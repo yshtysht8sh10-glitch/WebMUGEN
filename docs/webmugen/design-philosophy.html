@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>WebMUGEN Design Philosophy</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.75; margin: 0; color: #222; background: #f7f7f7; }
+    header { background: #0f172a; color: white; padding: 28px 32px; }
+    main { max-width: 1040px; margin: 0 auto; padding: 32px; background: white; }
+    h1,h2,h3 { line-height: 1.35; }
+    code { background: #eee; padding: 2px 5px; border-radius: 4px; }
+    pre { background: #111827; color: #e5e7eb; padding: 16px; overflow: auto; border-radius: 8px; }
+    table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+    th,td { border: 1px solid #ddd; padding: 8px; vertical-align: top; }
+    th { background: #f3f4f6; }
+    .note { border-left: 5px solid #2563eb; background: #eff6ff; padding: 14px 18px; margin: 18px 0; }
+  </style>
+</head>
+<body>
+<header><h1>WebMUGEN Design Philosophy</h1><p>長期開発、MUGEN互換、通信対戦、AI共同開発を見据えた設計思想。</p></header>
+<main>
+
+<section><h2>最重要思想</h2><ol>
+<li><strong>WebMUGEN本体はサーバーに依存しない。</strong> ゲーム実行はブラウザ内で完結させる。</li>
+<li><strong>core はMUGENバージョンを知らない。</strong> WinMUGENやMUGEN 1.0の差はparserとcompatibility layerで吸収する。</li>
+<li><strong>描画とゲームロジックを分離する。</strong> rendererはGameStateを描画するだけで書き換えない。</li>
+<li><strong>rollback通信対戦を最初から意識する。</strong> 入力はフレーム単位、状態は保存・復元・再計算可能にする。</li>
+<li><strong>調査したMUGEN仕様は必ずHTMLドキュメントに残す。</strong> チャットの中だけに残さない。</li>
+</ol></section>
+<section><h2>避けること</h2><ul>
+<li>Canvas描画中に座標や体力を更新する。</li>
+<li>WinMUGEN固有の癖をcoreへ直接埋め込む。</li>
+<li>ゲームロジックを現在時刻や非決定的乱数に依存させる。</li>
+<li>PHPや特定レンタルサーバーにWebMUGEN本体を依存させる。</li>
+</ul></section>
+
+</main>
+</body>
+</html>
