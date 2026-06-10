@@ -14,6 +14,12 @@ trigger1 = time = 0
 x = 0
 y = 0
 
+[State 0, Hadouken]
+type = ChangeState
+trigger1 = command = "qcf_a"
+value = 1000
+ctrl = 0
+
 [State 0, JumpForward]
 type = ChangeState
 trigger1 = command = "holdfwd_up"
@@ -56,6 +62,12 @@ movetype = I
 physics = S
 anim = 20
 ctrl = 1
+
+[State 20, Hadouken]
+type = ChangeState
+trigger1 = command = "qcf_a"
+value = 1000
+ctrl = 0
 
 [State 20, WalkForward]
 type = VelSet
@@ -185,4 +197,80 @@ type = ChangeState
 trigger1 = animtime = 0
 value = 0
 ctrl = 1
+
+;---------------------------------------------------------------------------
+; Hadouken-like special move.
+; Phase15ではProjectile/Helper未実装のため、まずは専用モーションとHitDefだけを持つ。
+[StateDef 1000]
+type = S
+movetype = A
+physics = S
+anim = 1000
+ctrl = 0
+
+[State 1000, Stop]
+type = VelSet
+trigger1 = time = 0
+x = 0
+y = 0
+
+[State 1000, HitDef]
+type = HitDef
+trigger1 = time = 6
+damage = 120, 20
+pausetime = 6, 12
+ground.velocity = -6, 0
+air.velocity = -3, -6
+
+[State 1000, Step]
+type = PosAdd
+trigger1 = time = 8
+x = 10
+
+[State 1000, End]
+type = ChangeState
+trigger1 = animtime = 0
+value = 0
+ctrl = 1
+
+;---------------------------------------------------------------------------
+; Simplified standing hit state
+[StateDef 5000]
+type = S
+movetype = H
+physics = N
+anim = 5000
+ctrl = 0
+
+[State 5000, Stop Y]
+type = VelSet
+trigger1 = time = 0
+y = 0
+
+[State 5000, Slide Friction]
+type = VelMul
+trigger1 = time >= 10
+x = 0.75
+
+[State 5000, End]
+type = ChangeState
+trigger1 = time >= 18
+value = 0
+ctrl = 1
+
+;---------------------------------------------------------------------------
+; Simplified air hit state
+[StateDef 5030]
+type = A
+movetype = H
+physics = A
+anim = 5030
+ctrl = 0
+
+[State 5030, Land]
+type = ChangeState
+trigger1 = time > 0
+trigger1 = pos y >= 285
+value = 5000
+ctrl = 0
 `;

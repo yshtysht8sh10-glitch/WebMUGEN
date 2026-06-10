@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchesCommand, parseCommandTokens } from './CommandMatcher';
+import { matchesCommand, parseCommandSteps, parseCommandTokens } from './CommandMatcher';
 import { InputBuffer } from './InputBuffer';
 
 describe('CommandMatcher', () => {
@@ -12,6 +12,17 @@ describe('CommandMatcher', () => {
     ]);
   });
 
+  it('parses simultaneous command step', () => {
+    expect(parseCommandSteps('/F+/U')).toEqual([
+      {
+        tokens: [
+          { kind: 'direction', value: 'F', hold: true },
+          { kind: 'direction', value: 'U', hold: true },
+        ],
+      },
+    ]);
+  });
+
   it('matches simple hold command', () => {
     const buffer = new InputBuffer();
     buffer.push({ left: false, right: true, up: false, down: false, attack: false });
@@ -21,6 +32,15 @@ describe('CommandMatcher', () => {
     );
   });
 
+  it('matches simultaneous diagonal hold command', () => {
+    const buffer = new InputBuffer();
+    buffer.push({ left: false, right: true, up: true, down: false, attack: false });
+
+    expect(
+      matchesCommand({ name: 'holdfwd_up', command: '/F+/U', time: 1 }, buffer.getFrames()),
+    ).toBe(true);
+  });
+
   it('matches quarter-circle command', () => {
     const buffer = new InputBuffer(20);
 
@@ -28,6 +48,18 @@ describe('CommandMatcher', () => {
     buffer.push({ left: false, right: true, up: false, down: true, attack: false });
     buffer.push({ left: false, right: true, up: false, down: false, attack: false });
     buffer.push({ left: false, right: false, up: false, down: false, attack: true });
+
+    expect(matchesCommand({ name: 'qcf_a', command: 'D,DF,F,a', time: 15 }, buffer.getFrames())).toBe(
+      true,
+    );
+  });
+
+  it('matches quarter-circle command when attack is pressed on down-forward', () => {
+    const buffer = new InputBuffer(20);
+
+    buffer.push({ left: false, right: false, up: false, down: true, attack: false });
+    buffer.push({ left: false, right: true, up: false, down: true, attack: false });
+    buffer.push({ left: false, right: true, up: false, down: true, attack: true });
 
     expect(matchesCommand({ name: 'qcf_a', command: 'D,DF,F,a', time: 15 }, buffer.getFrames())).toBe(
       true,

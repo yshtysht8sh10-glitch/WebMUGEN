@@ -34,6 +34,16 @@ command = a
     expect(hasCommand(state, 'qcf_a')).toBe(false);
   });
 
+  it('resolves diagonal hold command', () => {
+    const buffer = new InputBuffer();
+    const input = { left: false, right: true, up: true, down: false, attack: false };
+    buffer.push(input);
+
+    const state = resolveCommands(document, input, buffer);
+
+    expect(hasCommand(state, 'holdfwd_up')).toBe(true);
+  });
+
   it('resolves button command', () => {
     const buffer = new InputBuffer();
     const input = { left: false, right: false, up: false, down: false, attack: true };

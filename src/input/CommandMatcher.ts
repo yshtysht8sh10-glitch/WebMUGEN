@@ -5,17 +5,25 @@ export type CommandToken =
   | { kind: 'direction'; value: DirectionToken; hold: boolean }
   | { kind: 'button'; value: string; hold: boolean };
 
+export type CommandStep = {
+  tokens: CommandToken[];
+};
+
 export function parseCommandTokens(command: string): CommandToken[] {
+  return parseCommandSteps(command).flatMap((step) => step.tokens);
+}
+
+export function parseCommandSteps(command: string): CommandStep[] {
   return command
     .split(',')
     .map((part) => part.trim())
     .filter((part) => part.length > 0)
-    .flatMap(parseCommandPart);
+    .map(parseCommandStep);
 }
 
 export function matchesCommand(command: CmdCommand, frames: readonly InputFrame[]): boolean {
-  const tokens = parseCommandTokens(command.command);
-  if (tokens.length === 0) {
+  const steps = parseCommandSteps(command.command);
+  if (steps.length === 0) {
     return false;
   }
 
@@ -23,48 +31,69 @@ export function matchesCommand(command: CmdCommand, frames: readonly InputFrame[
   const searchFrames = frames.slice(0, timeLimit);
 
   let frameIndex = 0;
+  let previousMatchedFrameIndex = -1;
 
-  for (let tokenIndex = tokens.length - 1; tokenIndex >= 0; tokenIndex -= 1) {
-    const token = tokens[tokenIndex];
-    const foundIndex = findToken(token, searchFrames, frameIndex);
+  for (let stepIndex = steps.length - 1; stepIndex >= 0; stepIndex -= 1) {
+    const step = steps[stepIndex];
+
+    // D,DF,F,a のようなコマンドで、最後の a と F が同一フレームにある場合を許可する。
+    // 例: 最後を DF+a で押した場合、aステップとFステップは同じ入力フレームで成立してよい。
+    const allowSameFrame =
+      previousMatchedFrameIndex >= 0 &&
+      canShareFrame(step, steps[stepIndex + 1]) &&
+      stepMatchesFrame(step, searchFrames[previousMatchedFrameIndex]);
+
+    if (allowSameFrame) {
+      frameIndex = previousMatchedFrameIndex + 1;
+      continue;
+    }
+
+    const foundIndex = findStep(step, searchFrames, frameIndex);
 
     if (foundIndex < 0) {
       return false;
     }
 
+    previousMatchedFrameIndex = foundIndex;
     frameIndex = foundIndex + 1;
   }
 
   return true;
 }
 
-function parseCommandPart(part: string): CommandToken[] {
-  if (part.includes('+')) {
-    return part.split('+').flatMap((piece) => parseCommandPart(piece.trim()));
-  }
+function parseCommandStep(part: string): CommandStep {
+  return {
+    tokens: part
+      .split('+')
+      .map((piece) => piece.trim())
+      .filter((piece) => piece.length > 0)
+      .map(parseCommandToken),
+  };
+}
 
+function parseCommandToken(part: string): CommandToken {
   const hold = part.startsWith('/');
   const raw = hold ? part.slice(1) : part;
   const normalized = raw.toUpperCase();
 
   if (isDirectionToken(normalized)) {
-    return [{ kind: 'direction', value: normalized, hold }];
+    return { kind: 'direction', value: normalized, hold };
   }
 
-  return [{ kind: 'button', value: raw.toLowerCase(), hold }];
+  return { kind: 'button', value: raw.toLowerCase(), hold };
 }
 
-function findToken(
-  token: CommandToken,
+function findStep(
+  step: CommandStep,
   frames: readonly InputFrame[],
   startIndex: number,
 ): number {
   for (let index = startIndex; index < frames.length; index += 1) {
-    if (frameMatchesToken(frames[index], token)) {
+    if (stepMatchesFrame(step, frames[index])) {
       return index;
     }
 
-    if (token.hold) {
+    if (step.tokens.some((token) => token.hold)) {
       break;
     }
   }
@@ -72,16 +101,33 @@ function findToken(
   return -1;
 }
 
+function stepMatchesFrame(step: CommandStep, frame: InputFrame | undefined): boolean {
+  if (!frame) {
+    return false;
+  }
+
+  return step.tokens.every((token) => frameMatchesToken(frame, token));
+}
+
 function frameMatchesToken(frame: InputFrame, token: CommandToken): boolean {
   if (token.kind === 'direction') {
-    if (token.hold) {
-      return directionContains(frame.direction, token.value);
-    }
-
-    return frame.direction === token.value;
+    return directionContains(frame.direction, token.value);
   }
 
   return frame.buttons.has(token.value);
+}
+
+function canShareFrame(previousDirectionStep: CommandStep, laterStep: CommandStep | undefined): boolean {
+  if (!laterStep) {
+    return false;
+  }
+
+  const previousIsDirectionOnly = previousDirectionStep.tokens.every(
+    (token) => token.kind === 'direction',
+  );
+  const laterHasButton = laterStep.tokens.some((token) => token.kind === 'button');
+
+  return previousIsDirectionOnly && laterHasButton;
 }
 
 function directionContains(actual: DirectionToken, expected: DirectionToken): boolean {

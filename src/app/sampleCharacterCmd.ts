@@ -2,7 +2,7 @@ export const sampleCharacterCmd = `
 [Command]
 name = "qcf_a"
 command = D,DF,F,a
-time = 15
+time = 20
 
 [Command]
 name = "holdfwd"

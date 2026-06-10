@@ -64,19 +64,27 @@ export class CanvasRenderer {
     ctx.scale(player.facing, 1);
 
     const isAttack = player.stateNo === 200;
+    const isSpecial = player.stateNo === 1000;
     const isWalk = player.stateNo === 20;
     const bob = isWalk ? Math.sin(player.animTime / 3) * 3 : 0;
     const frameTint = currentElement ? currentElement.element.imageNo % 3 : 0;
 
-    ctx.fillStyle = player.hitPause > 0 ? '#ffffff' : isAttack ? '#ffcc66' : color;
+    ctx.fillStyle = player.hitPause > 0 ? '#ffffff' : isSpecial ? '#a7f3d0' : isAttack ? '#ffcc66' : color;
     ctx.fillRect(-16, -58 + bob, 32, 58);
     ctx.fillStyle = '#ffe0bd';
     ctx.fillRect(-13, -78 + bob, 26, 22);
     ctx.fillStyle = '#222';
     ctx.fillRect(4, -71 + bob, 4, 4);
+
     ctx.fillStyle = frameTint === 0 ? color : frameTint === 1 ? '#c4b5fd' : '#fde68a';
 
-    if (isAttack && player.animTime > 4 && player.animTime < 12) {
+    if (isSpecial && player.animTime > 6 && player.animTime < 16) {
+      ctx.fillRect(14, -50 + bob, 58, 12);
+      ctx.fillStyle = '#60a5fa';
+      ctx.beginPath();
+      ctx.arc(82, -44 + bob, 8, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (isAttack && player.animTime > 4 && player.animTime < 12) {
       ctx.fillRect(14, -48 + bob, 42, 10);
     } else {
       ctx.fillRect(14, -46 + bob, 10, 28);
