@@ -4,6 +4,7 @@ import type { FrameInput, GameState, PlayerState } from './types';
 import { stepPlayerByCns } from './CnsStateMachine';
 import { resolveSimpleHits } from './SimpleCollision';
 import { getAnimationLength } from '../animation/AnimationPlayer';
+import { resolveClsnHits } from '../collision/CollisionResolver';
 
 export function stepGameByCns(
   current: GameState,
@@ -32,7 +33,9 @@ export function stepGameByCns(
     }),
   ];
 
-  const collisionResult = resolveSimpleHits(steppedPlayers);
+  const collisionResult = airDocument
+    ? resolveClsnHits(steppedPlayers, airDocument)
+    : resolveSimpleHits(steppedPlayers);
 
   return {
     frame: current.frame + 1,

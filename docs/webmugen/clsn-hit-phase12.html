@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ja">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Clsn Hit Phase12</title>
+<style>body{font-family:system-ui,sans-serif;line-height:1.75;max-width:980px;margin:32px auto;padding:0 20px}code{background:#eee;padding:2px 5px;border-radius:4px}</style></head>
+<body>
+<h1>Clsn Hit Phase12</h1>
+<p>Phase12では、固定の簡易当たり判定ではなく、AIR由来の<code>Clsn1</code>と<code>Clsn2</code>の交差でヒットを解決する。</p>
+<h2>対応</h2>
+<ul>
+<li><code>moveType = A</code> の攻撃側のみヒット可能</li>
+<li>攻撃側の現在AIR要素の <code>Clsn1</code> を攻撃判定に使用</li>
+<li>防御側の現在AIR要素の <code>Clsn2</code> を食らい判定に使用</li>
+<li>接触時に既存のHitDef/HitState処理へ接続</li>
+</ul>
+<h2>次の課題</h2>
+<ul>
+<li>Clsn1/Clsn2がない場合の扱いをWinMUGENに寄せる</li>
+<li><code>hitflag</code> / <code>guardflag</code> 対応</li>
+<li>StateControllerの<code>movehit</code>を実際のヒット結果に接続</li>
+</ul>
+</body></html>
