@@ -16,6 +16,10 @@ export type PlayerState = {
   facing: 1 | -1;
   stateNo: number;
   stateTime: number;
+  stateType: 'S' | 'C' | 'A' | 'L';
+  moveType: 'I' | 'A' | 'H';
+  physics: 'S' | 'C' | 'A' | 'N';
+  ctrl: boolean;
   animNo: number;
   animTime: number;
 };

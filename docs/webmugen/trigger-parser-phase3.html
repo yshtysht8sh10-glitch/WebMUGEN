@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Trigger Parser Phase3</title>
+  <style>
+    body { font-family: system-ui, sans-serif; line-height: 1.75; max-width: 980px; margin: 32px auto; padding: 0 20px; }
+    code { background: #eee; padding: 2px 5px; border-radius: 4px; }
+    pre { background: #111827; color: #e5e7eb; padding: 16px; overflow: auto; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Trigger Parser Phase3</h1>
+  <p>Phase3では、CNSのtrigger式を最小ASTへ変換し、実行時に評価できる土台を追加する。</p>
+
+  <h2>修正メモ</h2>
+  <p><code>0</code> と <code>1</code> はbooleanではなく数値として扱う。MUGENの式では <code>time = 0</code> のような比較が頻出するため。</p>
+  <p><code>statetype = A</code> のような右辺の <code>A</code> は、未定義識別子ではなく文字列リテラル相当として扱う。</p>
+
+  <h2>対応例</h2>
+  <ul>
+    <li><code>time = 0</code></li>
+    <li><code>time &gt; 10</code></li>
+    <li><code>animtime = 0</code></li>
+    <li><code>command = "holdfwd"</code></li>
+    <li><code>command != "holdback"</code></li>
+    <li><code>ctrl</code></li>
+    <li><code>statetype = A</code></li>
+    <li><code>movehit</code></li>
+  </ul>
+</body>
+</html>
