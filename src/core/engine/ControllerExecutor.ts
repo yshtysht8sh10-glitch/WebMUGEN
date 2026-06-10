@@ -12,6 +12,7 @@ export type ControllerExecutionContext = {
 export type ControllerExecutionResult = {
   player: PlayerState;
   changedState: boolean;
+  velocityChanged: boolean;
 };
 
 const DEFAULT_GRAVITY = 0.45;
@@ -22,6 +23,7 @@ export function executeControllers(
   context: ControllerExecutionContext,
 ): ControllerExecutionResult {
   let currentPlayer = player;
+  let velocityChanged = false;
 
   for (const controller of controllers) {
     if (!shouldExecuteController(currentPlayer, controller, context)) {
@@ -30,11 +32,13 @@ export function executeControllers(
 
     const result = executeController(currentPlayer, controller);
     currentPlayer = result.player;
+    velocityChanged = velocityChanged || result.velocityChanged;
 
     if (result.changedState) {
       return {
         player: currentPlayer,
         changedState: true,
+        velocityChanged,
       };
     }
   }
@@ -42,6 +46,7 @@ export function executeControllers(
   return {
     player: currentPlayer,
     changedState: false,
+    velocityChanged,
   };
 }
 
@@ -78,42 +83,49 @@ export function executeController(
       return {
         player: executeVelSet(player, controller),
         changedState: false,
+        velocityChanged: true,
       };
 
     case 'posadd':
       return {
         player: executePosAdd(player, controller),
         changedState: false,
+        velocityChanged: false,
       };
 
     case 'ctrlset':
       return {
         player: executeCtrlSet(player, controller),
         changedState: false,
+        velocityChanged: false,
       };
 
     case 'changeanim':
       return {
         player: executeChangeAnim(player, controller),
         changedState: false,
+        velocityChanged: false,
       };
 
     case 'statetypeset':
       return {
         player: executeStateTypeSet(player, controller),
         changedState: false,
+        velocityChanged: false,
       };
 
     case 'gravity':
       return {
         player: executeGravity(player, controller),
         changedState: false,
+        velocityChanged: true,
       };
 
     default:
       return {
         player,
         changedState: false,
+        velocityChanged: false,
       };
   }
 }
@@ -135,6 +147,7 @@ function executeChangeState(
       ctrl: ctrl ?? player.ctrl,
     },
     changedState: true,
+    velocityChanged: false,
   };
 }
 

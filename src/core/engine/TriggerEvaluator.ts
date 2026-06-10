@@ -148,6 +148,12 @@ function isCommandActive(commandName: string, input: PlayerInput): boolean {
     case 'holdup':
       return input.up ?? false;
 
+    case 'holdfwd_up':
+      return input.right && (input.up ?? false);
+
+    case 'holdback_up':
+      return input.left && (input.up ?? false);
+
     case 'a':
       return input.attack;
 

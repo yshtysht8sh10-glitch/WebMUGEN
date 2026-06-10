@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Phase7 Physics Fix</title>
+  <style>
+    body { font-family: system-ui, sans-serif; line-height: 1.75; max-width: 980px; margin: 32px auto; padding: 0 20px; }
+    code { background: #eee; padding: 2px 5px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Phase7 Physics Fix</h1>
+  <p>Phase7の簡易当たり判定導入後に見つかった移動物理の問題を修正する。</p>
+
+  <h2>追加修正</h2>
+  <p><code>VelSet</code> や <code>Gravity</code> のような速度変更Controllerが実行されたフレームでは、地上摩擦を適用しない。</p>
+  <p>これにより、<code>VelSet x = 2</code> が同フレームで <code>2 * 0.82</code> に減衰してしまう問題を防ぐ。</p>
+</body>
+</html>

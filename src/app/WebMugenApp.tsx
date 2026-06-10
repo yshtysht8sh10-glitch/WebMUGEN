@@ -48,7 +48,7 @@ export function WebMugenApp() {
     <main className="app-shell">
       <header className="app-header">
         <h1>WebMUGEN</h1>
-        <p>CNS-driven movement prototype</p>
+        <p>2P hitbox prototype</p>
       </header>
 
       <section className="stage-panel">
@@ -56,8 +56,9 @@ export function WebMugenApp() {
       </section>
 
       <section className="help-panel">
-        <p>操作: ← / → 移動、↑ ジャンプ、A 攻撃</p>
-        <p>この版では、CNS風テキストで前進・後退・ジャンプ・重力・着地を動かします。</p>
+        <p>P1: ← / → 移動、↑ ジャンプ、A 攻撃</p>
+        <p>P2: J / L 移動、I ジャンプ、F 攻撃</p>
+        <p>緑枠がbody box、赤枠がattack boxです。</p>
       </section>
     </main>
   );

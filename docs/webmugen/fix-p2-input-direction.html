@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Fix P2 Input Direction</title>
+  <style>
+    body { font-family: system-ui, sans-serif; line-height: 1.75; max-width: 980px; margin: 32px auto; padding: 0 20px; }
+    code { background: #eee; padding: 2px 5px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Fix P2 Input Direction</h1>
+  <p>Phase7の2P入力では、P2の左右入力を反転していたため、操作感が逆になっていた。</p>
+
+  <h2>修正</h2>
+  <p>現時点の <code>sampleCharacterCns</code> は簡易的に <code>right = 前進</code>、<code>left = 後退</code> としているため、P2入力を反転せずそのまま渡す。</p>
+
+  <h2>今後の課題</h2>
+  <p>MUGEN本来の <code>holdfwd</code> / <code>holdback</code> はキャラクターの向き基準である。将来的には入力層で物理キーとMUGENコマンドを分離し、<code>facing</code> に応じて <code>holdfwd</code> / <code>holdback</code> を解決する。</p>
+</body>
+</html>

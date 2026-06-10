@@ -9,16 +9,26 @@ export type StepPlayerByCnsContext = {
 };
 
 const GROUND_Y = 285;
+const GROUND_FRICTION = 0.82;
+const AIR_GRAVITY = 0.45;
 
 export function stepPlayerByCns(
   player: PlayerState,
   document: CnsDocument,
   context: StepPlayerByCnsContext,
 ): PlayerState {
+  if (player.hitPause > 0) {
+    return {
+      ...player,
+      hitPause: player.hitPause - 1,
+    };
+  }
+
   const state = findStateDefinition(document, player.stateNo);
 
   let nextPlayer = player;
   let changedState = false;
+  let velocityChanged = false;
 
   if (state !== undefined) {
     nextPlayer = applyStateDefDefaults(nextPlayer, state);
@@ -31,10 +41,9 @@ export function stepPlayerByCns(
 
     nextPlayer = result.player;
     changedState = result.changedState;
+    velocityChanged = result.velocityChanged;
   }
 
-  // ChangeStateしたフレームでは、新しいStateの time = 0 を次フレームに残す。
-  // これをしないと、遷移先Stateの trigger1 = time = 0 が一度も成立しない。
   if (changedState) {
     const nextState = findStateDefinition(document, nextPlayer.stateNo);
     if (nextState !== undefined) {
@@ -48,6 +57,7 @@ export function stepPlayerByCns(
     };
   }
 
+  nextPlayer = applyPhysics(nextPlayer, velocityChanged, context.input);
   nextPlayer = applyVelocity(nextPlayer);
   nextPlayer = clampToStage(nextPlayer);
 
@@ -79,6 +89,35 @@ function applyStateDefDefaults(
   };
 }
 
+function applyPhysics(
+  player: PlayerState,
+  velocityChangedByController: boolean,
+  input: PlayerInput,
+): PlayerState {
+  if (player.stateType === 'A' || player.physics === 'A' || player.y < GROUND_Y) {
+    return {
+      ...player,
+      vy: player.vy + AIR_GRAVITY,
+    };
+  }
+
+  const holdingHorizontal = input.left || input.right;
+
+  if (
+    !velocityChangedByController &&
+    !holdingHorizontal &&
+    (player.physics === 'S' || player.physics === 'C')
+  ) {
+    const vx = Math.abs(player.vx) < 0.05 ? 0 : player.vx * GROUND_FRICTION;
+    return {
+      ...player,
+      vx,
+    };
+  }
+
+  return player;
+}
+
 function applyVelocity(player: PlayerState): PlayerState {
   return {
     ...player,
@@ -89,12 +128,14 @@ function applyVelocity(player: PlayerState): PlayerState {
 
 function clampToStage(player: PlayerState): PlayerState {
   const clampedY = Math.max(0, Math.min(GROUND_Y, player.y));
+  const landed = clampedY >= GROUND_Y && player.vy > 0;
 
   return {
     ...player,
     x: Math.max(20, Math.min(620, player.x)),
     y: clampedY,
-    vy: clampedY >= GROUND_Y && player.vy > 0 ? 0 : player.vy,
+    vy: landed ? 0 : player.vy,
+    stateType: landed && player.stateType === 'A' ? 'S' : player.stateType,
   };
 }
 

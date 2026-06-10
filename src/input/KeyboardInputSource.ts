@@ -17,6 +17,12 @@ export class KeyboardInputSource {
         up: this.pressed.has('ArrowUp'),
         attack: this.justPressed.has('KeyA'),
       },
+      p2: {
+        left: this.pressed.has('KeyJ'),
+        right: this.pressed.has('KeyL'),
+        up: this.pressed.has('KeyI'),
+        attack: this.justPressed.has('KeyF'),
+      },
     };
 
     this.justPressed.clear();
@@ -29,7 +35,11 @@ export class KeyboardInputSource {
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
-    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'KeyA'].includes(event.code)) {
+    if (
+      ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'KeyA', 'KeyJ', 'KeyL', 'KeyI', 'KeyF'].includes(
+        event.code,
+      )
+    ) {
       event.preventDefault();
     }
 

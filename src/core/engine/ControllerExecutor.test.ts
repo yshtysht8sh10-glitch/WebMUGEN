@@ -18,6 +18,7 @@ describe('executeController', () => {
     const result = executeController(player, controller);
 
     expect(result.changedState).toBe(true);
+    expect(result.velocityChanged).toBe(false);
     expect(result.player.stateNo).toBe(20);
     expect(result.player.stateTime).toBe(0);
     expect(result.player.animNo).toBe(20);
@@ -39,6 +40,7 @@ describe('executeController', () => {
     const result = executeController(player, controller);
 
     expect(result.changedState).toBe(false);
+    expect(result.velocityChanged).toBe(true);
     expect(result.player.vx).toBe(2.5);
     expect(result.player.vy).toBe(-1);
   });

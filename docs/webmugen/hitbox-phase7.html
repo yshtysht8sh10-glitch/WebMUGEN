@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Hitbox Phase7</title>
+  <style>
+    body { font-family: system-ui, sans-serif; line-height: 1.75; max-width: 980px; margin: 32px auto; padding: 0 20px; }
+    code { background: #eee; padding: 2px 5px; border-radius: 4px; }
+    pre { background: #111827; color: #e5e7eb; padding: 16px; overflow: auto; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Hitbox Phase7</h1>
+  <p>Phase7では、2Pキャラクターと簡易攻撃判定を追加する。</p>
+
+  <h2>追加要素</h2>
+  <ul>
+    <li>2P PlayerState</li>
+    <li>Life</li>
+    <li>body box</li>
+    <li>attack box</li>
+    <li>攻撃中のみ判定発生</li>
+    <li>ヒット時にLife減少</li>
+    <li>デバッグ枠描画</li>
+  </ul>
+
+  <h2>制限</h2>
+  <ul>
+    <li>まだ本格的な <code>HitDef</code> ではない。</li>
+    <li>CLS/Near/Farなどの当たり判定仕様は未対応。</li>
+    <li>hitstun、guard、pausetimeは仮実装。</li>
+    <li>同一攻撃で複数回当たる可能性があるため、後続Phaseでhit once管理が必要。</li>
+  </ul>
+
+  <h2>次のPhase</h2>
+  <p>Phase8では、簡易HitDef ControllerをCNSから読み、damageやpausetimeをController定義に寄せる。</p>
+</body>
+</html>
