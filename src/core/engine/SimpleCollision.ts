@@ -1,26 +1,44 @@
-import type { GameState, HitEvent, PlayerState, Rect } from './types';
+import type { ActiveHitDef, GameState, HitEvent, PlayerState, Rect } from './types';
 
 export type SimpleCollisionResult = Pick<GameState, 'players' | 'hitEvents'>;
 
-const ATTACK_DAMAGE = 50;
-const HIT_PAUSE_FRAMES = 8;
+const FALLBACK_HITDEF: ActiveHitDef = {
+  damage: 50,
+  guardDamage: 0,
+  pauseTime: {
+    attacker: 4,
+    defender: 8,
+  },
+  groundVelocity: {
+    x: -3.5,
+    y: 0,
+  },
+  airVelocity: {
+    x: -2.5,
+    y: -5.5,
+  },
+};
 
 export function resolveSimpleHits(players: [PlayerState, PlayerState]): SimpleCollisionResult {
   let p1 = players[0];
   let p2 = players[1];
   const hitEvents: HitEvent[] = [];
 
-  const p1Hit = isAttackActive(p1) && p1.animTime === 6 && intersects(getAttackBox(p1), getBodyBox(p2));
-  const p2Hit = isAttackActive(p2) && p2.animTime === 6 && intersects(getAttackBox(p2), getBodyBox(p1));
+  const p1Hit = canHit(p1) && intersects(getAttackBox(p1), getBodyBox(p2));
+  const p2Hit = canHit(p2) && intersects(getAttackBox(p2), getBodyBox(p1));
 
   if (p1Hit && p2.hitPause === 0) {
-    p2 = applyHit(p2, p1);
-    hitEvents.push({ attackerId: 1, defenderId: 2, damage: ATTACK_DAMAGE });
+    const hitDef = p1.activeHitDef ?? FALLBACK_HITDEF;
+    p1 = markHitDefUsed(applyAttackerPause(p1, hitDef));
+    p2 = applyHit(p2, p1, hitDef);
+    hitEvents.push({ attackerId: 1, defenderId: 2, damage: hitDef.damage });
   }
 
   if (p2Hit && p1.hitPause === 0) {
-    p1 = applyHit(p1, p2);
-    hitEvents.push({ attackerId: 2, defenderId: 1, damage: ATTACK_DAMAGE });
+    const hitDef = p2.activeHitDef ?? FALLBACK_HITDEF;
+    p2 = markHitDefUsed(applyAttackerPause(p2, hitDef));
+    p1 = applyHit(p1, p2, hitDef);
+    hitEvents.push({ attackerId: 2, defenderId: 1, damage: hitDef.damage });
   }
 
   return {
@@ -60,15 +78,36 @@ export function isAttackActive(player: PlayerState): boolean {
   return player.stateNo === 200 && player.animTime >= 5 && player.animTime <= 12;
 }
 
-function applyHit(defender: PlayerState, attacker: PlayerState): PlayerState {
+function canHit(player: PlayerState): boolean {
+  return isAttackActive(player) && !player.hitDefUsed;
+}
+
+function applyAttackerPause(attacker: PlayerState, hitDef: ActiveHitDef): PlayerState {
+  return {
+    ...attacker,
+    hitPause: hitDef.pauseTime.attacker,
+  };
+}
+
+function markHitDefUsed(attacker: PlayerState): PlayerState {
+  return {
+    ...attacker,
+    hitDefUsed: true,
+  };
+}
+
+function applyHit(defender: PlayerState, attacker: PlayerState, hitDef: ActiveHitDef): PlayerState {
+  const velocity =
+    defender.stateType === 'A' || defender.y < 285 ? hitDef.airVelocity : hitDef.groundVelocity;
+
   return {
     ...defender,
-    life: Math.max(0, defender.life - ATTACK_DAMAGE),
-    stateType: 'A',
-    physics: 'A',
-    vx: attacker.facing * 3.5,
-    vy: -4.5,
-    hitPause: HIT_PAUSE_FRAMES,
+    life: Math.max(0, defender.life - hitDef.damage),
+    stateType: velocity.y !== 0 ? 'A' : defender.stateType,
+    physics: velocity.y !== 0 ? 'A' : defender.physics,
+    vx: attacker.facing * Math.abs(velocity.x),
+    vy: velocity.y,
+    hitPause: hitDef.pauseTime.defender,
   };
 }
 

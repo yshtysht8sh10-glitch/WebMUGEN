@@ -1,5 +1,5 @@
-import type { CnsStateController } from '../../mugen/common/cnsTypes';
-import type { PlayerInput, PlayerState } from './types';
+import type { CnsStateController, CnsValue } from '../../mugen/common/cnsTypes';
+import type { ActiveHitDef, PlayerInput, PlayerState } from './types';
 import { parseTriggerExpression } from '../../parser/cns/TriggerParser';
 import { evaluateTriggerAsBoolean } from './TriggerEvaluator';
 
@@ -121,6 +121,13 @@ export function executeController(
         velocityChanged: true,
       };
 
+    case 'hitdef':
+      return {
+        player: executeHitDef(player, controller),
+        changedState: false,
+        velocityChanged: false,
+      };
+
     default:
       return {
         player,
@@ -145,6 +152,8 @@ function executeChangeState(
       animNo: stateNo,
       animTime: 0,
       ctrl: ctrl ?? player.ctrl,
+      activeHitDef: null,
+      hitDefUsed: false,
     },
     changedState: true,
     velocityChanged: false,
@@ -204,6 +213,36 @@ function executeGravity(player: PlayerState, controller: CnsStateController): Pl
   };
 }
 
+function executeHitDef(player: PlayerState, controller: CnsStateController): PlayerState {
+  const damage = readNumberPair(controller.params.damage, 30, 0);
+  const pauseTime = readNumberPair(controller.params.pausetime, 8, 8);
+  const groundVelocity = readNumberPair(controller.params['ground.velocity'], -3.5, 0);
+  const airVelocity = readNumberPair(controller.params['air.velocity'], -2.5, -5.5);
+
+  const activeHitDef: ActiveHitDef = {
+    damage: damage[0],
+    guardDamage: damage[1],
+    pauseTime: {
+      attacker: pauseTime[0],
+      defender: pauseTime[1],
+    },
+    groundVelocity: {
+      x: groundVelocity[0],
+      y: groundVelocity[1],
+    },
+    airVelocity: {
+      x: airVelocity[0],
+      y: airVelocity[1],
+    },
+  };
+
+  return {
+    ...player,
+    activeHitDef,
+    hitDefUsed: false,
+  };
+}
+
 function readNumber(
   controller: CnsStateController,
   key: string,
@@ -239,6 +278,28 @@ function readString(
   }
 
   return fallback;
+}
+
+function readNumberPair(value: CnsValue | undefined, fallback0: number, fallback1: number): [number, number] {
+  if (Array.isArray(value)) {
+    const first = Number(value[0]);
+    const second = Number(value[1]);
+    return [
+      Number.isNaN(first) ? fallback0 : first,
+      Number.isNaN(second) ? fallback1 : second,
+    ];
+  }
+
+  if (typeof value === 'number') {
+    return [value, fallback1];
+  }
+
+  if (typeof value === 'string') {
+    const numericValue = Number(value);
+    return [Number.isNaN(numericValue) ? fallback0 : numericValue, fallback1];
+  }
+
+  return [fallback0, fallback1];
 }
 
 function readOptionalBoolean(

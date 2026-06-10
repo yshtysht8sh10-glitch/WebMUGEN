@@ -14,7 +14,7 @@ describe('SimpleCollision', () => {
     expect(getAttackBox(player).width).toBeGreaterThan(0);
   });
 
-  it('deals damage when attack box overlaps opponent body box', () => {
+  it('deals fallback damage when attack box overlaps opponent body box without HitDef', () => {
     const state = createInitialGameState();
     const p1 = {
       ...state.players[0],

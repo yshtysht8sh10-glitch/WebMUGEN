@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>HitDef Phase8</title>
+  <style>
+    body { font-family: system-ui, sans-serif; line-height: 1.75; max-width: 980px; margin: 32px auto; padding: 0 20px; }
+    code { background: #eee; padding: 2px 5px; border-radius: 4px; }
+    pre { background: #111827; color: #e5e7eb; padding: 16px; overflow: auto; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h1>HitDef Phase8</h1>
+  <p>Phase8では、固定ダメージの簡易攻撃から、CNSの <code>HitDef</code> Controllerに基づく攻撃へ移行する。</p>
+
+  <h2>対応パラメータ</h2>
+  <ul>
+    <li><code>damage</code></li>
+    <li><code>pausetime</code></li>
+    <li><code>ground.velocity</code></li>
+    <li><code>air.velocity</code></li>
+  </ul>
+
+  <h2>テスト修正メモ</h2>
+  <p>Phase7の古いテストでは「ヒットしたら必ず空中状態になる」と仮定していた。</p>
+  <p>Phase8では <code>ground.velocity = -4, 0</code> のようにY速度が0なら、地上ヒットとして <code>stateType = S</code> のまま扱う。</p>
+  <p>相手を浮かせたい場合は、<code>ground.velocity = -4, -4.5</code> のようにY速度を負にする。</p>
+
+  <h2>現時点の仕様</h2>
+  <ul>
+    <li><code>HitDef</code> が実行されると、攻撃側PlayerStateに <code>activeHitDef</code> を保持する。</li>
+    <li>攻撃判定が接触すると <code>activeHitDef</code> のdamageを使う。</li>
+    <li>1回当たったHitDefは <code>hitDefUsed</code> で再ヒットを防ぐ。</li>
+    <li>本格的な <code>hitflag</code>、<code>guardflag</code>、<code>attr</code>、<code>sparkno</code> は未対応。</li>
+  </ul>
+</body>
+</html>

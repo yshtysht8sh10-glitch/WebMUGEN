@@ -26,5 +26,7 @@ function createPlayer(id: 1 | 2, x: number, y: number, facing: 1 | -1): PlayerSt
     animNo: 0,
     animTime: 0,
     hitPause: 0,
+    activeHitDef: null,
+    hitDefUsed: false,
   };
 }

@@ -17,6 +17,23 @@ export type Rect = {
   height: number;
 };
 
+export type ActiveHitDef = {
+  damage: number;
+  guardDamage: number;
+  pauseTime: {
+    attacker: number;
+    defender: number;
+  };
+  groundVelocity: {
+    x: number;
+    y: number;
+  };
+  airVelocity: {
+    x: number;
+    y: number;
+  };
+};
+
 export type PlayerState = {
   id: 1 | 2;
   x: number;
@@ -34,6 +51,8 @@ export type PlayerState = {
   animNo: number;
   animTime: number;
   hitPause: number;
+  activeHitDef: ActiveHitDef | null;
+  hitDefUsed: boolean;
 };
 
 export type HitEvent = {

@@ -1,8 +1,5 @@
 export const sampleCharacterCns = `
 ; WebMUGEN sample CNS
-; MUGEN common stateの考え方に寄せた簡易版。
-; 本物のMUGENではState 40でsysvar(1)にジャンプ方向を保存してState 50へ移るが、
-; 現段階のWebMUGENではsysvar/ifelse/constが未実装のため、40/41/42へ分ける。
 
 [StateDef 0]
 type = S
@@ -169,6 +166,14 @@ type = VelSet
 trigger1 = time = 0
 x = 0
 y = 0
+
+[State 200, Hit]
+type = HitDef
+trigger1 = time = 0
+damage = 80, 10
+pausetime = 4, 10
+ground.velocity = -4, 0
+air.velocity = -2.5, -5.5
 
 [State 200, Step]
 type = PosAdd
