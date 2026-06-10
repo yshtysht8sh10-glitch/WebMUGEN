@@ -1,6 +1,4 @@
 export const sampleCharacterAir = `
-; WebMUGEN sample AIR with Clsn
-
 Begin Action 0
 Clsn2Default: 1
  Clsn2[0] = -16,-78,16,0
@@ -35,10 +33,14 @@ Clsn2Default: 1
  Clsn2[0] = -16,-78,16,0
 1000,0, 0,0, 5
 1000,1, 0,0, 5
-Clsn1: 1
- Clsn1[0] = 30,-54,86,-36
 1000,2, 0,0, 8
 1000,1, 0,0, 5
+
+Begin Action 1100
+Clsn1Default: 1
+ Clsn1[0] = -12,-12,12,12
+1100,0, 0,0, 4
+1100,1, 0,0, 4
 
 Begin Action 5000
 Clsn2Default: 1

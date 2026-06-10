@@ -4,8 +4,9 @@ import {
   getPlayerAttackBoxes,
   getPlayerBodyBoxes,
 } from '../../core/collision/CollisionResolver';
-import type { GameState, PlayerState, Rect } from '../../core/engine/types';
+import type { GameState, PlayerState, ProjectileState, Rect } from '../../core/engine/types';
 import { getAttackBox, getBodyBox, isAttackActive } from '../../core/engine/SimpleCollision';
+import { getProjectileWorldBox } from '../../core/projectile/ProjectileSystem';
 
 export class CanvasRenderer {
   private readonly context: CanvasRenderingContext2D;
@@ -24,10 +25,12 @@ export class CanvasRenderer {
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.drawStage(ctx);
     this.drawLifeBars(ctx, state);
+    this.drawProjectiles(ctx, state.projectiles);
     this.drawPlayer(ctx, state.players[0], '#66ccff');
     this.drawPlayer(ctx, state.players[1], '#ff99aa');
     this.drawDebugBoxes(ctx, state.players[0]);
     this.drawDebugBoxes(ctx, state.players[1]);
+    this.drawProjectileDebugBoxes(ctx, state.projectiles);
     this.drawDebug(ctx, state);
   }
 
@@ -47,6 +50,23 @@ export class CanvasRenderer {
     ctx.strokeStyle = '#fff';
     ctx.strokeRect(20, 18, 260, 16);
     ctx.strokeRect(360, 18, 260, 16);
+  }
+
+  private drawProjectiles(ctx: CanvasRenderingContext2D, projectiles: ProjectileState[]): void {
+    for (const projectile of projectiles) {
+      ctx.save();
+      ctx.translate(projectile.x, projectile.y);
+      ctx.scale(projectile.facing, 1);
+      ctx.fillStyle = '#60a5fa';
+      ctx.beginPath();
+      ctx.arc(0, 0, 13 + Math.sin(projectile.animTime / 2) * 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#bfdbfe';
+      ctx.beginPath();
+      ctx.arc(-4, -4, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
   }
 
   private drawPlayer(ctx: CanvasRenderingContext2D, player: PlayerState, color: string): void {
@@ -80,10 +100,6 @@ export class CanvasRenderer {
 
     if (isSpecial && player.animTime > 6 && player.animTime < 16) {
       ctx.fillRect(14, -50 + bob, 58, 12);
-      ctx.fillStyle = '#60a5fa';
-      ctx.beginPath();
-      ctx.arc(82, -44 + bob, 8, 0, Math.PI * 2);
-      ctx.fill();
     } else if (isAttack && player.animTime > 4 && player.animTime < 12) {
       ctx.fillRect(14, -48 + bob, 42, 10);
     } else {
@@ -114,6 +130,10 @@ export class CanvasRenderer {
     if (isAttackActive(player)) this.strokeRect(ctx, getAttackBox(player), '#ff0000');
   }
 
+  private drawProjectileDebugBoxes(ctx: CanvasRenderingContext2D, projectiles: ProjectileState[]): void {
+    projectiles.forEach((projectile) => this.strokeRect(ctx, getProjectileWorldBox(projectile), '#ff0000'));
+  }
+
   private strokeRect(ctx: CanvasRenderingContext2D, rect: Rect, color: string): void {
     ctx.strokeStyle = color;
     ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
@@ -128,6 +148,6 @@ export class CanvasRenderer {
       12,
       56,
     );
-    ctx.fillText(`p1 life=${p1.life} p2 life=${p2.life}`, 12, 76);
+    ctx.fillText(`p1 life=${p1.life} p2 life=${p2.life} projectiles=${state.projectiles.length}`, 12, 76);
   }
 }

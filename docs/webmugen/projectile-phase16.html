@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ja">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Projectile Phase16</title>
+<style>body{font-family:system-ui,sans-serif;line-height:1.75;max-width:980px;margin:32px auto;padding:0 20px}code{background:#eee;padding:2px 5px;border-radius:4px}</style></head>
+<body>
+<h1>Projectile Phase16</h1>
+<p>Phase16では、CNSの<code>Projectile</code> Controllerを最小実装し、飛び道具を生成・移動・ヒットさせる。</p>
+<h2>対応</h2>
+<ul>
+<li><code>type = Projectile</code></li>
+<li><code>projid</code> / <code>projanim</code></li>
+<li><code>offset</code> / <code>velocity</code></li>
+<li><code>damage</code> / <code>pausetime</code></li>
+<li><code>ground.velocity</code> / <code>air.velocity</code></li>
+<li><code>removetime</code></li>
+</ul>
+<h2>制限</h2>
+<ul>
+<li>Projectileの判定はまだ固定矩形。</li>
+<li>AIRのClsn1とは未接続。</li>
+<li>projremove、projhitanim、projhitsなどは未対応。</li>
+</ul>
+</body></html>

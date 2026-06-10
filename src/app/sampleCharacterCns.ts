@@ -1,6 +1,4 @@
 export const sampleCharacterCns = `
-; WebMUGEN sample CNS
-
 [StateDef 0]
 type = S
 movetype = I
@@ -80,24 +78,6 @@ type = VelSet
 trigger1 = command = "holdback"
 x = -1.8
 y = 0
-
-[State 20, JumpForward]
-type = ChangeState
-trigger1 = command = "holdfwd_up"
-value = 41
-ctrl = 0
-
-[State 20, JumpBack]
-type = ChangeState
-trigger1 = command = "holdback_up"
-value = 42
-ctrl = 0
-
-[State 20, JumpNeutral]
-type = ChangeState
-trigger1 = command = "holdup"
-value = 40
-ctrl = 0
 
 [State 20, Stop]
 type = ChangeState
@@ -198,9 +178,6 @@ trigger1 = animtime = 0
 value = 0
 ctrl = 1
 
-;---------------------------------------------------------------------------
-; Hadouken-like special move.
-; Phase15ではProjectile/Helper未実装のため、まずは専用モーションとHitDefだけを持つ。
 [StateDef 1000]
 type = S
 movetype = A
@@ -214,18 +191,18 @@ trigger1 = time = 0
 x = 0
 y = 0
 
-[State 1000, HitDef]
-type = HitDef
-trigger1 = time = 6
-damage = 120, 20
-pausetime = 6, 12
-ground.velocity = -6, 0
+[State 1000, Fireball]
+type = Projectile
+trigger1 = time = 9
+projid = 1000
+projanim = 1100
+offset = 56, -44
+velocity = 5.5, 0
+damage = 90, 20
+pausetime = 4, 12
+ground.velocity = -5, 0
 air.velocity = -3, -6
-
-[State 1000, Step]
-type = PosAdd
-trigger1 = time = 8
-x = 10
+removetime = 90
 
 [State 1000, End]
 type = ChangeState
@@ -233,8 +210,6 @@ trigger1 = animtime = 0
 value = 0
 ctrl = 1
 
-;---------------------------------------------------------------------------
-; Simplified standing hit state
 [StateDef 5000]
 type = S
 movetype = H
@@ -258,8 +233,6 @@ trigger1 = time >= 18
 value = 0
 ctrl = 1
 
-;---------------------------------------------------------------------------
-; Simplified air hit state
 [StateDef 5030]
 type = A
 movetype = H

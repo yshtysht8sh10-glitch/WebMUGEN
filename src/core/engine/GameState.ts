@@ -4,6 +4,7 @@ export function createInitialGameState(): GameState {
   return {
     frame: 0,
     players: [createPlayer(1, 220, 285, 1), createPlayer(2, 420, 285, -1)],
+    projectiles: [],
     hitEvents: [],
   };
 }

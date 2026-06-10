@@ -1,11 +1,16 @@
 import type { CnsDocument, CnsStateDefinition } from '../../mugen/common/cnsTypes';
-import type { PlayerInput, PlayerState } from './types';
+import type { PlayerInput, PlayerState, ProjectileState } from './types';
 import { executeControllers } from './ControllerExecutor';
 
 export type StepPlayerByCnsContext = {
   input: PlayerInput;
   animLength: number;
   moveHit: boolean;
+};
+
+export type StepPlayerByCnsResult = {
+  player: PlayerState;
+  projectiles: ProjectileState[];
 };
 
 const GROUND_Y = 285;
@@ -17,18 +22,29 @@ export function stepPlayerByCns(
   document: CnsDocument,
   context: StepPlayerByCnsContext,
 ): PlayerState {
+  return stepPlayerByCnsWithEvents(player, document, context).player;
+}
+
+export function stepPlayerByCnsWithEvents(
+  player: PlayerState,
+  document: CnsDocument,
+  context: StepPlayerByCnsContext,
+): StepPlayerByCnsResult {
   if (player.hitPause > 0) {
     return {
-      ...player,
-      hitPause: player.hitPause - 1,
+      player: {
+        ...player,
+        hitPause: player.hitPause - 1,
+      },
+      projectiles: [],
     };
   }
 
   const state = findStateDefinition(document, player.stateNo);
-
   let nextPlayer = player;
   let changedState = false;
   let velocityChanged = false;
+  let projectiles: ProjectileState[] = [];
 
   if (state !== undefined) {
     nextPlayer = applyStateDefDefaults(nextPlayer, state);
@@ -42,6 +58,7 @@ export function stepPlayerByCns(
     nextPlayer = result.player;
     changedState = result.changedState;
     velocityChanged = result.velocityChanged;
+    projectiles = result.projectiles;
   }
 
   if (changedState) {
@@ -51,9 +68,12 @@ export function stepPlayerByCns(
     }
 
     return {
-      ...nextPlayer,
-      stateTime: 0,
-      animTime: 0,
+      player: {
+        ...nextPlayer,
+        stateTime: 0,
+        animTime: 0,
+      },
+      projectiles,
     };
   }
 
@@ -62,9 +82,12 @@ export function stepPlayerByCns(
   nextPlayer = clampToStage(nextPlayer);
 
   return {
-    ...nextPlayer,
-    stateTime: nextPlayer.stateTime + 1,
-    animTime: nextPlayer.animTime + 1,
+    player: {
+      ...nextPlayer,
+      stateTime: nextPlayer.stateTime + 1,
+      animTime: nextPlayer.animTime + 1,
+    },
+    projectiles,
   };
 }
 
@@ -75,10 +98,7 @@ export function findStateDefinition(
   return document.states.find((state) => state.stateNo === stateNo);
 }
 
-function applyStateDefDefaults(
-  player: PlayerState,
-  state: CnsStateDefinition,
-): PlayerState {
+function applyStateDefDefaults(player: PlayerState, state: CnsStateDefinition): PlayerState {
   return {
     ...player,
     stateType: normalizeStateType(state.stateType, player.stateType),
@@ -103,16 +123,9 @@ function applyPhysics(
 
   const holdingHorizontal = input.left || input.right;
 
-  if (
-    !velocityChangedByController &&
-    !holdingHorizontal &&
-    (player.physics === 'S' || player.physics === 'C')
-  ) {
+  if (!velocityChangedByController && !holdingHorizontal && (player.physics === 'S' || player.physics === 'C')) {
     const vx = Math.abs(player.vx) < 0.05 ? 0 : player.vx * GROUND_FRICTION;
-    return {
-      ...player,
-      vx,
-    };
+    return { ...player, vx };
   }
 
   return player;
@@ -139,35 +152,17 @@ function clampToStage(player: PlayerState): PlayerState {
   };
 }
 
-function normalizeStateType(
-  value: string | undefined,
-  fallback: PlayerState['stateType'],
-): PlayerState['stateType'] {
-  if (value === 'S' || value === 'C' || value === 'A' || value === 'L') {
-    return value;
-  }
-
+function normalizeStateType(value: string | undefined, fallback: PlayerState['stateType']): PlayerState['stateType'] {
+  if (value === 'S' || value === 'C' || value === 'A' || value === 'L') return value;
   return fallback;
 }
 
-function normalizeMoveType(
-  value: string | undefined,
-  fallback: PlayerState['moveType'],
-): PlayerState['moveType'] {
-  if (value === 'I' || value === 'A' || value === 'H') {
-    return value;
-  }
-
+function normalizeMoveType(value: string | undefined, fallback: PlayerState['moveType']): PlayerState['moveType'] {
+  if (value === 'I' || value === 'A' || value === 'H') return value;
   return fallback;
 }
 
-function normalizePhysics(
-  value: string | undefined,
-  fallback: PlayerState['physics'],
-): PlayerState['physics'] {
-  if (value === 'S' || value === 'C' || value === 'A' || value === 'N') {
-    return value;
-  }
-
+function normalizePhysics(value: string | undefined, fallback: PlayerState['physics']): PlayerState['physics'] {
+  if (value === 'S' || value === 'C' || value === 'A' || value === 'N') return value;
   return fallback;
 }

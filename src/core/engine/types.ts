@@ -60,6 +60,22 @@ export type PlayerState = {
   hitDefUsed: boolean;
 };
 
+export type ProjectileState = {
+  id: number;
+  ownerId: 1 | 2;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  facing: 1 | -1;
+  animNo: number;
+  animTime: number;
+  lifeTime: number;
+  removeTime: number;
+  hitDef: ActiveHitDef;
+  hitBox: Rect;
+};
+
 export type HitEvent = {
   attackerId: 1 | 2;
   defenderId: 1 | 2;
@@ -69,5 +85,6 @@ export type HitEvent = {
 export type GameState = {
   frame: number;
   players: [PlayerState, PlayerState];
+  projectiles: ProjectileState[];
   hitEvents: HitEvent[];
 };
