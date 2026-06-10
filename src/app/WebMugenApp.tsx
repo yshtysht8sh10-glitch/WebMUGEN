@@ -5,8 +5,10 @@ import { KeyboardInputSource } from '../input/KeyboardInputSource';
 import { CanvasRenderer } from '../renderer/canvas2d/CanvasRenderer';
 import { parseCnsText } from '../parser/cns/CnsParser';
 import { parseAirText } from '../parser/air/AirParser';
+import { parseCmdText } from '../parser/cmd/CmdParser';
 import { sampleCharacterCns } from './sampleCharacterCns';
 import { sampleCharacterAir } from './sampleCharacterAir';
+import { sampleCharacterCmd } from './sampleCharacterCmd';
 
 export function WebMugenApp() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -17,6 +19,7 @@ export function WebMugenApp() {
 
     const characterDefinition = parseCnsText(sampleCharacterCns);
     const airDocument = parseAirText(sampleCharacterAir);
+    const cmdDocument = parseCmdText(sampleCharacterCmd);
     const renderer = new CanvasRenderer(canvas, airDocument);
     const input = new KeyboardInputSource();
     let state = createInitialGameState();
@@ -31,7 +34,13 @@ export function WebMugenApp() {
       lastTime = now;
 
       while (accumulator >= fixedDeltaMs) {
-        state = stepGameByCns(state, characterDefinition, input.readFrameInput(), airDocument);
+        state = stepGameByCns(
+          state,
+          characterDefinition,
+          input.readFrameInput(),
+          airDocument,
+          cmdDocument,
+        );
         accumulator -= fixedDeltaMs;
       }
 
@@ -51,7 +60,7 @@ export function WebMugenApp() {
     <main className="app-shell">
       <header className="app-header">
         <h1>WebMUGEN</h1>
-        <p>AIR-driven animation prototype</p>
+        <p>CMD-driven command prototype</p>
       </header>
 
       <section className="stage-panel">
@@ -60,8 +69,8 @@ export function WebMugenApp() {
 
       <section className="help-panel">
         <p>P1: ← / → 移動、↑ ジャンプ、A 攻撃</p>
-        <p>P2: J / L 移動、I ジャンプ、F 攻撃</p>
-        <p>AIRの現在要素をキャラクター上部に表示します。</p>
+        <p>P2: J / L 移動、I ジャンプ、K しゃがみ入力、F 攻撃</p>
+        <p>この版ではCMD定義を読み、command名でCNS triggerを評価します。</p>
       </section>
     </main>
   );

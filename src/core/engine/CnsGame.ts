@@ -1,24 +1,34 @@
 import type { CnsDocument } from '../../mugen/common/cnsTypes';
 import type { AirDocument } from '../../parser/air/AirTypes';
-import type { FrameInput, GameState, PlayerState } from './types';
+import type { CmdDocument } from '../../parser/cmd/CmdTypes';
+import type { FrameInput, GameState, PlayerInput, PlayerState } from './types';
 import { stepPlayerByCns } from './CnsStateMachine';
 import { resolveSimpleHits } from './SimpleCollision';
 import { getAnimationLength } from '../animation/AnimationPlayer';
 import { resolveClsnHits } from '../collision/CollisionResolver';
+import { resolveCommands } from '../../input/CommandResolver';
 
 export function stepGameByCns(
   current: GameState,
   document: CnsDocument,
   input: FrameInput,
   airDocument?: AirDocument,
+  cmdDocument?: CmdDocument,
 ): GameState {
-  const p1Input = input.p1;
-  const p2Input = input.p2 ?? {
-    left: false,
-    right: false,
-    up: false,
-    attack: false,
-  };
+  const p1Input = attachCommands(
+    input.p1,
+    cmdDocument,
+  );
+  const p2Input = attachCommands(
+    input.p2 ?? {
+      left: false,
+      right: false,
+      up: false,
+      down: false,
+      attack: false,
+    },
+    cmdDocument,
+  );
 
   const steppedPlayers: [PlayerState, PlayerState] = [
     stepPlayerByCns(faceOpponent(current.players[0], current.players[1]), document, {
@@ -41,6 +51,17 @@ export function stepGameByCns(
     frame: current.frame + 1,
     players: collisionResult.players,
     hitEvents: collisionResult.hitEvents,
+  };
+}
+
+function attachCommands(input: PlayerInput, cmdDocument?: CmdDocument): PlayerInput {
+  if (!cmdDocument) {
+    return input;
+  }
+
+  return {
+    ...input,
+    commandNames: resolveCommands(cmdDocument, input).activeCommandNames,
   };
 }
 

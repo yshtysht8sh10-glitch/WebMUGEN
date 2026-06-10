@@ -2,7 +2,9 @@ export type PlayerInput = {
   left: boolean;
   right: boolean;
   up?: boolean;
+  down?: boolean;
   attack: boolean;
+  commandNames?: Set<string>;
 };
 
 export type FrameInput = {

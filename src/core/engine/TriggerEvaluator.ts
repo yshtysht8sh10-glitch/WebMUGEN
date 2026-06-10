@@ -124,7 +124,10 @@ export function evaluateCommandTrigger(
     return null;
   }
 
-  const commandActive = isCommandActive(expression.right.value, input);
+  const commandName = expression.right.value;
+  const commandActive = input.commandNames
+    ? input.commandNames.has(commandName)
+    : isLegacyCommandActive(commandName, input);
 
   if (expression.operator === '=') {
     return commandActive;
@@ -137,7 +140,7 @@ export function evaluateCommandTrigger(
   return false;
 }
 
-function isCommandActive(commandName: string, input: PlayerInput): boolean {
+function isLegacyCommandActive(commandName: string, input: PlayerInput): boolean {
   switch (commandName) {
     case 'holdfwd':
       return input.right;
@@ -147,6 +150,9 @@ function isCommandActive(commandName: string, input: PlayerInput): boolean {
 
     case 'holdup':
       return input.up ?? false;
+
+    case 'holddown':
+      return input.down ?? false;
 
     case 'holdfwd_up':
       return input.right && (input.up ?? false);
