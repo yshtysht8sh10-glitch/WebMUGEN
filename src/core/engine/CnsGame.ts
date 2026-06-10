@@ -1,12 +1,15 @@
 import type { CnsDocument } from '../../mugen/common/cnsTypes';
+import type { AirDocument } from '../../parser/air/AirTypes';
 import type { FrameInput, GameState, PlayerState } from './types';
 import { stepPlayerByCns } from './CnsStateMachine';
 import { resolveSimpleHits } from './SimpleCollision';
+import { getAnimationLength } from '../animation/AnimationPlayer';
 
 export function stepGameByCns(
   current: GameState,
   document: CnsDocument,
   input: FrameInput,
+  airDocument?: AirDocument,
 ): GameState {
   const p1Input = input.p1;
   const p2Input = input.p2 ?? {
@@ -19,15 +22,12 @@ export function stepGameByCns(
   const steppedPlayers: [PlayerState, PlayerState] = [
     stepPlayerByCns(faceOpponent(current.players[0], current.players[1]), document, {
       input: p1Input,
-      animLength: getAnimationLength(current.players[0].animNo),
+      animLength: getAnimLength(current.players[0], airDocument),
       moveHit: false,
     }),
     stepPlayerByCns(faceOpponent(current.players[1], current.players[0]), document, {
-      // Phase7時点では、P2もキー入力をそのまま渡す。
-      // MUGEN本来の holdfwd/holdback は向き基準だが、
-      // 現在のsampleCharacterCnsは right=前進、left=後退 の簡易定義として扱っている。
       input: p2Input,
-      animLength: getAnimationLength(current.players[1].animNo),
+      animLength: getAnimLength(current.players[1], airDocument),
       moveHit: false,
     }),
   ];
@@ -48,8 +48,12 @@ function faceOpponent(player: PlayerState, opponent: PlayerState): PlayerState {
   };
 }
 
-function getAnimationLength(animNo: number): number {
-  switch (animNo) {
+function getAnimLength(player: PlayerState, airDocument?: AirDocument): number {
+  if (airDocument) {
+    return getAnimationLength(airDocument, player.animNo);
+  }
+
+  switch (player.animNo) {
     case 200:
       return 18;
     default:

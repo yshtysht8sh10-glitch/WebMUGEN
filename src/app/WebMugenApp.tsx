@@ -4,7 +4,9 @@ import { stepGameByCns } from '../core/engine/CnsGame';
 import { KeyboardInputSource } from '../input/KeyboardInputSource';
 import { CanvasRenderer } from '../renderer/canvas2d/CanvasRenderer';
 import { parseCnsText } from '../parser/cns/CnsParser';
+import { parseAirText } from '../parser/air/AirParser';
 import { sampleCharacterCns } from './sampleCharacterCns';
+import { sampleCharacterAir } from './sampleCharacterAir';
 
 export function WebMugenApp() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -13,9 +15,10 @@ export function WebMugenApp() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const renderer = new CanvasRenderer(canvas);
-    const input = new KeyboardInputSource();
     const characterDefinition = parseCnsText(sampleCharacterCns);
+    const airDocument = parseAirText(sampleCharacterAir);
+    const renderer = new CanvasRenderer(canvas, airDocument);
+    const input = new KeyboardInputSource();
     let state = createInitialGameState();
 
     let animationFrameId = 0;
@@ -28,7 +31,7 @@ export function WebMugenApp() {
       lastTime = now;
 
       while (accumulator >= fixedDeltaMs) {
-        state = stepGameByCns(state, characterDefinition, input.readFrameInput());
+        state = stepGameByCns(state, characterDefinition, input.readFrameInput(), airDocument);
         accumulator -= fixedDeltaMs;
       }
 
@@ -48,7 +51,7 @@ export function WebMugenApp() {
     <main className="app-shell">
       <header className="app-header">
         <h1>WebMUGEN</h1>
-        <p>2P hitbox prototype</p>
+        <p>AIR-driven animation prototype</p>
       </header>
 
       <section className="stage-panel">
@@ -58,7 +61,7 @@ export function WebMugenApp() {
       <section className="help-panel">
         <p>P1: ← / → 移動、↑ ジャンプ、A 攻撃</p>
         <p>P2: J / L 移動、I ジャンプ、F 攻撃</p>
-        <p>緑枠がbody box、赤枠がattack boxです。</p>
+        <p>AIRの現在要素をキャラクター上部に表示します。</p>
       </section>
     </main>
   );

@@ -1,10 +1,15 @@
+import type { AirDocument } from '../../parser/air/AirTypes';
+import { getCurrentAnimationElement } from '../../core/animation/AnimationPlayer';
 import type { GameState, PlayerState, Rect } from '../../core/engine/types';
 import { getAttackBox, getBodyBox, isAttackActive } from '../../core/engine/SimpleCollision';
 
 export class CanvasRenderer {
   private readonly context: CanvasRenderingContext2D;
 
-  constructor(private readonly canvas: HTMLCanvasElement) {
+  constructor(
+    private readonly canvas: HTMLCanvasElement,
+    private readonly airDocument?: AirDocument,
+  ) {
     const context = canvas.getContext('2d');
     if (!context) {
       throw new Error('CanvasRenderingContext2D is not available.');
@@ -47,6 +52,10 @@ export class CanvasRenderer {
   }
 
   private drawPlayer(ctx: CanvasRenderingContext2D, player: PlayerState, color: string): void {
+    const currentElement = this.airDocument
+      ? getCurrentAnimationElement(this.airDocument, player.animNo, player.animTime)
+      : null;
+
     ctx.fillStyle = 'rgba(0,0,0,.3)';
     ctx.beginPath();
     ctx.ellipse(player.x, 305, 32, 8, 0, 0, Math.PI * 2);
@@ -57,9 +66,10 @@ export class CanvasRenderer {
     ctx.scale(player.facing, 1);
 
     const isAttack = player.stateNo === 200;
-    const isWalk = player.stateNo === 20 || player.stateNo === 21;
-    const bob = isWalk ? Math.sin(player.stateTime / 3) * 3 : 0;
+    const isWalk = player.stateNo === 20;
+    const bob = isWalk ? Math.sin(player.animTime / 3) * 3 : 0;
 
+    const frameTint = currentElement ? currentElement.element.imageNo % 3 : 0;
     ctx.fillStyle = player.hitPause > 0 ? '#ffffff' : isAttack ? '#ffcc66' : color;
     ctx.fillRect(-16, -58 + bob, 32, 58);
 
@@ -69,11 +79,17 @@ export class CanvasRenderer {
     ctx.fillStyle = '#222';
     ctx.fillRect(4, -71 + bob, 4, 4);
 
-    ctx.fillStyle = color;
+    ctx.fillStyle = frameTint === 0 ? color : frameTint === 1 ? '#c4b5fd' : '#fde68a';
     if (isAttack && player.animTime > 4 && player.animTime < 12) {
       ctx.fillRect(14, -48 + bob, 42, 10);
     } else {
       ctx.fillRect(14, -46 + bob, 10, 28);
+    }
+
+    if (currentElement) {
+      ctx.fillStyle = '#111';
+      ctx.font = '10px monospace';
+      ctx.fillText(`${currentElement.element.groupNo},${currentElement.element.imageNo}`, -18, -86 + bob);
     }
 
     ctx.restore();
@@ -97,7 +113,7 @@ export class CanvasRenderer {
     ctx.fillStyle = '#fff';
     ctx.font = '14px monospace';
     ctx.fillText(
-      `frame=${state.frame} p1=${p1.stateNo}/${p1.stateTime} p2=${p2.stateNo}/${p2.stateTime}`,
+      `frame=${state.frame} p1=${p1.stateNo}/${p1.animNo}:${p1.animTime} p2=${p2.stateNo}/${p2.animNo}:${p2.animTime}`,
       12,
       56,
     );
