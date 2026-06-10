@@ -1,5 +1,10 @@
 export const sampleCharacterCmd = `
 [Command]
+name = "qcf_a"
+command = D,DF,F,a
+time = 15
+
+[Command]
 name = "holdfwd"
 command = /F
 time = 1
@@ -21,12 +26,12 @@ time = 1
 
 [Command]
 name = "holdfwd_up"
-command = /F+U
+command = /F+/U
 time = 1
 
 [Command]
 name = "holdback_up"
-command = /B+U
+command = /B+/U
 time = 1
 
 [Command]

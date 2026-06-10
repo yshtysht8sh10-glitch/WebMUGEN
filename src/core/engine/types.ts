@@ -1,3 +1,5 @@
+import type { InputBuffer } from '../../input/InputBuffer';
+
 export type PlayerInput = {
   left: boolean;
   right: boolean;
@@ -5,6 +7,7 @@ export type PlayerInput = {
   down?: boolean;
   attack: boolean;
   commandNames?: Set<string>;
+  inputBuffer?: InputBuffer;
 };
 
 export type FrameInput = {

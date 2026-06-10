@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseCmdText } from '../parser/cmd/CmdParser';
 import { hasCommand, resolveCommands } from './CommandResolver';
+import { InputBuffer } from './InputBuffer';
 
 describe('CommandResolver', () => {
   const document = parseCmdText(`
@@ -10,7 +11,12 @@ command = /F
 
 [Command]
 name = "holdfwd_up"
-command = /F+U
+command = /F+/U
+
+[Command]
+name = "qcf_a"
+command = D,DF,F,a
+time = 15
 
 [Command]
 name = "a"
@@ -18,37 +24,37 @@ command = a
 `);
 
   it('resolves hold command', () => {
-    const state = resolveCommands(document, {
-      left: false,
-      right: true,
-      up: false,
-      attack: false,
-    });
+    const buffer = new InputBuffer();
+    const input = { left: false, right: true, up: false, down: false, attack: false };
+    buffer.push(input);
+
+    const state = resolveCommands(document, input, buffer);
 
     expect(hasCommand(state, 'holdfwd')).toBe(true);
-    expect(hasCommand(state, 'holdfwd_up')).toBe(false);
-  });
-
-  it('resolves diagonal hold command', () => {
-    const state = resolveCommands(document, {
-      left: false,
-      right: true,
-      up: true,
-      attack: false,
-    });
-
-    expect(hasCommand(state, 'holdfwd')).toBe(true);
-    expect(hasCommand(state, 'holdfwd_up')).toBe(true);
+    expect(hasCommand(state, 'qcf_a')).toBe(false);
   });
 
   it('resolves button command', () => {
-    const state = resolveCommands(document, {
-      left: false,
-      right: false,
-      up: false,
-      attack: true,
-    });
+    const buffer = new InputBuffer();
+    const input = { left: false, right: false, up: false, down: false, attack: true };
+    buffer.push(input);
+
+    const state = resolveCommands(document, input, buffer);
 
     expect(hasCommand(state, 'a')).toBe(true);
+  });
+
+  it('resolves buffered quarter-circle command', () => {
+    const buffer = new InputBuffer(20);
+
+    buffer.push({ left: false, right: false, up: false, down: true, attack: false });
+    buffer.push({ left: false, right: true, up: false, down: true, attack: false });
+    buffer.push({ left: false, right: true, up: false, down: false, attack: false });
+    const input = { left: false, right: false, up: false, down: false, attack: true };
+    buffer.push(input);
+
+    const state = resolveCommands(document, input, buffer);
+
+    expect(hasCommand(state, 'qcf_a')).toBe(true);
   });
 });

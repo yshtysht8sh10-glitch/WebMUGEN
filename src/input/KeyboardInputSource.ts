@@ -1,8 +1,11 @@
 import type { FrameInput } from '../core/engine/types';
+import { InputBuffer } from './InputBuffer';
 
 export class KeyboardInputSource {
   private readonly pressed = new Set<string>();
   private readonly justPressed = new Set<string>();
+  private readonly p1Buffer = new InputBuffer(60);
+  private readonly p2Buffer = new InputBuffer(60);
 
   constructor() {
     window.addEventListener('keydown', this.handleKeyDown);
@@ -10,20 +13,33 @@ export class KeyboardInputSource {
   }
 
   readFrameInput(): FrameInput {
+    const p1 = {
+      left: this.pressed.has('ArrowLeft'),
+      right: this.pressed.has('ArrowRight'),
+      up: this.pressed.has('ArrowUp'),
+      down: this.pressed.has('ArrowDown'),
+      attack: this.justPressed.has('KeyA'),
+    };
+
+    const p2 = {
+      left: this.pressed.has('KeyJ'),
+      right: this.pressed.has('KeyL'),
+      up: this.pressed.has('KeyI'),
+      down: this.pressed.has('KeyK'),
+      attack: this.justPressed.has('KeyF'),
+    };
+
+    this.p1Buffer.push(p1);
+    this.p2Buffer.push(p2);
+
     const frameInput: FrameInput = {
       p1: {
-        left: this.pressed.has('ArrowLeft'),
-        right: this.pressed.has('ArrowRight'),
-        up: this.pressed.has('ArrowUp'),
-        down: this.pressed.has('ArrowDown'),
-        attack: this.justPressed.has('KeyA'),
+        ...p1,
+        inputBuffer: this.p1Buffer,
       },
       p2: {
-        left: this.pressed.has('KeyJ'),
-        right: this.pressed.has('KeyL'),
-        up: this.pressed.has('KeyI'),
-        down: this.pressed.has('KeyK'),
-        attack: this.justPressed.has('KeyF'),
+        ...p2,
+        inputBuffer: this.p2Buffer,
       },
     };
 

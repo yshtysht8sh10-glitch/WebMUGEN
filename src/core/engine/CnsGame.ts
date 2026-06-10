@@ -15,10 +15,7 @@ export function stepGameByCns(
   airDocument?: AirDocument,
   cmdDocument?: CmdDocument,
 ): GameState {
-  const p1Input = attachCommands(
-    input.p1,
-    cmdDocument,
-  );
+  const p1Input = attachCommands(input.p1, cmdDocument);
   const p2Input = attachCommands(
     input.p2 ?? {
       left: false,
@@ -61,7 +58,7 @@ function attachCommands(input: PlayerInput, cmdDocument?: CmdDocument): PlayerIn
 
   return {
     ...input,
-    commandNames: resolveCommands(cmdDocument, input).activeCommandNames,
+    commandNames: resolveCommands(cmdDocument, input, input.inputBuffer).activeCommandNames,
   };
 }
 
