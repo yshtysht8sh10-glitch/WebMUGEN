@@ -1,0 +1,13 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "eamodio.gitlens",
+    "usernamehw.errorlens",
+    "christian-kohler.path-intellisense",
+    "ms-vscode.hexeditor",
+    "github.vscode-pull-request-github",
+    "hediet.vscode-drawio",
+    "github.copilot"
+  ]
+}
