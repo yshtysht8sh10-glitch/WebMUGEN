@@ -5,6 +5,8 @@ export type AirDocument = {
 export type AirAction = {
   actionNo: number;
   elements: AirElement[];
+  defaultClsn1: AirCollisionBox[];
+  defaultClsn2: AirCollisionBox[];
 };
 
 export type AirElement = {
@@ -15,4 +17,13 @@ export type AirElement = {
   duration: number;
   flip?: string;
   blend?: string;
+  clsn1: AirCollisionBox[];
+  clsn2: AirCollisionBox[];
+};
+
+export type AirCollisionBox = {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
 };

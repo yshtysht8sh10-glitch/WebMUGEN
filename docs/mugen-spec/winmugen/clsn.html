@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ja">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>WinMUGEN Clsn Notes</title>
+<style>body{font-family:system-ui,sans-serif;line-height:1.75;max-width:980px;margin:32px auto;padding:0 20px}code{background:#eee;padding:2px 5px;border-radius:4px}pre{background:#111827;color:#e5e7eb;padding:16px;overflow:auto;border-radius:8px}</style></head>
+<body>
+<h1>WinMUGEN Clsn Notes</h1>
+<p>ClsnはAIR内で定義される当たり判定枠。</p>
+<h2>種類</h2>
+<ul><li><code>Clsn1</code>: 攻撃判定</li><li><code>Clsn2</code>: 食らい判定</li></ul>
+<h2>例</h2>
+<pre>Begin Action 200
+
+Clsn2Default: 1
+ Clsn2[0] = -10,-78,10,0
+
+Clsn1: 1
+ Clsn1[0] = 15,-50,55,-40
+
+200,0, 0,0, 3</pre>
+</body></html>
