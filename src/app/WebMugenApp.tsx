@@ -48,7 +48,7 @@ export function WebMugenApp() {
     <main className="app-shell">
       <header className="app-header">
         <h1>WebMUGEN</h1>
-        <p>CNS-driven minimal engine prototype</p>
+        <p>CNS-driven movement prototype</p>
       </header>
 
       <section className="stage-panel">
@@ -56,8 +56,8 @@ export function WebMugenApp() {
       </section>
 
       <section className="help-panel">
-        <p>操作: → 移動、A 攻撃</p>
-        <p>この版では、CNS風テキストをparserで読み取り、State Controllerに従ってキャラクターを動かします。</p>
+        <p>操作: ← / → 移動、↑ ジャンプ、A 攻撃</p>
+        <p>この版では、CNS風テキストで前進・後退・ジャンプ・重力・着地を動かします。</p>
       </section>
     </main>
   );

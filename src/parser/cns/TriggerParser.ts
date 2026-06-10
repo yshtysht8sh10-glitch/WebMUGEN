@@ -1,7 +1,20 @@
 import type { TriggerExpression } from './TriggerExpression';
 
 const binaryOperators = ['!=', '>=', '<=', '=', '>', '<'] as const;
-const knownIdentifiers = new Set(['time', 'animtime', 'ctrl', 'statetype', 'movetype', 'physics', 'movehit', 'command']);
+const knownIdentifiers = new Set([
+  'time',
+  'animtime',
+  'ctrl',
+  'statetype',
+  'movetype',
+  'physics',
+  'movehit',
+  'command',
+  'pos y',
+  'pos x',
+  'vel y',
+  'vel x',
+]);
 
 export function parseTriggerExpression(text: string): TriggerExpression {
   const expression = text.trim();

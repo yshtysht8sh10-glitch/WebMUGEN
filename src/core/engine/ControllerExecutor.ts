@@ -14,6 +14,8 @@ export type ControllerExecutionResult = {
   changedState: boolean;
 };
 
+const DEFAULT_GRAVITY = 0.45;
+
 export function executeControllers(
   player: PlayerState,
   controllers: CnsStateController[],
@@ -52,8 +54,6 @@ function shouldExecuteController(
     return true;
   }
 
-  // Phase4ではtriggerを単純ANDとして扱う。
-  // MUGEN本来のtrigger1/trigger2の評価規則は後続Phaseで対応する。
   return controller.triggers.every((trigger) =>
     evaluateTriggerAsBoolean(parseTriggerExpression(trigger.expression), {
       player,
@@ -101,6 +101,12 @@ export function executeController(
     case 'statetypeset':
       return {
         player: executeStateTypeSet(player, controller),
+        changedState: false,
+      };
+
+    case 'gravity':
+      return {
+        player: executeGravity(player, controller),
         changedState: false,
       };
 
@@ -175,6 +181,13 @@ function executeStateTypeSet(player: PlayerState, controller: CnsStateController
     stateType: readString(controller, 'statetype', player.stateType) as PlayerState['stateType'],
     moveType: readString(controller, 'movetype', player.moveType) as PlayerState['moveType'],
     physics: readString(controller, 'physics', player.physics) as PlayerState['physics'],
+  };
+}
+
+function executeGravity(player: PlayerState, controller: CnsStateController): PlayerState {
+  return {
+    ...player,
+    vy: player.vy + readNumber(controller, 'y', DEFAULT_GRAVITY),
   };
 }
 

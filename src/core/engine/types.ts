@@ -1,6 +1,7 @@
 export type PlayerInput = {
   left: boolean;
   right: boolean;
+  up?: boolean;
   attack: boolean;
 };
 

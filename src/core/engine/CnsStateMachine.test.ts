@@ -4,7 +4,7 @@ import { createInitialGameState } from './GameState';
 import { stepPlayerByCns } from './CnsStateMachine';
 
 describe('stepPlayerByCns', () => {
-  it('changes state when trigger is true', () => {
+  it('keeps stateTime at 0 immediately after ChangeState', () => {
     const document = parseCnsText(`
 [StateDef 0]
 type = S
@@ -36,11 +36,11 @@ ctrl = 1
     });
 
     expect(nextPlayer.stateNo).toBe(20);
-    expect(nextPlayer.stateTime).toBe(1);
+    expect(nextPlayer.stateTime).toBe(0);
     expect(nextPlayer.animNo).toBe(20);
   });
 
-  it('executes VelSet in current state and applies velocity', () => {
+  it('executes VelSet on time 0 after entering a state', () => {
     const document = parseCnsText(`
 [StateDef 20]
 type = S
@@ -59,6 +59,7 @@ y = 0
     const player = {
       ...createInitialGameState().players[0],
       stateNo: 20,
+      stateTime: 0,
       animNo: 20,
     };
 
@@ -70,6 +71,7 @@ y = 0
 
     expect(nextPlayer.vx).toBe(2);
     expect(nextPlayer.x).toBe(player.x + 2);
+    expect(nextPlayer.stateTime).toBe(1);
   });
 
   it('executes PosAdd', () => {

@@ -50,8 +50,26 @@ function evaluateIdentifier(
     case 'statetype':
       return context.player.stateType;
 
+    case 'movetype':
+      return context.player.moveType;
+
+    case 'physics':
+      return context.player.physics;
+
     case 'movehit':
       return context.moveHit;
+
+    case 'pos x':
+      return context.player.x;
+
+    case 'pos y':
+      return context.player.y;
+
+    case 'vel x':
+      return context.player.vx;
+
+    case 'vel y':
+      return context.player.vy;
 
     case 'command':
       return '';
@@ -126,6 +144,9 @@ function isCommandActive(commandName: string, input: PlayerInput): boolean {
 
     case 'holdback':
       return input.left;
+
+    case 'holdup':
+      return input.up ?? false;
 
     case 'a':
       return input.attack;

@@ -8,6 +8,8 @@ export type StepPlayerByCnsContext = {
   moveHit: boolean;
 };
 
+const GROUND_Y = 285;
+
 export function stepPlayerByCns(
   player: PlayerState,
   document: CnsDocument,
@@ -16,6 +18,7 @@ export function stepPlayerByCns(
   const state = findStateDefinition(document, player.stateNo);
 
   let nextPlayer = player;
+  let changedState = false;
 
   if (state !== undefined) {
     nextPlayer = applyStateDefDefaults(nextPlayer, state);
@@ -27,6 +30,22 @@ export function stepPlayerByCns(
     });
 
     nextPlayer = result.player;
+    changedState = result.changedState;
+  }
+
+  // ChangeStateしたフレームでは、新しいStateの time = 0 を次フレームに残す。
+  // これをしないと、遷移先Stateの trigger1 = time = 0 が一度も成立しない。
+  if (changedState) {
+    const nextState = findStateDefinition(document, nextPlayer.stateNo);
+    if (nextState !== undefined) {
+      nextPlayer = applyStateDefDefaults(nextPlayer, nextState);
+    }
+
+    return {
+      ...nextPlayer,
+      stateTime: 0,
+      animTime: 0,
+    };
   }
 
   nextPlayer = applyVelocity(nextPlayer);
@@ -69,10 +88,13 @@ function applyVelocity(player: PlayerState): PlayerState {
 }
 
 function clampToStage(player: PlayerState): PlayerState {
+  const clampedY = Math.max(0, Math.min(GROUND_Y, player.y));
+
   return {
     ...player,
     x: Math.max(20, Math.min(620, player.x)),
-    y: Math.max(0, Math.min(285, player.y)),
+    y: clampedY,
+    vy: clampedY >= GROUND_Y && player.vy > 0 ? 0 : player.vy,
   };
 }
 
