@@ -9,14 +9,18 @@ import { getAttackBox, getBodyBox, isAttackActive } from '../../core/engine/Simp
 import { getProjectileWorldBox } from '../../core/projectile/ProjectileSystem';
 import { findSprite } from '../../core/sprite/SpritePackLoader';
 import type { SpritePack } from '../../core/sprite/SpriteTypes';
+import type { ImageDataSpritePack } from '../../core/sprite/ImageDataSpriteTypes';
+import { ImageDataSpriteRenderer } from './ImageDataSpriteRenderer';
 
 export class CanvasRenderer {
   private readonly context: CanvasRenderingContext2D;
+  private readonly imageDataSpriteRenderer = new ImageDataSpriteRenderer();
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly airDocument?: AirDocument,
     private readonly spritePack?: SpritePack | null,
+    private readonly imageDataSpritePack?: ImageDataSpritePack | null,
   ) {
     const context = canvas.getContext('2d');
     if (!context) throw new Error('CanvasRenderingContext2D is not available.');
@@ -60,17 +64,23 @@ export class CanvasRenderer {
       const currentElement = this.airDocument
         ? getCurrentAnimationElement(this.airDocument, projectile.animNo, projectile.animTime)
         : null;
-      const sprite =
-        currentElement &&
-        findSprite(this.spritePack, currentElement.element.groupNo, currentElement.element.imageNo);
 
-      if (sprite) {
-        ctx.save();
-        ctx.translate(projectile.x, projectile.y);
-        ctx.scale(projectile.facing, 1);
-        ctx.drawImage(sprite.image, -sprite.xAxis, -sprite.yAxis);
-        ctx.restore();
-        continue;
+      if (currentElement) {
+        const drawn = this.drawSpriteByElement(
+          ctx,
+          currentElement.element.groupNo,
+          currentElement.element.imageNo,
+          projectile.x,
+          projectile.y,
+          projectile.facing,
+          currentElement.element.offsetX,
+          currentElement.element.offsetY,
+          currentElement.element.flip,
+        );
+
+        if (drawn) {
+          continue;
+        }
       }
 
       ctx.save();
@@ -92,24 +102,67 @@ export class CanvasRenderer {
     const currentElement = this.airDocument
       ? getCurrentAnimationElement(this.airDocument, player.animNo, player.animTime)
       : null;
-    const sprite =
-      currentElement &&
-      findSprite(this.spritePack, currentElement.element.groupNo, currentElement.element.imageNo);
 
-    if (sprite) {
-      const offsetX = currentElement?.element.offsetX ?? 0;
-      const offsetY = currentElement?.element.offsetY ?? 0;
-      const flipX = currentElement?.element.flip?.toUpperCase().includes('H') ?? false;
+    if (currentElement) {
+      const drawn = this.drawSpriteByElement(
+        ctx,
+        currentElement.element.groupNo,
+        currentElement.element.imageNo,
+        player.x,
+        player.y,
+        player.facing,
+        currentElement.element.offsetX,
+        currentElement.element.offsetY,
+        currentElement.element.flip,
+      );
 
-      this.context.save();
-      this.context.translate(player.x, player.y);
-      this.context.scale(player.facing * (flipX ? -1 : 1), 1);
-      this.context.drawImage(sprite.image, -sprite.xAxis + offsetX, -sprite.yAxis + offsetY);
-      this.context.restore();
-      return;
+      if (drawn) {
+        return;
+      }
     }
 
     this.drawFallbackPlayer(ctx, player, color, currentElement);
+  }
+
+  private drawSpriteByElement(
+    ctx: CanvasRenderingContext2D,
+    groupNo: number,
+    imageNo: number,
+    x: number,
+    y: number,
+    facing: 1 | -1,
+    offsetX = 0,
+    offsetY = 0,
+    flip = '',
+  ): boolean {
+    const flipX = flip.toUpperCase().includes('H');
+
+    const imageDataSprite = this.imageDataSpritePack?.sprites.get(`${groupNo},${imageNo}`);
+    if (imageDataSprite) {
+      const canvas = this.imageDataSpriteRenderer.findCanvas(this.imageDataSpritePack, groupNo, imageNo);
+      if (!canvas) {
+        return false;
+      }
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(facing * (flipX ? -1 : 1), 1);
+      ctx.drawImage(canvas, -imageDataSprite.xAxis + offsetX, -imageDataSprite.yAxis + offsetY);
+      ctx.restore();
+      return true;
+    }
+
+    const sprite = findSprite(this.spritePack, groupNo, imageNo);
+    if (sprite) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(facing * (flipX ? -1 : 1), 1);
+      ctx.drawImage(sprite.image, -sprite.xAxis + offsetX, -sprite.yAxis + offsetY);
+      ctx.restore();
+      return true;
+    }
+
+    return false;
   }
 
   private drawFallbackPlayer(

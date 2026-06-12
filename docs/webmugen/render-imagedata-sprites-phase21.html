@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en" data-doc-lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Render ImageData Sprites Phase21</title>
+<style>
+body{font-family:system-ui,sans-serif;line-height:1.75;max-width:980px;margin:32px auto;padding:0 20px}
+.lang-switch{display:flex;gap:8px;justify-content:flex-end;margin-bottom:24px}
+.lang-switch button{border:1px solid #888;background:transparent;border-radius:999px;padding:6px 12px;cursor:pointer}
+.lang-switch button.active{background:#111827;color:#fff;border-color:#111827}
+[data-lang]{display:none}
+html[data-doc-lang="en"] [data-lang="en"]{display:block}
+html[data-doc-lang="ja"] [data-lang="ja"]{display:block}
+code{background:rgba(127,127,127,.18);padding:2px 5px;border-radius:4px}
+</style>
+<script>
+(function(){
+  const saved = localStorage.getItem("webmugen-doc-lang");
+  const lang = saved || "en";
+  document.documentElement.setAttribute("data-doc-lang", lang);
+  window.setWebMugenDocLang = function(nextLang){
+    localStorage.setItem("webmugen-doc-lang", nextLang);
+    document.documentElement.setAttribute("data-doc-lang", nextLang);
+    document.querySelectorAll("[data-lang-button]").forEach(function(button){
+      button.classList.toggle("active", button.getAttribute("data-lang-button") === nextLang);
+    });
+  };
+  window.addEventListener("DOMContentLoaded", function(){
+    document.querySelectorAll("[data-lang-button]").forEach(function(button){
+      button.classList.toggle("active", button.getAttribute("data-lang-button") === lang);
+    });
+  });
+})();
+</script></head>
+<body>
+<nav class="lang-switch">
+  <button type="button" data-lang-button="en" onclick="setWebMugenDocLang('en')">English</button>
+  <button type="button" data-lang-button="ja" onclick="setWebMugenDocLang('ja')">日本語</button>
+</nav>
+<section data-lang="en">
+<h1>Render ImageData Sprites Phase21</h1>
+<p>This phase connects ImageDataSpritePack to the main CanvasRenderer.</p>
+<ul>
+<li>CanvasRenderer accepts ImageDataSpritePack</li>
+<li>ImageData sprites are converted to cached offscreen canvases</li>
+<li>AIR group/image can resolve to SFF-derived ImageData sprites</li>
+<li>PNG SpritePack remains as fallback</li>
+<li>Fallback stick-figure drawing still works when no sprite is found</li>
+</ul>
+<p>Phase22 will add a character asset loader that fetches def/air/cns/cmd/sff files.</p>
+</section>
+<section data-lang="ja">
+<h1>Render ImageData Sprites Phase21</h1>
+<p>このフェーズでは、ImageDataSpritePackをメインCanvasRendererへ接続します。</p>
+<ul>
+<li>CanvasRendererがImageDataSpritePackを受け取れる</li>
+<li>ImageData Spriteをキャッシュ済みの内部Canvasへ変換</li>
+<li>AIRのgroup/imageからSFF由来ImageData Spriteを解決</li>
+<li>PNG SpritePackはフォールバックとして残す</li>
+<li>Spriteが見つからない場合は従来の棒人間描画を継続</li>
+</ul>
+<p>Phase22では、def/air/cns/cmd/sffを取得するキャラクターアセットローダーを追加します。</p>
+</section>
+</body></html>
