@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en" data-doc-lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SFF to SpritePack Phase20</title>
+<style>
+body{font-family:system-ui,sans-serif;line-height:1.75;max-width:980px;margin:32px auto;padding:0 20px}
+.lang-switch{display:flex;gap:8px;justify-content:flex-end;margin-bottom:24px}
+.lang-switch button{border:1px solid #888;background:transparent;border-radius:999px;padding:6px 12px;cursor:pointer}
+.lang-switch button.active{background:#111827;color:#fff;border-color:#111827}
+[data-lang]{display:none}
+html[data-doc-lang="en"] [data-lang="en"]{display:block}
+html[data-doc-lang="ja"] [data-lang="ja"]{display:block}
+code{background:rgba(127,127,127,.18);padding:2px 5px;border-radius:4px}
+</style>
+<script>
+(function(){
+  const saved = localStorage.getItem("webmugen-doc-lang");
+  const lang = saved || "en";
+  document.documentElement.setAttribute("data-doc-lang", lang);
+  window.setWebMugenDocLang = function(nextLang){
+    localStorage.setItem("webmugen-doc-lang", nextLang);
+    document.documentElement.setAttribute("data-doc-lang", nextLang);
+    document.querySelectorAll("[data-lang-button]").forEach(function(button){
+      button.classList.toggle("active", button.getAttribute("data-lang-button") === nextLang);
+    });
+  };
+  window.addEventListener("DOMContentLoaded", function(){
+    document.querySelectorAll("[data-lang-button]").forEach(function(button){
+      button.classList.toggle("active", button.getAttribute("data-lang-button") === lang);
+    });
+  });
+})();
+</script></head>
+<body>
+<nav class="lang-switch">
+  <button type="button" data-lang-button="en" onclick="setWebMugenDocLang('en')">English</button>
+  <button type="button" data-lang-button="ja" onclick="setWebMugenDocLang('ja')">日本語</button>
+</nav>
+<section data-lang="en">
+<h1>SFF to SpritePack Phase20</h1>
+<p>This phase connects the SFF v1 parser and the PCX decoder.</p>
+<ul>
+<li>SFF document to ImageDataSpritePack conversion</li>
+<li>SFF sprite raw data to PCX decoding</li>
+<li>PCX RGBA pixels to ImageData</li>
+<li>Linked sprite resolution</li>
+<li>ImageData sprite canvas cache helper</li>
+</ul>
+<p>Phase21 will connect this ImageDataSpritePack to the main CanvasRenderer and character loading flow.</p>
+</section>
+<section data-lang="ja">
+<h1>SFF to SpritePack Phase20</h1>
+<p>このフェーズでは、SFF v1パーサとPCXデコーダを接続します。</p>
+<ul>
+<li>SFF DocumentからImageDataSpritePackへの変換</li>
+<li>SFF sprite raw dataからPCXデコード</li>
+<li>PCX RGBA pixelsからImageData作成</li>
+<li>Linked Sprite解決</li>
+<li>ImageData Sprite用Canvasキャッシュヘルパ</li>
+</ul>
+<p>Phase21では、このImageDataSpritePackをメインCanvasRendererとキャラクター読み込みフローへ接続します。</p>
+</section>
+</body></html>
