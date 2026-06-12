@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en" data-doc-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SFF v1 Parser Phase18</title>
+<style>
+body{font-family:system-ui,sans-serif;line-height:1.75;max-width:980px;margin:32px auto;padding:0 20px}
+.lang-switch{display:flex;gap:8px;justify-content:flex-end;margin-bottom:24px}
+.lang-switch button{border:1px solid #888;background:transparent;border-radius:999px;padding:6px 12px;cursor:pointer}
+.lang-switch button.active{background:#111827;color:#fff;border-color:#111827}
+[data-lang]{display:none}
+html[data-doc-lang="en"] [data-lang="en"]{display:block}
+html[data-doc-lang="ja"] [data-lang="ja"]{display:block}
+pre{background:#111827;color:#e5e7eb;padding:16px;border-radius:8px;overflow:auto}
+code{background:rgba(127,127,127,.18);padding:2px 5px;border-radius:4px}
+</style>
+<script>
+(function(){
+  const saved = localStorage.getItem("webmugen-doc-lang");
+  const lang = saved || "en";
+  document.documentElement.setAttribute("data-doc-lang", lang);
+  window.setWebMugenDocLang = function(nextLang){
+    localStorage.setItem("webmugen-doc-lang", nextLang);
+    document.documentElement.setAttribute("data-doc-lang", nextLang);
+    document.querySelectorAll("[data-lang-button]").forEach(function(button){
+      button.classList.toggle("active", button.getAttribute("data-lang-button") === nextLang);
+    });
+  };
+  window.addEventListener("DOMContentLoaded", function(){
+    document.querySelectorAll("[data-lang-button]").forEach(function(button){
+      button.classList.toggle("active", button.getAttribute("data-lang-button") === lang);
+    });
+  });
+})();
+</script>
+</head>
+<body>
+<nav class="lang-switch">
+  <button type="button" data-lang-button="en" onclick="setWebMugenDocLang('en')">English</button>
+  <button type="button" data-lang-button="ja" onclick="setWebMugenDocLang('ja')">日本語</button>
+</nav>
+
+<section data-lang="en">
+<h1>SFF v1 Parser Phase18</h1>
+<p>This phase introduces the first binary SFF v1 parser.</p>
+<h2>Implemented</h2>
+<ul>
+<li>SFF header parsing</li>
+<li>Sprite subfile node parsing</li>
+<li><code>groupNo</code> / <code>imageNo</code> lookup</li>
+<li><code>xAxis</code> / <code>yAxis</code> extraction</li>
+<li>Linked sprite detection</li>
+<li>Raw sprite data slicing</li>
+</ul>
+<h2>Not implemented yet</h2>
+<ul>
+<li>PCX decoding</li>
+<li>Palette handling</li>
+<li>Conversion to Canvas Image / ImageBitmap</li>
+</ul>
+</section>
+
+<section data-lang="ja">
+<h1>SFF v1 Parser Phase18</h1>
+<p>このフェーズでは、SFF v1バイナリパーサの入口を実装します。</p>
+<h2>実装内容</h2>
+<ul>
+<li>SFFヘッダー解析</li>
+<li>Spriteサブファイルノード解析</li>
+<li><code>groupNo</code> / <code>imageNo</code> 検索</li>
+<li><code>xAxis</code> / <code>yAxis</code> 取り出し</li>
+<li>Linked Sprite判定</li>
+<li>生Spriteデータの切り出し</li>
+</ul>
+<h2>まだ未実装</h2>
+<ul>
+<li>PCXデコード</li>
+<li>パレット処理</li>
+<li>Canvas用Image / ImageBitmapへの変換</li>
+</ul>
+</section>
+</body>
+</html>
