@@ -4,15 +4,25 @@ const PCX_HEADER_SIZE = 128;
 const PCX_PALETTE_MARKER = 0x0c;
 const VGA_PALETTE_SIZE = 256 * 3;
 
-export function decodePcx(buffer: Uint8Array | ArrayBuffer): PcxImage {
+export type DecodePcxOptions = {
+  externalPalette?: Uint8Array;
+};
+
+export function decodePcx(buffer: Uint8Array | ArrayBuffer, options: DecodePcxOptions = {}): PcxImage {
   const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
   const header = parsePcxHeader(bytes);
 
-  validateSupportedPcx(header, bytes);
+  validateSupportedPcxHeader(header, bytes);
 
-  const palette = readVgaPalette(bytes);
+  const embeddedPalette = tryReadVgaPalette(bytes);
+  const palette = embeddedPalette ?? normalizeExternalPalette(options.externalPalette);
+
+  if (!palette) {
+    throw new Error('PCX VGA palette marker is missing.');
+  }
+
   const imageDataStart = PCX_HEADER_SIZE;
-  const imageDataEnd = bytes.length - 1 - VGA_PALETTE_SIZE;
+  const imageDataEnd = embeddedPalette ? bytes.length - 1 - VGA_PALETTE_SIZE : bytes.length;
   const decoded = decodeRle(bytes.subarray(imageDataStart, imageDataEnd));
   const indexedPixels = extractIndexedPixels(decoded, header);
   const rgbaPixels = indexedToRgba(indexedPixels, palette);
@@ -82,7 +92,20 @@ export function decodeRle(data: Uint8Array): Uint8Array {
   return new Uint8Array(output);
 }
 
-function validateSupportedPcx(header: PcxHeader, bytes: Uint8Array): void {
+export function tryReadVgaPalette(bytes: Uint8Array): Uint8Array | null {
+  if (bytes.length < PCX_HEADER_SIZE + 1 + VGA_PALETTE_SIZE) {
+    return null;
+  }
+
+  const paletteMarkerOffset = bytes.length - 1 - VGA_PALETTE_SIZE;
+  if (bytes[paletteMarkerOffset] !== PCX_PALETTE_MARKER) {
+    return null;
+  }
+
+  return bytes.slice(bytes.length - VGA_PALETTE_SIZE);
+}
+
+function validateSupportedPcxHeader(header: PcxHeader, bytes: Uint8Array): void {
   if (header.manufacturer !== 0x0a) {
     throw new Error(`Unsupported PCX manufacturer: ${header.manufacturer}`);
   }
@@ -97,19 +120,21 @@ function validateSupportedPcx(header: PcxHeader, bytes: Uint8Array): void {
     );
   }
 
-  if (bytes.length < PCX_HEADER_SIZE + 1 + VGA_PALETTE_SIZE) {
-    throw new Error('PCX data does not contain a 256-color VGA palette.');
-  }
-
-  const paletteMarkerOffset = bytes.length - 1 - VGA_PALETTE_SIZE;
-  if (bytes[paletteMarkerOffset] !== PCX_PALETTE_MARKER) {
-    throw new Error('PCX VGA palette marker is missing.');
+  if (bytes.length < PCX_HEADER_SIZE) {
+    throw new Error('PCX data is too small.');
   }
 }
 
-function readVgaPalette(bytes: Uint8Array): Uint8Array {
-  const paletteStart = bytes.length - VGA_PALETTE_SIZE;
-  return bytes.slice(paletteStart);
+function normalizeExternalPalette(palette: Uint8Array | undefined): Uint8Array | null {
+  if (!palette) {
+    return null;
+  }
+
+  if (palette.length !== VGA_PALETTE_SIZE) {
+    throw new Error(`Invalid external PCX palette size: ${palette.length}`);
+  }
+
+  return palette;
 }
 
 function extractIndexedPixels(decoded: Uint8Array, header: PcxHeader): Uint8Array {

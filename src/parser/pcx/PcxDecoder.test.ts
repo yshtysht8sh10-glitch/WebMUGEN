@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { decodePcx, decodeRle, parsePcxHeader } from './PcxDecoder';
+import { decodePcx, decodeRle, parsePcxHeader, tryReadVgaPalette } from './PcxDecoder';
 
-function createFake8BitPcx(): Uint8Array {
+function createFake8BitPcx(withPalette = true): Uint8Array {
   const width = 3;
   const height = 2;
   const bytesPerLine = 4;
@@ -24,42 +24,33 @@ function createFake8BitPcx(): Uint8Array {
   view.setUint16(66, bytesPerLine, true);
   view.setUint16(68, 1, true);
 
-  // Two rows, each padded to bytesPerLine.
-  // Row0: 1,2,3,pad0
-  // Row1: 4,5,6,pad0
-  const imageData = new Uint8Array([
-    1, 2, 3, 0,
-    4, 5, 6, 0,
-  ]);
+  const imageData = new Uint8Array([1, 2, 3, 0, 4, 5, 6, 0]);
+  const palette = createPalette();
+
+  if (!withPalette) {
+    const result = new Uint8Array(header.length + imageData.length);
+    result.set(header, 0);
+    result.set(imageData, header.length);
+    return result;
+  }
 
   const paletteMarker = new Uint8Array([0x0c]);
-  const palette = new Uint8Array(256 * 3);
-  palette[1 * 3] = 10;
-  palette[1 * 3 + 1] = 20;
-  palette[1 * 3 + 2] = 30;
-  palette[2 * 3] = 40;
-  palette[2 * 3 + 1] = 50;
-  palette[2 * 3 + 2] = 60;
-  palette[3 * 3] = 70;
-  palette[3 * 3 + 1] = 80;
-  palette[3 * 3 + 2] = 90;
-  palette[4 * 3] = 100;
-  palette[4 * 3 + 1] = 110;
-  palette[4 * 3 + 2] = 120;
-  palette[5 * 3] = 130;
-  palette[5 * 3 + 1] = 140;
-  palette[5 * 3 + 2] = 150;
-  palette[6 * 3] = 160;
-  palette[6 * 3 + 1] = 170;
-  palette[6 * 3 + 2] = 180;
-
   const result = new Uint8Array(header.length + imageData.length + paletteMarker.length + palette.length);
   result.set(header, 0);
   result.set(imageData, header.length);
   result.set(paletteMarker, header.length + imageData.length);
   result.set(palette, header.length + imageData.length + paletteMarker.length);
-
   return result;
+}
+
+function createPalette(): Uint8Array {
+  const palette = new Uint8Array(256 * 3);
+  for (let i = 1; i <= 6; i += 1) {
+    palette[i * 3] = i * 10;
+    palette[i * 3 + 1] = i * 10 + 1;
+    palette[i * 3 + 2] = i * 10 + 2;
+  }
+  return palette;
 }
 
 describe('PcxDecoder', () => {
@@ -77,16 +68,36 @@ describe('PcxDecoder', () => {
     expect(header.bytesPerLine).toBe(4);
   });
 
+  it('reads embedded VGA palette', () => {
+    const palette = tryReadVgaPalette(createFake8BitPcx());
+
+    expect(palette).toBeDefined();
+    expect(palette?.length).toBe(768);
+  });
+
   it('decodes indexed pixels and RGBA pixels', () => {
     const image = decodePcx(createFake8BitPcx());
 
     expect(Array.from(image.indexedPixels)).toEqual([1, 2, 3, 4, 5, 6]);
     expect(Array.from(image.rgbaPixels.slice(0, 8))).toEqual([
-      10, 20, 30, 255,
-      40, 50, 60, 255,
+      10, 11, 12, 255,
+      20, 21, 22, 255,
     ]);
     expect(image.width).toBe(3);
     expect(image.height).toBe(2);
+  });
+
+  it('decodes PCX without embedded palette by using external shared palette', () => {
+    const image = decodePcx(createFake8BitPcx(false), {
+      externalPalette: createPalette(),
+    });
+
+    expect(Array.from(image.indexedPixels)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(Array.from(image.rgbaPixels.slice(0, 4))).toEqual([10, 11, 12, 255]);
+  });
+
+  it('throws when palette is missing and no external palette is provided', () => {
+    expect(() => decodePcx(createFake8BitPcx(false))).toThrow('PCX VGA palette marker is missing.');
   });
 
   it('uses palette index 0 as transparent', () => {

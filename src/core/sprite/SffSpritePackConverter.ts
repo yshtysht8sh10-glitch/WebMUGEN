@@ -1,4 +1,4 @@
-import { decodePcx } from '../../parser/pcx/PcxDecoder';
+import { decodePcx, tryReadVgaPalette } from '../../parser/pcx/PcxDecoder';
 import { findSffSprite, getSpriteData, parseSffV1 } from '../../parser/sff/SffParser';
 import type { SffDocument, SffSpriteNode } from '../../parser/sff/SffTypes';
 import { spriteKey } from './SpritePackLoader';
@@ -10,6 +10,7 @@ export function convertSffV1ToImageDataSpritePack(buffer: ArrayBuffer): ImageDat
 
 export function convertSffDocumentToImageDataSpritePack(document: SffDocument): ImageDataSpritePack {
   const sprites = new Map<string, ImageDataSprite>();
+  const sharedPalette = findSharedPalette(document);
 
   for (const sprite of document.sprites) {
     const sourceSprite = resolveLinkedSprite(document, sprite);
@@ -22,7 +23,7 @@ export function convertSffDocumentToImageDataSpritePack(document: SffDocument): 
       continue;
     }
 
-    const pcx = decodePcx(rawData);
+    const pcx = decodePcx(rawData, { externalPalette: sharedPalette ?? undefined });
 
     sprites.set(spriteKey(sprite.groupNo, sprite.imageNo), {
       groupNo: sprite.groupNo,
@@ -52,4 +53,20 @@ export function resolveLinkedSprite(
   }
 
   return findSffSprite(document, sprite.groupNo, sprite.linkedIndex);
+}
+
+export function findSharedPalette(document: SffDocument): Uint8Array | null {
+  for (const sprite of document.sprites) {
+    if (sprite.isLinked) {
+      continue;
+    }
+
+    const rawData = getSpriteData(document, sprite);
+    const palette = tryReadVgaPalette(rawData);
+    if (palette) {
+      return palette;
+    }
+  }
+
+  return null;
 }

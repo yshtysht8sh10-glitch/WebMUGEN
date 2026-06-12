@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en" data-doc-lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SFF Shared Palette Phase24</title>
+<style>
+body{font-family:system-ui,sans-serif;line-height:1.75;max-width:980px;margin:32px auto;padding:0 20px}
+.lang-switch{display:flex;gap:8px;justify-content:flex-end;margin-bottom:24px}
+.lang-switch button{border:1px solid #888;background:transparent;border-radius:999px;padding:6px 12px;cursor:pointer}
+.lang-switch button.active{background:#111827;color:#fff;border-color:#111827}
+[data-lang]{display:none}
+html[data-doc-lang="en"] [data-lang="en"]{display:block}
+html[data-doc-lang="ja"] [data-lang="ja"]{display:block}
+code{background:rgba(127,127,127,.18);padding:2px 5px;border-radius:4px}
+</style>
+<script>
+(function(){
+  const saved = localStorage.getItem("webmugen-doc-lang");
+  const lang = saved || "en";
+  document.documentElement.setAttribute("data-doc-lang", lang);
+  window.setWebMugenDocLang = function(nextLang){
+    localStorage.setItem("webmugen-doc-lang", nextLang);
+    document.documentElement.setAttribute("data-doc-lang", nextLang);
+    document.querySelectorAll("[data-lang-button]").forEach(function(button){
+      button.classList.toggle("active", button.getAttribute("data-lang-button") === nextLang);
+    });
+  };
+  window.addEventListener("DOMContentLoaded", function(){
+    document.querySelectorAll("[data-lang-button]").forEach(function(button){
+      button.classList.toggle("active", button.getAttribute("data-lang-button") === lang);
+    });
+  });
+})();
+</script></head>
+<body>
+<nav class="lang-switch">
+  <button type="button" data-lang-button="en" onclick="setWebMugenDocLang('en')">English</button>
+  <button type="button" data-lang-button="ja" onclick="setWebMugenDocLang('ja')">日本語</button>
+</nav>
+<section data-lang="en">
+<h1>SFF Shared Palette Phase24</h1>
+<p>This phase adds shared palette support for SFF v1 sprites.</p>
+<ul>
+<li>PCX decoder accepts an external 256-color palette</li>
+<li>PCX decoder can detect embedded VGA palettes without throwing immediately</li>
+<li>SFF converter scans sprites and finds a shared palette</li>
+<li>Sprites without embedded palettes are decoded with the shared palette</li>
+</ul>
+<p>This should move KFM loading past the previous error: <code>PCX VGA palette marker is missing.</code></p>
+</section>
+<section data-lang="ja">
+<h1>SFF Shared Palette Phase24</h1>
+<p>このフェーズでは、SFF v1 Spriteの共有パレットに対応します。</p>
+<ul>
+<li>PCXデコーダが外部256色パレットを受け取れる</li>
+<li>PCXデコーダが埋め込みVGAパレットを安全に検出できる</li>
+<li>SFF変換処理がSprite群から共有パレットを探す</li>
+<li>パレットを持たないSpriteを共有パレットでデコードする</li>
+</ul>
+<p>これにより、KFM読み込み時の <code>PCX VGA palette marker is missing.</code> を越えることを狙います。</p>
+</section>
+</body></html>
