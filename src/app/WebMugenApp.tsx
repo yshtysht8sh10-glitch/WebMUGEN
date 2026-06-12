@@ -6,9 +6,11 @@ import { CanvasRenderer } from '../renderer/canvas2d/CanvasRenderer';
 import { parseCnsText } from '../parser/cns/CnsParser';
 import { parseAirText } from '../parser/air/AirParser';
 import { parseCmdText } from '../parser/cmd/CmdParser';
+import { loadSpritePack } from '../core/sprite/SpritePackLoader';
 import { sampleCharacterCns } from './sampleCharacterCns';
 import { sampleCharacterAir } from './sampleCharacterAir';
 import { sampleCharacterCmd } from './sampleCharacterCmd';
+import { sampleSpritePackManifest } from './sampleSpritePack';
 
 export function WebMugenApp() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -17,10 +19,10 @@ export function WebMugenApp() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    let disposed = false;
     const characterDefinition = parseCnsText(sampleCharacterCns);
     const airDocument = parseAirText(sampleCharacterAir);
     const cmdDocument = parseCmdText(sampleCharacterCmd);
-    const renderer = new CanvasRenderer(canvas, airDocument);
     const input = new KeyboardInputSource();
     let state = createInitialGameState();
 
@@ -29,28 +31,38 @@ export function WebMugenApp() {
     let accumulator = 0;
     const fixedDeltaMs = 1000 / 60;
 
-    const loop = (now: number) => {
-      accumulator += now - lastTime;
-      lastTime = now;
+    const start = async () => {
+      const spritePack = await loadSpritePack(sampleSpritePackManifest).catch(() => null);
+      if (disposed) return;
 
-      while (accumulator >= fixedDeltaMs) {
-        state = stepGameByCns(
-          state,
-          characterDefinition,
-          input.readFrameInput(),
-          airDocument,
-          cmdDocument,
-        );
-        accumulator -= fixedDeltaMs;
-      }
+      const renderer = new CanvasRenderer(canvas, airDocument, spritePack);
 
-      renderer.render(state);
+      const loop = (now: number) => {
+        accumulator += now - lastTime;
+        lastTime = now;
+
+        while (accumulator >= fixedDeltaMs) {
+          state = stepGameByCns(
+            state,
+            characterDefinition,
+            input.readFrameInput(),
+            airDocument,
+            cmdDocument,
+          );
+          accumulator -= fixedDeltaMs;
+        }
+
+        renderer.render(state);
+        animationFrameId = requestAnimationFrame(loop);
+      };
+
       animationFrameId = requestAnimationFrame(loop);
     };
 
-    animationFrameId = requestAnimationFrame(loop);
+    void start();
 
     return () => {
+      disposed = true;
       cancelAnimationFrame(animationFrameId);
       input.dispose();
     };
@@ -60,7 +72,7 @@ export function WebMugenApp() {
     <main className="app-shell">
       <header className="app-header">
         <h1>WebMUGEN</h1>
-        <p>CMD-driven command prototype</p>
+        <p>SpritePack renderer prototype</p>
       </header>
 
       <section className="stage-panel">
@@ -68,9 +80,9 @@ export function WebMugenApp() {
       </section>
 
       <section className="help-panel">
-        <p>P1: ← / → 移動、↑ ジャンプ、A 攻撃</p>
+        <p>P1: ← / → 移動、↑ ジャンプ、A 攻撃、↓↘→A 飛び道具</p>
         <p>P2: J / L 移動、I ジャンプ、K しゃがみ入力、F 攻撃</p>
-        <p>この版ではCMD定義を読み、command名でCNS triggerを評価します。</p>
+        <p>PNGスプライトがあればdrawImage、なければ従来の棒人間描画にフォールバックします。</p>
       </section>
     </main>
   );

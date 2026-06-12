@@ -7,6 +7,8 @@ import {
 import type { GameState, PlayerState, ProjectileState, Rect } from '../../core/engine/types';
 import { getAttackBox, getBodyBox, isAttackActive } from '../../core/engine/SimpleCollision';
 import { getProjectileWorldBox } from '../../core/projectile/ProjectileSystem';
+import { findSprite } from '../../core/sprite/SpritePackLoader';
+import type { SpritePack } from '../../core/sprite/SpriteTypes';
 
 export class CanvasRenderer {
   private readonly context: CanvasRenderingContext2D;
@@ -14,6 +16,7 @@ export class CanvasRenderer {
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly airDocument?: AirDocument,
+    private readonly spritePack?: SpritePack | null,
   ) {
     const context = canvas.getContext('2d');
     if (!context) throw new Error('CanvasRenderingContext2D is not available.');
@@ -54,6 +57,22 @@ export class CanvasRenderer {
 
   private drawProjectiles(ctx: CanvasRenderingContext2D, projectiles: ProjectileState[]): void {
     for (const projectile of projectiles) {
+      const currentElement = this.airDocument
+        ? getCurrentAnimationElement(this.airDocument, projectile.animNo, projectile.animTime)
+        : null;
+      const sprite =
+        currentElement &&
+        findSprite(this.spritePack, currentElement.element.groupNo, currentElement.element.imageNo);
+
+      if (sprite) {
+        ctx.save();
+        ctx.translate(projectile.x, projectile.y);
+        ctx.scale(projectile.facing, 1);
+        ctx.drawImage(sprite.image, -sprite.xAxis, -sprite.yAxis);
+        ctx.restore();
+        continue;
+      }
+
       ctx.save();
       ctx.translate(projectile.x, projectile.y);
       ctx.scale(projectile.facing, 1);
@@ -73,7 +92,32 @@ export class CanvasRenderer {
     const currentElement = this.airDocument
       ? getCurrentAnimationElement(this.airDocument, player.animNo, player.animTime)
       : null;
+    const sprite =
+      currentElement &&
+      findSprite(this.spritePack, currentElement.element.groupNo, currentElement.element.imageNo);
 
+    if (sprite) {
+      const offsetX = currentElement?.element.offsetX ?? 0;
+      const offsetY = currentElement?.element.offsetY ?? 0;
+      const flipX = currentElement?.element.flip?.toUpperCase().includes('H') ?? false;
+
+      this.context.save();
+      this.context.translate(player.x, player.y);
+      this.context.scale(player.facing * (flipX ? -1 : 1), 1);
+      this.context.drawImage(sprite.image, -sprite.xAxis + offsetX, -sprite.yAxis + offsetY);
+      this.context.restore();
+      return;
+    }
+
+    this.drawFallbackPlayer(ctx, player, color, currentElement);
+  }
+
+  private drawFallbackPlayer(
+    ctx: CanvasRenderingContext2D,
+    player: PlayerState,
+    color: string,
+    currentElement: ReturnType<typeof getCurrentAnimationElement>,
+  ): void {
     ctx.fillStyle = 'rgba(0,0,0,.3)';
     ctx.beginPath();
     ctx.ellipse(player.x, 305, 32, 8, 0, 0, Math.PI * 2);
