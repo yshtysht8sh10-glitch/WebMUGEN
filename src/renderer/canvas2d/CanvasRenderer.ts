@@ -11,6 +11,7 @@ import { findSprite } from '../../core/sprite/SpritePackLoader';
 import type { SpritePack } from '../../core/sprite/SpriteTypes';
 import type { ImageDataSpritePack } from '../../core/sprite/ImageDataSpriteTypes';
 import { ImageDataSpriteRenderer } from './ImageDataSpriteRenderer';
+import { createSpriteDebugInfo } from '../../core/sprite/SpriteDebugInfo';
 
 export class CanvasRenderer {
   private readonly context: CanvasRenderingContext2D;
@@ -39,6 +40,7 @@ export class CanvasRenderer {
     this.drawDebugBoxes(ctx, state.players[1]);
     this.drawProjectileDebugBoxes(ctx, state.projectiles);
     this.drawDebug(ctx, state);
+    this.drawSpriteDebug(ctx, state);
   }
 
   private drawStage(ctx: CanvasRenderingContext2D): void {
@@ -78,9 +80,7 @@ export class CanvasRenderer {
           currentElement.element.flip,
         );
 
-        if (drawn) {
-          continue;
-        }
+        if (drawn) continue;
       }
 
       ctx.save();
@@ -116,9 +116,7 @@ export class CanvasRenderer {
         currentElement.element.flip,
       );
 
-      if (drawn) {
-        return;
-      }
+      if (drawn) return;
     }
 
     this.drawFallbackPlayer(ctx, player, color, currentElement);
@@ -136,13 +134,12 @@ export class CanvasRenderer {
     flip = '',
   ): boolean {
     const flipX = flip.toUpperCase().includes('H');
+    const key = `${groupNo},${imageNo}`;
 
-    const imageDataSprite = this.imageDataSpritePack?.sprites.get(`${groupNo},${imageNo}`);
+    const imageDataSprite = this.imageDataSpritePack?.sprites.get(key);
     if (imageDataSprite) {
       const canvas = this.imageDataSpriteRenderer.findCanvas(this.imageDataSpritePack, groupNo, imageNo);
-      if (!canvas) {
-        return false;
-      }
+      if (!canvas) return false;
 
       ctx.save();
       ctx.translate(x, y);
@@ -246,5 +243,38 @@ export class CanvasRenderer {
       56,
     );
     ctx.fillText(`p1 life=${p1.life} p2 life=${p2.life} projectiles=${state.projectiles.length}`, 12, 76);
+  }
+
+  private drawSpriteDebug(ctx: CanvasRenderingContext2D, state: GameState): void {
+    const info = createSpriteDebugInfo(
+      state.players,
+      this.airDocument,
+      this.imageDataSpritePack,
+      this.spritePack,
+    );
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(17, 24, 39, 0.78)';
+    ctx.fillRect(8, 88, 360, 78);
+    ctx.font = '12px monospace';
+    ctx.fillStyle = '#e5e7eb';
+    ctx.fillText(`sprites imageData=${info.imageDataSpriteCount} png=${info.pngSpriteCount}`, 16, 106);
+
+    info.players.forEach((playerInfo, index) => {
+      const y = 126 + index * 18;
+      const status = playerInfo.hasImageDataSprite
+        ? 'imageData:yes'
+        : playerInfo.hasPngSprite
+          ? 'png:yes'
+          : 'missing';
+      ctx.fillStyle = playerInfo.hasImageDataSprite || playerInfo.hasPngSprite ? '#bbf7d0' : '#fecaca';
+      ctx.fillText(
+        `p${playerInfo.playerId} anim=${playerInfo.animNo}:${playerInfo.animTime} sprite=${playerInfo.key ?? 'none'} ${status}`,
+        16,
+        y,
+      );
+    });
+
+    ctx.restore();
   }
 }

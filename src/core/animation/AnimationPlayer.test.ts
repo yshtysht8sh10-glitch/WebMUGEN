@@ -1,35 +1,61 @@
 import { describe, expect, it } from 'vitest';
 import { parseAirText } from '../../parser/air/AirParser';
-import {
-  getAnimationLength,
-  getCurrentAnimationElement,
-  isAnimationFinished,
-} from './AnimationPlayer';
+import { getAnimationLength, getCurrentAnimationElement } from './AnimationPlayer';
 
 describe('AnimationPlayer', () => {
-  const document = parseAirText(`
+  it('returns current animation element', () => {
+    const air = parseAirText(`
 Begin Action 20
-20,0, 0,0, 4
-20,1, 0,0, 4
-20,2, 0,0, 4
+20,0, 0,0, 5
+20,1, 0,0, 5
 `);
 
-  it('gets animation length', () => {
-    expect(getAnimationLength(document, 20)).toBe(12);
+    expect(getCurrentAnimationElement(air, 20, 0)?.element.imageNo).toBe(0);
+    expect(getCurrentAnimationElement(air, 20, 5)?.element.imageNo).toBe(1);
   });
 
-  it('gets current element by animTime', () => {
-    expect(getCurrentAnimationElement(document, 20, 0)?.element.imageNo).toBe(0);
-    expect(getCurrentAnimationElement(document, 20, 4)?.element.imageNo).toBe(1);
-    expect(getCurrentAnimationElement(document, 20, 8)?.element.imageNo).toBe(2);
+  it('loops action when time exceeds length', () => {
+    const air = parseAirText(`
+Begin Action 0
+0,0, 0,0, 5
+0,1, 0,0, 5
+`);
+
+    expect(getAnimationLength(air, 0)).toBe(10);
+    expect(getCurrentAnimationElement(air, 0, 191)?.element.imageNo).toBe(0);
   });
 
-  it('loops animation element', () => {
-    expect(getCurrentAnimationElement(document, 20, 12)?.element.imageNo).toBe(0);
+  it('supports LoopStart', () => {
+    const air = parseAirText(`
+Begin Action 10
+10,0, 0,0, 5
+LoopStart
+10,1, 0,0, 5
+10,2, 0,0, 5
+`);
+
+    expect(getCurrentAnimationElement(air, 10, 0)?.element.imageNo).toBe(0);
+    expect(getCurrentAnimationElement(air, 10, 5)?.element.imageNo).toBe(1);
+    expect(getCurrentAnimationElement(air, 10, 15)?.element.imageNo).toBe(1);
   });
 
-  it('detects animation finished', () => {
-    expect(isAnimationFinished(document, 20, 11)).toBe(false);
-    expect(isAnimationFinished(document, 20, 12)).toBe(true);
+  it('keeps duration -1 element forever', () => {
+    const air = parseAirText(`
+Begin Action 5000
+5000,0, 0,0, 5
+5000,1, 0,0, -1
+`);
+
+    expect(getAnimationLength(air, 5000)).toBe(Number.POSITIVE_INFINITY);
+    expect(getCurrentAnimationElement(air, 5000, 500)?.element.imageNo).toBe(1);
+  });
+
+  it('returns null for missing action', () => {
+    const air = parseAirText(`
+Begin Action 0
+0,0, 0,0, 5
+`);
+
+    expect(getCurrentAnimationElement(air, 999, 0)).toBeNull();
   });
 });

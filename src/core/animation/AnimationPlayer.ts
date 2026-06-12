@@ -1,18 +1,34 @@
 import type { AirAction, AirDocument, AirElement } from '../../parser/air/AirTypes';
-import { findAirAction } from '../../parser/air/AirParser';
 
 export type CurrentAnimationElement = {
+  action: AirAction;
   element: AirElement;
   elementIndex: number;
   localTime: number;
 };
 
+export function getAnimationLength(document: AirDocument, actionNo: number): number {
+  const action = findAction(document, actionNo);
+  if (!action || action.elements.length === 0) {
+    return 1;
+  }
+
+  if (action.elements.some((element) => element.duration < 0)) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  return Math.max(
+    1,
+    action.elements.reduce((sum, element) => sum + Math.max(1, element.duration), 0),
+  );
+}
+
 export function getCurrentAnimationElement(
   document: AirDocument,
-  animNo: number,
+  actionNo: number,
   animTime: number,
 ): CurrentAnimationElement | null {
-  const action = findAirAction(document, animNo);
+  const action = findAction(document, actionNo);
   if (!action || action.elements.length === 0) {
     return null;
   }
@@ -22,10 +38,20 @@ export function getCurrentAnimationElement(
 
   for (let index = 0; index < action.elements.length; index += 1) {
     const element = action.elements[index];
-    const duration = getElementDuration(element);
 
+    if (element.duration < 0) {
+      return {
+        action,
+        element,
+        elementIndex: index,
+        localTime: Math.max(0, normalizedTime - cursor),
+      };
+    }
+
+    const duration = Math.max(1, element.duration);
     if (normalizedTime < cursor + duration) {
       return {
+        action,
         element,
         elementIndex: index,
         localTime: normalizedTime - cursor,
@@ -37,37 +63,53 @@ export function getCurrentAnimationElement(
 
   const lastIndex = action.elements.length - 1;
   return {
+    action,
     element: action.elements[lastIndex],
     elementIndex: lastIndex,
-    localTime: 0,
+    localTime: Math.max(0, animTime - cursor),
   };
 }
 
-export function getAnimationLength(document: AirDocument, animNo: number): number {
-  const action = findAirAction(document, animNo);
-  if (!action) {
-    return 60;
-  }
-
-  const total = action.elements.reduce((sum, element) => sum + getElementDuration(element), 0);
-  return total > 0 ? total : 1;
-}
-
-export function isAnimationFinished(document: AirDocument, animNo: number, animTime: number): boolean {
-  return animTime >= getAnimationLength(document, animNo);
+export function findAction(document: AirDocument, actionNo: number): AirAction | undefined {
+  return document.actions.find((action) => action.actionNo === actionNo);
 }
 
 function normalizeAnimationTime(action: AirAction, animTime: number): number {
-  const total = action.elements.reduce((sum, element) => sum + getElementDuration(element), 0);
+  const safeTime = Math.max(0, animTime);
 
-  if (total <= 0) {
+  if (action.elements.length === 0) {
     return 0;
   }
 
-  return animTime % total;
+  const infiniteIndex = action.elements.findIndex((element) => element.duration < 0);
+  if (infiniteIndex >= 0) {
+    const beforeInfinite = action.elements
+      .slice(0, infiniteIndex)
+      .reduce((sum, element) => sum + Math.max(1, element.duration), 0);
+    return Math.min(safeTime, beforeInfinite);
+  }
+
+  const length = getAnimationLengthFromAction(action);
+  if (length <= 0) {
+    return 0;
+  }
+
+  if (action.loopStartIndex !== null && action.loopStartIndex !== undefined) {
+    const loopStartTime = action.elements
+      .slice(0, action.loopStartIndex)
+      .reduce((sum, element) => sum + Math.max(1, element.duration), 0);
+    const loopLength = Math.max(1, length - loopStartTime);
+
+    if (safeTime >= length) {
+      return loopStartTime + ((safeTime - loopStartTime) % loopLength);
+    }
+  }
+
+  // Real-world AIR files often omit LoopStart for idle animations.
+  // Loop by default instead of returning null after the animation length.
+  return safeTime % Math.max(1, length);
 }
 
-function getElementDuration(element: AirElement): number {
-  // MUGENでは-1など特殊なdurationがあるが、Phase10では最低1Fとして扱う。
-  return element.duration > 0 ? element.duration : 1;
+function getAnimationLengthFromAction(action: AirAction): number {
+  return action.elements.reduce((sum, element) => sum + Math.max(1, element.duration), 0);
 }

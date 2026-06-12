@@ -1,119 +1,130 @@
-import type { AirAction, AirCollisionBox, AirDocument, AirElement } from './AirTypes';
-
-type PendingClsn = {
-  type: 'Clsn1' | 'Clsn2';
-  boxes: AirCollisionBox[];
-  isDefault: boolean;
-};
+import type {
+  AirAction,
+  AirClsnBox,
+  AirClsnSet,
+  AirDocument,
+  AirElement,
+} from './AirTypes';
 
 export function parseAirText(text: string): AirDocument {
-  const document: AirDocument = { actions: [] };
+  const actions: AirAction[] = [];
   let currentAction: AirAction | null = null;
-  let pendingClsn: PendingClsn | null = null;
+
+  let defaultClsn1: AirClsnSet = [];
+  let defaultClsn2: AirClsnSet = [];
+  let pendingClsn1: AirClsnSet | null = null;
+  let pendingClsn2: AirClsnSet | null = null;
+
+  let writingBoxes: AirClsnSet | null = null;
 
   for (const rawLine of text.split(/\r?\n/)) {
     const line = stripComment(rawLine).trim();
-    if (line.length === 0) continue;
+    if (!line) continue;
 
-    const actionNo = parseBeginAction(line);
-    if (actionNo !== null) {
+    const beginActionMatch = line.match(/^\[?\s*Begin\s+Action\s+(-?\d+)\s*\]?$/i);
+    if (beginActionMatch) {
       currentAction = {
-        actionNo,
+        actionNo: Number(beginActionMatch[1]),
         elements: [],
-        defaultClsn1: [],
-        defaultClsn2: [],
+        loopStartIndex: null,
       };
-      pendingClsn = null;
-      document.actions.push(currentAction);
+      actions.push(currentAction);
+      defaultClsn1 = [];
+      defaultClsn2 = [];
+      pendingClsn1 = null;
+      pendingClsn2 = null;
+      writingBoxes = null;
       continue;
     }
 
-    if (currentAction === null) continue;
+    if (!currentAction) continue;
 
-    const clsnHeader = parseClsnHeader(line);
-    if (clsnHeader !== null) {
-      pendingClsn = { ...clsnHeader, boxes: [] };
+    if (/^LoopStart$/i.test(line)) {
+      currentAction.loopStartIndex = currentAction.elements.length;
+      continue;
+    }
+
+    const clsnDefaultMatch = line.match(/^Clsn([12])Default\s*:\s*\d+/i);
+    if (clsnDefaultMatch) {
+      if (clsnDefaultMatch[1] === '1') {
+        defaultClsn1 = [];
+        writingBoxes = defaultClsn1;
+      } else {
+        defaultClsn2 = [];
+        writingBoxes = defaultClsn2;
+      }
+      continue;
+    }
+
+    const clsnMatch = line.match(/^Clsn([12])\s*:\s*\d+/i);
+    if (clsnMatch) {
+      if (clsnMatch[1] === '1') {
+        pendingClsn1 = [];
+        writingBoxes = pendingClsn1;
+      } else {
+        pendingClsn2 = [];
+        writingBoxes = pendingClsn2;
+      }
       continue;
     }
 
     const clsnBox = parseClsnBox(line);
-    if (clsnBox !== null && pendingClsn !== null) {
-      pendingClsn.boxes.push(clsnBox);
-      if (pendingClsn.isDefault) {
-        if (pendingClsn.type === 'Clsn1') currentAction.defaultClsn1 = [...pendingClsn.boxes];
-        if (pendingClsn.type === 'Clsn2') currentAction.defaultClsn2 = [...pendingClsn.boxes];
-      }
+    if (clsnBox && writingBoxes) {
+      writingBoxes.push(clsnBox);
       continue;
     }
 
-    const element = parseAirElement(line, currentAction, pendingClsn);
-    if (element !== null) {
-      currentAction.elements.push(element);
-      if (pendingClsn !== null && !pendingClsn.isDefault) {
-        pendingClsn = null;
-      }
+    const element = parseAirElement(line);
+    if (element) {
+      currentAction.elements.push({
+        ...element,
+        clsn1: pendingClsn1 ? cloneBoxes(pendingClsn1) : cloneBoxes(defaultClsn1),
+        clsn2: pendingClsn2 ? cloneBoxes(pendingClsn2) : cloneBoxes(defaultClsn2),
+      });
+      pendingClsn1 = null;
+      pendingClsn2 = null;
+      writingBoxes = null;
     }
   }
 
-  return document;
+  return { actions };
 }
 
-export function findAirAction(document: AirDocument, actionNo: number): AirAction | undefined {
-  return document.actions.find((action) => action.actionNo === actionNo);
-}
-
-function stripComment(line: string): string {
-  const index = line.indexOf(';');
-  return index >= 0 ? line.slice(0, index) : line;
-}
-
-function parseBeginAction(line: string): number | null {
-  const match = line.match(/^Begin\s+Action\s+(-?\d+)$/i);
-  return match ? Number(match[1]) : null;
-}
-
-function parseClsnHeader(line: string): { type: 'Clsn1' | 'Clsn2'; isDefault: boolean } | null {
-  const match = line.match(/^(Clsn[12])(Default)?\s*:\s*\d+$/i);
+function parseClsnBox(line: string): AirClsnBox | null {
+  const match = line.match(/^Clsn[12]\[\d+\]\s*=\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)/i);
   if (!match) return null;
 
+  const x1 = Number(match[1]);
+  const y1 = Number(match[2]);
+  const x2 = Number(match[3]);
+  const y2 = Number(match[4]);
+
   return {
-    type: match[1].toLowerCase() === 'clsn1' ? 'Clsn1' : 'Clsn2',
-    isDefault: match[2] !== undefined,
+    x1: Math.min(x1, x2),
+    y1: Math.min(y1, y2),
+    x2: Math.max(x1, x2),
+    y2: Math.max(y1, y2),
   };
 }
 
-function parseClsnBox(line: string): AirCollisionBox | null {
-  const match = line.match(/^Clsn[12]\[\d+]\s*=\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)$/i);
-  if (!match) return null;
-
-  return {
-    left: Number(match[1]),
-    top: Number(match[2]),
-    right: Number(match[3]),
-    bottom: Number(match[4]),
-  };
+function cloneBoxes(boxes: AirClsnSet): AirClsnSet {
+  return boxes.map((box) => ({ ...box }));
 }
 
-function parseAirElement(
-  line: string,
-  currentAction: AirAction,
-  pendingClsn: PendingClsn | null,
-): AirElement | null {
+function parseAirElement(line: string): Omit<AirElement, 'clsn1' | 'clsn2'> | null {
   const parts = line.split(',').map((part) => part.trim());
   if (parts.length < 5) return null;
 
-  const [groupNo, imageNo, offsetX, offsetY, duration] = parts.slice(0, 5).map(Number);
-  if ([groupNo, imageNo, offsetX, offsetY, duration].some(Number.isNaN)) return null;
+  const groupNo = Number(parts[0]);
+  const imageNo = Number(parts[1]);
+  const offsetX = Number(parts[2]);
+  const offsetY = Number(parts[3]);
+  const duration = Number(parts[4]);
+  const flip = parts[5] ?? '';
 
-  const clsn1 =
-    pendingClsn !== null && pendingClsn.type === 'Clsn1' && !pendingClsn.isDefault
-      ? [...pendingClsn.boxes]
-      : [...currentAction.defaultClsn1];
-
-  const clsn2 =
-    pendingClsn !== null && pendingClsn.type === 'Clsn2' && !pendingClsn.isDefault
-      ? [...pendingClsn.boxes]
-      : [...currentAction.defaultClsn2];
+  if ([groupNo, imageNo, offsetX, offsetY, duration].some((value) => Number.isNaN(value))) {
+    return null;
+  }
 
   return {
     groupNo,
@@ -121,9 +132,11 @@ function parseAirElement(
     offsetX,
     offsetY,
     duration,
-    flip: parts[5],
-    blend: parts[6],
-    clsn1,
-    clsn2,
+    flip,
   };
+}
+
+function stripComment(line: string): string {
+  const semicolonIndex = line.indexOf(';');
+  return semicolonIndex >= 0 ? line.slice(0, semicolonIndex) : line;
 }
