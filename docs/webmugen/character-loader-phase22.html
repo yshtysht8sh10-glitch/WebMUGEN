@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en" data-doc-lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Character Loader Phase22</title>
+<style>
+body{font-family:system-ui,sans-serif;line-height:1.75;max-width:980px;margin:32px auto;padding:0 20px}
+.lang-switch{display:flex;gap:8px;justify-content:flex-end;margin-bottom:24px}
+.lang-switch button{border:1px solid #888;background:transparent;border-radius:999px;padding:6px 12px;cursor:pointer}
+.lang-switch button.active{background:#111827;color:#fff;border-color:#111827}
+[data-lang]{display:none}
+html[data-doc-lang="en"] [data-lang="en"]{display:block}
+html[data-doc-lang="ja"] [data-lang="ja"]{display:block}
+code{background:rgba(127,127,127,.18);padding:2px 5px;border-radius:4px}
+</style>
+<script>
+(function(){
+  const saved = localStorage.getItem("webmugen-doc-lang");
+  const lang = saved || "en";
+  document.documentElement.setAttribute("data-doc-lang", lang);
+  window.setWebMugenDocLang = function(nextLang){
+    localStorage.setItem("webmugen-doc-lang", nextLang);
+    document.documentElement.setAttribute("data-doc-lang", nextLang);
+    document.querySelectorAll("[data-lang-button]").forEach(function(button){
+      button.classList.toggle("active", button.getAttribute("data-lang-button") === nextLang);
+    });
+  };
+  window.addEventListener("DOMContentLoaded", function(){
+    document.querySelectorAll("[data-lang-button]").forEach(function(button){
+      button.classList.toggle("active", button.getAttribute("data-lang-button") === lang);
+    });
+  });
+})();
+</script></head>
+<body>
+<nav class="lang-switch">
+  <button type="button" data-lang-button="en" onclick="setWebMugenDocLang('en')">English</button>
+  <button type="button" data-lang-button="ja" onclick="setWebMugenDocLang('ja')">日本語</button>
+</nav>
+<section data-lang="en">
+<h1>Character Loader Phase22</h1>
+<p>This phase adds the first character asset loader.</p>
+<ul>
+<li>DEF parser</li>
+<li>[Files] extraction</li>
+<li>cns / air / cmd loading</li>
+<li>sff loading and conversion to ImageDataSpritePack</li>
+<li>fetcher abstraction for tests and future zip support</li>
+</ul>
+<p>Phase23 will connect this loader to the application flow and add a KFM loading experiment.</p>
+</section>
+<section data-lang="ja">
+<h1>Character Loader Phase22</h1>
+<p>このフェーズでは、キャラクターアセットローダーの入口を追加します。</p>
+<ul>
+<li>DEFパーサ</li>
+<li>[Files] の抽出</li>
+<li>cns / air / cmd 読み込み</li>
+<li>sff読み込みとImageDataSpritePack変換</li>
+<li>テストと将来のzip対応に向けたfetcher抽象化</li>
+</ul>
+<p>Phase23では、このLoaderをアプリ本体に接続し、KFM読み込み実験に進みます。</p>
+</section>
+</body></html>
