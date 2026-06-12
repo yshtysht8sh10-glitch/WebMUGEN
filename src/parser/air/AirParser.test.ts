@@ -29,10 +29,10 @@ Clsn2Default: 2
     expect(doc.actions[0].elements[0].imageNo).toBe(0);
     expect(doc.actions[0].elements[0].clsn2).toHaveLength(2);
     expect(doc.actions[0].elements[0].clsn2[0]).toEqual({
-      x1: -13,
-      y1: -79,
-      x2: 16,
-      y2: 0,
+      left: -13,
+      top: -79,
+      right: 16,
+      bottom: 0,
     });
   });
 

@@ -1,6 +1,6 @@
 import type {
   AirAction,
-  AirClsnBox,
+  AirCollisionBox,
   AirClsnSet,
   AirDocument,
   AirElement,
@@ -90,7 +90,7 @@ export function parseAirText(text: string): AirDocument {
   return { actions };
 }
 
-function parseClsnBox(line: string): AirClsnBox | null {
+function parseClsnBox(line: string): AirCollisionBox | null {
   const match = line.match(/^Clsn[12]\[\d+\]\s*=\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)/i);
   if (!match) return null;
 
@@ -100,10 +100,10 @@ function parseClsnBox(line: string): AirClsnBox | null {
   const y2 = Number(match[4]);
 
   return {
-    x1: Math.min(x1, x2),
-    y1: Math.min(y1, y2),
-    x2: Math.max(x1, x2),
-    y2: Math.max(y1, y2),
+    left: Math.min(x1, x2),
+    top: Math.min(y1, y2),
+    right: Math.max(x1, x2),
+    bottom: Math.max(y1, y2),
   };
 }
 
