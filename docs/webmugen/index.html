@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>WebMUGEN Docs</title>
+  <style>
+    body{font-family:system-ui,sans-serif;line-height:1.75;max-width:980px;margin:32px auto;padding:0 20px}
+    code{background:#eee;padding:2px 5px;border-radius:4px}
+    pre{background:#111827;color:#e5e7eb;padding:16px;overflow:auto;border-radius:8px}
+    .lang-switch{display:flex;gap:8px;margin:16px 0 24px}
+    button{padding:6px 12px;border:1px solid #999;background:white;border-radius:6px;cursor:pointer}
+    button.active{background:#111827;color:white}
+    [data-lang]{display:none}
+    [data-lang].active{display:block}
+  </style>
+  <script>
+    function setLang(lang){
+      document.documentElement.lang = lang;
+      localStorage.setItem('webmugen-doc-lang', lang);
+      document.querySelectorAll('[data-lang]').forEach(el=>el.classList.toggle('active', el.dataset.lang===lang));
+      document.querySelectorAll('[data-lang-button]').forEach(el=>el.classList.toggle('active', el.dataset.langButton===lang));
+    }
+    window.addEventListener('DOMContentLoaded',()=>setLang(localStorage.getItem('webmugen-doc-lang') || 'en'));
+  </script>
+</head>
+<body>
+  <h1>WebMUGEN Docs</h1>
+  <div class="lang-switch">
+    <button data-lang-button="en" onclick="setLang('en')">English</button>
+    <button data-lang-button="ja" onclick="setLang('ja')">日本語</button>
+  </div>
+
+  <main data-lang="en">
+    <p>This is the main documentation index for WebMUGEN. English is the default because it is easier for most coding assistants and external contributors to parse consistently.</p>
+    <h2>Purpose</h2>
+    <p>WebMUGEN aims to run MUGEN-style characters in the browser by parsing DEF, CNS, AIR, CMD, and eventually SFF/SND files.</p>
+    <h2>Current engine areas</h2>
+    <ul>
+      <li>CNS state machine and controllers</li>
+      <li>AIR animation and Clsn boxes</li>
+      <li>CMD command matching and input buffer</li>
+      <li>HitDef, hit states, Projectile</li>
+      <li>SpritePack renderer prototype before full SFF support</li>
+    </ul>
+    <h2>Recommended reading order</h2>
+    <ol>
+      <li>Architecture overview</li>
+      <li>CNS parser and StateMachine</li>
+      <li>AIR / Clsn</li>
+      <li>CMD / InputBuffer</li>
+      <li>Projectile</li>
+      <li>SpritePack and future SFF loader</li>
+    </ol>
+  </main>
+
+  <main data-lang="ja">
+    <p>これは WebMUGEN のドキュメント入口です。デフォルトは英語ですが、このページ内で日本語表示へ切り替えできます。</p>
+    <h2>目的</h2>
+    <p>WebMUGEN は、DEF、CNS、AIR、CMD、将来的には SFF/SND を読み、MUGEN 風キャラクターをブラウザ上で動かすことを目指しています。</p>
+    <h2>現在のエンジン領域</h2>
+    <ul>
+      <li>CNS ステートマシンと Controller</li>
+      <li>AIR アニメーションと Clsn 判定</li>
+      <li>CMD コマンド判定と入力バッファ</li>
+      <li>HitDef、被弾 State、Projectile</li>
+      <li>本格 SFF 対応前の SpritePack レンダラー</li>
+    </ul>
+    <h2>読む順番</h2>
+    <ol>
+      <li>アーキテクチャ概要</li>
+      <li>CNS パーサと StateMachine</li>
+      <li>AIR / Clsn</li>
+      <li>CMD / InputBuffer</li>
+      <li>Projectile</li>
+      <li>SpritePack と将来の SFF ローダー</li>
+    </ol>
+  </main>
+</body>
+</html>

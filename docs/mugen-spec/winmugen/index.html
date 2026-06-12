@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>WinMUGEN Spec Notes</title>
+  <style>
+    body{font-family:system-ui,sans-serif;line-height:1.75;max-width:980px;margin:32px auto;padding:0 20px}
+    code{background:#eee;padding:2px 5px;border-radius:4px}
+    pre{background:#111827;color:#e5e7eb;padding:16px;overflow:auto;border-radius:8px}
+    .lang-switch{display:flex;gap:8px;margin:16px 0 24px}
+    button{padding:6px 12px;border:1px solid #999;background:white;border-radius:6px;cursor:pointer}
+    button.active{background:#111827;color:white}
+    [data-lang]{display:none}
+    [data-lang].active{display:block}
+  </style>
+  <script>
+    function setLang(lang){
+      document.documentElement.lang = lang;
+      localStorage.setItem('webmugen-doc-lang', lang);
+      document.querySelectorAll('[data-lang]').forEach(el=>el.classList.toggle('active', el.dataset.lang===lang));
+      document.querySelectorAll('[data-lang-button]').forEach(el=>el.classList.toggle('active', el.dataset.langButton===lang));
+    }
+    window.addEventListener('DOMContentLoaded',()=>setLang(localStorage.getItem('webmugen-doc-lang') || 'en'));
+  </script>
+</head>
+<body>
+  <h1>WinMUGEN Spec Notes</h1>
+  <div class="lang-switch">
+    <button data-lang-button="en" onclick="setLang('en')">English</button>
+    <button data-lang-button="ja" onclick="setLang('ja')">日本語</button>
+  </div>
+
+  <main data-lang="en">
+    <p>This area records researched WinMUGEN behavior so future work does not need to rediscover the same details.</p>
+    <h2>Files</h2>
+    <ul>
+      <li><code>.def</code>: character metadata and file references</li>
+      <li><code>.cns</code>: states, triggers, and controllers</li>
+      <li><code>.air</code>: animations and Clsn boxes</li>
+      <li><code>.cmd</code>: command definitions</li>
+      <li><code>.sff</code>: sprite archive</li>
+      <li><code>.snd</code>: sound archive</li>
+    </ul>
+    <h2>Documentation policy</h2>
+    <p>Each spec note should include both English and Japanese sections in one standalone HTML file. English should be shown by default.</p>
+  </main>
+
+  <main data-lang="ja">
+    <p>ここには、WinMUGEN の仕様調査メモを残します。後で Codex や別の生成AIへ引き継いだときに、同じ仕様を調べ直さないための場所です。</p>
+    <h2>ファイル</h2>
+    <ul>
+      <li><code>.def</code>: キャラクター情報と参照ファイル</li>
+      <li><code>.cns</code>: State、Trigger、Controller</li>
+      <li><code>.air</code>: アニメーションと Clsn 判定</li>
+      <li><code>.cmd</code>: コマンド定義</li>
+      <li><code>.sff</code>: スプライトアーカイブ</li>
+      <li><code>.snd</code>: サウンドアーカイブ</li>
+    </ul>
+    <h2>ドキュメント方針</h2>
+    <p>仕様メモは、英語と日本語を単独 HTML ファイル内に併記します。初期表示は英語にします。</p>
+  </main>
+</body>
+</html>
