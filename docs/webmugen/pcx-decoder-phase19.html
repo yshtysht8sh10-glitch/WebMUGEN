@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en" data-doc-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PCX Decoder Phase19</title>
+<style>
+body{font-family:system-ui,sans-serif;line-height:1.75;max-width:980px;margin:32px auto;padding:0 20px}
+.lang-switch{display:flex;gap:8px;justify-content:flex-end;margin-bottom:24px}
+.lang-switch button{border:1px solid #888;background:transparent;border-radius:999px;padding:6px 12px;cursor:pointer}
+.lang-switch button.active{background:#111827;color:#fff;border-color:#111827}
+[data-lang]{display:none}
+html[data-doc-lang="en"] [data-lang="en"]{display:block}
+html[data-doc-lang="ja"] [data-lang="ja"]{display:block}
+code{background:rgba(127,127,127,.18);padding:2px 5px;border-radius:4px}
+</style>
+<script>
+(function(){
+  const saved = localStorage.getItem("webmugen-doc-lang");
+  const lang = saved || "en";
+  document.documentElement.setAttribute("data-doc-lang", lang);
+  window.setWebMugenDocLang = function(nextLang){
+    localStorage.setItem("webmugen-doc-lang", nextLang);
+    document.documentElement.setAttribute("data-doc-lang", nextLang);
+    document.querySelectorAll("[data-lang-button]").forEach(function(button){
+      button.classList.toggle("active", button.getAttribute("data-lang-button") === nextLang);
+    });
+  };
+  window.addEventListener("DOMContentLoaded", function(){
+    document.querySelectorAll("[data-lang-button]").forEach(function(button){
+      button.classList.toggle("active", button.getAttribute("data-lang-button") === lang);
+    });
+  });
+})();
+</script>
+</head>
+<body>
+<nav class="lang-switch">
+  <button type="button" data-lang-button="en" onclick="setWebMugenDocLang('en')">English</button>
+  <button type="button" data-lang-button="ja" onclick="setWebMugenDocLang('ja')">日本語</button>
+</nav>
+
+<section data-lang="en">
+<h1>PCX Decoder Phase19</h1>
+<p>This phase adds a minimal 8-bit indexed color PCX decoder for SFF v1 sprites.</p>
+<h2>Implemented</h2>
+<ul>
+<li>PCX header parser</li>
+<li>8-bit / 1-plane PCX validation</li>
+<li>RLE decoding</li>
+<li>256-color VGA palette extraction</li>
+<li>Indexed pixels to RGBA conversion</li>
+<li>Palette index 0 transparency</li>
+</ul>
+<h2>Next</h2>
+<p>Phase20 will connect SFF sprite raw data to this PCX decoder and create Canvas-ready images.</p>
+</section>
+
+<section data-lang="ja">
+<h1>PCX Decoder Phase19</h1>
+<p>このフェーズでは、SFF v1スプライト用の8bitインデックスカラーPCXデコーダを追加します。</p>
+<h2>実装内容</h2>
+<ul>
+<li>PCXヘッダー解析</li>
+<li>8bit / 1 plane PCXの検証</li>
+<li>RLE展開</li>
+<li>256色VGAパレット読み取り</li>
+<li>インデックスピクセルからRGBAへの変換</li>
+<li>パレット番号0を透明扱い</li>
+</ul>
+<h2>次</h2>
+<p>Phase20では、SFFから取り出したraw sprite dataをこのPCXデコーダへ接続し、Canvasで描画できる画像を作ります。</p>
+</section>
+</body>
+</html>
