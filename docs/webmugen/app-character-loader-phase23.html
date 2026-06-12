@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en" data-doc-lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>App Character Loader Phase23</title>
+<style>
+body{font-family:system-ui,sans-serif;line-height:1.75;max-width:980px;margin:32px auto;padding:0 20px}
+.lang-switch{display:flex;gap:8px;justify-content:flex-end;margin-bottom:24px}
+.lang-switch button{border:1px solid #888;background:transparent;border-radius:999px;padding:6px 12px;cursor:pointer}
+.lang-switch button.active{background:#111827;color:#fff;border-color:#111827}
+[data-lang]{display:none}
+html[data-doc-lang="en"] [data-lang="en"]{display:block}
+html[data-doc-lang="ja"] [data-lang="ja"]{display:block}
+code{background:rgba(127,127,127,.18);padding:2px 5px;border-radius:4px}
+pre{background:#111827;color:#e5e7eb;padding:16px;border-radius:8px;overflow:auto}
+</style>
+<script>
+(function(){
+  const saved = localStorage.getItem("webmugen-doc-lang");
+  const lang = saved || "en";
+  document.documentElement.setAttribute("data-doc-lang", lang);
+  window.setWebMugenDocLang = function(nextLang){
+    localStorage.setItem("webmugen-doc-lang", nextLang);
+    document.documentElement.setAttribute("data-doc-lang", nextLang);
+    document.querySelectorAll("[data-lang-button]").forEach(function(button){
+      button.classList.toggle("active", button.getAttribute("data-lang-button") === nextLang);
+    });
+  };
+  window.addEventListener("DOMContentLoaded", function(){
+    document.querySelectorAll("[data-lang-button]").forEach(function(button){
+      button.classList.toggle("active", button.getAttribute("data-lang-button") === lang);
+    });
+  });
+})();
+</script></head>
+<body>
+<nav class="lang-switch">
+  <button type="button" data-lang-button="en" onclick="setWebMugenDocLang('en')">English</button>
+  <button type="button" data-lang-button="ja" onclick="setWebMugenDocLang('ja')">日本語</button>
+</nav>
+<section data-lang="en">
+<h1>App Character Loader Phase23</h1>
+<p>This phase connects CharacterLoader to the application entry point.</p>
+<ul>
+<li>The app tries to load <code>/chars/kfm/kfm.def</code>.</li>
+<li>If loading fails, the built-in sample character is used.</li>
+<li>SFF-derived ImageDataSpritePack is passed to CanvasRenderer.</li>
+<li>PNG SpritePack fallback remains available.</li>
+</ul>
+<pre><code>public/chars/kfm/
+  kfm.def
+  kfm.cns
+  kfm.cmd
+  kfm.air
+  kfm.sff</code></pre>
+<p>Phase24 will focus on making real KFM compatibility issues visible and fixing them one by one.</p>
+</section>
+<section data-lang="ja">
+<h1>App Character Loader Phase23</h1>
+<p>このフェーズでは、CharacterLoaderをアプリ本体に接続します。</p>
+<ul>
+<li>アプリは <code>/chars/kfm/kfm.def</code> を読みに行きます。</li>
+<li>読み込みに失敗した場合は内蔵サンプルキャラへフォールバックします。</li>
+<li>SFF由来のImageDataSpritePackをCanvasRendererへ渡します。</li>
+<li>PNG SpritePack fallbackも残します。</li>
+</ul>
+<pre><code>public/chars/kfm/
+  kfm.def
+  kfm.cns
+  kfm.cmd
+  kfm.air
+  kfm.sff</code></pre>
+<p>Phase24では、本物KFM互換で出てくる問題を見える化し、1つずつ直していきます。</p>
+</section>
+</body></html>
