@@ -1,8 +1,14 @@
-export type MugenVersion = 'winmugen' | 'mugen1.0' | 'mugen1.1';
+export type CnsValue = string | number | boolean | Array<string | number>;
 
-export type CnsDocument = {
-  versionHint: MugenVersion | 'unknown';
-  states: CnsStateDefinition[];
+export type CnsTrigger = {
+  name: string;
+  expression: string;
+};
+
+export type CnsStateController = {
+  type: string;
+  triggers: CnsTrigger[];
+  params: Record<string, CnsValue>;
 };
 
 export type CnsStateDefinition = {
@@ -15,21 +21,12 @@ export type CnsStateDefinition = {
   controllers: CnsStateController[];
 };
 
-export type CnsStateController = {
-  type: string;
-  triggers: CnsTrigger[];
-  params: Record<string, CnsValue>;
-  source?: CnsSourceLocation;
+export type CnsMetadataSection = {
+  name: string;
+  values: Record<string, CnsValue>;
 };
 
-export type CnsTrigger = {
-  index: number;
-  expression: string;
-};
-
-export type CnsValue = string | number | boolean | number[] | string[];
-
-export type CnsSourceLocation = {
-  file?: string;
-  line: number;
+export type CnsDocument = {
+  states: CnsStateDefinition[];
+  metadataSections: CnsMetadataSection[];
 };

@@ -1,200 +1,205 @@
 import type {
   CnsDocument,
+  CnsMetadataSection,
   CnsStateController,
   CnsStateDefinition,
+  CnsTrigger,
   CnsValue,
 } from '../../mugen/common/cnsTypes';
 
-type ParserContext = {
-  currentState: CnsStateDefinition | null;
-  currentController: CnsStateController | null;
-};
+type CurrentSection =
+  | { kind: 'statedef'; state: CnsStateDefinition }
+  | { kind: 'controller'; controller: CnsStateController }
+  | { kind: 'metadata'; section: CnsMetadataSection }
+  | null;
 
 export function parseCnsText(text: string): CnsDocument {
-  const document: CnsDocument = {
-    versionHint: 'unknown',
-    states: [],
-  };
-
-  const context: ParserContext = {
-    currentState: null,
-    currentController: null,
-  };
+  const states: CnsStateDefinition[] = [];
+  const metadataSections: CnsMetadataSection[] = [];
+  let currentState: CnsStateDefinition | null = null;
+  let current: CurrentSection = null;
 
   const lines = text.split(/\r?\n/);
 
-  lines.forEach((rawLine, index) => {
-    const lineNumber = index + 1;
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const rawLine = lines[lineIndex];
     const line = stripComment(rawLine).trim();
 
-    if (line.length === 0) {
-      return;
+    if (!line) {
+      continue;
     }
 
-    const sectionName = parseSectionName(line);
-    if (sectionName !== null) {
-      handleSection(sectionName, document, context, lineNumber);
-      return;
+    const sectionMatch = line.match(/^\[([^\]]+)\]$/);
+    if (sectionMatch) {
+      const sectionName = sectionMatch[1].trim();
+      const stateDefMatch = sectionName.match(/^statedef\s+(-?\d+)$/i);
+      if (stateDefMatch) {
+        currentState = {
+          stateNo: Number(stateDefMatch[1]),
+          controllers: [],
+        };
+        states.push(currentState);
+        current = { kind: 'statedef', state: currentState };
+        continue;
+      }
+
+      const controllerMatch = sectionName.match(/^state\s+(-?\d+)\s*,\s*(.+)$/i);
+      if (controllerMatch) {
+        if (!currentState) {
+          currentState = {
+            stateNo: Number(controllerMatch[1]),
+            controllers: [],
+          };
+          states.push(currentState);
+        }
+
+        const controller: CnsStateController = {
+          type: '',
+          triggers: [],
+          params: {},
+        };
+        currentState.controllers.push(controller);
+        current = { kind: 'controller', controller };
+        continue;
+      }
+
+      const metadataSection: CnsMetadataSection = {
+        name: sectionName,
+        values: {},
+      };
+      metadataSections.push(metadataSection);
+      current = { kind: 'metadata', section: metadataSection };
+      continue;
     }
 
-    const keyValue = parseKeyValue(line);
-    if (keyValue === null) {
-      return;
+    const equalsIndex = line.indexOf('=');
+    if (equalsIndex < 0) {
+      continue;
     }
 
-    handleKeyValue(keyValue.key, keyValue.value, context, lineNumber);
-  });
+    const key = line.slice(0, equalsIndex).trim().toLowerCase();
+    const valueText = line.slice(equalsIndex + 1).trim();
+    const value = parseValue(valueText);
 
-  return document;
-}
-
-function stripComment(line: string): string {
-  const commentIndex = line.indexOf(';');
-  if (commentIndex < 0) {
-    return line;
-  }
-
-  return line.slice(0, commentIndex);
-}
-
-function parseSectionName(line: string): string | null {
-  const match = line.match(/^\[(.+)]$/);
-  return match ? match[1].trim() : null;
-}
-
-function handleSection(
-  sectionName: string,
-  document: CnsDocument,
-  context: ParserContext,
-  lineNumber: number,
-): void {
-  const stateDefMatch = sectionName.match(/^StateDef\s+(-?\d+)$/i);
-  if (stateDefMatch) {
-    const state: CnsStateDefinition = {
-      stateNo: Number(stateDefMatch[1]),
-      controllers: [],
-    };
-
-    document.states.push(state);
-    context.currentState = state;
-    context.currentController = null;
-    return;
-  }
-
-  if (/^State\s+/i.test(sectionName)) {
-    if (context.currentState === null) {
-      throw new Error(`State controller appears before StateDef at line ${lineNumber}.`);
+    if (!current) {
+      // Real-world MUGEN CNS files sometimes contain loose metadata or labels.
+      // Ignore key-value pairs until a known section starts.
+      continue;
     }
 
-    const controller: CnsStateController = {
-      type: 'Unknown',
-      triggers: [],
-      params: {},
-      source: {
-        line: lineNumber,
-      },
-    };
+    if (current.kind === 'statedef') {
+      applyStateDefValue(current.state, key, value);
+      continue;
+    }
 
-    context.currentState.controllers.push(controller);
-    context.currentController = controller;
-  }
-}
+    if (current.kind === 'controller') {
+      applyControllerValue(current.controller, key, valueText, value);
+      continue;
+    }
 
-function parseKeyValue(line: string): { key: string; value: string } | null {
-  const match = line.match(/^([^=]+?)\s*=\s*(.+)$/);
-  if (!match) {
-    return null;
+    current.section.values[key] = value;
   }
 
   return {
-    key: match[1].trim(),
-    value: match[2].trim(),
+    states,
+    metadataSections,
   };
 }
 
-function handleKeyValue(
-  rawKey: string,
-  rawValue: string,
-  context: ParserContext,
-  lineNumber: number,
-): void {
-  const key = rawKey.toLowerCase();
-
-  if (context.currentController !== null) {
-    if (key.startsWith('trigger')) {
-      const triggerIndex = Number(key.replace('trigger', ''));
-      context.currentController.triggers.push({
-        index: Number.isFinite(triggerIndex) ? triggerIndex : 0,
-        expression: rawValue,
-      });
-      return;
-    }
-
-    if (key === 'type') {
-      context.currentController.type = rawValue;
-      return;
-    }
-
-    context.currentController.params[key] = parseCnsValue(rawValue);
-    return;
-  }
-
-  if (context.currentState !== null) {
-    applyStateDefValue(context.currentState, key, rawValue);
-    return;
-  }
-
-  throw new Error(`Key-value pair appears outside a section at line ${lineNumber}.`);
-}
-
-function applyStateDefValue(state: CnsStateDefinition, key: string, rawValue: string): void {
+function applyStateDefValue(state: CnsStateDefinition, key: string, value: CnsValue): void {
   switch (key) {
     case 'type':
-      state.stateType = rawValue;
+      state.stateType = String(value);
       break;
     case 'movetype':
-      state.moveType = rawValue;
+      state.moveType = String(value);
       break;
     case 'physics':
-      state.physics = rawValue;
+      state.physics = String(value);
       break;
     case 'anim':
-      state.initialAnim = Number(rawValue);
+      state.initialAnim = Number(value);
       break;
     case 'ctrl':
-      state.ctrl = rawValue.trim() !== '0';
+      state.ctrl = Number(value) !== 0;
       break;
     default:
       break;
   }
 }
 
-export function parseCnsValue(rawValue: string): CnsValue {
-  const value = rawValue.trim();
-
-  if (value.includes(',')) {
-    return value.split(',').map((part) => parseCnsValue(part.trim())) as number[] | string[];
+function applyControllerValue(
+  controller: CnsStateController,
+  key: string,
+  valueText: string,
+  value: CnsValue,
+): void {
+  if (key === 'type') {
+    controller.type = String(value);
+    return;
   }
 
-  if (value === '0') {
-    return 0;
+  if (/^trigger\d+$/i.test(key)) {
+    controller.triggers.push({
+      name: key,
+      expression: valueText,
+    });
+    return;
   }
 
-  if (value === '1') {
-    return 1;
+  controller.params[key] = value;
+}
+
+function stripComment(line: string): string {
+  const semicolonIndex = line.indexOf(';');
+  return semicolonIndex >= 0 ? line.slice(0, semicolonIndex) : line;
+}
+
+function parseValue(valueText: string): CnsValue {
+  const commaParts = splitCommaValues(valueText);
+
+  if (commaParts.length > 1) {
+    return commaParts.map(parseSingleValue);
   }
 
-  const numericValue = Number(value);
-  if (!Number.isNaN(numericValue)) {
-    return numericValue;
+  return parseSingleValue(valueText);
+}
+
+function splitCommaValues(valueText: string): string[] {
+  const parts: string[] = [];
+  let current = '';
+  let inQuote = false;
+
+  for (const char of valueText) {
+    if (char === '"') {
+      inQuote = !inQuote;
+      current += char;
+      continue;
+    }
+
+    if (char === ',' && !inQuote) {
+      parts.push(current.trim());
+      current = '';
+      continue;
+    }
+
+    current += char;
   }
 
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
-    return value.slice(1, -1);
+  parts.push(current.trim());
+  return parts.filter((part) => part.length > 0);
+}
+
+function parseSingleValue(valueText: string): string | number | boolean {
+  const trimmed = valueText.trim();
+
+  if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+    return Number(trimmed);
   }
 
-  return value;
+  if (/^(true|false)$/i.test(trimmed)) {
+    return /^true$/i.test(trimmed);
+  }
+
+  return trimmed.replace(/^"(.*)"$/, '$1');
 }

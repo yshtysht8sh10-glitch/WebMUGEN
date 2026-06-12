@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en" data-doc-lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CNS Metadata Tolerant Parser Phase25</title>
+<style>
+body{font-family:system-ui,sans-serif;line-height:1.75;max-width:980px;margin:32px auto;padding:0 20px}
+.lang-switch{display:flex;gap:8px;justify-content:flex-end;margin-bottom:24px}
+.lang-switch button{border:1px solid #888;background:transparent;border-radius:999px;padding:6px 12px;cursor:pointer}
+.lang-switch button.active{background:#111827;color:#fff;border-color:#111827}
+[data-lang]{display:none}
+html[data-doc-lang="en"] [data-lang="en"]{display:block}
+html[data-doc-lang="ja"] [data-lang="ja"]{display:block}
+code{background:rgba(127,127,127,.18);padding:2px 5px;border-radius:4px}
+</style>
+<script>
+(function(){
+  const saved = localStorage.getItem("webmugen-doc-lang");
+  const lang = saved || "en";
+  document.documentElement.setAttribute("data-doc-lang", lang);
+  window.setWebMugenDocLang = function(nextLang){
+    localStorage.setItem("webmugen-doc-lang", nextLang);
+    document.documentElement.setAttribute("data-doc-lang", nextLang);
+    document.querySelectorAll("[data-lang-button]").forEach(function(button){
+      button.classList.toggle("active", button.getAttribute("data-lang-button") === nextLang);
+    });
+  };
+  window.addEventListener("DOMContentLoaded", function(){
+    document.querySelectorAll("[data-lang-button]").forEach(function(button){
+      button.classList.toggle("active", button.getAttribute("data-lang-button") === lang);
+    });
+  });
+})();
+</script></head>
+<body>
+<nav class="lang-switch">
+  <button type="button" data-lang-button="en" onclick="setWebMugenDocLang('en')">English</button>
+  <button type="button" data-lang-button="ja" onclick="setWebMugenDocLang('ja')">日本語</button>
+</nav>
+<section data-lang="en">
+<h1>CNS Metadata Tolerant Parser Phase25</h1>
+<p>This phase makes the CNS parser tolerant of real-world metadata sections used by KFM and other MUGEN characters.</p>
+<ul>
+<li>Allows non-state sections such as <code>[Data]</code> and <code>[Size]</code></li>
+<li>Stores metadata sections separately</li>
+<li>Ignores loose key-value pairs before any section</li>
+<li>Keeps StateDef and State controller parsing behavior</li>
+</ul>
+<p>This targets the previous KFM fallback error: <code>Key-value pair appears outside a section</code>.</p>
+</section>
+<section data-lang="ja">
+<h1>CNS Metadata Tolerant Parser Phase25</h1>
+<p>このフェーズでは、KFMなど実キャラのCNSで使われるメタデータセクションを許容します。</p>
+<ul>
+<li><code>[Data]</code> や <code>[Size]</code> などState以外のセクションを許容</li>
+<li>metadataSectionsとして別保存</li>
+<li>セクション外のkey=valueは無視</li>
+<li>StateDefとState Controllerの解析は維持</li>
+</ul>
+<p>前回のKFM fallbackエラー <code>Key-value pair appears outside a section</code> の解消を狙います。</p>
+</section>
+</body></html>
