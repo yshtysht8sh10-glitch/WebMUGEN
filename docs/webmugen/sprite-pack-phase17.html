@@ -1,19 +1,76 @@
 <!doctype html>
-<html lang="ja">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SpritePack Phase17</title>
-<style>body{font-family:system-ui,sans-serif;line-height:1.75;max-width:980px;margin:32px auto;padding:0 20px}code{background:#eee;padding:2px 5px;border-radius:4px}</style></head>
+<html lang="en" data-doc-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SpritePack Phase17</title>
+
+<style>
+:root{color-scheme:light dark}
+body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.75;max-width:980px;margin:32px auto;padding:0 20px}
+.lang-switch{display:flex;gap:8px;justify-content:flex-end;margin-bottom:24px}
+.lang-switch button{border:1px solid #888;background:transparent;border-radius:999px;padding:6px 12px;cursor:pointer}
+.lang-switch button.active{background:#111827;color:#fff;border-color:#111827}
+[data-lang]{display:none}
+html[data-doc-lang="en"] [data-lang="en"]{display:block}
+html[data-doc-lang="ja"] [data-lang="ja"]{display:block}
+pre{background:#111827;color:#e5e7eb;padding:16px;border-radius:8px;overflow:auto}
+code{background:rgba(127,127,127,.18);padding:2px 5px;border-radius:4px}
+a{color:#2563eb}
+</style>
+<script>
+(function(){
+  const saved = localStorage.getItem("webmugen-doc-lang");
+  const lang = saved || "en";
+  document.documentElement.setAttribute("data-doc-lang", lang);
+  window.setWebMugenDocLang = function(nextLang){
+    localStorage.setItem("webmugen-doc-lang", nextLang);
+    document.documentElement.setAttribute("data-doc-lang", nextLang);
+    document.querySelectorAll("[data-lang-button]").forEach(function(button){
+      button.classList.toggle("active", button.getAttribute("data-lang-button") === nextLang);
+    });
+  };
+  window.addEventListener("DOMContentLoaded", function(){
+    document.querySelectorAll("[data-lang-button]").forEach(function(button){
+      button.classList.toggle("active", button.getAttribute("data-lang-button") === lang);
+    });
+  });
+})();
+</script>
+
+</head>
 <body>
+<nav class="lang-switch" aria-label="Language switch">
+  <button type="button" data-lang-button="en" onclick="setWebMugenDocLang('en')">English</button>
+  <button type="button" data-lang-button="ja" onclick="setWebMugenDocLang('ja')">日本語</button>
+</nav>
+
+<section data-lang="en">
+
 <h1>SpritePack Phase17</h1>
-<p>Phase17では、SFF本体の前段階として、AIRのgroup/imageからPNGスプライトを引いてCanvasへ描画する仕組みを追加する。</p>
-<h2>対応</h2>
+<p>This phase adds a SpritePack renderer prototype before direct SFF binary loading.</p>
 <ul>
-<li>SpritePackManifest</li>
-<li>SpritePackLoader</li>
-<li><code>groupNo,imageNo</code> によるSprite検索</li>
-<li>AIR現在要素からSpriteを選択</li>
-<li><code>xAxis</code>/<code>yAxis</code> を使った描画原点補正</li>
-<li>画像がない場合は従来描画へフォールバック</li>
+<li>SpritePack manifest</li>
+<li>Sprite loading by group/image key</li>
+<li>AIR animation element to sprite resolution</li>
+<li>Canvas drawImage rendering</li>
+<li>Fallback drawing when sprites are missing</li>
 </ul>
-<h2>次</h2>
-<p>Phase18では、SFF v1バイナリを読み、PCX/PNG化したSpritePackへ変換する。</p>
-</body></html>
+
+</section>
+
+<section data-lang="ja">
+
+<h1>SpritePack Phase17</h1>
+<p>このフェーズでは、SFFバイナリを直接読む前段階としてSpritePack Rendererを追加します。</p>
+<ul>
+<li>SpritePack Manifest</li>
+<li>group/imageキーによるSprite読み込み</li>
+<li>AIRアニメーション要素からSpriteを解決</li>
+<li>Canvas drawImage描画</li>
+<li>Spriteがない場合は従来描画へフォールバック</li>
+</ul>
+
+</section>
+</body>
+</html>

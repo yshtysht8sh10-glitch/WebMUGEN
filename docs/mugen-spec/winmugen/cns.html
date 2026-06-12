@@ -1,101 +1,84 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en" data-doc-lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>WinMUGEN CNS Notes</title>
-  <style>
-    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.75; margin: 0; background: #f7f7f7; color: #222; }
-    header { background: #0f172a; color: white; padding: 28px 32px; }
-    main { max-width: 1080px; margin: 0 auto; padding: 32px; background: white; }
-    h1,h2,h3 { line-height: 1.35; }
-    code { background: #eee; padding: 2px 5px; border-radius: 4px; }
-    pre { background: #111827; color: #e5e7eb; padding: 16px; overflow: auto; border-radius: 8px; }
-    table { border-collapse: collapse; width: 100%; margin: 16px 0; }
-    th,td { border: 1px solid #ddd; padding: 8px; vertical-align: top; }
-    th { background: #f3f4f6; }
-    .note { border-left: 5px solid #2563eb; background: #eff6ff; padding: 14px 18px; margin: 18px 0; }
-    .warn { border-left: 5px solid #f59e0b; background: #fffbeb; padding: 14px 18px; margin: 18px 0; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WinMUGEN CNS Notes</title>
+
+<style>
+:root{color-scheme:light dark}
+body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.75;max-width:980px;margin:32px auto;padding:0 20px}
+.lang-switch{display:flex;gap:8px;justify-content:flex-end;margin-bottom:24px}
+.lang-switch button{border:1px solid #888;background:transparent;border-radius:999px;padding:6px 12px;cursor:pointer}
+.lang-switch button.active{background:#111827;color:#fff;border-color:#111827}
+[data-lang]{display:none}
+html[data-doc-lang="en"] [data-lang="en"]{display:block}
+html[data-doc-lang="ja"] [data-lang="ja"]{display:block}
+pre{background:#111827;color:#e5e7eb;padding:16px;border-radius:8px;overflow:auto}
+code{background:rgba(127,127,127,.18);padding:2px 5px;border-radius:4px}
+a{color:#2563eb}
+</style>
+<script>
+(function(){
+  const saved = localStorage.getItem("webmugen-doc-lang");
+  const lang = saved || "en";
+  document.documentElement.setAttribute("data-doc-lang", lang);
+  window.setWebMugenDocLang = function(nextLang){
+    localStorage.setItem("webmugen-doc-lang", nextLang);
+    document.documentElement.setAttribute("data-doc-lang", nextLang);
+    document.querySelectorAll("[data-lang-button]").forEach(function(button){
+      button.classList.toggle("active", button.getAttribute("data-lang-button") === nextLang);
+    });
+  };
+  window.addEventListener("DOMContentLoaded", function(){
+    document.querySelectorAll("[data-lang-button]").forEach(function(button){
+      button.classList.toggle("active", button.getAttribute("data-lang-button") === lang);
+    });
+  });
+})();
+</script>
+
 </head>
 <body>
-<header><h1>WinMUGEN CNS Notes</h1><p>CNS全体の調査・実装方針。</p></header>
-<main>
-<section class="warn">
-  <h2>注意</h2>
-  <p>この文書はWebMUGEN用の初期調査・実装メモである。参照元仕様、WinMUGEN実機、既存キャラクターを使って継続的に修正する。</p>
-</section>
-<section>
-  <h2>CNSの役割</h2>
-  <p>CNSはキャラクターの状態機械、物理、攻撃、被弾、エフェクト、音声、変数操作を記述する中心的なファイルである。</p>
-</section>
-<section>
-  <h2>WebMUGEN内部モデル</h2>
-  <pre>CharacterDefinition
-  states: StateDefinition[]
+<nav class="lang-switch" aria-label="Language switch">
+  <button type="button" data-lang-button="en" onclick="setWebMugenDocLang('en')">English</button>
+  <button type="button" data-lang-button="ja" onclick="setWebMugenDocLang('ja')">日本語</button>
+</nav>
 
-StateDefinition
-  stateNo
-  type
-  moveType
-  physics
-  initialAnim
-  ctrl
-  controllers: StateController[]
+<section data-lang="en">
 
-StateController
-  type
-  triggers
-  parameters</pre>
+<h1>WinMUGEN CNS Notes</h1>
+<p>CNS files define character state logic.</p>
+<h2>StateDef</h2>
+<pre><code>[StateDef 200]
+type = S
+movetype = A
+physics = S
+anim = 200
+ctrl = 0</code></pre>
+<h2>State Controllers</h2>
+<p>Controllers such as <code>ChangeState</code>, <code>VelSet</code>, <code>HitDef</code>, and <code>Projectile</code> modify player state during the game loop.</p>
+<h2>WebMUGEN scope</h2>
+<p>WebMUGEN currently parses states, triggers, common controllers, hit definitions, movement, hit states, and projectile creation.</p>
+
 </section>
-<section>
-  <h2>State Controller一覧</h2>
-  <ul><li><a href="state-controller/ChangeState.html">ChangeState</a></li>
-<li><a href="state-controller/SelfState.html">SelfState</a></li>
-<li><a href="state-controller/ChangeAnim.html">ChangeAnim</a></li>
-<li><a href="state-controller/Anim.html">Anim</a></li>
-<li><a href="state-controller/VelSet.html">VelSet</a></li>
-<li><a href="state-controller/VelAdd.html">VelAdd</a></li>
-<li><a href="state-controller/VelMul.html">VelMul</a></li>
-<li><a href="state-controller/PosSet.html">PosSet</a></li>
-<li><a href="state-controller/PosAdd.html">PosAdd</a></li>
-<li><a href="state-controller/Gravity.html">Gravity</a></li>
-<li><a href="state-controller/CtrlSet.html">CtrlSet</a></li>
-<li><a href="state-controller/StateTypeSet.html">StateTypeSet</a></li>
-<li><a href="state-controller/VarSet.html">VarSet</a></li>
-<li><a href="state-controller/VarAdd.html">VarAdd</a></li>
-<li><a href="state-controller/ParentVarSet.html">ParentVarSet</a></li>
-<li><a href="state-controller/HitDef.html">HitDef</a></li>
-<li><a href="state-controller/HitVelSet.html">HitVelSet</a></li>
-<li><a href="state-controller/HitOverride.html">HitOverride</a></li>
-<li><a href="state-controller/ReversalDef.html">ReversalDef</a></li>
-<li><a href="state-controller/TargetState.html">TargetState</a></li>
-<li><a href="state-controller/TargetLifeAdd.html">TargetLifeAdd</a></li>
-<li><a href="state-controller/TargetBind.html">TargetBind</a></li>
-<li><a href="state-controller/Explod.html">Explod</a></li>
-<li><a href="state-controller/ModifyExplod.html">ModifyExplod</a></li>
-<li><a href="state-controller/RemoveExplod.html">RemoveExplod</a></li>
-<li><a href="state-controller/Helper.html">Helper</a></li>
-<li><a href="state-controller/DestroySelf.html">DestroySelf</a></li>
-<li><a href="state-controller/PlaySnd.html">PlaySnd</a></li>
-<li><a href="state-controller/StopSnd.html">StopSnd</a></li>
-<li><a href="state-controller/AssertSpecial.html">AssertSpecial</a></li>
-<li><a href="state-controller/EnvShake.html">EnvShake</a></li>
-<li><a href="state-controller/PalFX.html">PalFX</a></li>
-<li><a href="state-controller/Width.html">Width</a></li>
-<li><a href="state-controller/BindToRoot.html">BindToRoot</a></li>
-<li><a href="state-controller/BindToParent.html">BindToParent</a></li></ul>
+
+<section data-lang="ja">
+
+<h1>WinMUGEN CNS Notes</h1>
+<p>CNSはキャラクターの状態ロジックを定義するファイルです。</p>
+<h2>StateDef</h2>
+<pre><code>[StateDef 200]
+type = S
+movetype = A
+physics = S
+anim = 200
+ctrl = 0</code></pre>
+<h2>State Controller</h2>
+<p><code>ChangeState</code>、<code>VelSet</code>、<code>HitDef</code>、<code>Projectile</code> などのControllerがゲームループ中にプレイヤー状態を変更します。</p>
+<h2>WebMUGENの対応範囲</h2>
+<p>現在のWebMUGENは、State、Trigger、主要Controller、HitDef、移動、被弾状態、Projectile生成を扱います。</p>
+
 </section>
-<section>
-  <h2>初期実装優先度</h2>
-  <table>
-    <tr><th>優先度</th><th>Controller</th><th>理由</th></tr>
-    <tr><td>S</td><td>ChangeState, ChangeAnim, VelSet, PosSet, PosAdd, CtrlSet, StateTypeSet, VarSet</td><td>キャラクターを動かす最低限。</td></tr>
-    <tr><td>A</td><td>HitDef, HitVelSet, TargetState, TargetLifeAdd, PlaySnd, Explod, Helper</td><td>格闘ゲームらしさに必要。</td></tr>
-    <tr><td>B</td><td>EnvShake, PalFX, Width, AssertSpecial</td><td>演出・互換性向上。</td></tr>
-    <tr><td>C</td><td>BindToRoot, BindToParent, ParentVarSet</td><td>Helper実装後に重要。</td></tr>
-  </table>
-</section>
-</main>
 </body>
 </html>
