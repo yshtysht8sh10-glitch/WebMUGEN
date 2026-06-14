@@ -10,9 +10,11 @@ export type RoundState = {
   winner: 1 | 2 | 'draw' | null;
 };
 
+const INTRO_FRAMES = 90;
+
 export function createInitialRoundState(): RoundState {
   return {
-    phase: 'fight',
+    phase: 'intro',
     roundNo: 1,
     timer: 99,
     frameInPhase: 0,
@@ -21,6 +23,23 @@ export function createInitialRoundState(): RoundState {
 }
 
 export function stepRoundState(round: RoundState, gameState: GameState): RoundState {
+  if (round.phase === 'intro') {
+    const nextFrameInPhase = round.frameInPhase + 1;
+
+    if (nextFrameInPhase >= INTRO_FRAMES) {
+      return {
+        ...round,
+        phase: 'fight',
+        frameInPhase: 0,
+      };
+    }
+
+    return {
+      ...round,
+      frameInPhase: nextFrameInPhase,
+    };
+  }
+
   if (round.phase === 'ko' || round.phase === 'timeOver') {
     return {
       ...round,

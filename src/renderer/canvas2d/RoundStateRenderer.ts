@@ -14,6 +14,10 @@ export class RoundStateRenderer {
     ctx.font = 'bold 12px monospace';
     ctx.fillText(`ROUND ${round.roundNo}`, 444, 62);
 
+    if (round.phase === 'intro') {
+      this.drawIntro(ctx, round);
+    }
+
     if (round.phase === 'ko' || round.phase === 'timeOver') {
       const text = round.phase === 'ko' ? 'K.O.' : 'TIME OVER';
       ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
@@ -30,6 +34,22 @@ export class RoundStateRenderer {
     }
 
     ctx.restore();
+  }
+
+  private drawIntro(ctx: CanvasRenderingContext2D, round: RoundState): void {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.52)';
+    ctx.fillRect(330, 186, 300, 92);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 32px monospace';
+
+    if (round.frameInPhase < 45) {
+      ctx.fillText(`ROUND ${round.roundNo}`, 402, 238);
+      return;
+    }
+
+    ctx.font = 'bold 46px monospace';
+    ctx.fillText('FIGHT!', 398, 244);
   }
 }
 

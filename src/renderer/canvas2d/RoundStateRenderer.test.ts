@@ -20,6 +20,25 @@ describe('RoundStateRenderer', () => {
     expect(calls).toContain('ROUND 1');
   });
 
+  it('renders FIGHT during late intro', () => {
+    const calls: string[] = [];
+    const ctx = {
+      save: () => calls.push('save'),
+      restore: () => calls.push('restore'),
+      fillRect: () => calls.push('fillRect'),
+      fillText: (text: string) => calls.push(text),
+      set fillStyle(_value: string) {},
+      set font(_value: string) {},
+    } as unknown as CanvasRenderingContext2D;
+
+    new RoundStateRenderer().render(ctx, {
+      ...createInitialRoundState(),
+      frameInPhase: 45,
+    });
+
+    expect(calls).toContain('FIGHT!');
+  });
+
   it('renders KO restart prompt', () => {
     const calls: string[] = [];
     const ctx = {

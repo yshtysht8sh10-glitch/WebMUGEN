@@ -9,14 +9,14 @@ describe('RoundRestart', () => {
   });
 
   it('does not allow restart while fighting', () => {
-    expect(canRestartRound(createInitialRoundState())).toBe(false);
+    expect(canRestartRound({ ...createInitialRoundState(), phase: 'fight' })).toBe(false);
   });
 
   it('creates fresh runtime state for next round', () => {
     const restarted = restartRound(1);
 
     expect(restarted.roundState.roundNo).toBe(2);
-    expect(restarted.roundState.phase).toBe('fight');
+    expect(restarted.roundState.phase).toBe('intro');
     expect(restarted.gameState.players[0].life).toBe(1000);
     expect(restarted.hitFeedbackState).toEqual(createInitialHitFeedbackState());
   });
