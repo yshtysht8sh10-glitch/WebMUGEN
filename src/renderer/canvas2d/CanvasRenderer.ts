@@ -14,11 +14,14 @@ import { ImageDataSpriteRenderer } from './ImageDataSpriteRenderer';
 import { createSpriteDebugInfo } from '../../core/sprite/SpriteDebugInfo';
 import type { HitFeedbackState } from '../../core/engine/HitFeedback';
 import { HitFeedbackRenderer } from './HitFeedbackRenderer';
+import type { RoundState } from '../../core/engine/RoundState';
+import { RoundStateRenderer } from './RoundStateRenderer';
 
 export class CanvasRenderer {
   private readonly context: CanvasRenderingContext2D;
   private readonly imageDataSpriteRenderer = new ImageDataSpriteRenderer();
   private readonly hitFeedbackRenderer = new HitFeedbackRenderer();
+  private readonly roundStateRenderer = new RoundStateRenderer();
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -31,11 +34,12 @@ export class CanvasRenderer {
     this.context = context;
   }
 
-  render(state: GameState, hitFeedback?: HitFeedbackState): void {
+  render(state: GameState, hitFeedback?: HitFeedbackState, roundState?: RoundState): void {
     const ctx = this.context;
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.drawStage(ctx);
     this.drawLifeBars(ctx, state);
+    if (roundState) this.roundStateRenderer.render(ctx, roundState);
     this.drawProjectiles(ctx, state.projectiles);
     this.drawPlayer(ctx, state.players[0], '#66ccff');
     this.drawPlayer(ctx, state.players[1], '#ff99aa');

@@ -15,6 +15,12 @@ import {
   updateHitFeedback,
   type HitFeedbackState,
 } from '../core/engine/HitFeedback';
+import {
+  createInitialRoundState,
+  formatRoundState,
+  stepRoundState,
+  type RoundState,
+} from '../core/engine/RoundState';
 
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/kfm/kfm.def';
 
@@ -23,9 +29,11 @@ export function WebMugenApp() {
   const rendererRef = useRef<CanvasRenderer | null>(null);
   const gameStateRef = useRef<GameState>(createInitialGameState());
   const hitFeedbackRef = useRef<HitFeedbackState>(createInitialHitFeedbackState());
+  const roundStateRef = useRef<RoundState>(createInitialRoundState());
   const inputRef = useRef<BrowserInput | null>(null);
   const [loadMessage, setLoadMessage] = useState('Loading character...');
   const [inputDebugLines, setInputDebugLines] = useState<string[]>(['keys=-']);
+  const [roundDebugLine, setRoundDebugLine] = useState(formatRoundState(createInitialRoundState()));
 
   useEffect(() => {
     let disposed = false;
@@ -64,16 +72,24 @@ export function WebMugenApp() {
         setInputDebugLines(formatInputDebugOverlay(inputSnapshot));
 
         let nextState = gameStateRef.current;
-        nextState = applyFallbackControls(nextState, inputSnapshot.p1, inputSnapshot.p2);
-        nextState = stepFallbackMotion(nextState);
-        nextState = applyFallbackStageRules(nextState);
-        nextState = resolveFallbackHits(nextState, character.air);
+        let nextRoundState = roundStateRef.current;
 
+        if (nextRoundState.phase === 'fight') {
+          nextState = applyFallbackControls(nextState, inputSnapshot.p1, inputSnapshot.p2);
+          nextState = stepFallbackMotion(nextState);
+          nextState = applyFallbackStageRules(nextState);
+          nextState = resolveFallbackHits(nextState, character.air);
+        }
+
+        nextRoundState = stepRoundState(nextRoundState, nextState);
         const nextFeedback = updateHitFeedback(hitFeedbackRef.current, nextState);
 
         gameStateRef.current = nextState;
         hitFeedbackRef.current = nextFeedback;
-        rendererRef.current?.render(nextState, nextFeedback);
+        roundStateRef.current = nextRoundState;
+        setRoundDebugLine(formatRoundState(nextRoundState));
+
+        rendererRef.current?.render(nextState, nextFeedback, nextRoundState);
 
         frameId = requestAnimationFrame(tick);
       };
@@ -103,7 +119,7 @@ export function WebMugenApp() {
       />
       <p>{loadMessage}</p>
       <div style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', marginBottom: 16 }}>
-        {inputDebugLines.join('\n')}
+        {[...inputDebugLines, roundDebugLine].join('\n')}
       </div>
       <p>P1: ← / → 移動, ↑ ジャンプ, A 攻撃, ↓ + A 飛び道具</p>
       <p>P2: J / L 移動, I ジャンプ, K しゃがみ入力, F 攻撃</p>
