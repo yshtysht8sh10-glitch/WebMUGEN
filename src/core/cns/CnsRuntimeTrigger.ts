@@ -3,6 +3,7 @@ import type { PlayerState } from '../engine/types';
 export type CnsRuntimeTriggerContext = {
   player: PlayerState;
   commands?: ReadonlySet<string>;
+  animTime?: number;
 };
 
 export function evaluateCnsRuntimeTrigger(
@@ -18,7 +19,7 @@ export function evaluateCnsRuntimeTrigger(
     return context.player.ctrl;
   }
 
-  const commandMatch = trimmed.match(/^command\s*=\s*"([^"]+)"$/);
+  const commandMatch = trimmed.match(/^command\s*=\s*\"([^\"]+)\"$/);
   if (commandMatch) {
     return context.commands?.has(commandMatch[1].toLowerCase()) ?? false;
   }
@@ -30,7 +31,7 @@ export function evaluateCnsRuntimeTrigger(
 
   const animTimeMatch = trimmed.match(/^animtime\s*(=|!=|>=|<=|>|<)\s*(-?\d+)$/);
   if (animTimeMatch) {
-    return compareNumber(context.player.animTime, animTimeMatch[1], Number(animTimeMatch[2]));
+    return compareNumber(context.animTime ?? context.player.animTime, animTimeMatch[1], Number(animTimeMatch[2]));
   }
 
   const stateTypeMatch = trimmed.match(/^statetype\s*(=|!=)\s*([a-z])$/);

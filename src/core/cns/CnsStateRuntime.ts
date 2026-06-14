@@ -6,6 +6,7 @@ import type {
   CnsValue,
 } from '../../mugen/common/cnsTypes';
 import type { GameState, PlayerState } from '../engine/types';
+import { calculateMugenAnimTime } from '../animation/AnimationDuration';
 import { evaluateCnsRuntimeTriggerGroup } from './CnsRuntimeTrigger';
 
 export type CnsRuntimeTrace = {
@@ -16,6 +17,7 @@ export type CnsRuntimeTrace = {
   afterAnimNo: number;
   stateTime: number;
   afterStateTime: number;
+  mugenAnimTime: number;
   stateFound: boolean;
   executedControllers: string[];
 };
@@ -23,6 +25,7 @@ export type CnsRuntimeTrace = {
 export type CnsRuntimeInput = {
   p1Commands?: ReadonlySet<string>;
   p2Commands?: ReadonlySet<string>;
+  getAnimationDuration?: (animNo: number) => number | null;
 };
 
 export type CnsRuntimeResult = {
@@ -39,13 +42,13 @@ export function stepCnsStateRuntime(
     return {
       state,
       traces: [
-        createMissingTrace(1, state.players[0]),
-        createMissingTrace(2, state.players[1]),
+        createMissingTrace(1, state.players[0], input),
+        createMissingTrace(2, state.players[1], input),
       ],
     };
   }
 
-  const p1Result = stepPlayerCnsRuntime(state.players[0], 1, cnsDocument, input.p1Commands);
+  const p1Result = stepPlayerCnsRuntime(state.players[0], 1, cnsDocument, input, input.p1Commands);
   const intermediateState: GameState = {
     ...state,
     players: [p1Result.player, state.players[1]],
@@ -55,6 +58,7 @@ export function stepCnsStateRuntime(
     intermediateState.players[1],
     2,
     cnsDocument,
+    input,
     input.p2Commands,
   );
 
@@ -71,6 +75,7 @@ function stepPlayerCnsRuntime(
   player: PlayerState,
   playerId: 1 | 2,
   cnsDocument: CnsDocument,
+  input: CnsRuntimeInput,
   commands?: ReadonlySet<string>,
 ): { player: PlayerState; trace: CnsRuntimeTrace } {
   const stateDef = findStateDef(cnsDocument, player.stateNo);
@@ -82,6 +87,7 @@ function stepPlayerCnsRuntime(
     afterAnimNo: player.animNo,
     stateTime: player.stateTime,
     afterStateTime: player.stateTime,
+    mugenAnimTime: getMugenAnimTime(player, input),
     stateFound: Boolean(stateDef),
     executedControllers: [],
   };
@@ -93,7 +99,7 @@ function stepPlayerCnsRuntime(
   let nextPlayer = applyStateDefHeader(player, stateDef, { resetAnimOnChange: false });
 
   for (const controller of stateDef.controllers) {
-    if (!shouldRunController(controller, nextPlayer, commands)) {
+    if (!shouldRunController(controller, nextPlayer, input, commands)) {
       continue;
     }
 
@@ -138,6 +144,7 @@ function applyStateDefHeader(
 function shouldRunController(
   controller: CnsStateController,
   player: PlayerState,
+  input: CnsRuntimeInput,
   commands?: ReadonlySet<string>,
 ): boolean {
   if (controller.triggers.length === 0) {
@@ -146,8 +153,17 @@ function shouldRunController(
 
   return evaluateCnsRuntimeTriggerGroup(
     controller.triggers.map(formatTriggerForRuntime),
-    { player, commands },
+    {
+      player,
+      commands,
+      animTime: getMugenAnimTime(player, input),
+    },
   );
+}
+
+function getMugenAnimTime(player: PlayerState, input: CnsRuntimeInput): number {
+  const duration = input.getAnimationDuration?.(player.animNo) ?? null;
+  return calculateMugenAnimTime(player.animTime, duration);
 }
 
 function formatTriggerForRuntime(trigger: CnsTrigger): string {
@@ -275,7 +291,7 @@ function cnsValueToNumber(value: CnsValue | undefined): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function createMissingTrace(playerId: 1 | 2, player: PlayerState): CnsRuntimeTrace {
+function createMissingTrace(playerId: 1 | 2, player: PlayerState, input: CnsRuntimeInput): CnsRuntimeTrace {
   return {
     playerId,
     stateNo: player.stateNo,
@@ -284,6 +300,7 @@ function createMissingTrace(playerId: 1 | 2, player: PlayerState): CnsRuntimeTra
     afterAnimNo: player.animNo,
     stateTime: player.stateTime,
     afterStateTime: player.stateTime,
+    mugenAnimTime: getMugenAnimTime(player, input),
     stateFound: false,
     executedControllers: [],
   };

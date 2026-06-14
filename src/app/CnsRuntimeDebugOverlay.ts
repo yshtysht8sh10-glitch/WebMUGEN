@@ -11,8 +11,8 @@ export function formatCnsRuntimeDebugOverlay(traces: readonly CnsRuntimeTrace[])
 
     return `cns p${trace.playerId} state=${trace.stateNo}->${trace.afterStateNo} anim=${
       trace.animNo
-    }->${trace.afterAnimNo} time=${trace.stateTime}->${trace.afterStateTime} found=${
-      trace.stateFound ? 1 : 0
-    } exec=${controllers}`;
+    }->${trace.afterAnimNo} time=${trace.stateTime}->${trace.afterStateTime} animtime=${
+      trace.mugenAnimTime
+    } found=${trace.stateFound ? 1 : 0} exec=${controllers}`;
   });
 }

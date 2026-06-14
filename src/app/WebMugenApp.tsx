@@ -29,6 +29,7 @@ import {
   type RoundScore,
 } from '../core/engine/RoundScore';
 import { canRestartRound, restartRound } from '../core/engine/RoundRestart';
+import { getAnimationDuration } from '../core/animation/AnimationDuration';
 import { createFallbackCnsCommandSet } from '../core/cns/CnsCommandInput';
 import { attachFallbackAttackStates } from '../core/cns/CnsFallbackDocument';
 import {
@@ -80,13 +81,7 @@ export function WebMugenApp() {
           : `Sample character fallback: ${loadResult.reason ?? 'unknown reason'} cnsStates=${character.cns.states.length}`,
       );
 
-      rendererRef.current = new CanvasRenderer(
-        canvas,
-        character.air,
-        null,
-        character.sprites,
-      );
-
+      rendererRef.current = new CanvasRenderer(canvas, character.air, null, character.sprites);
       inputRef.current = new BrowserInput(window);
 
       const tick = () => {
@@ -121,6 +116,7 @@ export function WebMugenApp() {
           const cnsResult = stepCnsStateRuntime(nextState, character.cns, {
             p1Commands,
             p2Commands,
+            getAnimationDuration: (animNo) => getAnimationDuration(character.air, animNo),
           });
           nextState = cnsResult.state;
           nextCnsTraces = cnsResult.traces;

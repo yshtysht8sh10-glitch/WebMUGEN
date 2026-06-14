@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>MUGEN-like AnimTime Trigger Phase46</title></head>
+<body>
+<h1>MUGEN-like AnimTime Trigger Phase46</h1>
+<p>This phase makes AnimTime work like a remaining animation time trigger.</p>
+<ul>
+<li>Adds animation duration helper</li>
+<li>Calculates MUGEN-like AnimTime as remaining frames</li>
+<li>Passes AIR animation duration into CNS runtime from the app</li>
+<li>Evaluates AnimTime = 0 using remaining time, not elapsed time</li>
+<li>Supports KFM State 200 returning via AnimTime = 0</li>
+</ul>
+</body>
+</html>
