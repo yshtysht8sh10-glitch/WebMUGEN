@@ -6,17 +6,21 @@ describe('CnsRuntimeDebugOverlay', () => {
     expect(formatCnsRuntimeDebugOverlay([])).toEqual(['cns=-']);
   });
 
-  it('formats runtime traces with after state', () => {
+  it('formats runtime traces with after state, anim, and time', () => {
     expect(
       formatCnsRuntimeDebugOverlay([
         {
           playerId: 1,
-          stateNo: 0,
-          afterStateNo: 200,
+          stateNo: 200,
+          afterStateNo: 0,
+          animNo: 200,
+          afterAnimNo: 0,
+          stateTime: 19,
+          afterStateTime: 0,
           stateFound: true,
           executedControllers: ['ChangeState'],
         },
       ]),
-    ).toEqual(['cns p1 state=0->200 found=1 exec=ChangeState']);
+    ).toEqual(['cns p1 state=200->0 anim=200->0 time=19->0 found=1 exec=ChangeState']);
   });
 });

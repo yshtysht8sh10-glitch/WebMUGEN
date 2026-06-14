@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Immediate ChangeState Header Phase45</title></head>
+<body>
+<h1>Immediate ChangeState Header Phase45</h1>
+<p>This phase applies the destination StateDef header immediately after ChangeState.</p>
+<ul>
+<li>ChangeState now applies destination StateDef in the same CNS runtime step</li>
+<li>State 0 -&gt; 200 immediately applies anim=200 / movetype=A / ctrl=false</li>
+<li>CNS trace now includes anim before/after</li>
+<li>Debug overlay shows state and anim transition</li>
+</ul>
+</body>
+</html>

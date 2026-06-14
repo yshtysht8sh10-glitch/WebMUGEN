@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Phase45 Fix State Time Return</title></head>
+<body>
+<h1>Phase45 Fix State Time Return</h1>
+<p>This patch fixes attack state return behavior.</p>
+<ul>
+<li>Adds stateTime before/after to CNS runtime trace</li>
+<li>Shows time in the debug overlay</li>
+<li>Preserves stateTime while remaining in the same state</li>
+<li>Resets stateTime only when ChangeState actually changes the state</li>
+<li>Verifies state 200 can return to state 0 when time &gt; 18</li>
+</ul>
+</body>
+</html>

@@ -12,6 +12,10 @@ export type CnsRuntimeTrace = {
   playerId: 1 | 2;
   stateNo: number;
   afterStateNo: number;
+  animNo: number;
+  afterAnimNo: number;
+  stateTime: number;
+  afterStateTime: number;
   stateFound: boolean;
   executedControllers: string[];
 };
@@ -35,18 +39,13 @@ export function stepCnsStateRuntime(
     return {
       state,
       traces: [
-        createMissingTrace(1, state.players[0].stateNo),
-        createMissingTrace(2, state.players[1].stateNo),
+        createMissingTrace(1, state.players[0]),
+        createMissingTrace(2, state.players[1]),
       ],
     };
   }
 
-  const p1Result = stepPlayerCnsRuntime(
-    state.players[0],
-    1,
-    cnsDocument,
-    input.p1Commands,
-  );
+  const p1Result = stepPlayerCnsRuntime(state.players[0], 1, cnsDocument, input.p1Commands);
   const intermediateState: GameState = {
     ...state,
     players: [p1Result.player, state.players[1]],
@@ -79,6 +78,10 @@ function stepPlayerCnsRuntime(
     playerId,
     stateNo: player.stateNo,
     afterStateNo: player.stateNo,
+    animNo: player.animNo,
+    afterAnimNo: player.animNo,
+    stateTime: player.stateTime,
+    afterStateTime: player.stateTime,
     stateFound: Boolean(stateDef),
     executedControllers: [],
   };
@@ -87,14 +90,14 @@ function stepPlayerCnsRuntime(
     return { player, trace };
   }
 
-  let nextPlayer = applyStateDefHeader(player, stateDef);
+  let nextPlayer = applyStateDefHeader(player, stateDef, { resetAnimOnChange: false });
 
   for (const controller of stateDef.controllers) {
     if (!shouldRunController(controller, nextPlayer, commands)) {
       continue;
     }
 
-    const result = executeSupportedController(nextPlayer, controller);
+    const result = executeSupportedController(nextPlayer, controller, cnsDocument);
     nextPlayer = result.player;
 
     if (result.executed) {
@@ -103,6 +106,8 @@ function stepPlayerCnsRuntime(
   }
 
   trace.afterStateNo = nextPlayer.stateNo;
+  trace.afterAnimNo = nextPlayer.animNo;
+  trace.afterStateTime = nextPlayer.stateTime;
 
   return { player: nextPlayer, trace };
 }
@@ -111,14 +116,22 @@ function findStateDef(cnsDocument: CnsDocument, stateNo: number): CnsStateDefini
   return cnsDocument.states.find((state) => state.stateNo === stateNo);
 }
 
-function applyStateDefHeader(player: PlayerState, stateDef: CnsStateDefinition): PlayerState {
+function applyStateDefHeader(
+  player: PlayerState,
+  stateDef: CnsStateDefinition,
+  options: { resetAnimOnChange: boolean },
+): PlayerState {
+  const nextAnimNo = stateDef.initialAnim ?? player.animNo;
+  const animChanged = player.animNo !== nextAnimNo;
+
   return {
     ...player,
     stateType: stateDef.stateType ?? player.stateType,
     moveType: stateDef.moveType ?? player.moveType,
     physics: stateDef.physics ?? player.physics,
     ctrl: stateDef.ctrl ?? player.ctrl,
-    animNo: stateDef.initialAnim ?? player.animNo,
+    animNo: nextAnimNo,
+    animTime: options.resetAnimOnChange && animChanged ? 0 : player.animTime,
   };
 }
 
@@ -133,10 +146,7 @@ function shouldRunController(
 
   return evaluateCnsRuntimeTriggerGroup(
     controller.triggers.map(formatTriggerForRuntime),
-    {
-      player,
-      commands,
-    },
+    { player, commands },
   );
 }
 
@@ -147,14 +157,13 @@ function formatTriggerForRuntime(trigger: CnsTrigger): string {
 function executeSupportedController(
   player: PlayerState,
   controller: CnsStateController,
+  cnsDocument: CnsDocument,
 ): { player: PlayerState; executed: boolean; name: string } {
   const type = controller.type.toLowerCase();
 
   if (type === 'changeanim') {
     const value = readNumber(controller, 'value');
-    if (value === null) {
-      return { player, executed: false, name: 'ChangeAnim' };
-    }
+    if (value === null) return { player, executed: false, name: 'ChangeAnim' };
 
     return {
       player: {
@@ -172,11 +181,7 @@ function executeSupportedController(
     const y = readNumber(controller, 'y');
 
     return {
-      player: {
-        ...player,
-        vx: x ?? player.vx,
-        vy: y ?? player.vy,
-      },
+      player: { ...player, vx: x ?? player.vx, vy: y ?? player.vy },
       executed: x !== null || y !== null,
       name: 'VelSet',
     };
@@ -202,11 +207,7 @@ function executeSupportedController(
     const y = readNumber(controller, 'y');
 
     return {
-      player: {
-        ...player,
-        x: x ?? player.x,
-        y: y ?? player.y,
-      },
+      player: { ...player, x: x ?? player.x, y: y ?? player.y },
       executed: x !== null || y !== null,
       name: 'PosSet',
     };
@@ -229,15 +230,10 @@ function executeSupportedController(
 
   if (type === 'ctrlset') {
     const value = readNumber(controller, 'value');
-    if (value === null) {
-      return { player, executed: false, name: 'CtrlSet' };
-    }
+    if (value === null) return { player, executed: false, name: 'CtrlSet' };
 
     return {
-      player: {
-        ...player,
-        ctrl: value !== 0,
-      },
+      player: { ...player, ctrl: value !== 0 },
       executed: true,
       name: 'CtrlSet',
     };
@@ -245,51 +241,49 @@ function executeSupportedController(
 
   if (type === 'changestate') {
     const value = readNumber(controller, 'value');
-    if (value === null) {
-      return { player, executed: false, name: 'ChangeState' };
-    }
+    if (value === null) return { player, executed: false, name: 'ChangeState' };
+
+    const changedPlayer: PlayerState = {
+      ...player,
+      stateNo: value,
+      stateTime: player.stateNo === value ? player.stateTime : 0,
+    };
+
+    const destinationStateDef = findStateDef(cnsDocument, value);
 
     return {
-      player: {
-        ...player,
-        stateNo: value,
-        stateTime: player.stateNo === value ? player.stateTime : 0,
-      },
+      player: destinationStateDef
+        ? applyStateDefHeader(changedPlayer, destinationStateDef, { resetAnimOnChange: true })
+        : changedPlayer,
       executed: true,
       name: 'ChangeState',
     };
   }
 
-  return {
-    player,
-    executed: false,
-    name: controller.type,
-  };
+  return { player, executed: false, name: controller.type };
 }
 
 function readNumber(controller: CnsStateController, key: string): number | null {
-  const value = controller.params[key.toLowerCase()];
-  return cnsValueToNumber(value);
+  return cnsValueToNumber(controller.params[key.toLowerCase()]);
 }
 
 function cnsValueToNumber(value: CnsValue | undefined): number | null {
-  if (value === undefined || value === null) {
-    return null;
-  }
-
-  if (typeof value === 'number') {
-    return value;
-  }
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'number') return value;
 
   const parsed = Number(String(value).trim());
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function createMissingTrace(playerId: 1 | 2, stateNo: number): CnsRuntimeTrace {
+function createMissingTrace(playerId: 1 | 2, player: PlayerState): CnsRuntimeTrace {
   return {
     playerId,
-    stateNo,
-    afterStateNo: stateNo,
+    stateNo: player.stateNo,
+    afterStateNo: player.stateNo,
+    animNo: player.animNo,
+    afterAnimNo: player.animNo,
+    stateTime: player.stateTime,
+    afterStateTime: player.stateTime,
     stateFound: false,
     executedControllers: [],
   };

@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Phase45 Fix2 Inject Return Controller</title></head>
+<body>
+<h1>Phase45 Fix2 Inject Return Controller</h1>
+<p>This patch fixes real KFM state 200 getting stuck.</p>
+<ul>
+<li>Preserves existing character StateDef 200</li>
+<li>Injects only a fallback ChangeState controller into state 200 when needed</li>
+<li>Adds time &gt; 18 -&gt; ChangeState value 0 safety return</li>
+<li>Does not inject when state 200 already has a ChangeState value 0 controller</li>
+</ul>
+</body>
+</html>
