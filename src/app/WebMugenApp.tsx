@@ -32,12 +32,15 @@ import { canRestartRound, restartRound } from '../core/engine/RoundRestart';
 import { getAnimationDuration } from '../core/animation/AnimationDuration';
 import { createFallbackCnsCommandSet } from '../core/cns/CnsCommandInput';
 import { attachFallbackAttackStates } from '../core/cns/CnsFallbackDocument';
+import { analyzeCnsCoverage } from '../core/cns/CnsCoverageDiagnostics';
+import type { CnsCoverageDiagnostics } from '../core/cns/CnsCoverageDiagnostics';
 import {
   stepCnsStateRuntime,
   type CnsRuntimeTrace,
 } from '../core/cns/CnsStateRuntime';
 import { formatCnsRuntimeDebugOverlay } from './CnsRuntimeDebugOverlay';
 import { formatCnsCommandDebugOverlay } from './CnsCommandDebugOverlay';
+import { formatCnsCoverageDebugOverlay } from './CnsCoverageDebugOverlay';
 
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/kfm/kfm.def';
 
@@ -49,6 +52,7 @@ export function WebMugenApp() {
   const roundStateRef = useRef<RoundState>(createInitialRoundState());
   const roundScoreRef = useRef<RoundScore>(createInitialRoundScore());
   const cnsTraceRef = useRef<CnsRuntimeTrace[]>([]);
+  const cnsCoverageRef = useRef<CnsCoverageDiagnostics | null>(null);
   const restartPressedRef = useRef(false);
   const inputRef = useRef<BrowserInput | null>(null);
   const [loadMessage, setLoadMessage] = useState('Loading character...');
@@ -57,6 +61,7 @@ export function WebMugenApp() {
   const [scoreDebugLine, setScoreDebugLine] = useState(formatRoundScore(createInitialRoundScore()));
   const [cnsDebugLines, setCnsDebugLines] = useState<string[]>([]);
   const [commandDebugLines, setCommandDebugLines] = useState<string[]>(['cmd p1=-', 'cmd p2=-']);
+  const [coverageDebugLines, setCoverageDebugLines] = useState<string[]>(['coverage=-']);
 
   useEffect(() => {
     let disposed = false;
@@ -73,6 +78,9 @@ export function WebMugenApp() {
         ...loadResult.character,
         cns: attachFallbackAttackStates(loadResult.character.cns),
       };
+      cnsCoverageRef.current = analyzeCnsCoverage(character.cns);
+      setCoverageDebugLines(formatCnsCoverageDebugOverlay(cnsCoverageRef.current));
+
       const spriteCount = character.sprites?.sprites.size ?? 0;
 
       setLoadMessage(
@@ -175,7 +183,14 @@ export function WebMugenApp() {
       />
       <p>{loadMessage}</p>
       <div style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', marginBottom: 16 }}>
-        {[...inputDebugLines, ...commandDebugLines, roundDebugLine, scoreDebugLine, ...cnsDebugLines].join('\n')}
+        {[
+          ...inputDebugLines,
+          ...commandDebugLines,
+          roundDebugLine,
+          scoreDebugLine,
+          ...cnsDebugLines,
+          ...coverageDebugLines,
+        ].join('\n')}
       </div>
       <p>P1: ← / → 移動, ↑ ジャンプ, A 攻撃, ↓ + A 飛び道具</p>
       <p>P2: J / L 移動, I ジャンプ, K しゃがみ入力, F 攻撃</p>
