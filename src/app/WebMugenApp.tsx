@@ -22,6 +22,12 @@ import {
   stepRoundState,
   type RoundState,
 } from '../core/engine/RoundState';
+import {
+  createInitialRoundScore,
+  formatRoundScore,
+  updateRoundScore,
+  type RoundScore,
+} from '../core/engine/RoundScore';
 import { canRestartRound, restartRound } from '../core/engine/RoundRestart';
 
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/kfm/kfm.def';
@@ -32,11 +38,13 @@ export function WebMugenApp() {
   const gameStateRef = useRef<GameState>(createInitialGameState());
   const hitFeedbackRef = useRef<HitFeedbackState>(createInitialHitFeedbackState());
   const roundStateRef = useRef<RoundState>(createInitialRoundState());
+  const roundScoreRef = useRef<RoundScore>(createInitialRoundScore());
   const restartPressedRef = useRef(false);
   const inputRef = useRef<BrowserInput | null>(null);
   const [loadMessage, setLoadMessage] = useState('Loading character...');
   const [inputDebugLines, setInputDebugLines] = useState<string[]>(['keys=-']);
   const [roundDebugLine, setRoundDebugLine] = useState(formatRoundState(createInitialRoundState()));
+  const [scoreDebugLine, setScoreDebugLine] = useState(formatRoundScore(createInitialRoundScore()));
 
   useEffect(() => {
     let disposed = false;
@@ -77,6 +85,7 @@ export function WebMugenApp() {
         let nextState = gameStateRef.current;
         let nextRoundState = roundStateRef.current;
         let nextFeedback = hitFeedbackRef.current;
+        let nextScore = roundScoreRef.current;
 
         if (
           inputSnapshot.system.restartRound &&
@@ -94,9 +103,11 @@ export function WebMugenApp() {
           nextState = resolveFallbackHits(nextState, character.air);
           nextState = applyFallbackHitRecovery(nextState);
           nextRoundState = stepRoundState(nextRoundState, nextState);
+          nextScore = updateRoundScore(nextScore, nextRoundState);
           nextFeedback = updateHitFeedback(nextFeedback, nextState);
         } else {
           nextRoundState = stepRoundState(nextRoundState, nextState);
+          nextScore = updateRoundScore(nextScore, nextRoundState);
           nextFeedback = updateHitFeedback(nextFeedback, nextState);
         }
 
@@ -105,9 +116,11 @@ export function WebMugenApp() {
         gameStateRef.current = nextState;
         hitFeedbackRef.current = nextFeedback;
         roundStateRef.current = nextRoundState;
+        roundScoreRef.current = nextScore;
         setRoundDebugLine(formatRoundState(nextRoundState));
+        setScoreDebugLine(formatRoundScore(nextScore));
 
-        rendererRef.current?.render(nextState, nextFeedback, nextRoundState);
+        rendererRef.current?.render(nextState, nextFeedback, nextRoundState, nextScore);
 
         frameId = requestAnimationFrame(tick);
       };
@@ -137,7 +150,7 @@ export function WebMugenApp() {
       />
       <p>{loadMessage}</p>
       <div style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', marginBottom: 16 }}>
-        {[...inputDebugLines, roundDebugLine].join('\n')}
+        {[...inputDebugLines, roundDebugLine, scoreDebugLine].join('\n')}
       </div>
       <p>P1: ← / → 移動, ↑ ジャンプ, A 攻撃, ↓ + A 飛び道具</p>
       <p>P2: J / L 移動, I ジャンプ, K しゃがみ入力, F 攻撃</p>

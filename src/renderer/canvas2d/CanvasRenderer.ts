@@ -15,6 +15,7 @@ import { createSpriteDebugInfo } from '../../core/sprite/SpriteDebugInfo';
 import type { HitFeedbackState } from '../../core/engine/HitFeedback';
 import { HitFeedbackRenderer } from './HitFeedbackRenderer';
 import type { RoundState } from '../../core/engine/RoundState';
+import type { RoundScore } from '../../core/engine/RoundScore';
 import { RoundStateRenderer } from './RoundStateRenderer';
 
 export class CanvasRenderer {
@@ -34,12 +35,17 @@ export class CanvasRenderer {
     this.context = context;
   }
 
-  render(state: GameState, hitFeedback?: HitFeedbackState, roundState?: RoundState): void {
+  render(
+    state: GameState,
+    hitFeedback?: HitFeedbackState,
+    roundState?: RoundState,
+    roundScore?: RoundScore,
+  ): void {
     const ctx = this.context;
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.drawStage(ctx);
     this.drawLifeBars(ctx, state);
-    if (roundState) this.roundStateRenderer.render(ctx, roundState);
+    if (roundState) this.roundStateRenderer.render(ctx, roundState, roundScore);
     this.drawProjectiles(ctx, state.projectiles);
     this.drawPlayer(ctx, state.players[0], '#66ccff');
     this.drawPlayer(ctx, state.players[1], '#ff99aa');
