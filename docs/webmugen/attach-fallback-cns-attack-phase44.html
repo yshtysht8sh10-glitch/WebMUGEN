@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Attach Fallback CNS Attack Phase44</title></head>
+<body>
+<h1>Attach Fallback CNS Attack Phase44</h1>
+<p>This phase fixes the issue where attack did not appear after Phase42/43.</p>
+<ul>
+<li>Attaches fallback attack CNS states to the app character CNS document</li>
+<li>Creates fallback CNS document when character CNS is missing</li>
+<li>Does not overwrite existing character state numbers</li>
+<li>Changes trigger grouping to OR of AND groups</li>
+<li>Uses trigger1 = ctrl and trigger1 = command = "x" as AND conditions</li>
+<li>Adds cnsStates count to load message for easier diagnosis</li>
+</ul>
+</body>
+</html>

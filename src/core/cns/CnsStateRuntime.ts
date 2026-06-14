@@ -2,14 +2,16 @@ import type {
   CnsDocument,
   CnsStateController,
   CnsStateDefinition,
+  CnsTrigger,
   CnsValue,
 } from '../../mugen/common/cnsTypes';
 import type { GameState, PlayerState } from '../engine/types';
-import { evaluateCnsRuntimeTrigger } from './CnsRuntimeTrigger';
+import { evaluateCnsRuntimeTriggerGroup } from './CnsRuntimeTrigger';
 
 export type CnsRuntimeTrace = {
   playerId: 1 | 2;
   stateNo: number;
+  afterStateNo: number;
   stateFound: boolean;
   executedControllers: string[];
 };
@@ -76,6 +78,7 @@ function stepPlayerCnsRuntime(
   const trace: CnsRuntimeTrace = {
     playerId,
     stateNo: player.stateNo,
+    afterStateNo: player.stateNo,
     stateFound: Boolean(stateDef),
     executedControllers: [],
   };
@@ -98,6 +101,8 @@ function stepPlayerCnsRuntime(
       trace.executedControllers.push(result.name);
     }
   }
+
+  trace.afterStateNo = nextPlayer.stateNo;
 
   return { player: nextPlayer, trace };
 }
@@ -126,12 +131,17 @@ function shouldRunController(
     return true;
   }
 
-  return controller.triggers.some((trigger) =>
-    evaluateCnsRuntimeTrigger(trigger.expression, {
+  return evaluateCnsRuntimeTriggerGroup(
+    controller.triggers.map(formatTriggerForRuntime),
+    {
       player,
       commands,
-    }),
+    },
   );
+}
+
+function formatTriggerForRuntime(trigger: CnsTrigger): string {
+  return `${trigger.name}: ${trigger.expression}`;
 }
 
 function executeSupportedController(
@@ -172,6 +182,21 @@ function executeSupportedController(
     };
   }
 
+  if (type === 'veladd') {
+    const x = readNumber(controller, 'x');
+    const y = readNumber(controller, 'y');
+
+    return {
+      player: {
+        ...player,
+        vx: x !== null ? player.vx + x : player.vx,
+        vy: y !== null ? player.vy + y : player.vy,
+      },
+      executed: x !== null || y !== null,
+      name: 'VelAdd',
+    };
+  }
+
   if (type === 'posset') {
     const x = readNumber(controller, 'x');
     const y = readNumber(controller, 'y');
@@ -184,6 +209,37 @@ function executeSupportedController(
       },
       executed: x !== null || y !== null,
       name: 'PosSet',
+    };
+  }
+
+  if (type === 'posadd') {
+    const x = readNumber(controller, 'x');
+    const y = readNumber(controller, 'y');
+
+    return {
+      player: {
+        ...player,
+        x: x !== null ? player.x + x : player.x,
+        y: y !== null ? player.y + y : player.y,
+      },
+      executed: x !== null || y !== null,
+      name: 'PosAdd',
+    };
+  }
+
+  if (type === 'ctrlset') {
+    const value = readNumber(controller, 'value');
+    if (value === null) {
+      return { player, executed: false, name: 'CtrlSet' };
+    }
+
+    return {
+      player: {
+        ...player,
+        ctrl: value !== 0,
+      },
+      executed: true,
+      name: 'CtrlSet',
     };
   }
 
@@ -233,6 +289,7 @@ function createMissingTrace(playerId: 1 | 2, stateNo: number): CnsRuntimeTrace {
   return {
     playerId,
     stateNo,
+    afterStateNo: stateNo,
     stateFound: false,
     executedControllers: [],
   };

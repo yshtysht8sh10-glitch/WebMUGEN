@@ -30,6 +30,7 @@ import {
 } from '../core/engine/RoundScore';
 import { canRestartRound, restartRound } from '../core/engine/RoundRestart';
 import { createFallbackCnsCommandSet } from '../core/cns/CnsCommandInput';
+import { attachFallbackAttackStates } from '../core/cns/CnsFallbackDocument';
 import {
   stepCnsStateRuntime,
   type CnsRuntimeTrace,
@@ -67,13 +68,16 @@ export function WebMugenApp() {
       const loadResult = await loadAppCharacter(DEFAULT_CHARACTER_DEF_PATH);
       if (disposed) return;
 
-      const character = loadResult.character;
+      const character = {
+        ...loadResult.character,
+        cns: attachFallbackAttackStates(loadResult.character.cns),
+      };
       const spriteCount = character.sprites?.sprites.size ?? 0;
 
       setLoadMessage(
         loadResult.source === 'def'
-          ? `Loaded character: ${DEFAULT_CHARACTER_DEF_PATH} sprites=${spriteCount}`
-          : `Sample character fallback: ${loadResult.reason ?? 'unknown reason'}`,
+          ? `Loaded character: ${DEFAULT_CHARACTER_DEF_PATH} sprites=${spriteCount} cnsStates=${character.cns.states.length}`
+          : `Sample character fallback: ${loadResult.reason ?? 'unknown reason'} cnsStates=${character.cns.states.length}`,
       );
 
       rendererRef.current = new CanvasRenderer(

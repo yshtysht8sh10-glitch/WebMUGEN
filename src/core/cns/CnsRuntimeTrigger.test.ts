@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialGameState } from '../engine/GameState';
-import { evaluateCnsRuntimeTrigger } from './CnsRuntimeTrigger';
+import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup } from './CnsRuntimeTrigger';
 
 describe('CnsRuntimeTrigger', () => {
   const player = {
@@ -50,5 +50,32 @@ describe('CnsRuntimeTrigger', () => {
       player,
       commands: new Set(['x']),
     })).toBe(false);
+  });
+
+  it('evaluates trigger groups as OR of AND groups', () => {
+    expect(evaluateCnsRuntimeTriggerGroup([
+      'trigger1: ctrl',
+      'trigger1: command = "x"',
+    ], {
+      player,
+      commands: new Set(['x']),
+    })).toBe(true);
+
+    expect(evaluateCnsRuntimeTriggerGroup([
+      'trigger1: ctrl',
+      'trigger1: command = "x"',
+    ], {
+      player,
+      commands: new Set(),
+    })).toBe(false);
+
+    expect(evaluateCnsRuntimeTriggerGroup([
+      'trigger1: ctrl',
+      'trigger1: command = "x"',
+      'trigger2: time > 5',
+    ], {
+      player,
+      commands: new Set(),
+    })).toBe(true);
   });
 });

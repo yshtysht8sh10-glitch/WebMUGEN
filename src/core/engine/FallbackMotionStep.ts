@@ -1,89 +1,62 @@
 import type { GameState, PlayerState } from './types';
 
-const GROUND_Y = 285;
-const GRAVITY = 0.55;
-const FRICTION = 0.78;
+const GROUND_Y = 360;
+const GRAVITY = 0.6;
+const FRICTION = 0.82;
 
 export function stepFallbackMotion(state: GameState): GameState {
   return {
     ...state,
     frame: state.frame + 1,
-    players: [
-      stepFallbackPlayer(state.players[0]),
-      stepFallbackPlayer(state.players[1]),
-    ],
-    projectiles: state.projectiles,
-    hitEvents: [],
+    players: state.players.map(stepPlayerFallbackMotion) as [PlayerState, PlayerState],
   };
 }
 
-function stepFallbackPlayer(player: PlayerState): PlayerState {
-  let next: PlayerState = {
-    ...player,
-    stateTime: player.stateTime + 1,
-    animTime: player.animTime + 1,
-    hitPause: Math.max(0, player.hitPause - 1),
-  };
+function stepPlayerFallbackMotion(player: PlayerState): PlayerState {
+  const nextAnimTime = player.animTime + 1;
+  const nextStateTime = player.stateTime + 1;
 
-  if (next.hitPause > 0) {
-    return next;
+  if (player.hitPause > 0) {
+    return {
+      ...player,
+      hitPause: player.hitPause - 1,
+      animTime: nextAnimTime,
+      stateTime: nextStateTime,
+    };
   }
 
-  next = {
-    ...next,
-    x: next.x + next.vx,
-    y: next.y + next.vy,
-  };
+  let nextX = player.x + player.vx;
+  let nextY = player.y + player.vy;
+  let nextVx = player.vx;
+  let nextVy = player.vy;
+  let nextStateType = player.stateType;
+  let nextPhysics = player.physics;
 
-  if (next.stateType === 'A' || next.physics === 'A') {
-    next = {
-      ...next,
-      vy: next.vy + GRAVITY,
-    };
+  if (player.physics === 'A' || player.stateType === 'A') {
+    nextVy += GRAVITY;
+  } else if (player.physics === 'S' || player.physics === 'C') {
+    nextVx *= FRICTION;
+  }
 
-    if (next.y >= GROUND_Y) {
-      next = {
-        ...next,
-        y: GROUND_Y,
-        vy: 0,
-        vx: 0,
-        stateNo: 0,
-        animNo: 0,
-        animTime: 0,
-        stateTime: 0,
-        stateType: 'S',
-        moveType: 'I',
-        physics: 'S',
-        ctrl: true,
-      };
+  if (nextY >= GROUND_Y) {
+    nextY = GROUND_Y;
+
+    if (nextStateType === 'A') {
+      nextVy = 0;
+      nextStateType = 'S';
+      nextPhysics = 'S';
     }
-  } else {
-    next = {
-      ...next,
-      vx: Math.abs(next.vx) < 0.05 ? 0 : next.vx * FRICTION,
-      y: GROUND_Y,
-      vy: 0,
-    };
   }
 
-  if (isActionFinished(next)) {
-    next = {
-      ...next,
-      stateNo: 0,
-      animNo: 0,
-      animTime: 0,
-      stateTime: 0,
-      moveType: 'I',
-      ctrl: true,
-      vx: 0,
-    };
-  }
-
-  return next;
-}
-
-function isActionFinished(player: PlayerState): boolean {
-  if (player.stateNo === 200) return player.stateTime > 18;
-  if (player.stateNo === 1000) return player.stateTime > 28;
-  return false;
+  return {
+    ...player,
+    x: nextX,
+    y: nextY,
+    vx: Math.abs(nextVx) < 0.01 ? 0 : nextVx,
+    vy: Math.abs(nextVy) < 0.01 ? 0 : nextVy,
+    stateType: nextStateType,
+    physics: nextPhysics,
+    animTime: nextAnimTime,
+    stateTime: nextStateTime,
+  };
 }

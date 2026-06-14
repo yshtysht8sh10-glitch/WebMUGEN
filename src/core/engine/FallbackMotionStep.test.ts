@@ -1,66 +1,58 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialGameState } from './GameState';
-import { applyFallbackControls } from './FallbackControls';
 import { stepFallbackMotion } from './FallbackMotionStep';
 
 describe('FallbackMotionStep', () => {
-  it('increments frame and animation time', () => {
+  it('increments frame and timers', () => {
     const state = createInitialGameState();
     const next = stepFallbackMotion(state);
 
     expect(next.frame).toBe(state.frame + 1);
     expect(next.players[0].animTime).toBe(state.players[0].animTime + 1);
+    expect(next.players[0].stateTime).toBe(state.players[0].stateTime + 1);
   });
 
-  it('moves walking player', () => {
-    const state = applyFallbackControls(
-      createInitialGameState(),
-      { left: false, right: true, up: false, down: false, attack: false },
-      { left: false, right: false, up: false, down: false, attack: false },
-    );
-
-    const next = stepFallbackMotion(state);
-
-    expect(next.players[0].x).toBeGreaterThan(state.players[0].x);
-  });
-
-  it('lands airborne player', () => {
-    let state = createInitialGameState();
-    state = {
+  it('moves player by velocity', () => {
+    const state = createInitialGameState();
+    const next = stepFallbackMotion({
       ...state,
       players: [
-        {
-          ...state.players[0],
-          y: 284,
-          vy: 3,
-          stateType: 'A',
-          physics: 'A',
-          stateNo: 40,
-          animNo: 40,
-        },
+        { ...state.players[0], vx: 2, vy: -1 },
         state.players[1],
       ],
-    };
+    });
 
-    const next = stepFallbackMotion(state);
-
-    expect(next.players[0].y).toBe(285);
-    expect(next.players[0].stateNo).toBe(0);
-    expect(next.players[0].ctrl).toBe(true);
+    expect(next.players[0].x).toBe(state.players[0].x + 2);
+    expect(next.players[0].y).toBe(state.players[0].y - 1);
   });
 
-  it('returns attack player to idle after action finishes', () => {
-    let state = applyFallbackControls(
-      createInitialGameState(),
-      { left: false, right: false, up: false, down: false, attack: true },
-      { left: false, right: false, up: false, down: false, attack: false },
-    );
+  it('does not force active attack back to stand', () => {
+    const state = createInitialGameState();
+    const next = stepFallbackMotion({
+      ...state,
+      players: [
+        { ...state.players[0], stateNo: 200, moveType: 'A', ctrl: false, stateTime: 0, vx: 0 },
+        state.players[1],
+      ],
+    });
 
-    for (let i = 0; i < 20; i += 1) {
-      state = stepFallbackMotion(state);
-    }
+    expect(next.players[0].stateNo).toBe(200);
+    expect(next.players[0].moveType).toBe('A');
+    expect(next.players[0].ctrl).toBe(false);
+    expect(next.players[0].stateTime).toBe(1);
+  });
 
-    expect(state.players[0].stateNo).toBe(0);
-    expect(state.players[0].ctrl).toBe(true);
+  it('counts down hit pause without moving', () => {
+    const state = createInitialGameState();
+    const next = stepFallbackMotion({
+      ...state,
+      players: [
+        { ...state.players[0], hitPause: 2, vx: 10 },
+        state.players[1],
+      ],
+    });
+
+    expect(next.players[0].hitPause).toBe(1);
+    expect(next.players[0].x).toBe(state.players[0].x);
   });
 });

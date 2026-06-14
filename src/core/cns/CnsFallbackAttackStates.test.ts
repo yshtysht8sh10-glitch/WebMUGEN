@@ -13,6 +13,16 @@ describe('CnsFallbackAttackStates', () => {
     expect(cns.states.some((state) => state.stateNo === 200)).toBe(true);
   });
 
+  it('does not attack without command x', () => {
+    const cns = parseCnsText(CNS_FALLBACK_ATTACK_STATES);
+    const state = createInitialGameState();
+
+    const result = stepCnsStateRuntime(state, cns);
+
+    expect(result.state.players[0].stateNo).toBe(0);
+    expect(result.traces[0].executedControllers).toEqual([]);
+  });
+
   it('changes from stand to attack by command x', () => {
     const cns = parseCnsText(CNS_FALLBACK_ATTACK_STATES);
     const state = createInitialGameState();
@@ -46,6 +56,26 @@ describe('CnsFallbackAttackStates', () => {
       moveType: 'A',
       ctrl: false,
     });
+  });
+
+  it('applies attack motion controllers', () => {
+    const cns = parseCnsText(CNS_FALLBACK_ATTACK_STATES);
+    const state = createInitialGameState();
+
+    const result = stepCnsStateRuntime(
+      {
+        ...state,
+        players: [
+          { ...state.players[0], stateNo: 200, stateTime: 2, x: 100, vx: 8 },
+          state.players[1],
+        ],
+      },
+      cns,
+    );
+
+    expect(result.state.players[0].x).toBe(102);
+    expect(result.state.players[0].vx).toBe(8);
+    expect(result.traces[0].executedControllers).toEqual(['PosAdd']);
   });
 
   it('returns from attack to stand after time', () => {

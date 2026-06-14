@@ -46,6 +46,37 @@ export function evaluateCnsRuntimeTrigger(
   return false;
 }
 
+export function evaluateCnsRuntimeTriggerGroup(
+  expressions: readonly string[],
+  context: CnsRuntimeTriggerContext,
+): boolean {
+  if (expressions.length === 0) {
+    return true;
+  }
+
+  const groups = new Map<number, string[]>();
+
+  for (const expression of expressions) {
+    const match = expression.match(/^trigger(\d+)(?:all)?\s*:\s*(.*)$/i);
+    if (!match) {
+      const existing = groups.get(1) ?? [];
+      existing.push(expression);
+      groups.set(1, existing);
+      continue;
+    }
+
+    const groupNo = Number(match[1]);
+    const body = match[2];
+    const existing = groups.get(groupNo) ?? [];
+    existing.push(body);
+    groups.set(groupNo, existing);
+  }
+
+  return Array.from(groups.values()).some((group) =>
+    group.every((expression) => evaluateCnsRuntimeTrigger(expression, context)),
+  );
+}
+
 function normalizeExpression(expression: string): string {
   return expression.trim().toLowerCase().replace(/\s+/g, ' ');
 }

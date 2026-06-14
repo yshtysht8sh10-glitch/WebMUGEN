@@ -9,7 +9,7 @@ anim = 0
 [State 0, StandToLightAttack]
 type = ChangeState
 trigger1 = ctrl
-trigger2 = command = "x"
+trigger1 = command = "x"
 value = 200
 
 [Statedef 20]
@@ -22,7 +22,7 @@ anim = 20
 [State 20, WalkToLightAttack]
 type = ChangeState
 trigger1 = ctrl
-trigger2 = command = "x"
+trigger1 = command = "x"
 value = 200
 
 [Statedef 200]
@@ -36,6 +36,16 @@ anim = 200
 type = VelSet
 trigger1 = time = 0
 x = 0
+
+[State 200, TinyStepForward]
+type = PosAdd
+trigger1 = time = 2
+x = 2
+
+[State 200, RecoverControl]
+type = CtrlSet
+trigger1 = time > 16
+value = 1
 
 [State 200, ReturnToStand]
 type = ChangeState

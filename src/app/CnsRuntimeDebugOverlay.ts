@@ -1,12 +1,16 @@
 import type { CnsRuntimeTrace } from '../core/cns/CnsStateRuntime';
 
-export function formatCnsRuntimeDebugOverlay(traces: CnsRuntimeTrace[]): string[] {
+export function formatCnsRuntimeDebugOverlay(traces: readonly CnsRuntimeTrace[]): string[] {
+  if (traces.length === 0) {
+    return ['cns=-'];
+  }
+
   return traces.map((trace) => {
     const controllers =
-      trace.executedControllers.length > 0
-        ? trace.executedControllers.join(',')
-        : '-';
+      trace.executedControllers.length > 0 ? trace.executedControllers.join(',') : '-';
 
-    return `cns p${trace.playerId} state=${trace.stateNo} found=${trace.stateFound ? 1 : 0} exec=${controllers}`;
+    return `cns p${trace.playerId} state=${trace.stateNo}->${trace.afterStateNo} found=${
+      trace.stateFound ? 1 : 0
+    } exec=${controllers}`;
   });
 }
