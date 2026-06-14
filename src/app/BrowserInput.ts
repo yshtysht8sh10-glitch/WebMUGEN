@@ -47,6 +47,7 @@ function shouldPreventDefault(code: string): boolean {
     code === 'KeyI' ||
     code === 'KeyJ' ||
     code === 'KeyK' ||
-    code === 'KeyL'
+    code === 'KeyL' ||
+    code === 'KeyR'
   );
 }

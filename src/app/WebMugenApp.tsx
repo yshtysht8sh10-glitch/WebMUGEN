@@ -22,6 +22,7 @@ import {
   stepRoundState,
   type RoundState,
 } from '../core/engine/RoundState';
+import { canRestartRound, restartRound } from '../core/engine/RoundRestart';
 
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/kfm/kfm.def';
 
@@ -31,6 +32,7 @@ export function WebMugenApp() {
   const gameStateRef = useRef<GameState>(createInitialGameState());
   const hitFeedbackRef = useRef<HitFeedbackState>(createInitialHitFeedbackState());
   const roundStateRef = useRef<RoundState>(createInitialRoundState());
+  const restartPressedRef = useRef(false);
   const inputRef = useRef<BrowserInput | null>(null);
   const [loadMessage, setLoadMessage] = useState('Loading character...');
   const [inputDebugLines, setInputDebugLines] = useState<string[]>(['keys=-']);
@@ -74,17 +76,31 @@ export function WebMugenApp() {
 
         let nextState = gameStateRef.current;
         let nextRoundState = roundStateRef.current;
+        let nextFeedback = hitFeedbackRef.current;
 
-        if (nextRoundState.phase === 'fight') {
+        if (
+          inputSnapshot.system.restartRound &&
+          !restartPressedRef.current &&
+          canRestartRound(nextRoundState)
+        ) {
+          const restarted = restartRound(nextRoundState.roundNo);
+          nextState = restarted.gameState;
+          nextRoundState = restarted.roundState;
+          nextFeedback = restarted.hitFeedbackState;
+        } else if (nextRoundState.phase === 'fight') {
           nextState = applyFallbackControls(nextState, inputSnapshot.p1, inputSnapshot.p2);
           nextState = stepFallbackMotion(nextState);
           nextState = applyFallbackStageRules(nextState);
           nextState = resolveFallbackHits(nextState, character.air);
           nextState = applyFallbackHitRecovery(nextState);
+          nextRoundState = stepRoundState(nextRoundState, nextState);
+          nextFeedback = updateHitFeedback(nextFeedback, nextState);
+        } else {
+          nextRoundState = stepRoundState(nextRoundState, nextState);
+          nextFeedback = updateHitFeedback(nextFeedback, nextState);
         }
 
-        nextRoundState = stepRoundState(nextRoundState, nextState);
-        const nextFeedback = updateHitFeedback(hitFeedbackRef.current, nextState);
+        restartPressedRef.current = inputSnapshot.system.restartRound;
 
         gameStateRef.current = nextState;
         hitFeedbackRef.current = nextFeedback;
@@ -125,6 +141,7 @@ export function WebMugenApp() {
       </div>
       <p>P1: ← / → 移動, ↑ ジャンプ, A 攻撃, ↓ + A 飛び道具</p>
       <p>P2: J / L 移動, I ジャンプ, K しゃがみ入力, F 攻撃</p>
+      <p>System: R ラウンド再開（KO/TIME OVER後）</p>
       <p>Place character files under <code>public/chars/kfm/</code> to try DEF-based loading.</p>
     </div>
   );

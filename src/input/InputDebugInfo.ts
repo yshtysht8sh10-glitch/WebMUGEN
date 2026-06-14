@@ -1,5 +1,8 @@
 export type InputDebugSnapshot = {
   pressedKeys: string[];
+  system: {
+    restartRound: boolean;
+  };
   p1: {
     left: boolean;
     right: boolean;
@@ -22,6 +25,9 @@ export function createInputDebugSnapshot(pressedKeys: ReadonlySet<string>): Inpu
 
   return {
     pressedKeys: Array.from(pressedKeys).sort(),
+    system: {
+      restartRound: has('KeyR'),
+    },
     p1: {
       left: has('ArrowLeft'),
       right: has('ArrowRight'),
