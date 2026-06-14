@@ -9,6 +9,12 @@ import { formatInputDebugOverlay } from './InputDebugOverlay';
 import { applyFallbackControls } from '../core/engine/FallbackControls';
 import { stepFallbackMotion } from '../core/engine/FallbackMotionStep';
 import { applyFallbackStageRules } from '../core/engine/FallbackStageRules';
+import { resolveFallbackHits } from '../core/engine/FallbackHitResolver';
+import {
+  createInitialHitFeedbackState,
+  updateHitFeedback,
+  type HitFeedbackState,
+} from '../core/engine/HitFeedback';
 
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/kfm/kfm.def';
 
@@ -16,6 +22,7 @@ export function WebMugenApp() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
   const gameStateRef = useRef<GameState>(createInitialGameState());
+  const hitFeedbackRef = useRef<HitFeedbackState>(createInitialHitFeedbackState());
   const inputRef = useRef<BrowserInput | null>(null);
   const [loadMessage, setLoadMessage] = useState('Loading character...');
   const [inputDebugLines, setInputDebugLines] = useState<string[]>(['keys=-']);
@@ -60,9 +67,13 @@ export function WebMugenApp() {
         nextState = applyFallbackControls(nextState, inputSnapshot.p1, inputSnapshot.p2);
         nextState = stepFallbackMotion(nextState);
         nextState = applyFallbackStageRules(nextState);
+        nextState = resolveFallbackHits(nextState, character.air);
+
+        const nextFeedback = updateHitFeedback(hitFeedbackRef.current, nextState);
 
         gameStateRef.current = nextState;
-        rendererRef.current?.render(nextState);
+        hitFeedbackRef.current = nextFeedback;
+        rendererRef.current?.render(nextState, nextFeedback);
 
         frameId = requestAnimationFrame(tick);
       };

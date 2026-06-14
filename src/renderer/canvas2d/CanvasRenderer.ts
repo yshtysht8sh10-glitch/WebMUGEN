@@ -12,10 +12,13 @@ import type { SpritePack } from '../../core/sprite/SpriteTypes';
 import type { ImageDataSpritePack } from '../../core/sprite/ImageDataSpriteTypes';
 import { ImageDataSpriteRenderer } from './ImageDataSpriteRenderer';
 import { createSpriteDebugInfo } from '../../core/sprite/SpriteDebugInfo';
+import type { HitFeedbackState } from '../../core/engine/HitFeedback';
+import { HitFeedbackRenderer } from './HitFeedbackRenderer';
 
 export class CanvasRenderer {
   private readonly context: CanvasRenderingContext2D;
   private readonly imageDataSpriteRenderer = new ImageDataSpriteRenderer();
+  private readonly hitFeedbackRenderer = new HitFeedbackRenderer();
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -28,7 +31,7 @@ export class CanvasRenderer {
     this.context = context;
   }
 
-  render(state: GameState): void {
+  render(state: GameState, hitFeedback?: HitFeedbackState): void {
     const ctx = this.context;
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.drawStage(ctx);
@@ -36,6 +39,7 @@ export class CanvasRenderer {
     this.drawProjectiles(ctx, state.projectiles);
     this.drawPlayer(ctx, state.players[0], '#66ccff');
     this.drawPlayer(ctx, state.players[1], '#ff99aa');
+    if (hitFeedback) this.hitFeedbackRenderer.render(ctx, hitFeedback);
     this.drawDebugBoxes(ctx, state.players[0]);
     this.drawDebugBoxes(ctx, state.players[1]);
     this.drawProjectileDebugBoxes(ctx, state.projectiles);
