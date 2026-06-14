@@ -159,7 +159,7 @@ value = 22
     expect(result.state.players[0].animNo).toBe(22);
   });
 
-  it('runs controller by command trigger', () => {
+  it('runs P1 controller by command trigger', () => {
     const cns = parseCnsText(`
 [Statedef 0]
 type = S
@@ -181,6 +181,31 @@ value = 200
 
     expect(result.state.players[0].stateNo).toBe(200);
     expect(result.traces[0].executedControllers).toEqual(['ChangeState']);
+  });
+
+  it('runs P2 controller by command trigger', () => {
+    const cns = parseCnsText(`
+[Statedef 0]
+type = S
+movetype = I
+physics = S
+ctrl = 1
+anim = 0
+
+[State 0, ChangeState]
+type = ChangeState
+trigger1 = command = "x"
+value = 200
+`);
+
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime(state, cns, {
+      p2Commands: new Set(['x']),
+    });
+
+    expect(result.state.players[0].stateNo).toBe(0);
+    expect(result.state.players[1].stateNo).toBe(200);
+    expect(result.traces[1].executedControllers).toEqual(['ChangeState']);
   });
 
   it('does not run controller when trigger is false', () => {

@@ -30,10 +30,14 @@ import {
 } from '../core/engine/RoundScore';
 import { canRestartRound, restartRound } from '../core/engine/RoundRestart';
 import {
+  createFallbackCnsCommandSet,
+} from '../core/cns/CnsCommandInput';
+import {
   stepCnsStateRuntime,
   type CnsRuntimeTrace,
 } from '../core/cns/CnsStateRuntime';
 import { formatCnsRuntimeDebugOverlay } from './CnsRuntimeDebugOverlay';
+import { formatCnsCommandDebugOverlay } from './CnsCommandDebugOverlay';
 
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/kfm/kfm.def';
 
@@ -52,6 +56,7 @@ export function WebMugenApp() {
   const [roundDebugLine, setRoundDebugLine] = useState(formatRoundState(createInitialRoundState()));
   const [scoreDebugLine, setScoreDebugLine] = useState(formatRoundScore(createInitialRoundScore()));
   const [cnsDebugLines, setCnsDebugLines] = useState<string[]>([]);
+  const [commandDebugLines, setCommandDebugLines] = useState<string[]>(['cmd p1=-', 'cmd p2=-']);
 
   useEffect(() => {
     let disposed = false;
@@ -86,8 +91,11 @@ export function WebMugenApp() {
         const input = inputRef.current;
         const pressedKeys = input?.getPressedKeys() ?? new Set<string>();
         const inputSnapshot = createInputDebugSnapshot(pressedKeys);
+        const p1Commands = createFallbackCnsCommandSet(inputSnapshot.p1);
+        const p2Commands = createFallbackCnsCommandSet(inputSnapshot.p2);
 
         setInputDebugLines(formatInputDebugOverlay(inputSnapshot));
+        setCommandDebugLines(formatCnsCommandDebugOverlay(p1Commands, p2Commands));
 
         let nextState = gameStateRef.current;
         let nextRoundState = roundStateRef.current;
@@ -108,7 +116,10 @@ export function WebMugenApp() {
         } else if (nextRoundState.phase === 'fight') {
           nextState = applyFallbackControls(nextState, inputSnapshot.p1, inputSnapshot.p2);
 
-          const cnsResult = stepCnsStateRuntime(nextState, character.cns);
+          const cnsResult = stepCnsStateRuntime(nextState, character.cns, {
+            p1Commands,
+            p2Commands,
+          });
           nextState = cnsResult.state;
           nextCnsTraces = cnsResult.traces;
 
@@ -166,7 +177,7 @@ export function WebMugenApp() {
       />
       <p>{loadMessage}</p>
       <div style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', marginBottom: 16 }}>
-        {[...inputDebugLines, roundDebugLine, scoreDebugLine, ...cnsDebugLines].join('\n')}
+        {[...inputDebugLines, ...commandDebugLines, roundDebugLine, scoreDebugLine, ...cnsDebugLines].join('\n')}
       </div>
       <p>P1: ← / → 移動, ↑ ジャンプ, A 攻撃, ↓ + A 飛び道具</p>
       <p>P2: J / L 移動, I ジャンプ, K しゃがみ入力, F 攻撃</p>
