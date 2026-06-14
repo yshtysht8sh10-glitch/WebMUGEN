@@ -1,96 +1,100 @@
 import { useEffect, useRef, useState } from 'react';
-import { createInitialGameState } from '../core/engine/GameState';
-import { stepGameByCns } from '../core/engine/CnsGame';
-import { KeyboardInputSource } from '../input/KeyboardInputSource';
 import { CanvasRenderer } from '../renderer/canvas2d/CanvasRenderer';
-import { loadSpritePack } from '../core/sprite/SpritePackLoader';
-import { sampleSpritePackManifest } from './sampleSpritePack';
-import { createSampleCharacterAssets, loadAppCharacter } from './AppCharacterLoader';
+import { createInitialGameState } from '../core/engine/GameState';
+import type { GameState } from '../core/engine/types';
+import { loadAppCharacter } from './AppCharacterLoader';
+import { BrowserInput } from './BrowserInput';
+import { createInputDebugSnapshot } from '../input/InputDebugInfo';
+import { formatInputDebugOverlay } from './InputDebugOverlay';
+import { applyFallbackControls } from '../core/engine/FallbackControls';
+import { stepFallbackMotion } from '../core/engine/FallbackMotionStep';
 
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/kfm/kfm.def';
 
 export function WebMugenApp() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [loadMessage, setLoadMessage] = useState('Loading character assets...');
+  const rendererRef = useRef<CanvasRenderer | null>(null);
+  const gameStateRef = useRef<GameState>(createInitialGameState());
+  const inputRef = useRef<BrowserInput | null>(null);
+  const [loadMessage, setLoadMessage] = useState('Loading character...');
+  const [inputDebugLines, setInputDebugLines] = useState<string[]>(['keys=-']);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
     let disposed = false;
-    const input = new KeyboardInputSource();
-    let state = createInitialGameState();
-    let animationFrameId = 0;
-    let lastTime = performance.now();
-    let accumulator = 0;
-    const fixedDeltaMs = 1000 / 60;
+    let frameId = 0;
 
-    const start = async () => {
+    async function start() {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
       const loadResult = await loadAppCharacter(DEFAULT_CHARACTER_DEF_PATH);
-      const sampleAssets = createSampleCharacterAssets();
-      const assets = loadResult.character ?? sampleAssets;
-      const pngSpritePack = await loadSpritePack(sampleSpritePackManifest).catch(() => null);
-
       if (disposed) return;
+
+      const character = loadResult.character;
+      const spriteCount = character.sprites?.sprites.size ?? 0;
 
       setLoadMessage(
         loadResult.source === 'def'
-          ? `Loaded character: ${DEFAULT_CHARACTER_DEF_PATH}`
-          : `Sample character fallback: ${loadResult.errorMessage ?? 'character def was not loaded'}`,
+          ? `Loaded character: ${DEFAULT_CHARACTER_DEF_PATH} sprites=${spriteCount}`
+          : `Sample character fallback: ${loadResult.reason ?? 'unknown reason'}`,
       );
 
-      const renderer = new CanvasRenderer(canvas, assets.air, pngSpritePack, assets.sprites);
+      rendererRef.current = new CanvasRenderer(
+        canvas,
+        character.air,
+        null,
+        character.sprites,
+      );
 
-      const loop = (now: number) => {
-        accumulator += now - lastTime;
-        lastTime = now;
+      inputRef.current = new BrowserInput(window);
 
-        while (accumulator >= fixedDeltaMs) {
-          state = stepGameByCns(
-            state,
-            assets.cns,
-            input.readFrameInput(),
-            assets.air,
-            assets.cmd,
-          );
-          accumulator -= fixedDeltaMs;
-        }
+      const tick = () => {
+        const input = inputRef.current;
+        const pressedKeys = input?.getPressedKeys() ?? new Set<string>();
+        const inputSnapshot = createInputDebugSnapshot(pressedKeys);
 
-        renderer.render(state);
-        animationFrameId = requestAnimationFrame(loop);
+        setInputDebugLines(formatInputDebugOverlay(inputSnapshot));
+
+        let nextState = gameStateRef.current;
+        nextState = applyFallbackControls(nextState, inputSnapshot.p1, inputSnapshot.p2);
+        nextState = stepFallbackMotion(nextState);
+
+        gameStateRef.current = nextState;
+        rendererRef.current?.render(nextState);
+
+        frameId = requestAnimationFrame(tick);
       };
 
-      animationFrameId = requestAnimationFrame(loop);
-    };
+      frameId = requestAnimationFrame(tick);
+    }
 
     void start();
 
     return () => {
       disposed = true;
-      cancelAnimationFrame(animationFrameId);
-      input.dispose();
+      cancelAnimationFrame(frameId);
+      inputRef.current?.dispose();
+      inputRef.current = null;
     };
   }, []);
 
   return (
-    <main className="app-shell">
-      <header className="app-header">
-        <h1>WebMUGEN</h1>
-        <p>CharacterLoader app integration prototype</p>
-      </header>
-
-      <section className="stage-panel">
-        <canvas ref={canvasRef} width={640} height={360} />
-      </section>
-
-      <section className="help-panel">
-        <p>{loadMessage}</p>
-        <p>P1: ← / → 移動、↑ ジャンプ、A 攻撃、↓↘→A 飛び道具</p>
-        <p>P2: J / L 移動、I ジャンプ、K しゃがみ入力、F 攻撃</p>
-        <p>
-          Place character files under <code>public/chars/kfm/</code> to try DEF-based loading.
-        </p>
-      </section>
-    </main>
+    <div>
+      <h1>WebMUGEN</h1>
+      <p>CharacterLoader app integration prototype</p>
+      <canvas
+        ref={canvasRef}
+        width={960}
+        height={540}
+        style={{ border: '1px solid #475569', background: '#0f172a' }}
+      />
+      <p>{loadMessage}</p>
+      <div style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', marginBottom: 16 }}>
+        {inputDebugLines.join('\n')}
+      </div>
+      <p>P1: ← / → 移動, ↑ ジャンプ, A 攻撃, ↓ + A 飛び道具</p>
+      <p>P2: J / L 移動, I ジャンプ, K しゃがみ入力, F 攻撃</p>
+      <p>Place character files under <code>public/chars/kfm/</code> to try DEF-based loading.</p>
+    </div>
   );
 }

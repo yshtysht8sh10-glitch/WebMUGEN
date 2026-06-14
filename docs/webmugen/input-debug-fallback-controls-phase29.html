@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Input Debug and Fallback Controls Phase29</title></head>
+<body>
+<h1>Input Debug and Fallback Controls Phase29</h1>
+<p>This phase adds reusable input debug helpers and fallback control logic.</p>
+<ul>
+<li>Shows which keys are pressed</li>
+<li>Maps P1/P2 inputs to debug flags</li>
+<li>Provides fallback player state changes for movement, jump, attack, and projectile</li>
+</ul>
+<p>Integration target: call <code>createInputDebugSnapshot()</code> from the app loop, render <code>formatInputDebugOverlay()</code>, and apply <code>applyFallbackControls()</code> before/after CNS execution when CNS does not change state.</p>
+</body>
+</html>
