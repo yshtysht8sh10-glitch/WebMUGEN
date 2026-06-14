@@ -5,12 +5,18 @@ import type {
   CnsValue,
 } from '../../mugen/common/cnsTypes';
 import type { GameState, PlayerState } from '../engine/types';
+import { evaluateCnsRuntimeTrigger } from './CnsRuntimeTrigger';
 
 export type CnsRuntimeTrace = {
   playerId: 1 | 2;
   stateNo: number;
   stateFound: boolean;
   executedControllers: string[];
+};
+
+export type CnsRuntimeInput = {
+  p1Commands?: ReadonlySet<string>;
+  p2Commands?: ReadonlySet<string>;
 };
 
 export type CnsRuntimeResult = {
@@ -21,6 +27,7 @@ export type CnsRuntimeResult = {
 export function stepCnsStateRuntime(
   state: GameState,
   cnsDocument?: CnsDocument | null,
+  input: CnsRuntimeInput = {},
 ): CnsRuntimeResult {
   if (!cnsDocument) {
     return {
@@ -32,7 +39,12 @@ export function stepCnsStateRuntime(
     };
   }
 
-  const p1Result = stepPlayerCnsRuntime(state.players[0], 1, state, cnsDocument);
+  const p1Result = stepPlayerCnsRuntime(
+    state.players[0],
+    1,
+    cnsDocument,
+    input.p1Commands,
+  );
   const intermediateState: GameState = {
     ...state,
     players: [p1Result.player, state.players[1]],
@@ -41,8 +53,8 @@ export function stepCnsStateRuntime(
   const p2Result = stepPlayerCnsRuntime(
     intermediateState.players[1],
     2,
-    intermediateState,
     cnsDocument,
+    input.p2Commands,
   );
 
   return {
@@ -57,8 +69,8 @@ export function stepCnsStateRuntime(
 function stepPlayerCnsRuntime(
   player: PlayerState,
   playerId: 1 | 2,
-  state: GameState,
   cnsDocument: CnsDocument,
+  commands?: ReadonlySet<string>,
 ): { player: PlayerState; trace: CnsRuntimeTrace } {
   const stateDef = findStateDef(cnsDocument, player.stateNo);
   const trace: CnsRuntimeTrace = {
@@ -75,7 +87,7 @@ function stepPlayerCnsRuntime(
   let nextPlayer = applyStateDefHeader(player, stateDef);
 
   for (const controller of stateDef.controllers) {
-    if (!shouldRunController(controller, nextPlayer)) {
+    if (!shouldRunController(controller, nextPlayer, commands)) {
       continue;
     }
 
@@ -108,47 +120,18 @@ function applyStateDefHeader(player: PlayerState, stateDef: CnsStateDefinition):
 function shouldRunController(
   controller: CnsStateController,
   player: PlayerState,
+  commands?: ReadonlySet<string>,
 ): boolean {
   if (controller.triggers.length === 0) {
     return true;
   }
 
   return controller.triggers.some((trigger) =>
-    evaluateCnsRuntimeTrigger(trigger.expression, player),
+    evaluateCnsRuntimeTrigger(trigger.expression, {
+      player,
+      commands,
+    }),
   );
-}
-
-function evaluateCnsRuntimeTrigger(expression: string, player: PlayerState): boolean {
-  const trimmed = expression.trim().toLowerCase();
-
-  if (trimmed === '1') return true;
-  if (trimmed === '0') return false;
-
-  const timeMatch = trimmed.match(/^time\s*(=|!=|>=|<=|>|<)\s*(-?\d+)$/);
-  if (timeMatch) {
-    return compareNumber(player.stateTime, timeMatch[1], Number(timeMatch[2]));
-  }
-
-  return false;
-}
-
-function compareNumber(actual: number, operator: string, expected: number): boolean {
-  switch (operator) {
-    case '=':
-      return actual === expected;
-    case '!=':
-      return actual !== expected;
-    case '>':
-      return actual > expected;
-    case '>=':
-      return actual >= expected;
-    case '<':
-      return actual < expected;
-    case '<=':
-      return actual <= expected;
-    default:
-      return false;
-  }
 }
 
 function executeSupportedController(
