@@ -26,6 +26,33 @@ describe('FallbackControls', () => {
 
     expect(next.players[0].stateNo).toBe(200);
     expect(next.players[0].moveType).toBe('A');
+    expect(next.players[0].hitDefUsed).toBe(false);
+  });
+
+  it('does not restart attack every frame while held', () => {
+    let state = createInitialGameState();
+    state = applyFallbackControls(
+      state,
+      { left: false, right: false, up: false, down: false, attack: true },
+      { left: false, right: false, up: false, down: false, attack: false },
+    );
+
+    state = {
+      ...state,
+      players: [
+        { ...state.players[0], stateTime: 5, animTime: 5, hitDefUsed: true },
+        state.players[1],
+      ],
+    };
+
+    const next = applyFallbackControls(
+      state,
+      { left: false, right: false, up: false, down: false, attack: true },
+      { left: false, right: false, up: false, down: false, attack: false },
+    );
+
+    expect(next.players[0].stateTime).toBe(5);
+    expect(next.players[0].hitDefUsed).toBe(true);
   });
 
   it('starts fallback projectile state', () => {

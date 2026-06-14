@@ -10,6 +10,7 @@ import { applyFallbackControls } from '../core/engine/FallbackControls';
 import { stepFallbackMotion } from '../core/engine/FallbackMotionStep';
 import { applyFallbackStageRules } from '../core/engine/FallbackStageRules';
 import { resolveFallbackHits } from '../core/engine/FallbackHitResolver';
+import { applyFallbackHitRecovery } from '../core/engine/FallbackHitRecovery';
 import {
   createInitialHitFeedbackState,
   updateHitFeedback,
@@ -79,6 +80,7 @@ export function WebMugenApp() {
           nextState = stepFallbackMotion(nextState);
           nextState = applyFallbackStageRules(nextState);
           nextState = resolveFallbackHits(nextState, character.air);
+          nextState = applyFallbackHitRecovery(nextState);
         }
 
         nextRoundState = stepRoundState(nextRoundState, nextState);
