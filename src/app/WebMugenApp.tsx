@@ -29,9 +29,7 @@ import {
   type RoundScore,
 } from '../core/engine/RoundScore';
 import { canRestartRound, restartRound } from '../core/engine/RoundRestart';
-import {
-  createFallbackCnsCommandSet,
-} from '../core/cns/CnsCommandInput';
+import { createFallbackCnsCommandSet } from '../core/cns/CnsCommandInput';
 import {
   stepCnsStateRuntime,
   type CnsRuntimeTrace,

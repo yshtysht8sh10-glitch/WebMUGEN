@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>CNS Driven Basic Attack Phase42</title></head>
+<body>
+<h1>CNS Driven Basic Attack Phase42</h1>
+<p>This phase starts moving basic attack transition from fallback code to CNS ChangeState.</p>
+<ul>
+<li>Adds fallback CNS attack states for stand/walk/light attack</li>
+<li>Stops fallback controls from directly starting state 200</li>
+<li>Uses command = "x" to enter state 200 through CNS runtime</li>
+<li>State 200 applies movetype A / ctrl false / anim 200 through StateDef</li>
+<li>State 200 returns to stand by CNS ChangeState after time</li>
+</ul>
+</body>
+</html>

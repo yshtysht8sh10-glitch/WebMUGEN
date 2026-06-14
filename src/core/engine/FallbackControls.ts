@@ -28,15 +28,11 @@ function applyPlayerFallbackControl(player: PlayerState, input: FallbackControlI
     return player;
   }
 
+  if (player.moveType === 'A' || player.ctrl === false) {
+    return player;
+  }
+
   const horizontal = Number(input.right) - Number(input.left);
-
-  if (input.projectile) {
-    return startAction(player, 1000);
-  }
-
-  if (input.attack) {
-    return startAction(player, 200);
-  }
 
   if (input.up && player.stateType !== 'A') {
     return {
@@ -89,24 +85,4 @@ function applyPlayerFallbackControl(player: PlayerState, input: FallbackControlI
   }
 
   return player;
-}
-
-function startAction(player: PlayerState, actionStateNo: 200 | 1000): PlayerState {
-  if (player.stateNo === actionStateNo) {
-    return player;
-  }
-
-  return {
-    ...player,
-    stateNo: actionStateNo,
-    animNo: actionStateNo,
-    animTime: 0,
-    stateTime: 0,
-    stateType: 'S',
-    moveType: 'A',
-    physics: 'S',
-    ctrl: false,
-    vx: 0,
-    hitDefUsed: false,
-  };
 }
