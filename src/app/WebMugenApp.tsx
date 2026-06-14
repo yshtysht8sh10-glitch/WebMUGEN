@@ -29,6 +29,11 @@ import {
   type RoundScore,
 } from '../core/engine/RoundScore';
 import { canRestartRound, restartRound } from '../core/engine/RoundRestart';
+import {
+  stepCnsStateRuntime,
+  type CnsRuntimeTrace,
+} from '../core/cns/CnsStateRuntime';
+import { formatCnsRuntimeDebugOverlay } from './CnsRuntimeDebugOverlay';
 
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/kfm/kfm.def';
 
@@ -39,12 +44,14 @@ export function WebMugenApp() {
   const hitFeedbackRef = useRef<HitFeedbackState>(createInitialHitFeedbackState());
   const roundStateRef = useRef<RoundState>(createInitialRoundState());
   const roundScoreRef = useRef<RoundScore>(createInitialRoundScore());
+  const cnsTraceRef = useRef<CnsRuntimeTrace[]>([]);
   const restartPressedRef = useRef(false);
   const inputRef = useRef<BrowserInput | null>(null);
   const [loadMessage, setLoadMessage] = useState('Loading character...');
   const [inputDebugLines, setInputDebugLines] = useState<string[]>(['keys=-']);
   const [roundDebugLine, setRoundDebugLine] = useState(formatRoundState(createInitialRoundState()));
   const [scoreDebugLine, setScoreDebugLine] = useState(formatRoundScore(createInitialRoundScore()));
+  const [cnsDebugLines, setCnsDebugLines] = useState<string[]>([]);
 
   useEffect(() => {
     let disposed = false;
@@ -86,6 +93,7 @@ export function WebMugenApp() {
         let nextRoundState = roundStateRef.current;
         let nextFeedback = hitFeedbackRef.current;
         let nextScore = roundScoreRef.current;
+        let nextCnsTraces = cnsTraceRef.current;
 
         if (
           inputSnapshot.system.restartRound &&
@@ -96,8 +104,14 @@ export function WebMugenApp() {
           nextState = restarted.gameState;
           nextRoundState = restarted.roundState;
           nextFeedback = restarted.hitFeedbackState;
+          nextCnsTraces = [];
         } else if (nextRoundState.phase === 'fight') {
           nextState = applyFallbackControls(nextState, inputSnapshot.p1, inputSnapshot.p2);
+
+          const cnsResult = stepCnsStateRuntime(nextState, character.cns);
+          nextState = cnsResult.state;
+          nextCnsTraces = cnsResult.traces;
+
           nextState = stepFallbackMotion(nextState);
           nextState = applyFallbackStageRules(nextState);
           nextState = resolveFallbackHits(nextState, character.air);
@@ -117,8 +131,10 @@ export function WebMugenApp() {
         hitFeedbackRef.current = nextFeedback;
         roundStateRef.current = nextRoundState;
         roundScoreRef.current = nextScore;
+        cnsTraceRef.current = nextCnsTraces;
         setRoundDebugLine(formatRoundState(nextRoundState));
         setScoreDebugLine(formatRoundScore(nextScore));
+        setCnsDebugLines(formatCnsRuntimeDebugOverlay(nextCnsTraces));
 
         rendererRef.current?.render(nextState, nextFeedback, nextRoundState, nextScore);
 
@@ -150,7 +166,7 @@ export function WebMugenApp() {
       />
       <p>{loadMessage}</p>
       <div style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', marginBottom: 16 }}>
-        {[...inputDebugLines, roundDebugLine, scoreDebugLine].join('\n')}
+        {[...inputDebugLines, roundDebugLine, scoreDebugLine, ...cnsDebugLines].join('\n')}
       </div>
       <p>P1: ← / → 移動, ↑ ジャンプ, A 攻撃, ↓ + A 飛び道具</p>
       <p>P2: J / L 移動, I ジャンプ, K しゃがみ入力, F 攻撃</p>

@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>CNS State Runtime Phase39 Fix2</title></head>
+<body>
+<h1>CNS State Runtime Phase39 Fix2</h1>
+<p>This patch fixes CNS runtime trigger evaluation for Phase39.</p>
+<ul>
+<li>Removes dependency on evaluateTriggerAsBoolean for CNS runtime triggers</li>
+<li>Adds minimal CNS trigger evaluation inside CnsStateRuntime</li>
+<li>Supports trigger1 = 1 and trigger1 = 0</li>
+<li>Supports time comparisons: =, !=, &gt;, &gt;=, &lt;, &lt;=</li>
+<li>Keeps tests for trigger1 = time = 0 and trigger1 = time &gt; 5</li>
+</ul>
+</body>
+</html>

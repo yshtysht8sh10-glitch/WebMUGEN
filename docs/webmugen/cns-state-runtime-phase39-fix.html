@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>CNS State Runtime Phase39 Fix</title></head>
+<body>
+<h1>CNS State Runtime Phase39 Fix</h1>
+<p>This patch fixes Phase39 integration with the existing CNS parser and trigger evaluator.</p>
+<ul>
+<li>Uses ../../mugen/common/cnsTypes instead of non-existent CnsTypes</li>
+<li>Uses stateType / initialAnim from CnsStateDefinition</li>
+<li>Uses evaluateTriggerAsBoolean for CNS controller triggers</li>
+<li>Keeps tests for trigger1 = time = 0 and trigger1 = time &gt; 5</li>
+</ul>
+</body>
+</html>
