@@ -8,6 +8,7 @@ import { createInputDebugSnapshot } from '../input/InputDebugInfo';
 import { formatInputDebugOverlay } from './InputDebugOverlay';
 import { applyFallbackControls } from '../core/engine/FallbackControls';
 import { stepFallbackMotion } from '../core/engine/FallbackMotionStep';
+import { applyFallbackStageRules } from '../core/engine/FallbackStageRules';
 
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/kfm/kfm.def';
 
@@ -58,6 +59,7 @@ export function WebMugenApp() {
         let nextState = gameStateRef.current;
         nextState = applyFallbackControls(nextState, inputSnapshot.p1, inputSnapshot.p2);
         nextState = stepFallbackMotion(nextState);
+        nextState = applyFallbackStageRules(nextState);
 
         gameStateRef.current = nextState;
         rendererRef.current?.render(nextState);
