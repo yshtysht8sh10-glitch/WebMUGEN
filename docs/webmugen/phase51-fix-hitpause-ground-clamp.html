@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Phase51 Fix HitPause Ground Clamp</title></head>
+<body>
+<h1>Phase51 Fix HitPause Ground Clamp</h1>
+<p>This patch restores hitPause behavior while keeping ground clamp safety.</p>
+<ul>
+<li>hitPause now counts down by 1</li>
+<li>During hitPause, x/y/stateTime/animTime do not advance</li>
+<li>Ground clamp still runs after hitPause countdown</li>
+<li>Players already below ground are still safely clamped</li>
+</ul>
+</body>
+</html>

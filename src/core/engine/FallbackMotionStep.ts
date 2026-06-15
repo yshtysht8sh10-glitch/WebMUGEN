@@ -1,62 +1,40 @@
 import type { GameState, PlayerState } from './types';
+import { clampPlayersToGround, DEFAULT_GROUND_Y } from './GroundClamp';
 
-const GROUND_Y = 360;
 const GRAVITY = 0.6;
 const FRICTION = 0.82;
 
 export function stepFallbackMotion(state: GameState): GameState {
-  return {
+  const movedState: GameState = {
     ...state,
+    players: [stepPlayerMotion(state.players[0]), stepPlayerMotion(state.players[1])],
     frame: state.frame + 1,
-    players: state.players.map(stepPlayerFallbackMotion) as [PlayerState, PlayerState],
   };
+
+  return clampPlayersToGround(movedState, DEFAULT_GROUND_Y);
 }
 
-function stepPlayerFallbackMotion(player: PlayerState): PlayerState {
-  const nextAnimTime = player.animTime + 1;
-  const nextStateTime = player.stateTime + 1;
-
-  if (player.hitPause > 0) {
+function stepPlayerMotion(player: PlayerState): PlayerState {
+  if ((player.hitPause ?? 0) > 0) {
     return {
       ...player,
-      hitPause: player.hitPause - 1,
-      animTime: nextAnimTime,
-      stateTime: nextStateTime,
+      hitPause: Math.max(0, (player.hitPause ?? 0) - 1),
     };
   }
 
-  let nextX = player.x + player.vx;
-  let nextY = player.y + player.vy;
-  let nextVx = player.vx;
-  let nextVy = player.vy;
-  let nextStateType = player.stateType;
-  let nextPhysics = player.physics;
-
-  if (player.physics === 'A' || player.stateType === 'A') {
-    nextVy += GRAVITY;
-  } else if (player.physics === 'S' || player.physics === 'C') {
-    nextVx *= FRICTION;
-  }
-
-  if (nextY >= GROUND_Y) {
-    nextY = GROUND_Y;
-
-    if (nextStateType === 'A') {
-      nextVy = 0;
-      nextStateType = 'S';
-      nextPhysics = 'S';
-    }
-  }
+  const isAirborne = player.stateType === 'A' || player.physics === 'A';
+  const nextVy = isAirborne ? player.vy + GRAVITY : player.vy;
+  const nextX = player.x + player.vx;
+  const nextY = player.y + nextVy;
+  const nextVx = isAirborne ? player.vx : player.vx * FRICTION;
 
   return {
     ...player,
     x: nextX,
     y: nextY,
     vx: Math.abs(nextVx) < 0.01 ? 0 : nextVx,
-    vy: Math.abs(nextVy) < 0.01 ? 0 : nextVy,
-    stateType: nextStateType,
-    physics: nextPhysics,
-    animTime: nextAnimTime,
-    stateTime: nextStateTime,
+    vy: nextVy,
+    stateTime: player.stateTime + 1,
+    animTime: player.animTime + 1,
   };
 }

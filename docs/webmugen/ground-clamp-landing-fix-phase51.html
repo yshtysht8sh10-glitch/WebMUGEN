@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Ground Clamp Landing Fix Phase51</title></head>
+<body>
+<h1>Ground Clamp Landing Fix Phase51</h1>
+<p>This phase fixes players sinking below the ground after jump or landing motion.</p>
+<ul>
+<li>Adds GroundClamp helper</li>
+<li>Clamps y to groundY when a player goes below the stage floor</li>
+<li>Resets vy to 0 on landing</li>
+<li>Returns airborne state/physics to standing state/physics on landing</li>
+<li>Restores control after landing from an air state</li>
+<li>Connects clamp into FallbackMotionStep</li>
+</ul>
+</body>
+</html>
