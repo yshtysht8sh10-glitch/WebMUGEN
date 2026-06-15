@@ -25,7 +25,22 @@ export type CnsCoverageDiagnostics = {
   unsupportedTriggers: CnsTriggerCoverage[];
 };
 
-const SUPPORTED_CONTROLLERS = new Set(['changeanim','changestate','ctrlset','posadd','posset','veladd','velset']);
+const SUPPORTED_CONTROLLERS = new Set([
+  'changeanim',
+  'changestate',
+  'ctrlset',
+  'lifeadd',
+  'movetypeset',
+  'posadd',
+  'posset',
+  'poweradd',
+  'statetypeset',
+  'varadd',
+  'varset',
+  'veladd',
+  'velset',
+]);
+
 const PARTIAL_CONTROLLERS = new Set(['hitdef','projectile']);
 
 const SUPPORTED_TRIGGER_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
