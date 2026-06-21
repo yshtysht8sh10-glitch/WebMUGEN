@@ -1,3 +1,5 @@
+import type { HitDefSpec } from '../hitdef/HitDefTypes';
+
 export type RuntimeEvent =
   | { type: 'pause'; time: number; moveTime: number }
   | { type: 'superpause'; time: number; moveTime: number; darken: boolean }
@@ -6,7 +8,8 @@ export type RuntimeEvent =
   | { type: 'helper'; id: number | null; ownerId: 1 | 2; stateNo: number; x: number; y: number; lifeTime: number | null }
   | { type: 'destroyHelper'; id: number }
   | { type: 'targetBind'; ownerId: 1 | 2; targetId: 1 | 2; time: number; x: number; y: number }
-  | { type: 'targetDrop'; ownerId: 1 | 2 };
+  | { type: 'targetDrop'; ownerId: 1 | 2 }
+  | { type: 'hitDef'; ownerId: 1 | 2; hitDef: HitDefSpec };
 
 export type RuntimeEventQueue = { events: RuntimeEvent[] };
 
