@@ -6,6 +6,8 @@ import { getCharacterDefFiles, parseDefText } from '../../parser/def/DefParser';
 import { convertSffV1ToImageDataSpritePack } from '../sprite/SffSpritePackConverter';
 import type { CharacterAssets, CharacterPaletteAsset } from './CharacterTypes';
 
+const COMMON_CNS_PATH = '/chars/common1.cns';
+
 export type CharacterAssetFetcher = {
   text(path: string): Promise<string>;
   arrayBuffer(path: string): Promise<ArrayBuffer>;
@@ -32,10 +34,11 @@ export async function loadCharacterFromDef(
     throw new Error('[Files] cmd is missing.');
   }
 
-  const [cnsText, airText, cmdText, palettes] = await Promise.all([
+  const [cnsText, airText, cmdText, commonCnsText, palettes] = await Promise.all([
     fetcher.text(resolveAssetPath(basePath, files.cns)),
     fetcher.text(resolveAssetPath(basePath, files.anim)),
     fetcher.text(resolveAssetPath(basePath, files.cmd)),
+    loadOptionalText(COMMON_CNS_PATH, fetcher),
     loadCharacterPalettes(basePath, files.palettes ?? [], fetcher),
   ]);
 
@@ -49,9 +52,13 @@ export async function loadCharacterFromDef(
         })
       : null;
 
+  const characterCns = mergeCnsDocuments(parseCnsText(cnsText), parseCnsText(cmdText));
+
   return {
     def,
-    cns: mergeCnsDocuments(parseCnsText(cnsText), parseCnsText(cmdText)),
+    cns: commonCnsText
+      ? mergeMissingCnsStates(characterCns, parseCnsText(commonCnsText))
+      : characterCns,
     air: parseAirText(airText),
     cmd: parseCmdText(cmdText),
     sprites,
@@ -96,6 +103,24 @@ export function mergeCnsDocuments(base: CnsDocument, extra: CnsDocument): CnsDoc
     states: [...base.states, ...extra.states],
     metadataSections: [...base.metadataSections, ...extra.metadataSections],
   };
+}
+
+export function mergeMissingCnsStates(base: CnsDocument, common: CnsDocument): CnsDocument {
+  const existingStateNos = new Set(base.states.map((state) => state.stateNo));
+  const missingCommonStates = common.states.filter((state) => !existingStateNos.has(state.stateNo));
+
+  return {
+    states: [...base.states, ...missingCommonStates],
+    metadataSections: [...base.metadataSections, ...common.metadataSections],
+  };
+}
+
+async function loadOptionalText(path: string, fetcher: CharacterAssetFetcher): Promise<string | null> {
+  try {
+    return await fetcher.text(path);
+  } catch {
+    return null;
+  }
 }
 
 async function loadCharacterPalettes(
