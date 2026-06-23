@@ -6,6 +6,7 @@ export type PlayerInput = {
   up?: boolean;
   down?: boolean;
   attack: boolean;
+  buttons?: ReadonlySet<string> | readonly string[];
   commandNames?: Set<string>;
   inputBuffer?: InputBuffer;
 };
