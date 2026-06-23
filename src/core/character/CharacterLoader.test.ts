@@ -78,6 +78,86 @@ value = 200
     expect(character.palettes).toEqual([]);
   });
 
+  it('loads common1 CNS states only when character CNS is missing them', async () => {
+    const textAssets = new Map<string, string>([
+      [
+        '/chars/kfm/kfm.def',
+        `
+[Files]
+cmd = kfm.cmd
+cns = kfm.cns
+anim = kfm.air
+`,
+      ],
+      [
+        '/chars/kfm/kfm.cns',
+        `
+[StateDef 200]
+type = S
+movetype = A
+physics = S
+anim = 200
+ctrl = 0
+`,
+      ],
+      ['/chars/kfm/kfm.air', 'Begin Action 0\n0,0, 0,0, 5\n'],
+      [
+        '/chars/kfm/kfm.cmd',
+        `
+[Command]
+name = "x"
+command = x
+time = 1
+
+[Statedef -1]
+
+[State -1, X]
+type = ChangeState
+triggerall = command = "x"
+trigger1 = ctrl
+value = 200
+`,
+      ],
+      [
+        '/chars/common1.cns',
+        `
+[StateDef 0]
+type = S
+movetype = I
+physics = S
+anim = 0
+ctrl = 1
+
+[StateDef 200]
+type = S
+movetype = I
+physics = S
+anim = 999
+ctrl = 1
+`,
+      ],
+    ]);
+
+    const fetcher: CharacterAssetFetcher = {
+      async text(path) {
+        const asset = textAssets.get(path);
+        if (asset === undefined) {
+          throw new Error(`missing text asset: ${path}`);
+        }
+        return asset;
+      },
+      async arrayBuffer() {
+        throw new Error('sff should not be loaded in this test');
+      },
+    };
+
+    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', fetcher);
+
+    expect(character.cns.states.map((state) => state.stateNo)).toEqual([200, -1, 0]);
+    expect(character.cns.states.find((state) => state.stateNo === 200)?.initialAnim).toBe(200);
+    expect(character.cns.states.find((state) => state.stateNo === 0)?.initialAnim).toBe(0);
+  });
+
   it('loads ACT palette assets declared by DEF pal entries', async () => {
     const paletteBytes = new Uint8Array([1, 2, 3, 4, 5, 6]);
     const textAssets = new Map<string, string>([
