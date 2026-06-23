@@ -87,4 +87,6 @@ export type GameState = {
   players: [PlayerState, PlayerState];
   projectiles: ProjectileState[];
   hitEvents: HitEvent[];
+  commandBuffers?: [InputBuffer, InputBuffer];
+  commandNames?: [ReadonlySet<string>, ReadonlySet<string>];
 };
