@@ -1,13 +1,14 @@
 import type { CnsDocument } from '../../mugen/common/cnsTypes';
 import type { AirDocument } from '../../parser/air/AirTypes';
 import type { CmdDocument } from '../../parser/cmd/CmdTypes';
-import type { FrameInput, GameState, PlayerInput, PlayerState } from './types';
-import { stepPlayerByCnsWithEvents } from './CnsStateMachine';
-import { resolveSimpleHits } from './SimpleCollision';
+import { InputBuffer } from '../../input/InputBuffer';
+import { resolveCommands } from '../../input/CommandResolver';
 import { getAnimationLength } from '../animation/AnimationPlayer';
 import { resolveClsnHits } from '../collision/CollisionResolver';
-import { resolveCommands } from '../../input/CommandResolver';
 import { resolveProjectileHits, stepProjectiles } from '../projectile/ProjectileSystem';
+import { stepPlayerByCnsWithEvents } from './CnsStateMachine';
+import { resolveSimpleHits } from './SimpleCollision';
+import type { FrameInput, GameState, PlayerInput, PlayerState } from './types';
 
 export function stepGameByCns(
   current: GameState,
@@ -16,17 +17,18 @@ export function stepGameByCns(
   airDocument?: AirDocument,
   cmdDocument?: CmdDocument,
 ): GameState {
-  const p1Input = attachCommands(input.p1, cmdDocument);
-  const p2Input = attachCommands(
+  const p1CommandInput = attachCommands(input.p1, cmdDocument, current.commandBuffers?.[0]);
+  const p2CommandInput = attachCommands(
     input.p2 ?? { left: false, right: false, up: false, down: false, attack: false },
     cmdDocument,
+    current.commandBuffers?.[1],
   );
 
   const p1Result = stepPlayerByCnsWithEvents(
     faceOpponent(current.players[0], current.players[1]),
     document,
     {
-      input: p1Input,
+      input: p1CommandInput.input,
       animLength: getAnimLength(current.players[0], airDocument),
       moveHit: false,
     },
@@ -36,7 +38,7 @@ export function stepGameByCns(
     faceOpponent(current.players[1], current.players[0]),
     document,
     {
-      input: p2Input,
+      input: p2CommandInput.input,
       animLength: getAnimLength(current.players[1], airDocument),
       moveHit: false,
     },
@@ -61,16 +63,42 @@ export function stepGameByCns(
     players: projectileResult.players,
     projectiles: projectileResult.projectiles,
     hitEvents: [...directHitResult.hitEvents, ...projectileResult.hitEvents],
+    commandBuffers: [p1CommandInput.buffer, p2CommandInput.buffer],
+    commandNames: [p1CommandInput.commandNames, p2CommandInput.commandNames],
   };
 }
 
-function attachCommands(input: PlayerInput, cmdDocument?: CmdDocument): PlayerInput {
-  if (!cmdDocument) return input;
+type AttachedCommandInput = {
+  input: PlayerInput;
+  buffer: InputBuffer;
+  commandNames: ReadonlySet<string>;
+};
+
+function attachCommands(
+  input: PlayerInput,
+  cmdDocument?: CmdDocument,
+  previousBuffer?: InputBuffer,
+): AttachedCommandInput {
+  const buffer = input.inputBuffer?.clone() ?? previousBuffer?.clone() ?? new InputBuffer();
+  buffer.push(input);
+
+  const resolvedCommandNames = cmdDocument
+    ? normalizeCommandNames(resolveCommands(cmdDocument, input, buffer).activeCommandNames)
+    : normalizeCommandNames(input.commandNames ?? new Set());
 
   return {
-    ...input,
-    commandNames: resolveCommands(cmdDocument, input, input.inputBuffer).activeCommandNames,
+    input: {
+      ...input,
+      inputBuffer: buffer,
+      commandNames: new Set(resolvedCommandNames),
+    },
+    buffer,
+    commandNames: resolvedCommandNames,
   };
+}
+
+function normalizeCommandNames(commands: Iterable<string>): ReadonlySet<string> {
+  return new Set(Array.from(commands, (command) => command.toLowerCase()));
 }
 
 function faceOpponent(player: PlayerState, opponent: PlayerState): PlayerState {
