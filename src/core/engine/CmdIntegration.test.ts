@@ -21,7 +21,7 @@ ctrl = 1
 
 [State 0, Special]
 type = ChangeState
-trigger1 = command = "qcf_a"
+trigger1 = command = "QCF_x"
 value = 300
 ctrl = 1
 
@@ -43,11 +43,11 @@ ctrl = 0
   const cmd = parseCmdText(`
 [Command]
 name = "holdfwd"
-command = /F
+command = /$F
 
 [Command]
-name = "qcf_a"
-command = D, DF, F, a
+name = "QCF_x"
+command = ~D, DF, F, x
 time = 20
 `);
 
@@ -95,10 +95,10 @@ time = 20
     };
 
     state = stepGameByCns(state, cns, {
-      p1: { left: false, right: false, down: false, up: false, attack: true },
+      p1: { left: false, right: false, down: false, up: false, attack: false, buttons: ['x'] },
     }, undefined, cmd);
 
     expect(state.players[0].stateNo).toBe(300);
-    expect(state.commandNames?.[0].has('qcf_a')).toBe(true);
+    expect(state.commandNames?.[0].has('qcf_x')).toBe(true);
   });
 });
