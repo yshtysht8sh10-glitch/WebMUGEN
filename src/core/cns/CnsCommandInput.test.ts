@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createCnsCommandSet,
+  createCnsCommandSetFromMatches,
   createFallbackCnsCommandSet,
   hasCommandDefinition,
 } from './CnsCommandInput';
@@ -14,6 +15,16 @@ describe('CnsCommandInput', () => {
 
     expect(commands.has('x')).toBe(true);
     expect(commands.has('qcf_x')).toBe(true);
+  });
+
+  it('creates normalized CNS command set from runtime matches', () => {
+    const commands = createCnsCommandSetFromMatches([
+      { matched: true, commandName: 'QCF_X', matchedFrames: [1, 2, 3, 4] },
+      { matched: true, commandName: 'Y', matchedFrames: [5] },
+    ]);
+
+    expect(commands.has('qcf_x')).toBe(true);
+    expect(commands.has('y')).toBe(true);
   });
 
   it('creates fallback command set from fallback input', () => {
