@@ -84,7 +84,7 @@ function attachCommands(
 
   const resolvedCommandNames = cmdDocument
     ? normalizeCommandNames(resolveCommands(cmdDocument, input, buffer).activeCommandNames)
-    : normalizeCommandNames(input.commandNames ?? new Set());
+    : normalizeCommandNames(input.commandNames ?? createLegacyCommandNames(input));
 
   return {
     input: {
@@ -99,6 +99,29 @@ function attachCommands(
 
 function normalizeCommandNames(commands: Iterable<string>): ReadonlySet<string> {
   return new Set(Array.from(commands, (command) => command.toLowerCase()));
+}
+
+function createLegacyCommandNames(input: PlayerInput): ReadonlySet<string> {
+  const commands = new Set<string>();
+
+  if (input.right) commands.add('holdfwd');
+  if (input.left) commands.add('holdback');
+  if (input.up) commands.add('holdup');
+  if (input.down) commands.add('holddown');
+  if (input.right && input.up) commands.add('holdfwd_up');
+  if (input.left && input.up) commands.add('holdback_up');
+  if (input.attack) commands.add('a');
+
+  for (const button of readButtons(input.buttons)) {
+    commands.add(button);
+  }
+
+  return commands;
+}
+
+function readButtons(buttons: PlayerInput['buttons']): string[] {
+  if (!buttons) return [];
+  return Array.from(buttons, (button) => String(button).toLowerCase());
 }
 
 function faceOpponent(player: PlayerState, opponent: PlayerState): PlayerState {
