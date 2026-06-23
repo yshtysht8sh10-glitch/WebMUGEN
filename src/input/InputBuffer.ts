@@ -43,8 +43,24 @@ export class InputBuffer {
 export function inputToFrame(input: PlayerInput): InputFrame {
   return {
     direction: inputToDirection(input),
-    buttons: new Set(input.attack ? ['a'] : []),
+    buttons: inputToButtons(input),
   };
+}
+
+export function inputToButtons(input: PlayerInput): Set<string> {
+  const buttons = new Set<string>();
+
+  if (input.attack) {
+    buttons.add('a');
+  }
+
+  if (input.buttons) {
+    for (const button of input.buttons) {
+      buttons.add(button.toLowerCase());
+    }
+  }
+
+  return buttons;
 }
 
 export function inputToDirection(input: PlayerInput): DirectionToken {
