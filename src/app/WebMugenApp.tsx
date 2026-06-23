@@ -3,7 +3,7 @@ import { CanvasRenderer } from '../renderer/canvas2d/CanvasRenderer';
 import { createInitialGameState } from '../core/engine/GameState';
 import type { GameState } from '../core/engine/types';
 import { loadAppCharacter } from './AppCharacterLoader';
-import { BrowserInput } from './BrowserInput';
+import { BrowserInput, keysToP1Input, keysToP2Input } from './BrowserInput';
 import { createInputDebugSnapshot } from '../input/InputDebugInfo';
 import { formatInputDebugOverlay } from './InputDebugOverlay';
 import { applyFallbackControls } from '../core/engine/FallbackControls';
@@ -30,7 +30,6 @@ import {
 } from '../core/engine/RoundScore';
 import { canRestartRound, restartRound } from '../core/engine/RoundRestart';
 import { getAnimationDuration } from '../core/animation/AnimationDuration';
-import { createFallbackCnsCommandSet } from '../core/cns/CnsCommandInput';
 import { attachFallbackAttackStates } from '../core/cns/CnsFallbackDocument';
 import { analyzeCnsCoverage } from '../core/cns/CnsCoverageDiagnostics';
 import type { CnsCoverageDiagnostics } from '../core/cns/CnsCoverageDiagnostics';
@@ -41,6 +40,9 @@ import {
 import { formatCnsRuntimeDebugOverlay } from './CnsRuntimeDebugOverlay';
 import { formatCnsCommandDebugOverlay } from './CnsCommandDebugOverlay';
 import { formatCnsCoverageDebugOverlay } from './CnsCoverageDebugOverlay';
+import { InputBuffer } from '../input/InputBuffer';
+import { resolveCommands } from '../input/CommandResolver';
+import { formatCmdControlHelp } from './CmdControlHelp';
 
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/kfm/kfm.def';
 
@@ -53,6 +55,8 @@ export function WebMugenApp() {
   const roundScoreRef = useRef<RoundScore>(createInitialRoundScore());
   const cnsTraceRef = useRef<CnsRuntimeTrace[]>([]);
   const cnsCoverageRef = useRef<CnsCoverageDiagnostics | null>(null);
+  const p1CommandBufferRef = useRef(new InputBuffer(60));
+  const p2CommandBufferRef = useRef(new InputBuffer(60));
   const restartPressedRef = useRef(false);
   const inputRef = useRef<BrowserInput | null>(null);
   const [loadMessage, setLoadMessage] = useState('Loading character...');
@@ -62,6 +66,7 @@ export function WebMugenApp() {
   const [cnsDebugLines, setCnsDebugLines] = useState<string[]>([]);
   const [commandDebugLines, setCommandDebugLines] = useState<string[]>(['cmd p1=-', 'cmd p2=-']);
   const [coverageDebugLines, setCoverageDebugLines] = useState<string[]>(['coverage=-']);
+  const [controlHelpLines, setControlHelpLines] = useState<string[]>(['CMD: -']);
 
   useEffect(() => {
     let disposed = false;
@@ -80,6 +85,7 @@ export function WebMugenApp() {
       };
       cnsCoverageRef.current = analyzeCnsCoverage(character.cns);
       setCoverageDebugLines(formatCnsCoverageDebugOverlay(cnsCoverageRef.current));
+      setControlHelpLines(formatCmdControlHelp(character.cmd));
 
       const spriteCount = character.sprites?.sprites.size ?? 0;
 
@@ -91,13 +97,19 @@ export function WebMugenApp() {
 
       rendererRef.current = new CanvasRenderer(canvas, character.air, null, character.sprites);
       inputRef.current = new BrowserInput(window);
+      p1CommandBufferRef.current = new InputBuffer(60);
+      p2CommandBufferRef.current = new InputBuffer(60);
 
       const tick = () => {
         const input = inputRef.current;
         const pressedKeys = input?.getPressedKeys() ?? new Set<string>();
         const inputSnapshot = createInputDebugSnapshot(pressedKeys);
-        const p1Commands = createFallbackCnsCommandSet(inputSnapshot.p1);
-        const p2Commands = createFallbackCnsCommandSet(inputSnapshot.p2);
+        const p1Input = keysToP1Input(pressedKeys);
+        const p2Input = keysToP2Input(pressedKeys);
+        p1CommandBufferRef.current.push(p1Input);
+        p2CommandBufferRef.current.push(p2Input);
+        const p1Commands = resolveCommands(character.cmd, p1Input, p1CommandBufferRef.current).activeCommandNames;
+        const p2Commands = resolveCommands(character.cmd, p2Input, p2CommandBufferRef.current).activeCommandNames;
 
         setInputDebugLines(formatInputDebugOverlay(inputSnapshot));
         setCommandDebugLines(formatCnsCommandDebugOverlay(p1Commands, p2Commands));
@@ -118,8 +130,10 @@ export function WebMugenApp() {
           nextRoundState = restarted.roundState;
           nextFeedback = restarted.hitFeedbackState;
           nextCnsTraces = [];
+          p1CommandBufferRef.current.clear();
+          p2CommandBufferRef.current.clear();
         } else if (nextRoundState.phase === 'fight') {
-          nextState = applyFallbackControls(nextState, inputSnapshot.p1, inputSnapshot.p2);
+          nextState = applyFallbackControls(nextState, p1Input, p2Input);
 
           const cnsResult = stepCnsStateRuntime(nextState, character.cns, {
             p1Commands,
@@ -192,8 +206,11 @@ export function WebMugenApp() {
           ...coverageDebugLines,
         ].join('\n')}
       </div>
-      <p>P1: ← / → 移動, ↑ ジャンプ, A 攻撃, ↓ + A 飛び道具</p>
-      <p>P2: J / L 移動, I ジャンプ, K しゃがみ入力, F 攻撃</p>
+      <div style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', marginBottom: 16 }}>
+        {controlHelpLines.join('\n')}
+      </div>
+      <p>P1 keys: arrows move, A/S/D = a/b/c, Q/W/E = x/y/z</p>
+      <p>P2 keys: J/L/I/K move, F/G/H = a/b/c, U/O/P = x/y/z</p>
       <p>System: R ラウンド再開（KO/TIME OVER後）</p>
       <p>Place character files under <code>public/chars/kfm/</code> to try DEF-based loading.</p>
     </div>
