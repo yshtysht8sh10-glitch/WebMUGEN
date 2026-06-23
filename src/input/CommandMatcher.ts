@@ -36,8 +36,6 @@ export function matchesCommand(command: CmdCommand, frames: readonly InputFrame[
   for (let stepIndex = steps.length - 1; stepIndex >= 0; stepIndex -= 1) {
     const step = steps[stepIndex];
 
-    // D,DF,F,a のようなコマンドで、最後の a と F が同一フレームにある場合を許可する。
-    // 例: 最後を DF+a で押した場合、aステップとFステップは同じ入力フレームで成立してよい。
     const allowSameFrame =
       previousMatchedFrameIndex >= 0 &&
       canShareFrame(step, steps[stepIndex + 1]) &&
@@ -72,8 +70,9 @@ function parseCommandStep(part: string): CommandStep {
 }
 
 function parseCommandToken(part: string): CommandToken {
-  const hold = part.startsWith('/');
-  const raw = hold ? part.slice(1) : part;
+  const normalizedPart = part.trim();
+  const hold = normalizedPart.includes('/') || normalizedPart.includes('$');
+  const raw = normalizedPart.replace(/[~/$]/g, '');
   const normalized = raw.toUpperCase();
 
   if (isDirectionToken(normalized)) {
