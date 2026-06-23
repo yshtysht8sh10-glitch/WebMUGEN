@@ -105,4 +105,23 @@ describe('FallbackControls', () => {
     expect(next.players[0].stateNo).toBe(40);
     expect(next.players[0].stateType).toBe('A');
   });
+
+  it('does not force idle or walk while the player is physically airborne', () => {
+    const state = createInitialGameState();
+    const next = applyFallbackControls(
+      {
+        ...state,
+        players: [
+          { ...state.players[0], y: 240, stateNo: 40, animNo: 40, stateType: 'S', physics: 'A', ctrl: true },
+          state.players[1],
+        ],
+      },
+      { left: false, right: true, up: false, down: false, attack: false },
+      { left: false, right: false, up: false, down: false, attack: false },
+    );
+
+    expect(next.players[0].stateNo).toBe(40);
+    expect(next.players[0].animNo).toBe(40);
+    expect(next.players[0].y).toBe(240);
+  });
 });
