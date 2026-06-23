@@ -7,6 +7,11 @@ export type DefDocument = {
   sections: DefSection[];
 };
 
+export type CharacterDefPalette = {
+  slot: number;
+  file: string;
+};
+
 export type CharacterDefFiles = {
   cmd?: string;
   cns?: string;
@@ -14,4 +19,5 @@ export type CharacterDefFiles = {
   sprite?: string;
   anim?: string;
   sound?: string;
+  palettes?: CharacterDefPalette[];
 };
