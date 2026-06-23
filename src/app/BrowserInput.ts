@@ -1,3 +1,5 @@
+import type { PlayerInput } from '../core/engine/types';
+
 type KeyboardEventTarget = Pick<Window, 'addEventListener' | 'removeEventListener'>;
 
 export class BrowserInput {
@@ -39,15 +41,71 @@ export class BrowserInput {
   };
 }
 
+export function keysToP1Input(keys: ReadonlySet<string>): PlayerInput {
+  return {
+    left: keys.has('ArrowLeft'),
+    right: keys.has('ArrowRight'),
+    up: keys.has('ArrowUp'),
+    down: keys.has('ArrowDown'),
+    attack: keys.has('KeyA'),
+    buttons: keysToButtons(keys, P1_BUTTON_KEYS),
+  };
+}
+
+export function keysToP2Input(keys: ReadonlySet<string>): PlayerInput {
+  return {
+    left: keys.has('KeyJ'),
+    right: keys.has('KeyL'),
+    up: keys.has('KeyI'),
+    down: keys.has('KeyK'),
+    attack: keys.has('KeyF'),
+    buttons: keysToButtons(keys, P2_BUTTON_KEYS),
+  };
+}
+
+const P1_BUTTON_KEYS: Readonly<Record<string, string>> = {
+  KeyA: 'a',
+  KeyS: 'b',
+  KeyD: 'c',
+  KeyQ: 'x',
+  KeyW: 'y',
+  KeyE: 'z',
+};
+
+const P2_BUTTON_KEYS: Readonly<Record<string, string>> = {
+  KeyF: 'a',
+  KeyG: 'b',
+  KeyH: 'c',
+  KeyU: 'x',
+  KeyO: 'y',
+  KeyP: 'z',
+};
+
+function keysToButtons(keys: ReadonlySet<string>, mapping: Readonly<Record<string, string>>): string[] {
+  return Object.entries(mapping)
+    .filter(([code]) => keys.has(code))
+    .map(([, button]) => button);
+}
+
 function shouldPreventDefault(code: string): boolean {
   return (
     code.startsWith('Arrow') ||
     code === 'KeyA' ||
+    code === 'KeyS' ||
+    code === 'KeyD' ||
     code === 'KeyF' ||
+    code === 'KeyG' ||
+    code === 'KeyH' ||
     code === 'KeyI' ||
     code === 'KeyJ' ||
     code === 'KeyK' ||
     code === 'KeyL' ||
+    code === 'KeyQ' ||
+    code === 'KeyU' ||
+    code === 'KeyW' ||
+    code === 'KeyE' ||
+    code === 'KeyO' ||
+    code === 'KeyP' ||
     code === 'KeyR'
   );
 }
