@@ -82,7 +82,8 @@ time = 20
     state = stepGameByCns(state, cns, {
       p1: { left: false, right: true, down: true, up: false, attack: false },
     }, undefined, cmd);
-    expect(state.players[0].stateNo).toBe(0);
+    expect(state.players[0].stateNo).toBe(20);
+    expect(state.commandNames?.[0].has('holdfwd')).toBe(true);
 
     state = stepGameByCns(state, cns, {
       p1: { left: false, right: true, down: false, up: false, attack: false },
