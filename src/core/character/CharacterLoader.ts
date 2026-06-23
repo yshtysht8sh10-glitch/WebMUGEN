@@ -2,8 +2,8 @@ import { parseAirText } from '../../parser/air/AirParser';
 import { parseCmdText } from '../../parser/cmd/CmdParser';
 import { parseCnsText } from '../../parser/cns/CnsParser';
 import { getCharacterDefFiles, parseDefText } from '../../parser/def/DefParser';
-import type { CharacterAssets } from './CharacterTypes';
 import { convertSffV1ToImageDataSpritePack } from '../sprite/SffSpritePackConverter';
+import type { CharacterAssets, CharacterPaletteAsset } from './CharacterTypes';
 
 export type CharacterAssetFetcher = {
   text(path: string): Promise<string>;
@@ -31,17 +31,21 @@ export async function loadCharacterFromDef(
     throw new Error('[Files] cmd is missing.');
   }
 
-  const [cnsText, airText, cmdText] = await Promise.all([
+  const [cnsText, airText, cmdText, palettes] = await Promise.all([
     fetcher.text(resolveAssetPath(basePath, files.cns)),
     fetcher.text(resolveAssetPath(basePath, files.anim)),
     fetcher.text(resolveAssetPath(basePath, files.cmd)),
+    loadCharacterPalettes(basePath, files.palettes ?? [], fetcher),
   ]);
 
+  const selectedPalette = palettes[0]?.bytes;
   const sprites =
     files.sprite !== undefined
-      ? convertSffV1ToImageDataSpritePack(
-          await fetcher.arrayBuffer(resolveAssetPath(basePath, files.sprite)),
-        )
+      ? convertSffV1ToImageDataSpritePack(await fetcher.arrayBuffer(resolveAssetPath(basePath, files.sprite)), {
+          externalPalette: selectedPalette,
+          preferExternalPalette: selectedPalette !== undefined,
+          paletteIndexOrder: selectedPalette !== undefined ? 'reversed' : 'normal',
+        })
       : null;
 
   return {
@@ -50,6 +54,7 @@ export async function loadCharacterFromDef(
     air: parseAirText(airText),
     cmd: parseCmdText(cmdText),
     sprites,
+    palettes,
   };
 }
 
@@ -83,6 +88,20 @@ export function resolveAssetPath(basePath: string, relativePath: string): string
   }
 
   return `${basePath.replace(/\/$/, '')}/${relativePath.replace(/^\.\//, '')}`;
+}
+
+async function loadCharacterPalettes(
+  basePath: string,
+  palettes: readonly { slot: number; file: string }[],
+  fetcher: CharacterAssetFetcher,
+): Promise<CharacterPaletteAsset[]> {
+  return Promise.all(
+    palettes.map(async (palette) => ({
+      slot: palette.slot,
+      file: palette.file,
+      bytes: new Uint8Array(await fetcher.arrayBuffer(resolveAssetPath(basePath, palette.file))),
+    })),
+  );
 }
 
 function getBasePath(path: string): string {
