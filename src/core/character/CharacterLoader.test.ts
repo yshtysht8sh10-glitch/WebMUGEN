@@ -8,7 +8,7 @@ describe('CharacterLoader', () => {
     expect(resolveAssetPath('/chars/kfm', '/global/kfm.air')).toBe('/global/kfm.air');
   });
 
-  it('loads def, cns, air, and cmd assets', async () => {
+  it('loads def, cns, air, cmd, and CMD statedef assets', async () => {
     const textAssets = new Map<string, string>([
       [
         '/chars/kfm/kfm.def',
@@ -44,6 +44,14 @@ Begin Action 0
 name = "a"
 command = a
 time = 1
+
+[Statedef -1]
+
+[State -1, A]
+type = ChangeState
+triggerall = command = "a"
+trigger1 = ctrl
+value = 200
 `,
       ],
     ]);
@@ -63,7 +71,7 @@ time = 1
 
     const character = await loadCharacterFromDef('/chars/kfm/kfm.def', fetcher);
 
-    expect(character.cns.states[0].stateNo).toBe(0);
+    expect(character.cns.states.map((state) => state.stateNo)).toEqual([0, -1]);
     expect(character.air.actions[0].actionNo).toBe(0);
     expect(character.cmd.commands[0].name).toBe('a');
     expect(character.sprites).toBeNull();
