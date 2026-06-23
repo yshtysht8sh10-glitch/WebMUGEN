@@ -17,8 +17,11 @@ export function evaluateCnsRuntimeTrigger(
 
   if (trimmed === 'ctrl') return context.player.ctrl;
 
-  const commandMatch = trimmed.match(/^command\s*=\s*\"([^\"]+)\"$/);
-  if (commandMatch) return context.commands?.has(commandMatch[1].toLowerCase()) ?? false;
+  const commandMatch = trimmed.match(/^command\s*(=|!=)\s*\"([^\"]+)\"$/);
+  if (commandMatch) {
+    const active = context.commands?.has(commandMatch[2].toLowerCase()) ?? false;
+    return commandMatch[1] === '=' ? active : !active;
+  }
 
   const timeMatch = trimmed.match(/^time\s*(=|!=|>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)$/);
   if (timeMatch) return compareNumber(context.player.stateTime, timeMatch[1], Number(timeMatch[2]));
@@ -33,6 +36,9 @@ export function evaluateCnsRuntimeTrigger(
 
   const stateNoMatch = trimmed.match(/^stateno\s*(=|!=|>=|<=|>|<)\s*(-?\d+)$/);
   if (stateNoMatch) return compareNumber(context.player.stateNo, stateNoMatch[1], Number(stateNoMatch[2]));
+
+  const powerMatch = trimmed.match(/^power\s*(=|!=|>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)$/);
+  if (powerMatch) return compareNumber(context.player.power ?? 0, powerMatch[1], Number(powerMatch[2]));
 
   const posMatch = trimmed.match(/^pos\s+([xy])\s*(=|!=|>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)$/);
   if (posMatch) {
@@ -74,14 +80,30 @@ export function evaluateCnsRuntimeTriggerGroup(
 ): boolean {
   if (expressions.length === 0) return true;
 
+  const triggerAll: string[] = [];
   const groups = new Map<number, string[]>();
+
   for (const expression of expressions) {
-    const match = expression.match(/^trigger(\d+)(?:all)?\s*:\s*(.*)$/i);
+    const triggerAllMatch = expression.match(/^triggerall\s*:\s*(.*)$/i);
+    if (triggerAllMatch) {
+      triggerAll.push(triggerAllMatch[1]);
+      continue;
+    }
+
+    const match = expression.match(/^trigger(\d+)\s*:\s*(.*)$/i);
     const groupNo = match ? Number(match[1]) : 1;
     const body = match ? match[2] : expression;
     const existing = groups.get(groupNo) ?? [];
     existing.push(body);
     groups.set(groupNo, existing);
+  }
+
+  if (!triggerAll.every((expression) => evaluateCnsRuntimeTrigger(expression, context))) {
+    return false;
+  }
+
+  if (groups.size === 0) {
+    return triggerAll.length > 0;
   }
 
   return Array.from(groups.values()).some((group) =>
