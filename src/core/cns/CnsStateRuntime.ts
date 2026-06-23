@@ -78,7 +78,8 @@ function stepPlayerCnsRuntime(
   input: CnsRuntimeInput,
   commands?: ReadonlySet<string>,
 ): { player: PlayerState; trace: CnsRuntimeTrace } {
-  const stateDef = findStateDef(cnsDocument, player.stateNo);
+  const originalStateNo = player.stateNo;
+  const initialStateDef = findStateDef(cnsDocument, player.stateNo);
   const trace: CnsRuntimeTrace = {
     playerId,
     stateNo: player.stateNo,
@@ -88,15 +89,67 @@ function stepPlayerCnsRuntime(
     stateTime: player.stateTime,
     afterStateTime: player.stateTime,
     mugenAnimTime: getMugenAnimTime(player, input),
-    stateFound: Boolean(stateDef),
+    stateFound: Boolean(initialStateDef),
     executedControllers: [],
   };
 
-  if (!stateDef) {
-    return { player, trace };
+  let nextPlayer = player;
+  const commandStateDef = findStateDef(cnsDocument, -1);
+
+  if (commandStateDef) {
+    const commandResult = executeControllersForState(
+      nextPlayer,
+      commandStateDef,
+      cnsDocument,
+      input,
+      commands,
+    );
+    nextPlayer = commandResult.player;
+    trace.executedControllers.push(...commandResult.executedControllers);
+
+    if (nextPlayer.stateNo !== originalStateNo) {
+      trace.afterStateNo = nextPlayer.stateNo;
+      trace.afterAnimNo = nextPlayer.animNo;
+      trace.afterStateTime = nextPlayer.stateTime;
+      return { player: nextPlayer, trace };
+    }
   }
 
-  let nextPlayer = applyStateDefHeader(player, stateDef, { resetAnimOnChange: false });
+  const stateDef = findStateDef(cnsDocument, nextPlayer.stateNo);
+  trace.stateFound = Boolean(stateDef);
+
+  if (!stateDef) {
+    return { player: nextPlayer, trace };
+  }
+
+  nextPlayer = applyStateDefHeader(nextPlayer, stateDef, { resetAnimOnChange: false });
+
+  const stateResult = executeControllersForState(
+    nextPlayer,
+    stateDef,
+    cnsDocument,
+    input,
+    commands,
+  );
+  nextPlayer = stateResult.player;
+  trace.executedControllers.push(...stateResult.executedControllers);
+
+  trace.afterStateNo = nextPlayer.stateNo;
+  trace.afterAnimNo = nextPlayer.animNo;
+  trace.afterStateTime = nextPlayer.stateTime;
+
+  return { player: nextPlayer, trace };
+}
+
+function executeControllersForState(
+  player: PlayerState,
+  stateDef: CnsStateDefinition,
+  cnsDocument: CnsDocument,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): { player: PlayerState; executedControllers: string[] } {
+  let nextPlayer = player;
+  const executedControllers: string[] = [];
 
   for (const controller of stateDef.controllers) {
     if (!shouldRunController(controller, nextPlayer, input, commands)) {
@@ -107,15 +160,11 @@ function stepPlayerCnsRuntime(
     nextPlayer = result.player;
 
     if (result.executed) {
-      trace.executedControllers.push(result.name);
+      executedControllers.push(result.name);
     }
   }
 
-  trace.afterStateNo = nextPlayer.stateNo;
-  trace.afterAnimNo = nextPlayer.animNo;
-  trace.afterStateTime = nextPlayer.stateTime;
-
-  return { player: nextPlayer, trace };
+  return { player: nextPlayer, executedControllers };
 }
 
 function findStateDef(cnsDocument: CnsDocument, stateNo: number): CnsStateDefinition | undefined {
@@ -300,8 +349,9 @@ function executeSupportedController(
     const value = readNumber(controller, 'value');
     if (value === null) return { player, executed: false, name: 'PowerAdd' };
 
+    const playerWithPower = player as PlayerState & { power?: number };
     return {
-      player: { ...player, power: Math.max(0, player.power + value) },
+      player: { ...player, power: Math.max(0, (playerWithPower.power ?? 0) + value) } as PlayerState,
       executed: true,
       name: 'PowerAdd',
     };
@@ -376,7 +426,7 @@ function cnsValueToNumber(value: CnsValue | undefined): number | null {
 
 function toStateType(value: string | null): PlayerState['stateType'] | null {
   const normalized = value?.toUpperCase();
-  if (normalized === 'S' || normalized === 'C' || normalized === 'A') return normalized;
+  if (normalized === 'S' || normalized === 'C' || normalized === 'A' || normalized === 'L') return normalized;
   return null;
 }
 
@@ -393,17 +443,19 @@ function toPhysics(value: string | null): PlayerState['physics'] | null {
 }
 
 function getPlayerVar(player: PlayerState, index: number): number {
-  return (player.vars?.[index] as number | undefined) ?? 0;
+  const playerWithVars = player as PlayerState & { vars?: Record<number, number> };
+  return playerWithVars.vars?.[index] ?? 0;
 }
 
 function setPlayerVar(player: PlayerState, index: number, value: number): PlayerState {
+  const playerWithVars = player as PlayerState & { vars?: Record<number, number> };
   return {
     ...player,
     vars: {
-      ...player.vars,
+      ...playerWithVars.vars,
       [index]: value,
     },
-  };
+  } as PlayerState;
 }
 
 function createMissingTrace(playerId: 1 | 2, player: PlayerState, input: CnsRuntimeInput): CnsRuntimeTrace {
