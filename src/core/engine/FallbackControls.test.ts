@@ -16,6 +16,54 @@ describe('FallbackControls', () => {
     expect(next.players[0].vx).toBeGreaterThan(0);
   });
 
+  it('uses back-walk animation when moving backward', () => {
+    const state = createInitialGameState();
+    const next = applyFallbackControls(
+      state,
+      { left: true, right: false, up: false, down: false, attack: false },
+      { left: false, right: false, up: false, down: false, attack: false },
+    );
+
+    expect(next.players[0].stateNo).toBe(20);
+    expect(next.players[0].animNo).toBe(21);
+    expect(next.players[0].vx).toBeLessThan(0);
+  });
+
+  it('crouches while holding down', () => {
+    const state = createInitialGameState();
+    const next = applyFallbackControls(
+      state,
+      { left: false, right: false, up: false, down: true, attack: false },
+      { left: false, right: false, up: false, down: false, attack: false },
+    );
+
+    expect(next.players[0]).toMatchObject({
+      stateNo: 11,
+      animNo: 11,
+      stateType: 'C',
+      physics: 'C',
+      vx: 0,
+    });
+  });
+
+  it('preserves crouch timers while down is held', () => {
+    const state = createInitialGameState();
+    const next = applyFallbackControls(
+      {
+        ...state,
+        players: [
+          { ...state.players[0], stateNo: 11, animNo: 11, stateType: 'C', physics: 'C', animTime: 8, stateTime: 8 },
+          state.players[1],
+        ],
+      },
+      { left: false, right: false, up: false, down: true, attack: false },
+      { left: false, right: false, up: false, down: false, attack: false },
+    );
+
+    expect(next.players[0].animTime).toBe(8);
+    expect(next.players[0].stateTime).toBe(8);
+  });
+
   it('does not start attack directly from fallback controls', () => {
     const state = createInitialGameState();
     const next = applyFallbackControls(
