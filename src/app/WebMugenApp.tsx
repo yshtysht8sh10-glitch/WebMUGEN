@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { CanvasRenderer } from '../renderer/canvas2d/CanvasRenderer';
 import { createInitialGameState } from '../core/engine/GameState';
 import type { GameState } from '../core/engine/types';
-import { loadAppCharacter } from './AppCharacterLoader';
+import { createSampleCharacterAssets, loadAppCharacter } from './AppCharacterLoader';
 import { BrowserInput, keysToP1Input, keysToP2Input } from './BrowserInput';
 import { createInputDebugSnapshot } from '../input/InputDebugInfo';
 import { formatInputDebugOverlay } from './InputDebugOverlay';
@@ -79,9 +79,10 @@ export function WebMugenApp() {
       const loadResult = await loadAppCharacter(DEFAULT_CHARACTER_DEF_PATH);
       if (disposed) return;
 
+      const loadedCharacter = loadResult.character ?? createSampleCharacterAssets();
       const character = {
-        ...loadResult.character,
-        cns: attachFallbackAttackStates(loadResult.character.cns),
+        ...loadedCharacter,
+        cns: attachFallbackAttackStates(loadedCharacter.cns),
       };
       cnsCoverageRef.current = analyzeCnsCoverage(character.cns);
       setCoverageDebugLines(formatCnsCoverageDebugOverlay(cnsCoverageRef.current));
@@ -92,7 +93,7 @@ export function WebMugenApp() {
       setLoadMessage(
         loadResult.source === 'def'
           ? `Loaded character: ${DEFAULT_CHARACTER_DEF_PATH} sprites=${spriteCount} cnsStates=${character.cns.states.length}`
-          : `Sample character fallback: ${loadResult.reason ?? 'unknown reason'} cnsStates=${character.cns.states.length}`,
+          : `Sample character fallback: ${loadResult.errorMessage ?? 'unknown reason'} cnsStates=${character.cns.states.length}`,
       );
 
       rendererRef.current = new CanvasRenderer(canvas, character.air, null, character.sprites);
