@@ -18,6 +18,23 @@ describe('CnsRuntimeTrigger', () => {
     expect(evaluateCnsRuntimeTrigger('AnimTime = 12', { player })).toBe(true);
   });
 
+  it('evaluates command equality and inequality', () => {
+    expect(evaluateCnsRuntimeTrigger('command = "QCF_x"', {
+      player,
+      commands: new Set(['qcf_x']),
+    })).toBe(true);
+
+    expect(evaluateCnsRuntimeTrigger('command != "holddown"', {
+      player,
+      commands: new Set(['x']),
+    })).toBe(true);
+
+    expect(evaluateCnsRuntimeTrigger('command != "holddown"', {
+      player,
+      commands: new Set(['holddown']),
+    })).toBe(false);
+  });
+
   it('evaluates trigger groups as OR of AND groups', () => {
     expect(evaluateCnsRuntimeTriggerGroup([
       'trigger1: ctrl',
@@ -43,5 +60,25 @@ describe('CnsRuntimeTrigger', () => {
       player,
       commands: new Set(),
     })).toBe(true);
+  });
+
+  it('requires triggerall before any trigger group may pass', () => {
+    expect(evaluateCnsRuntimeTriggerGroup([
+      'triggerall: command = "QCF_x"',
+      'trigger1: statetype = S',
+      'trigger1: ctrl',
+    ], {
+      player,
+      commands: new Set(['qcf_x']),
+    })).toBe(true);
+
+    expect(evaluateCnsRuntimeTriggerGroup([
+      'triggerall: command = "QCF_x"',
+      'trigger1: statetype = S',
+      'trigger1: ctrl',
+    ], {
+      player,
+      commands: new Set(['x']),
+    })).toBe(false);
   });
 });
