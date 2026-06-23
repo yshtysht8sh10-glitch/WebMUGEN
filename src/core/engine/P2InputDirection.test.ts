@@ -21,6 +21,7 @@ describe('P2 input direction', () => {
       p2: { left: true, right: false, up: false, attack: false },
     });
 
+    expect(state.commandNames?.[1].has('holdback')).toBe(true);
     expect(state.players[1].x).toBeLessThan(originalX);
   });
 
@@ -40,6 +41,7 @@ describe('P2 input direction', () => {
       p2: { left: false, right: true, up: false, attack: false },
     });
 
+    expect(state.commandNames?.[1].has('holdfwd')).toBe(true);
     expect(state.players[1].x).toBeGreaterThan(originalX);
   });
 });
