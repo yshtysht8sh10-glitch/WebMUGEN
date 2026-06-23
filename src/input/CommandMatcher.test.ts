@@ -30,6 +30,24 @@ describe('CommandMatcher', () => {
     expect(matchesCommand({ name: 'holdback', command: '/$B', time: 1 }, buffer.getFrames())).toBe(true);
   });
 
+  it('does not match double-tap forward from holding forward', () => {
+    const buffer = new InputBuffer(10);
+    buffer.push({ left: false, right: true, up: false, down: false, attack: false });
+    buffer.push({ left: false, right: true, up: false, down: false, attack: false });
+    buffer.push({ left: false, right: true, up: false, down: false, attack: false });
+
+    expect(matchesCommand({ name: 'FF', command: 'F, F', time: 10 }, buffer.getFrames())).toBe(false);
+  });
+
+  it('matches double-tap forward when forward is pressed twice', () => {
+    const buffer = new InputBuffer(10);
+    buffer.push({ left: false, right: true, up: false, down: false, attack: false });
+    buffer.push({ left: false, right: false, up: false, down: false, attack: false });
+    buffer.push({ left: false, right: true, up: false, down: false, attack: false });
+
+    expect(matchesCommand({ name: 'FF', command: 'F, F', time: 10 }, buffer.getFrames())).toBe(true);
+  });
+
   it('parses MUGEN release and hold modifiers', () => {
     expect(parseCommandTokens('~D, /$F, x+y')).toEqual([
       { kind: 'direction', value: 'D', hold: false },
