@@ -31,6 +31,26 @@ ctrl = 1
     expect(doc.states[0].controllers[0].triggers[0].expression).toBe('command = "holdfwd"');
   });
 
+  it('parses triggerall controllers used by CMD Statedef -1', () => {
+    const doc = parseCnsText(`
+[Statedef -1]
+
+[State -1, Special]
+type = ChangeState
+triggerall = command = "QCF_x"
+trigger1 = statetype = S
+trigger1 = ctrl
+value = 1000
+`);
+
+    expect(doc.states[0].stateNo).toBe(-1);
+    expect(doc.states[0].controllers[0].triggers).toEqual([
+      { name: 'triggerall', expression: 'command = "QCF_x"' },
+      { name: 'trigger1', expression: 'statetype = S' },
+      { name: 'trigger1', expression: 'ctrl' },
+    ]);
+  });
+
   it('allows metadata sections before StateDef', () => {
     const doc = parseCnsText(`
 [Data]
