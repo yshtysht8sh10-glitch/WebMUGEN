@@ -19,18 +19,36 @@ trigger1 = command = "holdfwd"
 value = 20
 ctrl = 1
 
+[State 0, Special]
+type = ChangeState
+trigger1 = command = "qcf_a"
+value = 300
+ctrl = 1
+
 [StateDef 20]
 type = S
 movetype = I
 physics = S
 anim = 20
 ctrl = 1
+
+[StateDef 300]
+type = S
+movetype = A
+physics = S
+anim = 300
+ctrl = 0
 `);
 
   const cmd = parseCmdText(`
 [Command]
 name = "holdfwd"
 command = /F
+
+[Command]
+name = "qcf_a"
+command = D, DF, F, a
+time = 20
 `);
 
   it('evaluates CNS command trigger through CMD document', () => {
@@ -50,5 +68,37 @@ command = /F
     );
 
     expect(state.players[0].stateNo).toBe(20);
+    expect(state.commandNames?.[0].has('holdfwd')).toBe(true);
+  });
+
+  it('keeps CMD input history in GameState and triggers buffered command moves', () => {
+    let state = createInitialGameState();
+
+    state = stepGameByCns(state, cns, {
+      p1: { left: false, right: false, down: true, up: false, attack: false },
+    }, undefined, cmd);
+    expect(state.players[0].stateNo).toBe(0);
+
+    state = stepGameByCns(state, cns, {
+      p1: { left: false, right: true, down: true, up: false, attack: false },
+    }, undefined, cmd);
+    expect(state.players[0].stateNo).toBe(0);
+
+    state = stepGameByCns(state, cns, {
+      p1: { left: false, right: true, down: false, up: false, attack: false },
+    }, undefined, cmd);
+    expect(state.players[0].stateNo).toBe(20);
+
+    state = {
+      ...state,
+      players: [{ ...state.players[0], stateNo: 0, stateTime: 0, animNo: 0, ctrl: true }, state.players[1]],
+    };
+
+    state = stepGameByCns(state, cns, {
+      p1: { left: false, right: false, down: false, up: false, attack: true },
+    }, undefined, cmd);
+
+    expect(state.players[0].stateNo).toBe(300);
+    expect(state.commandNames?.[0].has('qcf_a')).toBe(true);
   });
 });
