@@ -1,121 +1,137 @@
 # CMD Runtime Integration Notes
 
-This document records the current WebMUGEN CMD command path and the intended next steps.
+This document records the current WebMUGEN CMD command path. Keep it current: CMD bugs are easy to misdiagnose because parser, input history, command matching, and CNS triggers are separate layers.
 
-## Current Status
+## Current Runtime Status
 
-WebMUGEN already parses character `.cmd` files and can evaluate simple command triggers in CNS.
-
-The existing runtime path is:
+WebMUGEN now supports this path:
 
 ```text
-CharacterLoader
+Character .cmd file
+  -> CharacterLoader
   -> parseCmdText(...)
   -> CharacterAssets.cmd
   -> stepGameByCns(..., cmdDocument)
-  -> attachCommands(...)
+  -> GameState.commandBuffers[p1/p2]
   -> input/CommandResolver.resolveCommands(...)
+  -> GameState.commandNames[p1/p2]
   -> PlayerInput.commandNames
-  -> CNS command trigger
+  -> CNS trigger: command = "..."
+  -> controller execution / ChangeState
 ```
 
-This is why simple commands such as:
+This means a command defined in `.cmd` can drive a CNS trigger across multiple frames, for example:
 
 ```ini
 [Command]
-name = "holdfwd"
-command = /F
+name = "qcf_a"
+command = D, DF, F, a
+time = 20
 ```
 
-can drive CNS triggers such as:
+can drive:
 
 ```ini
-trigger1 = command = "holdfwd"
+[State 0, Special]
+type = ChangeState
+trigger1 = command = "qcf_a"
+value = 300
 ```
 
-## Added Bridge
+The integration test `src/core/engine/CmdIntegration.test.ts` covers this buffered transition.
 
-The core command runtime also has a typed matcher path under `src/core/cmd`:
+## Runtime State
+
+`GameState` now carries command runtime data:
+
+```ts
+commandBuffers?: [InputBuffer, InputBuffer];
+commandNames?: [ReadonlySet<string>, ReadonlySet<string>];
+```
+
+`commandBuffers` preserve per-player input history across calls to `stepGameByCns()`. This is required for multi-step commands such as quarter-circle motions.
+
+`commandNames` expose the current frame's matched command names for debug overlays and future runtime tracing.
+
+## Important Implementation Details
+
+### Input history is internal to `stepGameByCns()`
+
+The app layer may still pass `PlayerInput.inputBuffer`, but it is no longer required for normal CMD matching. `stepGameByCns()` clones the previous `GameState.commandBuffers` entry, pushes the current frame input, and resolves commands from that buffer.
+
+This prevents a common failure mode where `D, DF, F, a` never matches because only the current frame is visible.
+
+### Command names are normalized
+
+CNS command triggers should be treated case-insensitively.
 
 ```text
-CmdCommandParser
-CommandMatcher
-CommandRuntimeState
+command = "QCF_A"
+command = "qcf_a"
 ```
 
-To avoid keeping parser CMD data and runtime command matching disconnected, `CmdDocumentAdapter` now bridges:
+should match the same command. The current path normalizes runtime command names to lower-case, and `TriggerEvaluator` performs a case-insensitive fallback check.
 
-```text
-parser/cmd CmdDocument
-  -> core/cmd CmdCommandDefinition[]
-```
+### Buffer mutation is controlled
 
-This allows future game-loop work to use the typed runtime matcher without reparsing raw text.
+`InputBuffer.clone()` exists so game stepping can derive the next buffer from the previous state without mutating the previous `GameState` in place.
 
 ## File Responsibilities
 
 ### `src/parser/cmd/CmdParser.ts`
 
-Parses raw `.cmd` text into `CmdDocument`:
+Parses raw `.cmd` text into:
 
 ```ts
-{ commands: CmdCommand[] }
+CmdDocument
 ```
 
-This keeps the original command name, expression, and optional time.
+This preserves command name, command expression, and optional time.
 
-### `src/core/cmd/CmdDocumentAdapter.ts`
+### `src/input/CommandResolver.ts`
 
-Converts parsed `CmdDocument` into typed runtime definitions:
+Currently used by the live `stepGameByCns()` path. It checks a `CmdDocument` against an `InputBuffer` and returns matched command names.
 
-```ts
-CmdCommandDefinition[]
-```
+### `src/input/CommandMatcher.ts`
 
-It also converts command match results into a lower-case CNS command set.
+Parses command expressions such as `/F`, `D,DF,F,a`, and `F+a` for the existing game-loop path.
 
-### `src/core/cns/CnsCommandInput.ts`
+### `src/core/engine/CnsGame.ts`
 
-Normalizes command names for CNS trigger evaluation. CNS command matching should be case-insensitive, so names are stored lower-case.
+Owns the current live CMD application path. It attaches command names to `PlayerInput` before running CNS controllers.
 
-### `src/core/cmd/CommandDiagnostics.ts`
+### `src/core/engine/TriggerEvaluator.ts`
 
-Summarizes command definitions and matched command names for debug overlays or trace output.
+Evaluates CNS trigger expressions. For `command = "..."`, it checks `PlayerInput.commandNames` first, then legacy direct-input fallbacks.
 
-## Important Rule
+### `src/core/cmd/*`
 
-CNS command triggers are string matches and should be treated case-insensitively:
+Contains the newer typed command runtime path and diagnostics. This path is useful for future cleanup and deeper command tracing, but the current live game-loop integration still uses `src/input/*`.
+
+## Regression Tests To Preserve
+
+- `src/core/engine/CmdIntegration.test.ts`
+  - hold command triggers CNS ChangeState
+  - buffered `D, DF, F, a` command triggers CNS ChangeState
+- `src/input/CommandResolver.test.ts`
+  - direct, hold, diagonal, and buffered command resolution
+- `src/input/InputBufferClone.test.ts`
+  - cloning does not mutate the original buffer
+- `src/core/engine/TriggerEvaluator.test.ts` or equivalent future coverage
+  - command triggers remain case-insensitive
+
+## Known Limitations
+
+Only one generic attack button currently maps to `a` in `inputToFrame()`. KFM command files may use buttons such as `x`, `y`, `z`, `a`, `b`, `c` depending on source data. Full MUGEN-style button mapping needs a separate input model expansion.
+
+Recommended next step:
 
 ```text
-command = "QCF_X"
-command = "qcf_x"
+PlayerInput.attack
+  -> explicit buttons: a/b/c/x/y/z
+  -> BrowserInput key map
+  -> InputBuffer button Set
+  -> CMD matching by actual button names
 ```
 
-should refer to the same normalized command name.
-
-## Known Split
-
-There are currently two command-related paths:
-
-```text
-src/input/*       existing game-loop path
-src/core/cmd/*    typed runtime matcher path
-```
-
-The current change does not replace the game-loop path. It adds adapter and diagnostic support so the two paths can be unified safely later.
-
-## Next Recommended Step
-
-The next step is to make the game loop persist command runtime state per player instead of relying only on `PlayerInput.inputBuffer` supplied from the app layer.
-
-Suggested path:
-
-```text
-GameState
-  -> p1CommandRuntime / p2CommandRuntime
-  -> stepCommandRuntime each frame
-  -> createCnsCommandSetFromMatches
-  -> CnsRuntimeTriggerContext.commands
-```
-
-That change is larger because it touches `GameState` shape and app input flow. Keep it separate from parser and adapter cleanup.
+Do not mix that with command buffer persistence; buffer persistence is now implemented and should remain stable.
