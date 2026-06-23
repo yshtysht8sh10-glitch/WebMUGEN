@@ -139,7 +139,7 @@ function applyControllerValue(
     return;
   }
 
-  if (/^trigger\d+$/i.test(key)) {
+  if (/^trigger(?:all|\d+)$/i.test(key)) {
     controller.triggers.push({
       name: key,
       expression: valueText,
