@@ -73,10 +73,9 @@ function parseCommandToken(part: string): CommandToken {
   const normalizedPart = part.trim();
   const hold = normalizedPart.includes('/') || normalizedPart.includes('$');
   const raw = normalizedPart.replace(/[~/$]/g, '');
-  const normalized = raw.toUpperCase();
 
-  if (isDirectionToken(normalized)) {
-    return { kind: 'direction', value: normalized, hold };
+  if (isDirectionToken(raw)) {
+    return { kind: 'direction', value: raw, hold };
   }
 
   return { kind: 'button', value: raw.toLowerCase(), hold };
