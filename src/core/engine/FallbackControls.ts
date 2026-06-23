@@ -51,13 +51,31 @@ function applyPlayerFallbackControl(player: PlayerState, input: FallbackControlI
     };
   }
 
+  if (input.down && player.stateType !== 'A') {
+    return {
+      ...player,
+      stateNo: 11,
+      animNo: 11,
+      animTime: player.stateNo === 11 ? player.animTime : 0,
+      stateTime: player.stateNo === 11 ? player.stateTime : 0,
+      stateType: 'C',
+      moveType: 'I',
+      physics: 'C',
+      ctrl: true,
+      vx: 0,
+      hitDefUsed: false,
+    };
+  }
+
   if (horizontal !== 0 && player.stateType !== 'A') {
+    const animNo = horizontal > 0 ? 20 : 21;
+
     return {
       ...player,
       stateNo: 20,
-      animNo: 20,
-      animTime: player.stateNo === 20 ? player.animTime : 0,
-      stateTime: player.stateNo === 20 ? player.stateTime : 0,
+      animNo,
+      animTime: player.stateNo === 20 && player.animNo === animNo ? player.animTime : 0,
+      stateTime: player.stateNo === 20 && player.animNo === animNo ? player.stateTime : 0,
       stateType: 'S',
       moveType: 'I',
       physics: 'S',
