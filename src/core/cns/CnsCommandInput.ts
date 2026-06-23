@@ -1,4 +1,5 @@
-import type { CommandDefinition } from '../../parser/cmd/CmdTypes';
+import type { CmdCommand } from '../../parser/cmd/CmdTypes';
+import type { CommandMatchResult } from '../cmd/CommandMatcher';
 
 export type CnsCommandInputSnapshot = {
   p1Commands: ReadonlySet<string>;
@@ -11,6 +12,10 @@ export type ResolvedCommandLike = {
 
 export function createCnsCommandSet(commands: readonly ResolvedCommandLike[]): ReadonlySet<string> {
   return new Set(commands.map((command) => command.name.toLowerCase()));
+}
+
+export function createCnsCommandSetFromMatches(matches: readonly CommandMatchResult[]): ReadonlySet<string> {
+  return new Set(matches.map((match) => match.commandName.toLowerCase()));
 }
 
 export function createFallbackCnsCommandSet(input: {
@@ -31,7 +36,7 @@ export function createFallbackCnsCommandSet(input: {
 }
 
 export function hasCommandDefinition(
-  definitions: readonly CommandDefinition[] | undefined,
+  definitions: readonly Pick<CmdCommand, 'name'>[] | undefined,
   commandName: string,
 ): boolean {
   if (!definitions) {
