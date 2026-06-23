@@ -124,9 +124,9 @@ export function evaluateCommandTrigger(
     return null;
   }
 
-  const commandName = expression.right.value;
+  const commandName = expression.right.value.toLowerCase();
   const commandActive = input.commandNames
-    ? input.commandNames.has(commandName)
+    ? hasCommandName(input.commandNames, commandName)
     : isLegacyCommandActive(commandName, input);
 
   if (expression.operator === '=') {
@@ -138,6 +138,14 @@ export function evaluateCommandTrigger(
   }
 
   return false;
+}
+
+function hasCommandName(commands: ReadonlySet<string>, commandName: string): boolean {
+  if (commands.has(commandName)) {
+    return true;
+  }
+
+  return Array.from(commands).some((command) => command.toLowerCase() === commandName);
 }
 
 function isLegacyCommandActive(commandName: string, input: PlayerInput): boolean {
