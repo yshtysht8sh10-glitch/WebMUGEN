@@ -1,3 +1,4 @@
+import type { CnsDocument } from '../../mugen/common/cnsTypes';
 import { parseAirText } from '../../parser/air/AirParser';
 import { parseCmdText } from '../../parser/cmd/CmdParser';
 import { parseCnsText } from '../../parser/cns/CnsParser';
@@ -50,7 +51,7 @@ export async function loadCharacterFromDef(
 
   return {
     def,
-    cns: parseCnsText(cnsText),
+    cns: mergeCnsDocuments(parseCnsText(cnsText), parseCnsText(cmdText)),
     air: parseAirText(airText),
     cmd: parseCmdText(cmdText),
     sprites,
@@ -88,6 +89,13 @@ export function resolveAssetPath(basePath: string, relativePath: string): string
   }
 
   return `${basePath.replace(/\/$/, '')}/${relativePath.replace(/^\.\//, '')}`;
+}
+
+export function mergeCnsDocuments(base: CnsDocument, extra: CnsDocument): CnsDocument {
+  return {
+    states: [...base.states, ...extra.states],
+    metadataSections: [...base.metadataSections, ...extra.metadataSections],
+  };
 }
 
 async function loadCharacterPalettes(
