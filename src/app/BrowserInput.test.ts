@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BrowserInput } from './BrowserInput';
+import { BrowserInput, keysToP1Input, keysToP2Input } from './BrowserInput';
 
 describe('BrowserInput', () => {
   it('tracks pressed keys', () => {
@@ -27,5 +27,23 @@ describe('BrowserInput', () => {
     expect(input.getPressedKeys().has('ArrowRight')).toBe(false);
 
     input.dispose();
+  });
+
+  it('maps P1 keys to MUGEN command buttons', () => {
+    const input = keysToP1Input(new Set(['ArrowDown', 'ArrowRight', 'KeyQ', 'KeyA']));
+
+    expect(input.down).toBe(true);
+    expect(input.right).toBe(true);
+    expect(input.attack).toBe(true);
+    expect(input.buttons).toEqual(['a', 'x']);
+  });
+
+  it('maps P2 keys to MUGEN command buttons', () => {
+    const input = keysToP2Input(new Set(['KeyJ', 'KeyK', 'KeyU', 'KeyF']));
+
+    expect(input.left).toBe(true);
+    expect(input.down).toBe(true);
+    expect(input.attack).toBe(true);
+    expect(input.buttons).toEqual(['a', 'x']);
   });
 });
