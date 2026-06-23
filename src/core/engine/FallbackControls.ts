@@ -9,6 +9,8 @@ export type FallbackControlInput = {
   projectile?: boolean;
 };
 
+const GROUND_Y = 285;
+
 export function applyFallbackControls(
   state: GameState,
   p1Input: FallbackControlInput,
@@ -29,6 +31,10 @@ function applyPlayerFallbackControl(player: PlayerState, input: FallbackControlI
   }
 
   if (player.moveType === 'A' || player.ctrl === false) {
+    return player;
+  }
+
+  if (player.y < GROUND_Y) {
     return player;
   }
 
