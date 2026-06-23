@@ -1,16 +1,28 @@
 import { decodePcx, tryReadVgaPalette } from '../../parser/pcx/PcxDecoder';
 import { findSffSprite, getSpriteData, parseSffV1 } from '../../parser/sff/SffParser';
 import type { SffDocument, SffSpriteNode } from '../../parser/sff/SffTypes';
-import { spriteKey } from './SpritePackLoader';
 import type { ImageDataSprite, ImageDataSpritePack } from './ImageDataSpriteTypes';
+import { spriteKey } from './SpritePackLoader';
 
-export function convertSffV1ToImageDataSpritePack(buffer: ArrayBuffer): ImageDataSpritePack {
-  return convertSffDocumentToImageDataSpritePack(parseSffV1(buffer));
+export type SffSpritePackConverterOptions = {
+  externalPalette?: Uint8Array;
+  preferExternalPalette?: boolean;
+  paletteIndexOrder?: 'normal' | 'reversed';
+};
+
+export function convertSffV1ToImageDataSpritePack(
+  buffer: ArrayBuffer,
+  options: SffSpritePackConverterOptions = {},
+): ImageDataSpritePack {
+  return convertSffDocumentToImageDataSpritePack(parseSffV1(buffer), options);
 }
 
-export function convertSffDocumentToImageDataSpritePack(document: SffDocument): ImageDataSpritePack {
+export function convertSffDocumentToImageDataSpritePack(
+  document: SffDocument,
+  options: SffSpritePackConverterOptions = {},
+): ImageDataSpritePack {
   const sprites = new Map<string, ImageDataSprite>();
-  const sharedPalette = findSharedPalette(document);
+  const sharedPalette = options.externalPalette ?? findSharedPalette(document);
 
   for (const sprite of document.sprites) {
     const sourceSprite = resolveLinkedSprite(document, sprite);
@@ -23,7 +35,11 @@ export function convertSffDocumentToImageDataSpritePack(document: SffDocument): 
       continue;
     }
 
-    const pcx = decodePcx(rawData, { externalPalette: sharedPalette ?? undefined });
+    const pcx = decodePcx(rawData, {
+      externalPalette: sharedPalette ?? undefined,
+      preferExternalPalette: options.preferExternalPalette,
+      paletteIndexOrder: options.paletteIndexOrder,
+    });
 
     sprites.set(spriteKey(sprite.groupNo, sprite.imageNo), {
       groupNo: sprite.groupNo,
