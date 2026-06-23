@@ -12,6 +12,24 @@ describe('CommandMatcher', () => {
     ]);
   });
 
+  it('keeps lowercase b as a button and uppercase B as back direction', () => {
+    expect(parseCommandTokens('b')).toEqual([
+      { kind: 'button', value: 'b', hold: false },
+    ]);
+
+    expect(parseCommandTokens('B')).toEqual([
+      { kind: 'direction', value: 'B', hold: false },
+    ]);
+  });
+
+  it('does not match button b from holding back', () => {
+    const buffer = new InputBuffer();
+    buffer.push({ left: true, right: false, up: false, down: false, attack: false });
+
+    expect(matchesCommand({ name: 'b', command: 'b', time: 1 }, buffer.getFrames())).toBe(false);
+    expect(matchesCommand({ name: 'holdback', command: '/$B', time: 1 }, buffer.getFrames())).toBe(true);
+  });
+
   it('parses MUGEN release and hold modifiers', () => {
     expect(parseCommandTokens('~D, /$F, x+y')).toEqual([
       { kind: 'direction', value: 'D', hold: false },
