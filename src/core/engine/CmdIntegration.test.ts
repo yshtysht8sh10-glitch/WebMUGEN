@@ -25,6 +25,13 @@ trigger1 = command = "QCF_x"
 value = 300
 ctrl = 1
 
+[StateDef 11]
+type = C
+movetype = I
+physics = C
+anim = 11
+ctrl = 1
+
 [StateDef 20]
 type = S
 movetype = I
@@ -77,7 +84,7 @@ time = 20
     state = stepGameByCns(state, cns, {
       p1: { left: false, right: false, down: true, up: false, attack: false },
     }, undefined, cmd);
-    expect(state.players[0].stateNo).toBe(0);
+    expect(state.players[0].stateNo).toBe(11);
 
     state = stepGameByCns(state, cns, {
       p1: { left: false, right: true, down: true, up: false, attack: false },
