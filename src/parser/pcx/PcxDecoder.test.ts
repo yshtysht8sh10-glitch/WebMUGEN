@@ -96,6 +96,20 @@ describe('PcxDecoder', () => {
     expect(Array.from(image.rgbaPixels.slice(0, 4))).toEqual([10, 11, 12, 255]);
   });
 
+  it('can prefer an external ACT palette over an embedded PCX palette', () => {
+    const externalPalette = createPalette();
+    externalPalette[3] = 101;
+    externalPalette[4] = 102;
+    externalPalette[5] = 103;
+
+    const image = decodePcx(createFake8BitPcx(true), {
+      externalPalette,
+      preferExternalPalette: true,
+    });
+
+    expect(Array.from(image.rgbaPixels.slice(0, 4))).toEqual([101, 102, 103, 255]);
+  });
+
   it('throws when palette is missing and no external palette is provided', () => {
     expect(() => decodePcx(createFake8BitPcx(false))).toThrow('PCX VGA palette marker is missing.');
   });
