@@ -6,6 +6,8 @@ const VGA_PALETTE_SIZE = 256 * 3;
 
 export type DecodePcxOptions = {
   externalPalette?: Uint8Array;
+  preferExternalPalette?: boolean;
+  paletteIndexOrder?: 'normal' | 'reversed';
 };
 
 export function decodePcx(buffer: Uint8Array | ArrayBuffer, options: DecodePcxOptions = {}): PcxImage {
@@ -15,7 +17,10 @@ export function decodePcx(buffer: Uint8Array | ArrayBuffer, options: DecodePcxOp
   validateSupportedPcxHeader(header, bytes);
 
   const embeddedPalette = tryReadVgaPalette(bytes);
-  const palette = embeddedPalette ?? normalizeExternalPalette(options.externalPalette);
+  const externalPalette = normalizeExternalPalette(options.externalPalette);
+  const palette = options.preferExternalPalette
+    ? externalPalette ?? embeddedPalette
+    : embeddedPalette ?? externalPalette;
 
   if (!palette) {
     throw new Error('PCX VGA palette marker is missing.');
@@ -25,7 +30,7 @@ export function decodePcx(buffer: Uint8Array | ArrayBuffer, options: DecodePcxOp
   const imageDataEnd = embeddedPalette ? bytes.length - 1 - VGA_PALETTE_SIZE : bytes.length;
   const decoded = decodeRle(bytes.subarray(imageDataStart, imageDataEnd));
   const indexedPixels = extractIndexedPixels(decoded, header);
-  const rgbaPixels = indexedToRgba(indexedPixels, palette);
+  const rgbaPixels = indexedToRgba(indexedPixels, palette, options.paletteIndexOrder ?? 'normal');
 
   return {
     header,
@@ -159,17 +164,23 @@ function extractIndexedPixels(decoded: Uint8Array, header: PcxHeader): Uint8Arra
   return pixels;
 }
 
-function indexedToRgba(indexedPixels: Uint8Array, palette: Uint8Array): Uint8ClampedArray {
+function indexedToRgba(
+  indexedPixels: Uint8Array,
+  palette: Uint8Array,
+  paletteIndexOrder: 'normal' | 'reversed',
+): Uint8ClampedArray {
   const rgba = new Uint8ClampedArray(indexedPixels.length * 4);
 
   for (let i = 0; i < indexedPixels.length; i += 1) {
-    const paletteIndex = indexedPixels[i] * 3;
+    const sourceIndex = indexedPixels[i];
+    const colorIndex = paletteIndexOrder === 'reversed' ? 255 - sourceIndex : sourceIndex;
+    const paletteIndex = colorIndex * 3;
     const rgbaIndex = i * 4;
 
     rgba[rgbaIndex] = palette[paletteIndex];
     rgba[rgbaIndex + 1] = palette[paletteIndex + 1];
     rgba[rgbaIndex + 2] = palette[paletteIndex + 2];
-    rgba[rgbaIndex + 3] = indexedPixels[i] === 0 ? 0 : 255;
+    rgba[rgbaIndex + 3] = sourceIndex === 0 ? 0 : 255;
   }
 
   return rgba;
