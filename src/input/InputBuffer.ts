@@ -24,6 +24,17 @@ export class InputBuffer {
     return this.frames;
   }
 
+  clone(): InputBuffer {
+    const clone = new InputBuffer(this.maxFrames);
+    clone.frames.push(
+      ...this.frames.map((frame) => ({
+        direction: frame.direction,
+        buttons: new Set(frame.buttons),
+      })),
+    );
+    return clone;
+  }
+
   clear(): void {
     this.frames.length = 0;
   }
