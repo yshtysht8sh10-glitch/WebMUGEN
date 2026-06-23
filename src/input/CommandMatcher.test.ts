@@ -12,6 +12,15 @@ describe('CommandMatcher', () => {
     ]);
   });
 
+  it('parses MUGEN release and hold modifiers', () => {
+    expect(parseCommandTokens('~D, /$F, x+y')).toEqual([
+      { kind: 'direction', value: 'D', hold: false },
+      { kind: 'direction', value: 'F', hold: true },
+      { kind: 'button', value: 'x', hold: false },
+      { kind: 'button', value: 'y', hold: false },
+    ]);
+  });
+
   it('parses simultaneous command step', () => {
     expect(parseCommandSteps('/F+/U')).toEqual([
       {
@@ -52,6 +61,27 @@ describe('CommandMatcher', () => {
     expect(matchesCommand({ name: 'qcf_a', command: 'D,DF,F,a', time: 15 }, buffer.getFrames())).toBe(
       true,
     );
+  });
+
+  it('matches KFM-style quarter-circle x command', () => {
+    const buffer = new InputBuffer(20);
+
+    buffer.push({ left: false, right: false, up: false, down: true, attack: false });
+    buffer.push({ left: false, right: true, up: false, down: true, attack: false });
+    buffer.push({ left: false, right: true, up: false, down: false, attack: false });
+    buffer.push({ left: false, right: false, up: false, down: false, attack: false, buttons: ['x'] });
+
+    expect(matchesCommand({ name: 'QCF_x', command: '~D, DF, F, x', time: 15 }, buffer.getFrames())).toBe(
+      true,
+    );
+  });
+
+  it('matches hold-down plus button command', () => {
+    const buffer = new InputBuffer(20);
+
+    buffer.push({ left: false, right: false, up: false, down: true, attack: false, buttons: ['a'] });
+
+    expect(matchesCommand({ name: 'down_a', command: '/$D,a', time: 1 }, buffer.getFrames())).toBe(true);
   });
 
   it('matches quarter-circle command when attack is pressed on down-forward', () => {
