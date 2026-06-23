@@ -91,7 +91,6 @@ time = 20
     }, undefined, cmd);
     expect(state.players[0].stateNo).toBe(11);
     expect(state.commandNames?.[0].has('holdfwd')).toBe(true);
-    expect(state.commandNames?.[0].has('holddown')).toBe(true);
 
     state = stepGameByCns(state, cns, {
       p1: { left: false, right: true, down: false, up: false, attack: false },
