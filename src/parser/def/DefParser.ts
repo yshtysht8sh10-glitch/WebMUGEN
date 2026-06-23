@@ -1,4 +1,4 @@
-import type { CharacterDefFiles, DefDocument, DefSection } from './DefTypes';
+import type { CharacterDefFiles, CharacterDefPalette, DefDocument, DefSection } from './DefTypes';
 
 export function parseDefText(text: string): DefDocument {
   const sections: DefSection[] = [];
@@ -50,12 +50,21 @@ export function getCharacterDefFiles(document: DefDocument): CharacterDefFiles {
   }
 
   const st: string[] = [];
+  const palettes: CharacterDefPalette[] = [];
 
   for (const [key, value] of files.values.entries()) {
     if (key === 'st' || /^st\d+$/.test(key)) {
       st.push(value);
+      continue;
+    }
+
+    const paletteMatch = key.match(/^pal(\d+)$/);
+    if (paletteMatch) {
+      palettes.push({ slot: Number(paletteMatch[1]), file: value });
     }
   }
+
+  palettes.sort((left, right) => left.slot - right.slot);
 
   return {
     cmd: files.values.get('cmd'),
@@ -64,6 +73,7 @@ export function getCharacterDefFiles(document: DefDocument): CharacterDefFiles {
     sprite: files.values.get('sprite'),
     anim: files.values.get('anim'),
     sound: files.values.get('sound'),
+    ...(palettes.length > 0 ? { palettes } : {}),
   };
 }
 
