@@ -46,7 +46,12 @@ export function matchesCommand(command: CmdCommand, frames: readonly InputFrame[
       continue;
     }
 
-    const foundIndex = findStep(step, searchFrames, frameIndex);
+    const foundIndex = findStep(
+      step,
+      searchFrames,
+      frameIndex,
+      shouldRequireFreshRepeatedDirection(step, steps[stepIndex + 1]),
+    );
 
     if (foundIndex < 0) {
       return false;
@@ -85,9 +90,10 @@ function findStep(
   step: CommandStep,
   frames: readonly InputFrame[],
   startIndex: number,
+  requireFreshDirection: boolean,
 ): number {
   for (let index = startIndex; index < frames.length; index += 1) {
-    if (stepMatchesFrame(step, frames[index])) {
+    if (stepMatchesFrame(step, frames[index]) && (!requireFreshDirection || isFreshDirectionStep(step, frames, index))) {
       return index;
     }
 
@@ -126,6 +132,26 @@ function canShareFrame(previousDirectionStep: CommandStep, laterStep: CommandSte
   const laterHasButton = laterStep.tokens.some((token) => token.kind === 'button');
 
   return previousIsDirectionOnly && laterHasButton;
+}
+
+function shouldRequireFreshRepeatedDirection(step: CommandStep, laterStep: CommandStep | undefined): boolean {
+  const direction = singleNonHoldDirection(step);
+  const laterDirection = laterStep ? singleNonHoldDirection(laterStep) : null;
+  return direction !== null && direction === laterDirection;
+}
+
+function isFreshDirectionStep(step: CommandStep, frames: readonly InputFrame[], index: number): boolean {
+  const direction = singleNonHoldDirection(step);
+  if (!direction) return true;
+
+  const newerFrame = frames[index - 1];
+  return !newerFrame || !directionContains(newerFrame.direction, direction);
+}
+
+function singleNonHoldDirection(step: CommandStep): DirectionToken | null {
+  if (step.tokens.length !== 1) return null;
+  const [token] = step.tokens;
+  return token.kind === 'direction' && !token.hold ? token.value : null;
 }
 
 function directionContains(actual: DirectionToken, expected: DirectionToken): boolean {
