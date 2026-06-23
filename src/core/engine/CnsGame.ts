@@ -6,6 +6,7 @@ import { resolveCommands } from '../../input/CommandResolver';
 import { getAnimationLength } from '../animation/AnimationPlayer';
 import { resolveClsnHits } from '../collision/CollisionResolver';
 import { resolveProjectileHits, stepProjectiles } from '../projectile/ProjectileSystem';
+import { applyFallbackControls } from './FallbackControls';
 import { stepPlayerByCnsWithEvents } from './CnsStateMachine';
 import { resolveSimpleHits } from './SimpleCollision';
 import type { FrameInput, GameState, PlayerInput, PlayerState } from './types';
@@ -17,29 +18,28 @@ export function stepGameByCns(
   airDocument?: AirDocument,
   cmdDocument?: CmdDocument,
 ): GameState {
-  const p1CommandInput = attachCommands(input.p1, cmdDocument, current.commandBuffers?.[0]);
-  const p2CommandInput = attachCommands(
-    input.p2 ?? { left: false, right: false, up: false, down: false, attack: false },
-    cmdDocument,
-    current.commandBuffers?.[1],
-  );
+  const p1RawInput = input.p1;
+  const p2RawInput = input.p2 ?? { left: false, right: false, up: false, down: false, attack: false };
+  const p1CommandInput = attachCommands(p1RawInput, cmdDocument, current.commandBuffers?.[0]);
+  const p2CommandInput = attachCommands(p2RawInput, cmdDocument, current.commandBuffers?.[1]);
+  const controlledState = applyFallbackControls(current, p1CommandInput.input, p2CommandInput.input);
 
   const p1Result = stepPlayerByCnsWithEvents(
-    faceOpponent(current.players[0], current.players[1]),
+    faceOpponent(controlledState.players[0], controlledState.players[1]),
     document,
     {
       input: p1CommandInput.input,
-      animLength: getAnimLength(current.players[0], airDocument),
+      animLength: getAnimLength(controlledState.players[0], airDocument),
       moveHit: false,
     },
   );
 
   const p2Result = stepPlayerByCnsWithEvents(
-    faceOpponent(current.players[1], current.players[0]),
+    faceOpponent(controlledState.players[1], controlledState.players[0]),
     document,
     {
       input: p2CommandInput.input,
-      animLength: getAnimLength(current.players[1], airDocument),
+      animLength: getAnimLength(controlledState.players[1], airDocument),
       moveHit: false,
     },
   );
