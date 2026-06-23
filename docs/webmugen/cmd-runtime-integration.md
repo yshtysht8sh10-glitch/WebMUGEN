@@ -42,12 +42,14 @@ The integration test `src/core/engine/CmdIntegration.test.ts` covers this buffer
 
 ## Runtime State
 
-`GameState` carries command runtime data:
+`GameState` can carry command runtime data after `stepGameByCns()` has run:
 
 ```ts
 commandBuffers?: [InputBuffer, InputBuffer];
 commandNames?: [ReadonlySet<string>, ReadonlySet<string>];
 ```
+
+`createInitialGameState()` does not need to eagerly allocate these fields. `stepGameByCns()` initializes them when missing.
 
 `commandBuffers` preserve per-player input history across calls to `stepGameByCns()`. This is required for multi-step commands such as quarter-circle motions.
 
