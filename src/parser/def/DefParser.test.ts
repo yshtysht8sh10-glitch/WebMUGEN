@@ -42,4 +42,19 @@ sound = kfm.snd
       sound: 'kfm.snd',
     });
   });
+
+  it('extracts sorted palette file references', () => {
+    const doc = parseDefText(`
+[Files]
+pal6 = kfm.act
+pal1 = kfm6.act
+pal2 = kfm4.act
+`);
+
+    expect(getCharacterDefFiles(doc).palettes).toEqual([
+      { slot: 1, file: 'kfm6.act' },
+      { slot: 2, file: 'kfm4.act' },
+      { slot: 6, file: 'kfm.act' },
+    ]);
+  });
 });
