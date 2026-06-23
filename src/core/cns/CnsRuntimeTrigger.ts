@@ -38,7 +38,7 @@ export function evaluateCnsRuntimeTrigger(
   if (stateNoMatch) return compareNumber(context.player.stateNo, stateNoMatch[1], Number(stateNoMatch[2]));
 
   const powerMatch = trimmed.match(/^power\s*(=|!=|>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)$/);
-  if (powerMatch) return compareNumber(context.player.power ?? 0, powerMatch[1], Number(powerMatch[2]));
+  if (powerMatch) return compareNumber(readOptionalPower(context.player), powerMatch[1], Number(powerMatch[2]));
 
   const posMatch = trimmed.match(/^pos\s+([xy])\s*(=|!=|>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)$/);
   if (posMatch) {
@@ -133,4 +133,8 @@ function compareString(actual: string, operator: string, expected: string): bool
     case '!=': return actual.toUpperCase() !== expected;
     default: return false;
   }
+}
+
+function readOptionalPower(player: PlayerState): number {
+  return (player as PlayerState & { power?: number }).power ?? 0;
 }
