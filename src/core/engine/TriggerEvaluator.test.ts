@@ -30,6 +30,24 @@ describe('evaluateTriggerAsBoolean', () => {
     ).toBe(true);
   });
 
+  it('evaluates command names case-insensitively', () => {
+    const player = createInitialGameState().players[0];
+
+    expect(
+      evaluateTriggerAsBoolean(parseTriggerExpression('command = "QCF_A"'), {
+        player,
+        input: {
+          left: false,
+          right: false,
+          attack: false,
+          commandNames: new Set(['qcf_a']),
+        },
+        animLength: 10,
+        moveHit: false,
+      }),
+    ).toBe(true);
+  });
+
   it('evaluates ctrl shorthand', () => {
     const player = createInitialGameState().players[0];
 
