@@ -82,6 +82,34 @@ P2: F/G/H -> a/b/c, U/O/P -> x/y/z
 
 If the UI constructs `PlayerInput` manually, it must set `buttons` for non-`a` buttons. Without that, commands such as `QCF_x` cannot match.
 
+## CMD-Derived Control Help
+
+Static help text such as:
+
+```text
+P1: ← / → 移動, ↑ ジャンプ, A 攻撃
+```
+
+should be replaced by CMD-derived help where possible.
+
+Use:
+
+```ts
+formatCmdControlHelp(character.cmd)
+```
+
+from `src/app/CmdControlHelp.ts` to generate display lines from the loaded `.cmd` file.
+
+Example output:
+
+```text
+QCF_x: ↓, ↓→, →, x
+FF: →, →
+down_a: ↓, a
+```
+
+This avoids hard-coding controls that do not match the current character. The UI may still show a short key-map legend separately, but move/command help should come from CMD.
+
 ## CMD Modifiers
 
 The live matcher under `src/input/CommandMatcher.ts` handles common MUGEN modifiers:
@@ -144,6 +172,10 @@ Evaluates CNS trigger expressions. For `command = "..."`, it checks `PlayerInput
 
 Tracks pressed browser keys and exposes `keysToP1Input()` / `keysToP2Input()` helpers. These helpers should be used by the app layer so CMD button names are available to the engine.
 
+### `src/app/CmdControlHelp.ts`
+
+Formats useful move/command help from `CmdDocument`. This is the intended replacement for hard-coded move help text.
+
 ### `src/core/cmd/*`
 
 Contains the newer typed command runtime path and diagnostics. This path is useful for future cleanup and deeper command tracing, but the current live game-loop integration still uses `src/input/*`.
@@ -161,6 +193,8 @@ Contains the newer typed command runtime path and diagnostics. This path is usef
   - cloning does not mutate the original buffer
 - `src/app/BrowserInput.test.ts`
   - browser keys map to MUGEN button names
+- `src/app/CmdControlHelp.test.ts`
+  - command help is generated from CMD definitions
 - `src/core/engine/TriggerEvaluator.test.ts`
   - command triggers remain case-insensitive
 
