@@ -1,6 +1,6 @@
 import type { GameState, PlayerState } from './types';
 
-export const DEFAULT_GROUND_Y = 360;
+export const DEFAULT_GROUND_Y = 285;
 
 export function clampPlayersToGround(
   state: GameState,
