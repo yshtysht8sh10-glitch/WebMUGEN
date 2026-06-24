@@ -158,6 +158,76 @@ ctrl = 1
     expect(character.cns.states.find((state) => state.stateNo === 0)?.initialAnim).toBe(0);
   });
 
+  it('merges common1 command state controllers into character command state', async () => {
+    const textAssets = new Map<string, string>([
+      [
+        '/chars/kfm/kfm.def',
+        `
+[Files]
+cmd = kfm.cmd
+cns = kfm.cns
+anim = kfm.air
+`,
+      ],
+      ['/chars/kfm/kfm.cns', '[StateDef 0]\ntype = S\nmovetype = I\nphysics = S\nanim = 0\nctrl = 1\n'],
+      ['/chars/kfm/kfm.air', 'Begin Action 0\n0,0, 0,0, 5\n'],
+      [
+        '/chars/kfm/kfm.cmd',
+        `
+[Command]
+name = "a"
+command = a
+
+[Statedef -1]
+
+[State -1, A]
+type = ChangeState
+triggerall = command = "a"
+trigger1 = ctrl
+value = 200
+`,
+      ],
+      [
+        '/chars/common1.cns',
+        `
+[Statedef -1]
+
+[State -1, Jump]
+type = ChangeState
+triggerall = command = "holdup"
+trigger1 = ctrl
+value = 40
+
+[StateDef 40]
+type = A
+movetype = I
+physics = A
+anim = 40
+ctrl = 0
+`,
+      ],
+    ]);
+
+    const fetcher: CharacterAssetFetcher = {
+      async text(path) {
+        const asset = textAssets.get(path);
+        if (asset === undefined) {
+          throw new Error(`missing text asset: ${path}`);
+        }
+        return asset;
+      },
+      async arrayBuffer() {
+        throw new Error('sff should not be loaded in this test');
+      },
+    };
+
+    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', fetcher);
+    const commandState = character.cns.states.find((state) => state.stateNo === -1);
+
+    expect(character.cns.states.map((state) => state.stateNo)).toEqual([0, -1, 40]);
+    expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([200, 40]);
+  });
+
   it('loads ACT palette assets declared by DEF pal entries', async () => {
     const paletteBytes = new Uint8Array([1, 2, 3, 4, 5, 6]);
     const textAssets = new Map<string, string>([
