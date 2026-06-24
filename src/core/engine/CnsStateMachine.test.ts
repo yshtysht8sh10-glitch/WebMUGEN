@@ -104,4 +104,52 @@ x = 8
 
     expect(nextPlayer.x).toBe(player.x + 8);
   });
+
+  it('transitions common jump air states to landing state 52 on ground contact', () => {
+    const document = parseCnsText(`
+[StateDef 50]
+type = A
+movetype = I
+physics = A
+anim = 40
+ctrl = 0
+
+[StateDef 52]
+type = S
+movetype = I
+physics = S
+anim = 47
+ctrl = 0
+`);
+
+    const player = {
+      ...createInitialGameState().players[0],
+      stateNo: 50,
+      stateTime: 12,
+      animNo: 40,
+      animTime: 12,
+      stateType: 'A' as const,
+      physics: 'A' as const,
+      ctrl: false,
+      y: 284.8,
+      vy: 2,
+    };
+
+    const nextPlayer = stepPlayerByCns(player, document, {
+      input: { left: false, right: false, attack: false },
+      animLength: 60,
+      moveHit: false,
+    });
+
+    expect(nextPlayer).toMatchObject({
+      stateNo: 52,
+      stateTime: 0,
+      animNo: 47,
+      animTime: 0,
+      stateType: 'S',
+      physics: 'S',
+      y: 285,
+      vy: 0,
+    });
+  });
 });
