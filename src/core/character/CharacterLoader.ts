@@ -1,4 +1,4 @@
-import type { CnsDocument } from '../../mugen/common/cnsTypes';
+import type { CnsDocument, CnsStateController, CnsStateDefinition } from '../../mugen/common/cnsTypes';
 import { parseAirText } from '../../parser/air/AirParser';
 import { parseCmdText } from '../../parser/cmd/CmdParser';
 import type { CmdDocument } from '../../parser/cmd/CmdTypes';
@@ -125,7 +125,10 @@ export function mergeMissingCnsStates(base: CnsDocument, common: CnsDocument): C
 
     return {
       ...state,
-      controllers: [...state.controllers, ...commonCommandState.controllers],
+      controllers: [
+        ...state.controllers,
+        ...filterCommonCommandControllers(state, commonCommandState.controllers),
+      ],
     };
   });
 
@@ -135,6 +138,33 @@ export function mergeMissingCnsStates(base: CnsDocument, common: CnsDocument): C
     states: [...states, ...missingCommonStates],
     metadataSections: [...base.metadataSections, ...common.metadataSections],
   };
+}
+
+function filterCommonCommandControllers(
+  characterCommandState: CnsStateDefinition,
+  commonControllers: readonly CnsStateController[],
+): CnsStateController[] {
+  const characterCommandNames = collectPositiveCommandTriggerNames(characterCommandState.controllers);
+
+  return commonControllers.filter((controller) => {
+    const commonCommandNames = collectPositiveCommandTriggerNames([controller]);
+    return !commonCommandNames.some((commandName) => characterCommandNames.has(commandName));
+  });
+}
+
+function collectPositiveCommandTriggerNames(controllers: readonly CnsStateController[]): Set<string> {
+  const names = new Set<string>();
+
+  for (const controller of controllers) {
+    for (const trigger of controller.triggers) {
+      const match = trigger.expression.match(/^\s*command\s*=\s*"([^"]+)"\s*$/i);
+      if (match) {
+        names.add(match[1].toLowerCase());
+      }
+    }
+  }
+
+  return names;
 }
 
 function mergeCmdDocuments(character: CmdDocument, commonDocuments: readonly CmdDocument[]): CmdDocument {
