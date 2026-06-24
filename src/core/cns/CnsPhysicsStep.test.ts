@@ -40,13 +40,13 @@ describe('CnsPhysicsStep', () => {
     });
   });
 
-  it('transitions common jump state 50 to landing state 52 on ground contact', () => {
+  it('transitions any physics A state to landing state 52 on ground contact', () => {
     const cns = parseCnsText(`
-[Statedef 50]
-type = A
+[Statedef 610]
+type = S
 movetype = I
 physics = A
-anim = 40
+anim = 610
 ctrl = 0
 
 [Statedef 52]
@@ -62,11 +62,11 @@ ctrl = 0
       players: [
         {
           ...state.players[0],
-          stateNo: 50,
+          stateNo: 610,
           stateTime: 32,
-          animNo: 40,
+          animNo: 610,
           animTime: 32,
-          stateType: 'A',
+          stateType: 'S',
           physics: 'A',
           ctrl: false,
           y: 284,
