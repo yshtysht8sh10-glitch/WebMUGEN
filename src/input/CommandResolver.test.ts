@@ -67,4 +67,27 @@ command = a
 
     expect(hasCommand(state, 'qcf_a')).toBe(true);
   });
+
+  it('adds raw up command aliases for CNS jump triggers', () => {
+    const buffer = new InputBuffer();
+    const input = { left: false, right: false, up: true, down: false, attack: false };
+    buffer.push(input);
+
+    const state = resolveCommands(document, input, buffer);
+
+    expect(hasCommand(state, 'holdup')).toBe(true);
+    expect(hasCommand(state, 'up')).toBe(true);
+  });
+
+  it('adds raw held diagonal command aliases', () => {
+    const buffer = new InputBuffer();
+    const input = { left: false, right: true, up: false, down: true, attack: false };
+    buffer.push(input);
+
+    const state = resolveCommands(document, input, buffer);
+
+    expect(hasCommand(state, 'holdfwd')).toBe(true);
+    expect(hasCommand(state, 'holddown')).toBe(true);
+    expect(hasCommand(state, 'holdfwd_down')).toBe(true);
+  });
 });
