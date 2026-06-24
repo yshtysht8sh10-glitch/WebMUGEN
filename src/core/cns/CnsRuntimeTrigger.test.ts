@@ -35,6 +35,14 @@ describe('CnsRuntimeTrigger', () => {
     })).toBe(false);
   });
 
+  it('evaluates common round and player status triggers', () => {
+    expect(evaluateCnsRuntimeTrigger('RoundState = 2', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('AILevel = 0', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('Alive', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('Var(59) = 0', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('SysVar(0) = 0', { player })).toBe(true);
+  });
+
   it('evaluates trigger groups as OR of AND groups', () => {
     expect(evaluateCnsRuntimeTriggerGroup([
       'trigger1: ctrl',
@@ -80,5 +88,21 @@ describe('CnsRuntimeTrigger', () => {
       player,
       commands: new Set(['x']),
     })).toBe(false);
+  });
+
+  it('evaluates a common-style jump trigger group', () => {
+    expect(evaluateCnsRuntimeTriggerGroup([
+      'triggerall: command = "holdup"',
+      'triggerall: command != "holddown"',
+      'triggerall: alive',
+      'triggerall: roundstate = 2',
+      'triggerall: ailevel = 0',
+      'triggerall: var(59) = 0',
+      'trigger1: statetype = S',
+      'trigger1: ctrl',
+    ], {
+      player,
+      commands: new Set(['holdup', 'up']),
+    })).toBe(true);
   });
 });
