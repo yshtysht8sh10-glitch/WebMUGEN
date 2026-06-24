@@ -10,6 +10,7 @@ export type FallbackControlInput = {
 };
 
 const GROUND_Y = 285;
+const FALLBACK_CONTROL_STATES = new Set([0, 11, 20]);
 
 export function applyFallbackControls(
   state: GameState,
@@ -35,6 +36,10 @@ function applyPlayerFallbackControl(player: PlayerState, input: FallbackControlI
   }
 
   if (player.y < GROUND_Y) {
+    return player;
+  }
+
+  if (!FALLBACK_CONTROL_STATES.has(player.stateNo)) {
     return player;
   }
 
