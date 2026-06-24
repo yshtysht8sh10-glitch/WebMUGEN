@@ -21,6 +21,8 @@ export function resolveCommands(
     }
   }
 
+  addRawDirectionCommandAliases(activeCommandNames, input);
+
   return {
     activeCommandNames,
   };
@@ -28,4 +30,42 @@ export function resolveCommands(
 
 export function hasCommand(commandState: CommandState, commandName: string): boolean {
   return commandState.activeCommandNames.has(commandName.toLowerCase());
+}
+
+function addRawDirectionCommandAliases(commandNames: Set<string>, input: PlayerInput): void {
+  if (input.up) {
+    commandNames.add('holdup');
+    commandNames.add('up');
+  }
+
+  if (input.down) {
+    commandNames.add('holddown');
+    commandNames.add('down');
+  }
+
+  if (input.right) {
+    commandNames.add('holdfwd');
+    commandNames.add('fwd');
+  }
+
+  if (input.left) {
+    commandNames.add('holdback');
+    commandNames.add('back');
+  }
+
+  if (input.right && input.up) {
+    commandNames.add('holdfwd_up');
+  }
+
+  if (input.left && input.up) {
+    commandNames.add('holdback_up');
+  }
+
+  if (input.right && input.down) {
+    commandNames.add('holdfwd_down');
+  }
+
+  if (input.left && input.down) {
+    commandNames.add('holdback_down');
+  }
 }
