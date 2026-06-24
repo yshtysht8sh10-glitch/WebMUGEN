@@ -308,6 +308,90 @@ ctrl = 0
     expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([200, 40]);
   });
 
+  it('prefers character command routes over common command routes', async () => {
+    const textAssets = new Map<string, string>([
+      [
+        '/chars/kfm/kfm.def',
+        `
+[Files]
+cmd = kfm.cmd
+cns = kfm.cns
+anim = kfm.air
+`,
+      ],
+      [
+        '/chars/kfm/kfm.cns',
+        `
+[StateDef 0]
+type = S
+movetype = I
+physics = S
+anim = 0
+ctrl = 1
+
+[StateDef 41]
+type = A
+movetype = I
+physics = A
+anim = 41
+ctrl = 0
+`,
+      ],
+      ['/chars/kfm/kfm.air', 'Begin Action 0\n0,0, 0,0, 5\n'],
+      [
+        '/chars/kfm/kfm.cmd',
+        `
+[Command]
+name = "holdup"
+command = /U
+
+[Statedef -1]
+
+[State -1, Character Jump]
+type = ChangeState
+triggerall = command = "holdup"
+trigger1 = ctrl
+value = 41
+`,
+      ],
+      [
+        '/chars/common.cmd',
+        `
+[Command]
+name = "holdup"
+command = /U
+
+[Statedef -1]
+
+[State -1, Common Jump]
+type = ChangeState
+triggerall = command = "holdup"
+trigger1 = ctrl
+value = 40
+`,
+      ],
+      ['/chars/common1.cns', '[StateDef 40]\ntype = A\nmovetype = I\nphysics = A\nanim = 40\nctrl = 0\n'],
+    ]);
+
+    const fetcher: CharacterAssetFetcher = {
+      async text(path) {
+        const asset = textAssets.get(path);
+        if (asset === undefined) {
+          throw new Error(`missing text asset: ${path}`);
+        }
+        return asset;
+      },
+      async arrayBuffer() {
+        throw new Error('sff should not be loaded in this test');
+      },
+    };
+
+    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', fetcher);
+    const commandState = character.cns.states.find((state) => state.stateNo === -1);
+
+    expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([41]);
+  });
+
   it('loads ACT palette assets declared by DEF pal entries', async () => {
     const paletteBytes = new Uint8Array([1, 2, 3, 4, 5, 6]);
     const textAssets = new Map<string, string>([
