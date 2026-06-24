@@ -1,6 +1,7 @@
 ; WebMUGEN common command routing
 ; This file provides baseline MUGEN-style movement ChangeState routes.
 ; Character CMD Statedef -1 routes take precedence when they define the same command.
+; Air-physics landing from jump states 40/50/51 into state 52 is handled by the CNS runtime.
 
 [Command]
 name = "holdup"
@@ -42,12 +43,6 @@ type = ChangeState
 triggerall = stateno = 40
 trigger1 = time > 0
 value = 50
-
-[State -1, Common Jump Falling]
-type = ChangeState
-triggerall = stateno = 50
-trigger1 = vel y >= 0
-value = 51
 
 [State -1, Common Crouch]
 type = ChangeState
