@@ -4,6 +4,8 @@ export type CnsRuntimeTriggerContext = {
   player: PlayerState;
   commands?: ReadonlySet<string>;
   animTime?: number;
+  roundState?: number;
+  aiLevel?: number;
 };
 
 export function evaluateCnsRuntimeTrigger(
@@ -16,6 +18,7 @@ export function evaluateCnsRuntimeTrigger(
   if (trimmed === '0') return false;
 
   if (trimmed === 'ctrl') return context.player.ctrl;
+  if (trimmed === 'alive') return context.player.life > 0;
 
   const commandMatch = trimmed.match(/^command\s*(=|!=)\s*\"([^\"]+)\"$/);
   if (commandMatch) {
@@ -36,6 +39,18 @@ export function evaluateCnsRuntimeTrigger(
 
   const stateNoMatch = trimmed.match(/^stateno\s*(=|!=|>=|<=|>|<)\s*(-?\d+)$/);
   if (stateNoMatch) return compareNumber(context.player.stateNo, stateNoMatch[1], Number(stateNoMatch[2]));
+
+  const roundStateMatch = trimmed.match(/^roundstate\s*(=|!=|>=|<=|>|<)\s*(-?\d+)$/);
+  if (roundStateMatch) return compareNumber(context.roundState ?? 2, roundStateMatch[1], Number(roundStateMatch[2]));
+
+  const aiLevelMatch = trimmed.match(/^ailevel\s*(=|!=|>=|<=|>|<)\s*(-?\d+)$/);
+  if (aiLevelMatch) return compareNumber(context.aiLevel ?? 0, aiLevelMatch[1], Number(aiLevelMatch[2]));
+
+  const varMatch = trimmed.match(/^var\s*\(\s*(\d+)\s*\)\s*(=|!=|>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)$/);
+  if (varMatch) return compareNumber(readPlayerVar(context.player, Number(varMatch[1])), varMatch[2], Number(varMatch[3]));
+
+  const sysVarMatch = trimmed.match(/^sysvar\s*\(\s*(\d+)\s*\)\s*(=|!=|>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)$/);
+  if (sysVarMatch) return compareNumber(readPlayerSysVar(context.player, Number(sysVarMatch[1])), sysVarMatch[2], Number(sysVarMatch[3]));
 
   const powerMatch = trimmed.match(/^power\s*(=|!=|>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)$/);
   if (powerMatch) return compareNumber(readOptionalPower(context.player), powerMatch[1], Number(powerMatch[2]));
@@ -137,4 +152,12 @@ function compareString(actual: string, operator: string, expected: string): bool
 
 function readOptionalPower(player: PlayerState): number {
   return (player as PlayerState & { power?: number }).power ?? 0;
+}
+
+function readPlayerVar(player: PlayerState, index: number): number {
+  return (player as PlayerState & { vars?: Record<number, number> }).vars?.[index] ?? 0;
+}
+
+function readPlayerSysVar(player: PlayerState, index: number): number {
+  return (player as PlayerState & { sysVars?: Record<number, number> }).sysVars?.[index] ?? 0;
 }
