@@ -28,6 +28,15 @@ trigger1 = statetype = S
 trigger1 = ctrl
 value = 40
 
+[State -1, Common Jump Velocity]
+type = VelSet
+triggerall = command = "holdup"
+triggerall = command != "holddown"
+trigger1 = stateno = 40
+trigger1 = time = 0
+x = 0
+y = -8.4
+
 [State -1, Common Crouch]
 type = ChangeState
 triggerall = command = "holddown"
