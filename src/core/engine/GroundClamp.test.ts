@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialGameState } from './GameState';
-import { clampPlayerToGround, clampPlayersToGround } from './GroundClamp';
+import { clampPlayerToGround, clampPlayersToGround, DEFAULT_GROUND_Y } from './GroundClamp';
 
 describe('GroundClamp', () => {
+  it('uses the stage floor top as the default ground y', () => {
+    expect(DEFAULT_GROUND_Y).toBe(285);
+  });
+
   it('does not change a player above the ground', () => {
     const state = createInitialGameState();
     const player = { ...state.players[0], y: 300, vy: 5, stateType: 'A' as const, physics: 'A' as const };
