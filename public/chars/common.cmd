@@ -37,6 +37,18 @@ trigger1 = time = 0
 x = 0
 y = -8.4
 
+[State -1, Common Jump Rising]
+type = ChangeState
+triggerall = stateno = 40
+trigger1 = time > 0
+value = 50
+
+[State -1, Common Jump Falling]
+type = ChangeState
+triggerall = stateno = 50
+trigger1 = vel y >= 0
+value = 51
+
 [State -1, Common Crouch]
 type = ChangeState
 triggerall = command = "holddown"
