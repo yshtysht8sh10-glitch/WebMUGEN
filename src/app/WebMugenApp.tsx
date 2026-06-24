@@ -45,6 +45,7 @@ import { resolveCommands } from '../input/CommandResolver';
 import { formatCmdControlHelp } from './CmdControlHelp';
 
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/kfm/kfm.def';
+const ENABLE_RUNTIME_FALLBACKS = false;
 
 export function WebMugenApp() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -82,7 +83,9 @@ export function WebMugenApp() {
       const loadedCharacter = loadResult.character ?? createSampleCharacterAssets();
       const character = {
         ...loadedCharacter,
-        cns: attachFallbackAttackStates(loadedCharacter.cns),
+        cns: ENABLE_RUNTIME_FALLBACKS
+          ? attachFallbackAttackStates(loadedCharacter.cns)
+          : loadedCharacter.cns,
       };
       cnsCoverageRef.current = analyzeCnsCoverage(character.cns);
       setCoverageDebugLines(formatCnsCoverageDebugOverlay(cnsCoverageRef.current));
@@ -92,8 +95,8 @@ export function WebMugenApp() {
 
       setLoadMessage(
         loadResult.source === 'def'
-          ? `Loaded character: ${DEFAULT_CHARACTER_DEF_PATH} sprites=${spriteCount} cnsStates=${character.cns.states.length}`
-          : `Sample character fallback: ${loadResult.errorMessage ?? 'unknown reason'} cnsStates=${character.cns.states.length}`,
+          ? `Loaded character: ${DEFAULT_CHARACTER_DEF_PATH} sprites=${spriteCount} cnsStates=${character.cns.states.length} fallback=${ENABLE_RUNTIME_FALLBACKS ? 'on' : 'off'}`
+          : `Sample character fallback: ${loadResult.errorMessage ?? 'unknown reason'} cnsStates=${character.cns.states.length} runtimeFallback=${ENABLE_RUNTIME_FALLBACKS ? 'on' : 'off'}`,
       );
 
       rendererRef.current = new CanvasRenderer(canvas, character.air, null, character.sprites);
@@ -134,7 +137,9 @@ export function WebMugenApp() {
           p1CommandBufferRef.current.clear();
           p2CommandBufferRef.current.clear();
         } else if (nextRoundState.phase === 'fight') {
-          nextState = applyFallbackControls(nextState, p1Input, p2Input);
+          if (ENABLE_RUNTIME_FALLBACKS) {
+            nextState = applyFallbackControls(nextState, p1Input, p2Input);
+          }
 
           const cnsResult = stepCnsStateRuntime(nextState, character.cns, {
             p1Commands,
@@ -144,10 +149,13 @@ export function WebMugenApp() {
           nextState = cnsResult.state;
           nextCnsTraces = cnsResult.traces;
 
-          nextState = stepFallbackMotion(nextState);
-          nextState = applyFallbackStageRules(nextState);
-          nextState = resolveFallbackHits(nextState, character.air);
-          nextState = applyFallbackHitRecovery(nextState);
+          if (ENABLE_RUNTIME_FALLBACKS) {
+            nextState = stepFallbackMotion(nextState);
+            nextState = applyFallbackStageRules(nextState);
+            nextState = resolveFallbackHits(nextState, character.air);
+            nextState = applyFallbackHitRecovery(nextState);
+          }
+
           nextRoundState = stepRoundState(nextRoundState, nextState);
           nextScore = updateRoundScore(nextScore, nextRoundState);
           nextFeedback = updateHitFeedback(nextFeedback, nextState);
