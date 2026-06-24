@@ -94,6 +94,25 @@ describe('FallbackControls', () => {
     expect(next.players[0].stateTime).toBe(5);
   });
 
+  it('does not interrupt CNS-driven dash states', () => {
+    const state = createInitialGameState();
+    const next = applyFallbackControls(
+      {
+        ...state,
+        players: [
+          { ...state.players[0], stateNo: 100, animNo: 100, stateType: 'S', physics: 'S', ctrl: true, vx: 5 },
+          state.players[1],
+        ],
+      },
+      { left: false, right: true, up: false, down: false, attack: false },
+      { left: false, right: false, up: false, down: false, attack: false },
+    );
+
+    expect(next.players[0].stateNo).toBe(100);
+    expect(next.players[0].animNo).toBe(100);
+    expect(next.players[0].vx).toBe(5);
+  });
+
   it('jumps with fallback controls', () => {
     const state = createInitialGameState();
     const next = applyFallbackControls(
