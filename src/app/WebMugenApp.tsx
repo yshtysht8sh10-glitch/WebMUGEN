@@ -37,6 +37,7 @@ import {
   stepCnsStateRuntime,
   type CnsRuntimeTrace,
 } from '../core/cns/CnsStateRuntime';
+import { stepCnsPhysicsMotion } from '../core/cns/CnsPhysicsStep';
 import { formatCnsRuntimeDebugOverlay } from './CnsRuntimeDebugOverlay';
 import { formatCnsCommandDebugOverlay } from './CnsCommandDebugOverlay';
 import { formatCnsCoverageDebugOverlay } from './CnsCoverageDebugOverlay';
@@ -154,6 +155,8 @@ export function WebMugenApp() {
             nextState = applyFallbackStageRules(nextState);
             nextState = resolveFallbackHits(nextState, character.air);
             nextState = applyFallbackHitRecovery(nextState);
+          } else {
+            nextState = stepCnsPhysicsMotion(nextState);
           }
 
           nextRoundState = stepRoundState(nextRoundState, nextState);
