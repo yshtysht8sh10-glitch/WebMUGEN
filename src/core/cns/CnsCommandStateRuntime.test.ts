@@ -128,4 +128,50 @@ anim = 40
     });
     expect(result.traces[0].executedControllers).toContain('ChangeState');
   });
+
+  it('runs common-style jump trigger conditions and changes to state 40', () => {
+    const cns = parseCnsText(`
+[Statedef -1]
+
+[State -1, Jump]
+type = ChangeState
+triggerall = command = "holdup"
+triggerall = command != "holddown"
+triggerall = alive
+triggerall = roundstate = 2
+triggerall = ailevel = 0
+triggerall = var(59) = 0
+trigger1 = statetype = S
+trigger1 = ctrl
+value = 40
+
+[Statedef 0]
+type = S
+movetype = I
+physics = S
+ctrl = 1
+anim = 0
+
+[Statedef 40]
+type = A
+movetype = I
+physics = A
+ctrl = 0
+anim = 40
+`);
+
+    const result = stepCnsStateRuntime(createInitialGameState(), cns, {
+      p1Commands: new Set(['holdup', 'up']),
+      p2Commands: new Set(),
+    });
+
+    expect(result.state.players[0]).toMatchObject({
+      stateNo: 40,
+      animNo: 40,
+      stateType: 'A',
+      physics: 'A',
+      ctrl: false,
+    });
+    expect(result.traces[0].executedControllers).toContain('ChangeState');
+  });
 });
