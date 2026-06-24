@@ -107,10 +107,23 @@ export function mergeCnsDocuments(base: CnsDocument, extra: CnsDocument): CnsDoc
 
 export function mergeMissingCnsStates(base: CnsDocument, common: CnsDocument): CnsDocument {
   const existingStateNos = new Set(base.states.map((state) => state.stateNo));
+  const commonCommandState = common.states.find((state) => state.stateNo === -1);
+
+  const states = base.states.map((state) => {
+    if (state.stateNo !== -1 || !commonCommandState) {
+      return state;
+    }
+
+    return {
+      ...state,
+      controllers: [...state.controllers, ...commonCommandState.controllers],
+    };
+  });
+
   const missingCommonStates = common.states.filter((state) => !existingStateNos.has(state.stateNo));
 
   return {
-    states: [...base.states, ...missingCommonStates],
+    states: [...states, ...missingCommonStates],
     metadataSections: [...base.metadataSections, ...common.metadataSections],
   };
 }
