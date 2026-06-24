@@ -16,6 +16,8 @@ export type StepPlayerByCnsResult = {
 const GROUND_Y = 285;
 const GROUND_FRICTION = 0.82;
 const AIR_GRAVITY = 0.45;
+const COMMON_JUMP_AIR_STATES = new Set([40, 50, 51]);
+const COMMON_JUMP_LAND_STATE = 52;
 
 export function stepPlayerByCns(
   player: PlayerState,
@@ -79,7 +81,7 @@ export function stepPlayerByCnsWithEvents(
 
   nextPlayer = applyPhysics(nextPlayer, velocityChanged, context.input);
   nextPlayer = applyVelocity(nextPlayer);
-  nextPlayer = clampToStage(nextPlayer);
+  nextPlayer = clampToStage(nextPlayer, document);
 
   return {
     player: {
@@ -139,16 +141,38 @@ function applyVelocity(player: PlayerState): PlayerState {
   };
 }
 
-function clampToStage(player: PlayerState): PlayerState {
+function clampToStage(player: PlayerState, document: CnsDocument): PlayerState {
   const clampedY = Math.max(0, Math.min(GROUND_Y, player.y));
   const landed = clampedY >= GROUND_Y && player.vy > 0;
-
-  return {
+  const clampedPlayer: PlayerState = {
     ...player,
     x: Math.max(20, Math.min(620, player.x)),
     y: clampedY,
     vy: landed ? 0 : player.vy,
-    stateType: landed && player.stateType === 'A' ? 'S' : player.stateType,
+  };
+
+  if (!landed) {
+    return clampedPlayer;
+  }
+
+  if (COMMON_JUMP_AIR_STATES.has(player.stateNo)) {
+    const landingState = findStateDefinition(document, COMMON_JUMP_LAND_STATE);
+    if (landingState) {
+      return applyStateDefDefaults(
+        {
+          ...clampedPlayer,
+          stateNo: COMMON_JUMP_LAND_STATE,
+          stateTime: -1,
+          animTime: -1,
+        },
+        landingState,
+      );
+    }
+  }
+
+  return {
+    ...clampedPlayer,
+    stateType: player.stateType === 'A' ? 'S' : player.stateType,
   };
 }
 
