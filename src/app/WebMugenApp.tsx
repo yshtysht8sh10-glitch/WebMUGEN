@@ -156,7 +156,7 @@ export function WebMugenApp() {
             nextState = resolveFallbackHits(nextState, character.air);
             nextState = applyFallbackHitRecovery(nextState);
           } else {
-            nextState = stepCnsPhysicsMotion(nextState);
+            nextState = stepCnsPhysicsMotion(nextState, character.cns);
           }
 
           nextRoundState = stepRoundState(nextRoundState, nextState);
