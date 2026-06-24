@@ -4,7 +4,6 @@ import { clampPlayerToGround, DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 
 const AIR_GRAVITY = 0.6;
 const GROUND_FRICTION = 0.82;
-const COMMON_JUMP_AIR_STATES = new Set([40, 50, 51]);
 const COMMON_JUMP_LAND_STATE = 52;
 
 export function stepCnsPhysicsMotion(state: GameState, cnsDocument?: CnsDocument | null): GameState {
@@ -31,9 +30,9 @@ function stepPlayerCnsPhysics(player: PlayerState): PlayerState {
     };
   }
 
-  const airborne = player.stateType === 'A' || player.physics === 'A';
-  const nextVy = airborne ? player.vy + AIR_GRAVITY : player.vy;
-  const nextVx = airborne ? player.vx : player.vx * GROUND_FRICTION;
+  const usesAirPhysics = player.physics === 'A';
+  const nextVy = usesAirPhysics ? player.vy + AIR_GRAVITY : player.vy;
+  const nextVx = usesAirPhysics ? player.vx : player.vx * GROUND_FRICTION;
 
   return {
     ...player,
@@ -54,11 +53,9 @@ function clampPlayerAfterCnsPhysics(
     return player;
   }
 
-  const landedFromCommonJump = COMMON_JUMP_AIR_STATES.has(player.stateNo)
-    && (player.stateType === 'A' || player.physics === 'A')
-    && player.vy >= 0;
+  const landedFromAirPhysics = player.physics === 'A' && player.vy >= 0;
 
-  if (landedFromCommonJump && cnsDocument) {
+  if (landedFromAirPhysics && cnsDocument) {
     const landingState = findStateDefinition(cnsDocument, COMMON_JUMP_LAND_STATE);
     if (landingState) {
       return applyStateDefHeader(
