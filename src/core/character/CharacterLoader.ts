@@ -148,7 +148,7 @@ function filterCommonCommandControllers(
 
   return commonControllers.filter((controller) => {
     const commonCommandNames = collectPositiveCommandTriggerNames([controller]);
-    return !commonCommandNames.some((commandName) => characterCommandNames.has(commandName));
+    return !Array.from(commonCommandNames).some((commandName) => characterCommandNames.has(commandName));
   });
 }
 
