@@ -1,12 +1,14 @@
 import type { CnsDocument } from '../../mugen/common/cnsTypes';
 import { parseAirText } from '../../parser/air/AirParser';
 import { parseCmdText } from '../../parser/cmd/CmdParser';
+import type { CmdDocument } from '../../parser/cmd/CmdTypes';
 import { parseCnsText } from '../../parser/cns/CnsParser';
 import { getCharacterDefFiles, parseDefText } from '../../parser/def/DefParser';
 import { convertSffV1ToImageDataSpritePack } from '../sprite/SffSpritePackConverter';
 import type { CharacterAssets, CharacterPaletteAsset } from './CharacterTypes';
 
 const COMMON_CNS_PATH = '/chars/common1.cns';
+const COMMON_CMD_PATHS = ['/chars/common.cmd', '/chars/common1.cmd'];
 
 export type CharacterAssetFetcher = {
   text(path: string): Promise<string>;
@@ -34,11 +36,12 @@ export async function loadCharacterFromDef(
     throw new Error('[Files] cmd is missing.');
   }
 
-  const [cnsText, airText, cmdText, commonCnsText, palettes] = await Promise.all([
+  const [cnsText, airText, cmdText, commonCnsText, commonCmdTexts, palettes] = await Promise.all([
     fetcher.text(resolveAssetPath(basePath, files.cns)),
     fetcher.text(resolveAssetPath(basePath, files.anim)),
     fetcher.text(resolveAssetPath(basePath, files.cmd)),
     loadOptionalText(COMMON_CNS_PATH, fetcher),
+    loadOptionalTexts(COMMON_CMD_PATHS, fetcher),
     loadCharacterPalettes(basePath, files.palettes ?? [], fetcher),
   ]);
 
@@ -52,7 +55,13 @@ export async function loadCharacterFromDef(
         })
       : null;
 
-  const characterCns = mergeCnsDocuments(parseCnsText(cnsText), parseCnsText(cmdText));
+  const characterCmd = parseCmdText(cmdText);
+  const commonCmdDocuments = commonCmdTexts.map(parseCmdText);
+  const commonCmdCnsDocuments = commonCmdTexts.map(parseCnsText);
+  const characterCns = commonCmdCnsDocuments.reduce(
+    (merged, commonCmdCns) => mergeMissingCnsStates(merged, commonCmdCns),
+    mergeCnsDocuments(parseCnsText(cnsText), parseCnsText(cmdText)),
+  );
 
   return {
     def,
@@ -60,7 +69,7 @@ export async function loadCharacterFromDef(
       ? mergeMissingCnsStates(characterCns, parseCnsText(commonCnsText))
       : characterCns,
     air: parseAirText(airText),
-    cmd: parseCmdText(cmdText),
+    cmd: mergeCmdDocuments(characterCmd, commonCmdDocuments),
     sprites,
     palettes,
   };
@@ -128,12 +137,33 @@ export function mergeMissingCnsStates(base: CnsDocument, common: CnsDocument): C
   };
 }
 
+function mergeCmdDocuments(character: CmdDocument, commonDocuments: readonly CmdDocument[]): CmdDocument {
+  const commandsByName = new Map<string, CmdDocument['commands'][number]>();
+
+  for (const document of commonDocuments) {
+    for (const command of document.commands) {
+      commandsByName.set(command.name.toLowerCase(), command);
+    }
+  }
+
+  for (const command of character.commands) {
+    commandsByName.set(command.name.toLowerCase(), command);
+  }
+
+  return { commands: Array.from(commandsByName.values()) };
+}
+
 async function loadOptionalText(path: string, fetcher: CharacterAssetFetcher): Promise<string | null> {
   try {
     return await fetcher.text(path);
   } catch {
     return null;
   }
+}
+
+async function loadOptionalTexts(paths: readonly string[], fetcher: CharacterAssetFetcher): Promise<string[]> {
+  const texts = await Promise.all(paths.map((path) => loadOptionalText(path, fetcher)));
+  return texts.filter((text): text is string => text !== null);
 }
 
 async function loadCharacterPalettes(
