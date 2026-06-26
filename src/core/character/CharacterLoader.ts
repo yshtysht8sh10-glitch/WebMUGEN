@@ -24,17 +24,9 @@ export async function loadCharacterFromDef(
   const files = getCharacterDefFiles(def);
   const basePath = getBasePath(defPath);
 
-  if (!files.cns) {
-    throw new Error('[Files] cns is missing.');
-  }
-
-  if (!files.anim) {
-    throw new Error('[Files] anim is missing.');
-  }
-
-  if (!files.cmd) {
-    throw new Error('[Files] cmd is missing.');
-  }
+  if (!files.cns) throw new Error('[Files] cns is missing.');
+  if (!files.anim) throw new Error('[Files] anim is missing.');
+  if (!files.cmd) throw new Error('[Files] cmd is missing.');
 
   const [cnsText, airText, cmdText, commonCnsText, commonCmdTexts, palettes] = await Promise.all([
     fetcher.text(resolveAssetPath(basePath, files.cns)),
@@ -46,14 +38,13 @@ export async function loadCharacterFromDef(
   ]);
 
   const selectedPalette = palettes[0]?.bytes;
-  const sprites =
-    files.sprite !== undefined
-      ? convertSffV1ToImageDataSpritePack(await fetcher.arrayBuffer(resolveAssetPath(basePath, files.sprite)), {
-          externalPalette: selectedPalette,
-          preferExternalPalette: selectedPalette !== undefined,
-          paletteIndexOrder: selectedPalette !== undefined ? 'reversed' : 'normal',
-        })
-      : null;
+  const sprites = files.sprite !== undefined
+    ? convertSffV1ToImageDataSpritePack(await fetcher.arrayBuffer(resolveAssetPath(basePath, files.sprite)), {
+        externalPalette: selectedPalette,
+        preferExternalPalette: selectedPalette !== undefined,
+        paletteIndexOrder: selectedPalette !== undefined ? 'reversed' : 'normal',
+      })
+    : null;
 
   const characterCmd = parseCmdText(cmdText);
   const commonCmdDocuments = commonCmdTexts.map(parseCmdText);
@@ -65,9 +56,7 @@ export async function loadCharacterFromDef(
 
   return {
     def,
-    cns: commonCnsText
-      ? mergeMissingCnsStates(characterCns, parseCnsText(commonCnsText))
-      : characterCns,
+    cns: commonCnsText ? mergeMissingCnsStates(characterCns, parseCnsText(commonCnsText)) : characterCns,
     air: parseAirText(airText),
     cmd: mergeCmdDocuments(characterCmd, commonCmdDocuments),
     sprites,
@@ -79,31 +68,20 @@ export function createHttpCharacterAssetFetcher(): CharacterAssetFetcher {
   return {
     async text(path: string) {
       const response = await fetch(path);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch text asset: ${path}`);
-      }
+      if (!response.ok) throw new Error(`Failed to fetch text asset: ${path}`);
       return response.text();
     },
-
     async arrayBuffer(path: string) {
       const response = await fetch(path);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch binary asset: ${path}`);
-      }
+      if (!response.ok) throw new Error(`Failed to fetch binary asset: ${path}`);
       return response.arrayBuffer();
     },
   };
 }
 
 export function resolveAssetPath(basePath: string, relativePath: string): string {
-  if (/^https?:\/\//i.test(relativePath) || relativePath.startsWith('/')) {
-    return relativePath;
-  }
-
-  if (!basePath) {
-    return relativePath;
-  }
-
+  if (/^https?:\/\//i.test(relativePath) || relativePath.startsWith('/')) return relativePath;
+  if (!basePath) return relativePath;
   return `${basePath.replace(/\/$/, '')}/${relativePath.replace(/^\.\//, '')}`;
 }
 
@@ -119,9 +97,7 @@ export function mergeMissingCnsStates(base: CnsDocument, common: CnsDocument): C
   const commonCommandState = common.states.find((state) => state.stateNo === -1);
 
   const states = base.states.map((state) => {
-    if (state.stateNo !== -1 || !commonCommandState) {
-      return state;
-    }
+    if (state.stateNo !== -1 || !commonCommandState) return state;
 
     return {
       ...state,
@@ -144,23 +120,23 @@ function filterCommonCommandControllers(
   characterCommandState: CnsStateDefinition,
   commonControllers: readonly CnsStateController[],
 ): CnsStateController[] {
-  const characterCommandNames = collectPositiveCommandTriggerNames(characterCommandState.controllers);
+  const characterChangeStateCommandNames = collectPositiveChangeStateCommandTriggerNames(characterCommandState.controllers);
 
   return commonControllers.filter((controller) => {
-    const commonCommandNames = collectPositiveCommandTriggerNames([controller]);
-    return !Array.from(commonCommandNames).some((commandName) => characterCommandNames.has(commandName));
+    const commonCommandNames = collectPositiveChangeStateCommandTriggerNames([controller]);
+    return !Array.from(commonCommandNames).some((commandName) => characterChangeStateCommandNames.has(commandName));
   });
 }
 
-function collectPositiveCommandTriggerNames(controllers: readonly CnsStateController[]): Set<string> {
+function collectPositiveChangeStateCommandTriggerNames(controllers: readonly CnsStateController[]): Set<string> {
   const names = new Set<string>();
 
   for (const controller of controllers) {
+    if (controller.type.toLowerCase() !== 'changestate') continue;
+
     for (const trigger of controller.triggers) {
       const match = trigger.expression.match(/^\s*command\s*=\s*"([^"]+)"\s*$/i);
-      if (match) {
-        names.add(match[1].toLowerCase());
-      }
+      if (match) names.add(match[1].toLowerCase());
     }
   }
 
@@ -171,14 +147,10 @@ function mergeCmdDocuments(character: CmdDocument, commonDocuments: readonly Cmd
   const commandsByName = new Map<string, CmdDocument['commands'][number]>();
 
   for (const document of commonDocuments) {
-    for (const command of document.commands) {
-      commandsByName.set(command.name.toLowerCase(), command);
-    }
+    for (const command of document.commands) commandsByName.set(command.name.toLowerCase(), command);
   }
 
-  for (const command of character.commands) {
-    commandsByName.set(command.name.toLowerCase(), command);
-  }
+  for (const command of character.commands) commandsByName.set(command.name.toLowerCase(), command);
 
   return { commands: Array.from(commandsByName.values()) };
 }
