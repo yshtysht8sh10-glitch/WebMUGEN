@@ -2,6 +2,7 @@
 ; This file provides baseline MUGEN-style movement ChangeState routes.
 ; Character CMD Statedef -1 routes take precedence when they define the same command.
 ; Physics integration is handled by the runtime, but common movement state routing lives here.
+; NOTE: current WebMUGEN trigger coordinates use the internal screen Y ground value 285.
 
 [Command]
 name = "holdup"
@@ -80,6 +81,6 @@ value = 20
 type = ChangeState
 triggerall = physics = A
 triggerall = vel y >= 0
-trigger1 = pos y >= 0
+trigger1 = pos y >= 285
 value = 52
 ctrl = 0
