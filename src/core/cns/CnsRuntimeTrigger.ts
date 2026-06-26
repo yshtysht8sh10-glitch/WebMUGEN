@@ -1,5 +1,4 @@
 import type { PlayerState } from '../engine/types';
-import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 
 export type CnsRuntimeTriggerContext = {
   player: PlayerState;
@@ -58,7 +57,7 @@ export function evaluateCnsRuntimeTrigger(
 
   const posMatch = trimmed.match(/^pos\s+([xy])\s*(=|!=|>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)$/);
   if (posMatch) {
-    const actual = posMatch[1] === 'x' ? context.player.x : toMugenPosY(context.player.y);
+    const actual = posMatch[1] === 'x' ? context.player.x : context.player.y;
     return compareNumber(actual, posMatch[2], Number(posMatch[3]));
   }
 
@@ -152,10 +151,6 @@ function compareString(actual: string, operator: string, expected: string): bool
     case '!=': return actual.toUpperCase() !== expected;
     default: return false;
   }
-}
-
-function toMugenPosY(screenY: number): number {
-  return screenY - DEFAULT_GROUND_Y;
 }
 
 function readOptionalPower(player: PlayerState): number {
