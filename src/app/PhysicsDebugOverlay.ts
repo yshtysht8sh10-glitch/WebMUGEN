@@ -1,0 +1,30 @@
+import type { GameState, PlayerState } from '../core/engine/types';
+
+export function formatPhysicsDebugOverlay(state: GameState): string[] {
+  return [
+    formatPlayerPhysicsDebug('p1', state.players[0]),
+    formatPlayerPhysicsDebug('p2', state.players[1]),
+  ];
+}
+
+function formatPlayerPhysicsDebug(label: string, player: PlayerState): string {
+  return [
+    `phys ${label}`,
+    `state=${player.stateNo}`,
+    `type=${player.stateType}`,
+    `physics=${player.physics}`,
+    `ctrl=${player.ctrl ? 1 : 0}`,
+    `pos=(${formatNumber(player.x)},${formatNumber(player.y)})`,
+    `vel=(${formatNumber(player.vx)},${formatNumber(player.vy)})`,
+    `time=${player.stateTime}`,
+    `anim=${player.animNo}:${player.animTime}`,
+  ].join(' ');
+}
+
+function formatNumber(value: number): string {
+  if (Number.isInteger(value)) {
+    return String(value);
+  }
+
+  return value.toFixed(2);
+}
