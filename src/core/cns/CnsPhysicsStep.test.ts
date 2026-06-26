@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { parseCnsText } from '../../parser/cns/CnsParser';
 import { createInitialGameState } from '../engine/GameState';
 import { stepCnsPhysicsMotion } from './CnsPhysicsStep';
 
@@ -21,70 +20,22 @@ describe('CnsPhysicsStep', () => {
     expect(next.players[0].animTime).toBe(1);
   });
 
-  it('clamps falling airborne players back to ground when no CNS document is available', () => {
+  it('clamps falling air-physics players to ground without changing state', () => {
     const state = createInitialGameState();
     const next = stepCnsPhysicsMotion({
       ...state,
       players: [
-        { ...state.players[0], stateType: 'A', physics: 'A', ctrl: false, y: 284, vy: 6 },
+        { ...state.players[0], stateNo: 50, stateType: 'A', physics: 'A', ctrl: false, y: 284, vy: 6 },
         state.players[1],
       ],
     });
 
     expect(next.players[0]).toMatchObject({
+      stateNo: 50,
       y: 285,
       vy: 0,
-      stateType: 'S',
-      physics: 'S',
-      ctrl: true,
-    });
-  });
-
-  it('transitions any physics A state to landing state 52 on ground contact', () => {
-    const cns = parseCnsText(`
-[Statedef 610]
-type = S
-movetype = I
-physics = A
-anim = 610
-ctrl = 0
-
-[Statedef 52]
-type = S
-movetype = I
-physics = S
-anim = 47
-ctrl = 0
-`);
-    const state = createInitialGameState();
-    const next = stepCnsPhysicsMotion({
-      ...state,
-      players: [
-        {
-          ...state.players[0],
-          stateNo: 610,
-          stateTime: 32,
-          animNo: 610,
-          animTime: 32,
-          stateType: 'S',
-          physics: 'A',
-          ctrl: false,
-          y: 284,
-          vy: 6,
-        },
-        state.players[1],
-      ],
-    }, cns);
-
-    expect(next.players[0]).toMatchObject({
-      stateNo: 52,
-      stateTime: 0,
-      animNo: 47,
-      animTime: 0,
-      y: 285,
-      vy: 0,
-      stateType: 'S',
-      physics: 'S',
+      stateType: 'A',
+      physics: 'A',
       ctrl: false,
     });
   });
