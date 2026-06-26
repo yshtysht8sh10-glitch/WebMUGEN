@@ -115,6 +115,26 @@ function stepPlayerCnsRuntime(
     }
   }
 
+  const commonStateDef = findStateDef(cnsDocument, -2);
+  if (commonStateDef) {
+    const commonResult = executeControllersForState(
+      nextPlayer,
+      commonStateDef,
+      cnsDocument,
+      input,
+      commands,
+    );
+    nextPlayer = commonResult.player;
+    trace.executedControllers.push(...commonResult.executedControllers);
+
+    if (nextPlayer.stateNo !== originalStateNo) {
+      trace.afterStateNo = nextPlayer.stateNo;
+      trace.afterAnimNo = nextPlayer.animNo;
+      trace.afterStateTime = nextPlayer.stateTime;
+      return { player: nextPlayer, trace };
+    }
+  }
+
   const stateDef = findStateDef(cnsDocument, nextPlayer.stateNo);
   trace.stateFound = Boolean(stateDef);
 
