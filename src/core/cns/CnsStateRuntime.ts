@@ -1,10 +1,4 @@
-import type {
-  CnsDocument,
-  CnsStateController,
-  CnsStateDefinition,
-  CnsTrigger,
-  CnsValue,
-} from '../../mugen/common/cnsTypes';
+import type { CnsDocument, CnsStateController, CnsStateDefinition, CnsTrigger, CnsValue } from '../../mugen/common/cnsTypes';
 import type { GameState, PlayerState } from '../engine/types';
 import { calculateMugenAnimTime } from '../animation/AnimationDuration';
 import { evaluateCnsRuntimeTriggerGroup } from './CnsRuntimeTrigger';
@@ -28,58 +22,28 @@ export type CnsRuntimeInput = {
   getAnimationDuration?: (animNo: number) => number | null;
 };
 
-export type CnsRuntimeResult = {
-  state: GameState;
-  traces: CnsRuntimeTrace[];
-};
+export type CnsRuntimeResult = { state: GameState; traces: CnsRuntimeTrace[] };
 
-export function stepCnsStateRuntime(
-  state: GameState,
-  cnsDocument?: CnsDocument | null,
-  input: CnsRuntimeInput = {},
-): CnsRuntimeResult {
-  if (!cnsDocument) {
-    return {
-      state,
-      traces: [
-        createMissingTrace(1, state.players[0], input),
-        createMissingTrace(2, state.players[1], input),
-      ],
-    };
-  }
+type ControllerResult = { player: PlayerState; executed: boolean; name: string };
 
-  const p1Result = stepPlayerCnsRuntime(state.players[0], 1, cnsDocument, input, input.p1Commands);
-  const intermediateState: GameState = {
-    ...state,
-    players: [p1Result.player, state.players[1]],
-  };
+export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, input: CnsRuntimeInput = {}): CnsRuntimeResult {
+  if (!cns) return { state, traces: [missingTrace(1, state.players[0], input), missingTrace(2, state.players[1], input)] };
 
-  const p2Result = stepPlayerCnsRuntime(
-    intermediateState.players[1],
-    2,
-    cnsDocument,
-    input,
-    input.p2Commands,
-  );
+  const p1 = stepPlayer(state.players[0], 1, cns, input, input.p1Commands);
+  const p2 = stepPlayer(state.players[1], 2, cns, input, input.p2Commands);
 
-  return {
-    state: {
-      ...intermediateState,
-      players: [intermediateState.players[0], p2Result.player],
-    },
-    traces: [p1Result.trace, p2Result.trace],
-  };
+  return { state: { ...state, players: [p1.player, p2.player] }, traces: [p1.trace, p2.trace] };
 }
 
-function stepPlayerCnsRuntime(
+function stepPlayer(
   player: PlayerState,
   playerId: 1 | 2,
-  cnsDocument: CnsDocument,
+  cns: CnsDocument,
   input: CnsRuntimeInput,
   commands?: ReadonlySet<string>,
 ): { player: PlayerState; trace: CnsRuntimeTrace } {
   const originalStateNo = player.stateNo;
-  const initialStateDef = findStateDef(cnsDocument, player.stateNo);
+  let next = player;
   const trace: CnsRuntimeTrace = {
     playerId,
     stateNo: player.stateNo,
@@ -88,407 +52,210 @@ function stepPlayerCnsRuntime(
     afterAnimNo: player.animNo,
     stateTime: player.stateTime,
     afterStateTime: player.stateTime,
-    mugenAnimTime: getMugenAnimTime(player, input),
-    stateFound: Boolean(initialStateDef),
+    mugenAnimTime: mugenAnimTime(player, input),
+    stateFound: Boolean(findState(cns, player.stateNo)),
     executedControllers: [],
   };
 
-  let nextPlayer = player;
-  const commandStateDef = findStateDef(cnsDocument, -1);
-
-  if (commandStateDef) {
-    const commandResult = executeControllersForState(
-      nextPlayer,
-      commandStateDef,
-      cnsDocument,
-      input,
-      commands,
-    );
-    nextPlayer = commandResult.player;
-    trace.executedControllers.push(...commandResult.executedControllers);
-
-    if (nextPlayer.stateNo !== originalStateNo) {
-      trace.afterStateNo = nextPlayer.stateNo;
-      trace.afterAnimNo = nextPlayer.animNo;
-      trace.afterStateTime = nextPlayer.stateTime;
-      return { player: nextPlayer, trace };
-    }
+  for (const negativeStateNo of [-1, -2]) {
+    const negativeState = findState(cns, negativeStateNo);
+    if (!negativeState) continue;
+    const result = executeStateControllers(next, negativeState, cns, input, commands);
+    next = result.player;
+    trace.executedControllers.push(...result.executedControllers);
+    if (next.stateNo !== originalStateNo) return finishTrace(next, trace);
   }
 
-  const commonStateDef = findStateDef(cnsDocument, -2);
-  if (commonStateDef) {
-    const commonResult = executeControllersForState(
-      nextPlayer,
-      commonStateDef,
-      cnsDocument,
-      input,
-      commands,
-    );
-    nextPlayer = commonResult.player;
-    trace.executedControllers.push(...commonResult.executedControllers);
-
-    if (nextPlayer.stateNo !== originalStateNo) {
-      trace.afterStateNo = nextPlayer.stateNo;
-      trace.afterAnimNo = nextPlayer.animNo;
-      trace.afterStateTime = nextPlayer.stateTime;
-      return { player: nextPlayer, trace };
-    }
-  }
-
-  const stateDef = findStateDef(cnsDocument, nextPlayer.stateNo);
+  const stateDef = findState(cns, next.stateNo);
   trace.stateFound = Boolean(stateDef);
+  if (!stateDef) return finishTrace(next, trace);
 
-  if (!stateDef) {
-    return { player: nextPlayer, trace };
-  }
+  next = applyStateHeader(next, stateDef, false);
+  const result = executeStateControllers(next, stateDef, cns, input, commands);
+  next = result.player;
+  trace.executedControllers.push(...result.executedControllers);
 
-  nextPlayer = applyStateDefHeader(nextPlayer, stateDef, { resetAnimOnChange: false });
-
-  const stateResult = executeControllersForState(
-    nextPlayer,
-    stateDef,
-    cnsDocument,
-    input,
-    commands,
-  );
-  nextPlayer = stateResult.player;
-  trace.executedControllers.push(...stateResult.executedControllers);
-
-  trace.afterStateNo = nextPlayer.stateNo;
-  trace.afterAnimNo = nextPlayer.animNo;
-  trace.afterStateTime = nextPlayer.stateTime;
-
-  return { player: nextPlayer, trace };
+  return finishTrace(next, trace);
 }
 
-function executeControllersForState(
+function finishTrace(player: PlayerState, trace: CnsRuntimeTrace): { player: PlayerState; trace: CnsRuntimeTrace } {
+  trace.afterStateNo = player.stateNo;
+  trace.afterAnimNo = player.animNo;
+  trace.afterStateTime = player.stateTime;
+  return { player, trace };
+}
+
+function executeStateControllers(
   player: PlayerState,
   stateDef: CnsStateDefinition,
-  cnsDocument: CnsDocument,
+  cns: CnsDocument,
   input: CnsRuntimeInput,
   commands?: ReadonlySet<string>,
 ): { player: PlayerState; executedControllers: string[] } {
-  let nextPlayer = player;
+  let next = player;
   const executedControllers: string[] = [];
 
   for (const controller of stateDef.controllers) {
-    if (!shouldRunController(controller, nextPlayer, input, commands)) {
-      continue;
-    }
-
-    const result = executeSupportedController(nextPlayer, controller, cnsDocument);
-    nextPlayer = result.player;
-
-    if (result.executed) {
-      executedControllers.push(result.name);
-    }
+    if (!shouldRun(controller, next, input, commands)) continue;
+    const result = executeController(next, controller, cns);
+    next = result.player;
+    if (result.executed) executedControllers.push(result.name);
   }
 
-  return { player: nextPlayer, executedControllers };
+  return { player: next, executedControllers };
 }
 
-function findStateDef(cnsDocument: CnsDocument, stateNo: number): CnsStateDefinition | undefined {
-  return cnsDocument.states.find((state) => state.stateNo === stateNo);
+function findState(cns: CnsDocument, stateNo: number): CnsStateDefinition | undefined {
+  return cns.states.find((state) => state.stateNo === stateNo);
 }
 
-function applyStateDefHeader(
-  player: PlayerState,
-  stateDef: CnsStateDefinition,
-  options: { resetAnimOnChange: boolean },
-): PlayerState {
-  const nextAnimNo = stateDef.initialAnim ?? player.animNo;
-  const animChanged = player.animNo !== nextAnimNo;
-
-  return {
-    ...player,
-    stateType: stateDef.stateType ?? player.stateType,
-    moveType: stateDef.moveType ?? player.moveType,
-    physics: stateDef.physics ?? player.physics,
-    ctrl: stateDef.ctrl ?? player.ctrl,
-    animNo: nextAnimNo,
-    animTime: options.resetAnimOnChange && animChanged ? 0 : player.animTime,
-  };
+function enterState(player: PlayerState, stateNo: number, cns: CnsDocument): PlayerState {
+  const stateDef = findState(cns, stateNo);
+  const base: PlayerState = { ...player, stateNo, stateTime: 0, animTime: 0 };
+  if (!stateDef) return base;
+  const animNo = stateDef.initialAnim ?? inferDefaultAnimNo(stateNo, player.animNo);
+  return { ...base, stateType: stateDef.stateType ?? player.stateType, moveType: stateDef.moveType ?? player.moveType, physics: stateDef.physics ?? player.physics, ctrl: stateDef.ctrl ?? player.ctrl, animNo };
 }
 
-function shouldRunController(
-  controller: CnsStateController,
-  player: PlayerState,
-  input: CnsRuntimeInput,
-  commands?: ReadonlySet<string>,
-): boolean {
-  if (controller.triggers.length === 0) {
-    return true;
-  }
-
-  return evaluateCnsRuntimeTriggerGroup(
-    controller.triggers.map(formatTriggerForRuntime),
-    {
-      player,
-      commands,
-      animTime: getMugenAnimTime(player, input),
-    },
-  );
+function inferDefaultAnimNo(stateNo: number, currentAnimNo: number): number {
+  return stateNo >= 0 ? stateNo : currentAnimNo;
 }
 
-function getMugenAnimTime(player: PlayerState, input: CnsRuntimeInput): number {
+function applyStateHeader(player: PlayerState, stateDef: CnsStateDefinition, resetAnimOnChange: boolean): PlayerState {
+  const animNo = stateDef.initialAnim ?? player.animNo;
+  return { ...player, stateType: stateDef.stateType ?? player.stateType, moveType: stateDef.moveType ?? player.moveType, physics: stateDef.physics ?? player.physics, ctrl: stateDef.ctrl ?? player.ctrl, animNo, animTime: resetAnimOnChange && player.animNo !== animNo ? 0 : player.animTime };
+}
+
+function shouldRun(controller: CnsStateController, player: PlayerState, input: CnsRuntimeInput, commands?: ReadonlySet<string>): boolean {
+  if (controller.triggers.length === 0) return true;
+  return evaluateCnsRuntimeTriggerGroup(controller.triggers.map(formatTrigger), { player, commands, animTime: mugenAnimTime(player, input) });
+}
+
+function formatTrigger(trigger: CnsTrigger): string {
+  return `${trigger.name}: ${trigger.expression}`;
+}
+
+function mugenAnimTime(player: PlayerState, input: CnsRuntimeInput): number {
   const duration = input.getAnimationDuration?.(player.animNo) ?? null;
   return calculateMugenAnimTime(player.animTime, duration);
 }
 
-function formatTriggerForRuntime(trigger: CnsTrigger): string {
-  return `${trigger.name}: ${trigger.expression}`;
-}
-
-function executeSupportedController(
-  player: PlayerState,
-  controller: CnsStateController,
-  cnsDocument: CnsDocument,
-): { player: PlayerState; executed: boolean; name: string } {
+function executeController(player: PlayerState, controller: CnsStateController, cns: CnsDocument): ControllerResult {
   const type = controller.type.toLowerCase();
-
-  if (type === 'changeanim') {
-    const value = readNumber(controller, 'value');
-    if (value === null) return { player, executed: false, name: 'ChangeAnim' };
-
-    return {
-      player: {
-        ...player,
-        animNo: value,
-        animTime: player.animNo === value ? player.animTime : 0,
-      },
-      executed: true,
-      name: 'ChangeAnim',
-    };
-  }
-
-  if (type === 'velset') {
-    const x = readNumber(controller, 'x');
-    const y = readNumber(controller, 'y');
-
-    return {
-      player: { ...player, vx: x ?? player.vx, vy: y ?? player.vy },
-      executed: x !== null || y !== null,
-      name: 'VelSet',
-    };
-  }
-
-  if (type === 'veladd') {
-    const x = readNumber(controller, 'x');
-    const y = readNumber(controller, 'y');
-
-    return {
-      player: {
-        ...player,
-        vx: x !== null ? player.vx + x : player.vx,
-        vy: y !== null ? player.vy + y : player.vy,
-      },
-      executed: x !== null || y !== null,
-      name: 'VelAdd',
-    };
-  }
-
-  if (type === 'posset') {
-    const x = readNumber(controller, 'x');
-    const y = readNumber(controller, 'y');
-
-    return {
-      player: { ...player, x: x ?? player.x, y: y ?? player.y },
-      executed: x !== null || y !== null,
-      name: 'PosSet',
-    };
-  }
-
-  if (type === 'posadd') {
-    const x = readNumber(controller, 'x');
-    const y = readNumber(controller, 'y');
-
-    return {
-      player: {
-        ...player,
-        x: x !== null ? player.x + x : player.x,
-        y: y !== null ? player.y + y : player.y,
-      },
-      executed: x !== null || y !== null,
-      name: 'PosAdd',
-    };
-  }
-
-  if (type === 'ctrlset') {
-    const value = readNumber(controller, 'value');
-    if (value === null) return { player, executed: false, name: 'CtrlSet' };
-
-    return {
-      player: { ...player, ctrl: value !== 0 },
-      executed: true,
-      name: 'CtrlSet',
-    };
-  }
-
-  if (type === 'statetypeset') {
-    const stateType = readString(controller, 'statetype');
-    const moveType = readString(controller, 'movetype');
-    const physics = readString(controller, 'physics');
-
-    return {
-      player: {
-        ...player,
-        stateType: toStateType(stateType) ?? player.stateType,
-        moveType: toMoveType(moveType) ?? player.moveType,
-        physics: toPhysics(physics) ?? player.physics,
-      },
-      executed: stateType !== null || moveType !== null || physics !== null,
-      name: 'StateTypeSet',
-    };
-  }
-
-  if (type === 'movetypeset') {
-    const value = readString(controller, 'value') ?? readString(controller, 'movetype');
-    const moveType = toMoveType(value);
-
-    if (!moveType) return { player, executed: false, name: 'MoveTypeSet' };
-
-    return {
-      player: { ...player, moveType },
-      executed: true,
-      name: 'MoveTypeSet',
-    };
-  }
-
-  if (type === 'lifeadd') {
-    const value = readNumber(controller, 'value');
-    if (value === null) return { player, executed: false, name: 'LifeAdd' };
-
-    return {
-      player: { ...player, life: Math.max(0, player.life + value) },
-      executed: true,
-      name: 'LifeAdd',
-    };
-  }
-
-  if (type === 'poweradd') {
-    const value = readNumber(controller, 'value');
-    if (value === null) return { player, executed: false, name: 'PowerAdd' };
-
-    const playerWithPower = player as PlayerState & { power?: number };
-    return {
-      player: { ...player, power: Math.max(0, (playerWithPower.power ?? 0) + value) } as PlayerState,
-      executed: true,
-      name: 'PowerAdd',
-    };
-  }
-
-  if (type === 'varset') {
-    const index = readNumber(controller, 'v');
-    const value = readNumber(controller, 'value');
-    if (index === null || value === null) return { player, executed: false, name: 'VarSet' };
-
-    return {
-      player: setPlayerVar(player, index, value),
-      executed: true,
-      name: 'VarSet',
-    };
-  }
-
-  if (type === 'varadd') {
-    const index = readNumber(controller, 'v');
-    const value = readNumber(controller, 'value');
-    if (index === null || value === null) return { player, executed: false, name: 'VarAdd' };
-
-    const current = getPlayerVar(player, index);
-    return {
-      player: setPlayerVar(player, index, current + value),
-      executed: true,
-      name: 'VarAdd',
-    };
-  }
-
+  if (type === 'changeanim') return changeAnim(player, controller);
+  if (type === 'velset') return withPlayer({ ...player, vx: num(controller, 'x') ?? player.vx, vy: num(controller, 'y') ?? player.vy }, hasNum(controller, 'x') || hasNum(controller, 'y'), 'VelSet');
+  if (type === 'veladd') return withPlayer({ ...player, vx: player.vx + (num(controller, 'x') ?? 0), vy: player.vy + (num(controller, 'y') ?? 0) }, hasNum(controller, 'x') || hasNum(controller, 'y'), 'VelAdd');
+  if (type === 'posset') return withPlayer({ ...player, x: num(controller, 'x') ?? player.x, y: num(controller, 'y') ?? player.y }, hasNum(controller, 'x') || hasNum(controller, 'y'), 'PosSet');
+  if (type === 'posadd') return withPlayer({ ...player, x: player.x + (num(controller, 'x') ?? 0), y: player.y + (num(controller, 'y') ?? 0) }, hasNum(controller, 'x') || hasNum(controller, 'y'), 'PosAdd');
+  if (type === 'ctrlset') return setCtrl(player, controller);
+  if (type === 'statetypeset') return stateTypeSet(player, controller);
+  if (type === 'movetypeset') return moveTypeSet(player, controller);
+  if (type === 'lifeadd') return addLife(player, controller);
+  if (type === 'poweradd') return addPower(player, controller);
+  if (type === 'varset') return setVarController(player, controller);
+  if (type === 'varadd') return addVarController(player, controller);
   if (type === 'changestate') {
-    const value = readNumber(controller, 'value');
-    if (value === null) return { player, executed: false, name: 'ChangeState' };
-
-    const changedPlayer: PlayerState = {
-      ...player,
-      stateNo: value,
-      stateTime: player.stateNo === value ? player.stateTime : 0,
-    };
-
-    const destinationStateDef = findStateDef(cnsDocument, value);
-
-    return {
-      player: destinationStateDef
-        ? applyStateDefHeader(changedPlayer, destinationStateDef, { resetAnimOnChange: true })
-        : changedPlayer,
-      executed: true,
-      name: 'ChangeState',
-    };
+    const value = num(controller, 'value');
+    return value === null ? withPlayer(player, false, 'ChangeState') : withPlayer(enterState(player, value, cns), true, 'ChangeState');
   }
-
-  return { player, executed: false, name: controller.type };
+  return withPlayer(player, false, controller.type);
 }
 
-function readNumber(controller: CnsStateController, key: string): number | null {
+function changeAnim(player: PlayerState, controller: CnsStateController): ControllerResult {
+  const value = num(controller, 'value');
+  if (value === null) return withPlayer(player, false, 'ChangeAnim');
+  return withPlayer({ ...player, animNo: value, animTime: player.animNo === value ? player.animTime : 0 }, true, 'ChangeAnim');
+}
+
+function setCtrl(player: PlayerState, controller: CnsStateController): ControllerResult {
+  const value = num(controller, 'value');
+  return value === null ? withPlayer(player, false, 'CtrlSet') : withPlayer({ ...player, ctrl: value !== 0 }, true, 'CtrlSet');
+}
+
+function stateTypeSet(player: PlayerState, controller: CnsStateController): ControllerResult {
+  const stateType = toStateType(str(controller, 'statetype')) ?? player.stateType;
+  const moveType = toMoveType(str(controller, 'movetype')) ?? player.moveType;
+  const physics = toPhysics(str(controller, 'physics')) ?? player.physics;
+  const executed = str(controller, 'statetype') !== null || str(controller, 'movetype') !== null || str(controller, 'physics') !== null;
+  return withPlayer({ ...player, stateType, moveType, physics }, executed, 'StateTypeSet');
+}
+
+function moveTypeSet(player: PlayerState, controller: CnsStateController): ControllerResult {
+  const moveType = toMoveType(str(controller, 'value') ?? str(controller, 'movetype'));
+  return moveType ? withPlayer({ ...player, moveType }, true, 'MoveTypeSet') : withPlayer(player, false, 'MoveTypeSet');
+}
+
+function addLife(player: PlayerState, controller: CnsStateController): ControllerResult {
+  const value = num(controller, 'value');
+  return value === null ? withPlayer(player, false, 'LifeAdd') : withPlayer({ ...player, life: Math.max(0, player.life + value) }, true, 'LifeAdd');
+}
+
+function addPower(player: PlayerState, controller: CnsStateController): ControllerResult {
+  const value = num(controller, 'value');
+  const powered = player as PlayerState & { power?: number };
+  return value === null ? withPlayer(player, false, 'PowerAdd') : withPlayer({ ...player, power: Math.max(0, (powered.power ?? 0) + value) } as PlayerState, true, 'PowerAdd');
+}
+
+function setVarController(player: PlayerState, controller: CnsStateController): ControllerResult {
+  const index = num(controller, 'v');
+  const value = num(controller, 'value');
+  return index === null || value === null ? withPlayer(player, false, 'VarSet') : withPlayer(setVar(player, index, value), true, 'VarSet');
+}
+
+function addVarController(player: PlayerState, controller: CnsStateController): ControllerResult {
+  const index = num(controller, 'v');
+  const value = num(controller, 'value');
+  return index === null || value === null ? withPlayer(player, false, 'VarAdd') : withPlayer(setVar(player, index, getVar(player, index) + value), true, 'VarAdd');
+}
+
+function withPlayer(player: PlayerState, executed: boolean, name: string): ControllerResult {
+  return { player, executed, name };
+}
+
+function num(controller: CnsStateController, key: string): number | null {
   return cnsValueToNumber(controller.params[key.toLowerCase()]);
 }
 
-function readString(controller: CnsStateController, key: string): string | null {
+function hasNum(controller: CnsStateController, key: string): boolean {
+  return num(controller, key) !== null;
+}
+
+function str(controller: CnsStateController, key: string): string | null {
   const value = controller.params[key.toLowerCase()];
-  if (value === undefined || value === null) return null;
-  return String(value).trim();
+  return value === undefined || value === null ? null : String(value).trim();
 }
 
 function cnsValueToNumber(value: CnsValue | undefined): number | null {
   if (value === undefined || value === null) return null;
   if (typeof value === 'number') return value;
-
   const parsed = Number(String(value).trim());
   return Number.isFinite(parsed) ? parsed : null;
 }
 
 function toStateType(value: string | null): PlayerState['stateType'] | null {
   const normalized = value?.toUpperCase();
-  if (normalized === 'S' || normalized === 'C' || normalized === 'A' || normalized === 'L') return normalized;
-  return null;
+  return normalized === 'S' || normalized === 'C' || normalized === 'A' || normalized === 'L' ? normalized : null;
 }
 
 function toMoveType(value: string | null): PlayerState['moveType'] | null {
   const normalized = value?.toUpperCase();
-  if (normalized === 'I' || normalized === 'A' || normalized === 'H') return normalized;
-  return null;
+  return normalized === 'I' || normalized === 'A' || normalized === 'H' ? normalized : null;
 }
 
 function toPhysics(value: string | null): PlayerState['physics'] | null {
   const normalized = value?.toUpperCase();
-  if (normalized === 'S' || normalized === 'C' || normalized === 'A' || normalized === 'N') return normalized;
-  return null;
+  return normalized === 'S' || normalized === 'C' || normalized === 'A' || normalized === 'N' ? normalized : null;
 }
 
-function getPlayerVar(player: PlayerState, index: number): number {
-  const playerWithVars = player as PlayerState & { vars?: Record<number, number> };
-  return playerWithVars.vars?.[index] ?? 0;
+function getVar(player: PlayerState, index: number): number {
+  return ((player as PlayerState & { vars?: Record<number, number> }).vars ?? {})[index] ?? 0;
 }
 
-function setPlayerVar(player: PlayerState, index: number, value: number): PlayerState {
-  const playerWithVars = player as PlayerState & { vars?: Record<number, number> };
-  return {
-    ...player,
-    vars: {
-      ...playerWithVars.vars,
-      [index]: value,
-    },
-  } as PlayerState;
+function setVar(player: PlayerState, index: number, value: number): PlayerState {
+  const vars = (player as PlayerState & { vars?: Record<number, number> }).vars ?? {};
+  return { ...player, vars: { ...vars, [index]: value } } as PlayerState;
 }
 
-function createMissingTrace(playerId: 1 | 2, player: PlayerState, input: CnsRuntimeInput): CnsRuntimeTrace {
-  return {
-    playerId,
-    stateNo: player.stateNo,
-    afterStateNo: player.stateNo,
-    animNo: player.animNo,
-    afterAnimNo: player.animNo,
-    stateTime: player.stateTime,
-    afterStateTime: player.stateTime,
-    mugenAnimTime: getMugenAnimTime(player, input),
-    stateFound: false,
-    executedControllers: [],
-  };
+function missingTrace(playerId: 1 | 2, player: PlayerState, input: CnsRuntimeInput): CnsRuntimeTrace {
+  return { playerId, stateNo: player.stateNo, afterStateNo: player.stateNo, animNo: player.animNo, afterAnimNo: player.animNo, stateTime: player.stateTime, afterStateTime: player.stateTime, mugenAnimTime: mugenAnimTime(player, input), stateFound: false, executedControllers: [] };
 }
