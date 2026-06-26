@@ -42,19 +42,33 @@ physics = S
 ctrl = 1
 anim = 20
 
-[State 20, WalkForward]
+[State 20, WalkForward FacingRight]
 type = PosAdd
 triggerall = command = "holdfwd"
 triggerall = command != "holddown"
-trigger1 = 1
+trigger1 = facing = 1
 x = 2
 
-[State 20, WalkBack]
+[State 20, WalkForward FacingLeft]
+type = PosAdd
+triggerall = command = "holdfwd"
+triggerall = command != "holddown"
+trigger1 = facing = -1
+x = -2
+
+[State 20, WalkBack FacingRight]
 type = PosAdd
 triggerall = command = "holdback"
 triggerall = command != "holddown"
-trigger1 = 1
+trigger1 = facing = 1
 x = -2
+
+[State 20, WalkBack FacingLeft]
+type = PosAdd
+triggerall = command = "holdback"
+triggerall = command != "holddown"
+trigger1 = facing = -1
+x = 2
 
 [State 20, ReturnToStand]
 type = ChangeState
