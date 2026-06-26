@@ -90,4 +90,59 @@ anim = 0
     expect(result.state.players[0].stateNo).toBe(200);
     expect(result.traces[0].mugenAnimTime).toBe(1);
   });
+
+  it('re-enters state 0 with idle animation even when the target StateDef omits anim', () => {
+    const cns = parseCnsText(`
+[Statedef 52]
+type = S
+movetype = I
+physics = S
+ctrl = 0
+anim = 47
+
+[State 52, EndLanding]
+type = ChangeState
+trigger1 = time > 5
+value = 0
+
+[Statedef 0]
+type = S
+movetype = I
+physics = S
+ctrl = 1
+`);
+
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime(
+      {
+        ...state,
+        players: [
+          {
+            ...state.players[0],
+            stateNo: 52,
+            animNo: 47,
+            animTime: 96,
+            stateTime: 96,
+            stateType: 'S',
+            moveType: 'I',
+            physics: 'S',
+            ctrl: false,
+          },
+          state.players[1],
+        ],
+      },
+      cns,
+    );
+
+    expect(result.state.players[0]).toMatchObject({
+      stateNo: 0,
+      animNo: 0,
+      animTime: 0,
+      stateTime: 0,
+      stateType: 'S',
+      moveType: 'I',
+      physics: 'S',
+      ctrl: true,
+    });
+  });
 });
