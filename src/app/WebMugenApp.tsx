@@ -41,6 +41,7 @@ import { stepCnsPhysicsMotion } from '../core/cns/CnsPhysicsStep';
 import { formatCnsRuntimeDebugOverlay } from './CnsRuntimeDebugOverlay';
 import { formatCnsCommandDebugOverlay } from './CnsCommandDebugOverlay';
 import { formatCnsCoverageDebugOverlay } from './CnsCoverageDebugOverlay';
+import { formatPhysicsDebugOverlay } from './PhysicsDebugOverlay';
 import { InputBuffer } from '../input/InputBuffer';
 import { resolveCommands } from '../input/CommandResolver';
 import { formatCmdControlHelp } from './CmdControlHelp';
@@ -67,6 +68,7 @@ export function WebMugenApp() {
   const [scoreDebugLine, setScoreDebugLine] = useState(formatRoundScore(createInitialRoundScore()));
   const [cnsDebugLines, setCnsDebugLines] = useState<string[]>([]);
   const [commandDebugLines, setCommandDebugLines] = useState<string[]>(['cmd p1=-', 'cmd p2=-']);
+  const [physicsDebugLines, setPhysicsDebugLines] = useState<string[]>(['phys p1=-', 'phys p2=-']);
   const [coverageDebugLines, setCoverageDebugLines] = useState<string[]>(['coverage=-']);
   const [controlHelpLines, setControlHelpLines] = useState<string[]>(['CMD: -']);
 
@@ -156,7 +158,7 @@ export function WebMugenApp() {
             nextState = resolveFallbackHits(nextState, character.air);
             nextState = applyFallbackHitRecovery(nextState);
           } else {
-            nextState = stepCnsPhysicsMotion(nextState, character.cns);
+            nextState = stepCnsPhysicsMotion(nextState);
           }
 
           nextRoundState = stepRoundState(nextRoundState, nextState);
@@ -178,6 +180,7 @@ export function WebMugenApp() {
         setRoundDebugLine(formatRoundState(nextRoundState));
         setScoreDebugLine(formatRoundScore(nextScore));
         setCnsDebugLines(formatCnsRuntimeDebugOverlay(nextCnsTraces));
+        setPhysicsDebugLines(formatPhysicsDebugOverlay(nextState));
 
         rendererRef.current?.render(nextState, nextFeedback, nextRoundState, nextScore);
 
@@ -212,6 +215,7 @@ export function WebMugenApp() {
         {[
           ...inputDebugLines,
           ...commandDebugLines,
+          ...physicsDebugLines,
           roundDebugLine,
           scoreDebugLine,
           ...cnsDebugLines,
