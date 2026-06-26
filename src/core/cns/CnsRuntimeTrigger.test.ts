@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialGameState } from '../engine/GameState';
+import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup } from './CnsRuntimeTrigger';
 
 describe('CnsRuntimeTrigger', () => {
@@ -41,6 +42,22 @@ describe('CnsRuntimeTrigger', () => {
     expect(evaluateCnsRuntimeTrigger('Alive', { player })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('Var(59) = 0', { player })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('SysVar(0) = 0', { player })).toBe(true);
+  });
+
+  it('evaluates physics and MUGEN y-position triggers', () => {
+    const groundedAirPhysicsPlayer = {
+      ...player,
+      physics: 'A' as const,
+      y: DEFAULT_GROUND_Y,
+      vy: 0,
+    };
+
+    expect(evaluateCnsRuntimeTrigger('physics = A', { player: groundedAirPhysicsPlayer })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('physics != S', { player: groundedAirPhysicsPlayer })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('pos y >= 0', { player: groundedAirPhysicsPlayer })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('pos y < 0', {
+      player: { ...groundedAirPhysicsPlayer, y: DEFAULT_GROUND_Y - 1 },
+    })).toBe(true);
   });
 
   it('evaluates trigger groups as OR of AND groups', () => {
