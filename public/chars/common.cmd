@@ -45,18 +45,24 @@ triggerall = stateno = 40
 trigger1 = time > 0
 value = 50
 
-[State -1, Common Crouch]
+[State -1, Common Crouch Start]
 type = ChangeState
 triggerall = command = "holddown"
 trigger1 = statetype = S
 trigger1 = ctrl
 value = 10
 
-[State -1, Common Stand From Crouch]
+[State -1, Common Crouch Hold]
+type = ChangeState
+triggerall = command = "holddown"
+trigger1 = stateno = 10
+trigger1 = time > 0
+value = 11
+
+[State -1, Common Crouch End]
 type = ChangeState
 triggerall = command != "holddown"
 trigger1 = statetype = C
-trigger1 = ctrl
 value = 12
 
 [State -1, Common Walk Forward]
@@ -65,6 +71,7 @@ triggerall = command = "holdfwd"
 triggerall = command != "holddown"
 trigger1 = statetype = S
 trigger1 = ctrl
+trigger1 = stateno != 20
 value = 20
 
 [State -1, Common Walk Back]
@@ -73,6 +80,7 @@ triggerall = command = "holdback"
 triggerall = command != "holddown"
 trigger1 = statetype = S
 trigger1 = ctrl
+trigger1 = stateno != 20
 value = 20
 
 [Statedef -2]
