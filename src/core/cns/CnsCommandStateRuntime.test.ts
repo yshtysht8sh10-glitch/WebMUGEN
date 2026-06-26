@@ -4,6 +4,7 @@ import { parseCmdText } from '../../parser/cmd/CmdParser';
 import { InputBuffer } from '../../input/InputBuffer';
 import { resolveCommands } from '../../input/CommandResolver';
 import { createInitialGameState } from '../engine/GameState';
+import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 import { stepCnsStateRuntime } from './CnsStateRuntime';
 
 describe('CnsCommandStateRuntime', () => {
@@ -75,6 +76,62 @@ anim = 0
 
     expect(result.state.players[0].stateNo).toBe(0);
     expect(result.traces[0].executedControllers).not.toContain('ChangeState');
+  });
+
+  it('runs Statedef -2 common controllers before the current state', () => {
+    const cns = parseCnsText(`
+[Statedef -2]
+
+[State -2, Common Land]
+type = ChangeState
+triggerall = physics = A
+triggerall = vel y >= 0
+trigger1 = pos y >= 0
+value = 52
+
+[Statedef 50]
+type = A
+movetype = I
+physics = A
+ctrl = 0
+anim = 50
+
+[Statedef 52]
+type = S
+movetype = I
+physics = S
+ctrl = 0
+anim = 47
+`);
+
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime({
+      ...state,
+      players: [
+        {
+          ...state.players[0],
+          stateNo: 50,
+          stateType: 'A',
+          physics: 'A',
+          ctrl: false,
+          y: DEFAULT_GROUND_Y,
+          vy: 0,
+        },
+        state.players[1],
+      ],
+    }, cns, {
+      p1Commands: new Set(),
+      p2Commands: new Set(),
+    });
+
+    expect(result.state.players[0]).toMatchObject({
+      stateNo: 52,
+      animNo: 47,
+      stateType: 'S',
+      physics: 'S',
+      ctrl: false,
+    });
+    expect(result.traces[0].executedControllers).toContain('ChangeState');
   });
 
   it('maps Up input to holdup and changes to jump state 40', () => {
