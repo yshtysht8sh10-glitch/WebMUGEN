@@ -1,4 +1,5 @@
 import type { PlayerState } from '../engine/types';
+import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 
 export type CnsRuntimeTriggerContext = {
   player: PlayerState;
@@ -57,7 +58,7 @@ export function evaluateCnsRuntimeTrigger(
 
   const posMatch = trimmed.match(/^pos\s+([xy])\s*(=|!=|>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)$/);
   if (posMatch) {
-    const actual = posMatch[1] === 'x' ? context.player.x : context.player.y;
+    const actual = posMatch[1] === 'x' ? context.player.x : toMugenPosY(context.player.y);
     return compareNumber(actual, posMatch[2], Number(posMatch[3]));
   }
 
@@ -82,6 +83,9 @@ export function evaluateCnsRuntimeTrigger(
 
   const moveTypeMatch = trimmed.match(/^movetype\s*(=|!=)\s*([aih])$/);
   if (moveTypeMatch) return compareString(context.player.moveType, moveTypeMatch[1], moveTypeMatch[2].toUpperCase());
+
+  const physicsMatch = trimmed.match(/^physics\s*(=|!=)\s*([scan])$/);
+  if (physicsMatch) return compareString(context.player.physics, physicsMatch[1], physicsMatch[2].toUpperCase());
 
   const facingMatch = trimmed.match(/^facing\s*(=|!=|>=|<=|>|<)\s*(-?1)$/);
   if (facingMatch) return compareNumber(context.player.facing, facingMatch[1], Number(facingMatch[2]));
@@ -148,6 +152,10 @@ function compareString(actual: string, operator: string, expected: string): bool
     case '!=': return actual.toUpperCase() !== expected;
     default: return false;
   }
+}
+
+function toMugenPosY(screenY: number): number {
+  return screenY - DEFAULT_GROUND_Y;
 }
 
 function readOptionalPower(player: PlayerState): number {
