@@ -111,14 +111,28 @@ function findState(cns: CnsDocument, stateNo: number): CnsStateDefinition | unde
 
 function enterState(player: PlayerState, stateNo: number, cns: CnsDocument): PlayerState {
   const stateDef = findState(cns, stateNo);
-  const base: PlayerState = { ...player, stateNo, stateTime: 0, animTime: 0 };
-  if (!stateDef) return base;
-  const animNo = stateDef.initialAnim ?? inferDefaultAnimNo(stateNo, player.animNo);
-  return { ...base, stateType: stateDef.stateType ?? player.stateType, moveType: stateDef.moveType ?? player.moveType, physics: stateDef.physics ?? player.physics, ctrl: stateDef.ctrl ?? player.ctrl, animNo };
+  if (!stateDef) return { ...player, stateNo, stateTime: 0 };
+
+  const inferredAnimNo = inferDefaultAnimNo(stateNo, player.animNo);
+  const animNo = stateDef.initialAnim ?? inferredAnimNo;
+  const animChanged = player.animNo !== animNo;
+
+  return {
+    ...player,
+    stateNo,
+    stateTime: 0,
+    animNo,
+    animTime: animChanged ? 0 : player.animTime,
+    stateType: stateDef.stateType ?? player.stateType,
+    moveType: stateDef.moveType ?? player.moveType,
+    physics: stateDef.physics ?? player.physics,
+    ctrl: stateDef.ctrl ?? player.ctrl,
+  };
 }
 
 function inferDefaultAnimNo(stateNo: number, currentAnimNo: number): number {
-  return stateNo >= 0 ? stateNo : currentAnimNo;
+  if (stateNo === 0) return 0;
+  return currentAnimNo;
 }
 
 function applyStateHeader(player: PlayerState, stateDef: CnsStateDefinition, resetAnimOnChange: boolean): PlayerState {
