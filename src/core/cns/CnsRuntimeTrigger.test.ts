@@ -44,7 +44,7 @@ describe('CnsRuntimeTrigger', () => {
     expect(evaluateCnsRuntimeTrigger('SysVar(0) = 0', { player })).toBe(true);
   });
 
-  it('evaluates physics and MUGEN y-position triggers', () => {
+  it('evaluates physics and internal y-position triggers', () => {
     const groundedAirPhysicsPlayer = {
       ...player,
       physics: 'A' as const,
@@ -54,8 +54,8 @@ describe('CnsRuntimeTrigger', () => {
 
     expect(evaluateCnsRuntimeTrigger('physics = A', { player: groundedAirPhysicsPlayer })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('physics != S', { player: groundedAirPhysicsPlayer })).toBe(true);
-    expect(evaluateCnsRuntimeTrigger('pos y >= 0', { player: groundedAirPhysicsPlayer })).toBe(true);
-    expect(evaluateCnsRuntimeTrigger('pos y < 0', {
+    expect(evaluateCnsRuntimeTrigger(`pos y >= ${DEFAULT_GROUND_Y}`, { player: groundedAirPhysicsPlayer })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger(`pos y < ${DEFAULT_GROUND_Y}`, {
       player: { ...groundedAirPhysicsPlayer, y: DEFAULT_GROUND_Y - 1 },
     })).toBe(true);
   });
