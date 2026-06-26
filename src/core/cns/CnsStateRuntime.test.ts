@@ -145,4 +145,59 @@ ctrl = 1
       ctrl: true,
     });
   });
+
+  it('preserves the current animation when entering an animless non-idle state', () => {
+    const cns = parseCnsText(`
+[Statedef 40]
+type = A
+movetype = I
+physics = A
+ctrl = 0
+anim = 40
+
+[State 40, ToJumpUp]
+type = ChangeState
+trigger1 = time > 3
+value = 50
+
+[Statedef 50]
+type = A
+movetype = I
+physics = A
+ctrl = 0
+`);
+
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime(
+      {
+        ...state,
+        players: [
+          {
+            ...state.players[0],
+            stateNo: 40,
+            animNo: 40,
+            animTime: 4,
+            stateTime: 4,
+            stateType: 'A',
+            moveType: 'I',
+            physics: 'A',
+            ctrl: false,
+          },
+          state.players[1],
+        ],
+      },
+      cns,
+    );
+
+    expect(result.state.players[0]).toMatchObject({
+      stateNo: 50,
+      animNo: 40,
+      animTime: 4,
+      stateTime: 0,
+      stateType: 'A',
+      moveType: 'I',
+      physics: 'A',
+      ctrl: false,
+    });
+  });
 });
