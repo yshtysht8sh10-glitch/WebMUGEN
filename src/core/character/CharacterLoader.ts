@@ -120,36 +120,38 @@ function filterCommonCommandControllers(
   characterCommandState: CnsStateDefinition,
   commonControllers: readonly CnsStateController[],
 ): CnsStateController[] {
-  const characterPrimaryCommandNames = collectPrimaryChangeStateCommandTriggerNames(characterCommandState.controllers);
+  const characterPrimaryCommands = collectPrimaryCommandRoutes(characterCommandState.controllers);
 
   return commonControllers.filter((controller) => {
-    const commonPrimaryCommandNames = collectPrimaryChangeStateCommandTriggerNames([controller]);
-    return !Array.from(commonPrimaryCommandNames).some((commandName) => characterPrimaryCommandNames.has(commandName));
+    const commonPrimaryCommands = collectPrimaryCommandRoutes([controller]);
+    return !Array.from(commonPrimaryCommands).some((commandName) => characterPrimaryCommands.has(commandName));
   });
 }
 
-function collectPrimaryChangeStateCommandTriggerNames(controllers: readonly CnsStateController[]): Set<string> {
+function collectPrimaryCommandRoutes(controllers: readonly CnsStateController[]): Set<string> {
   const names = new Set<string>();
 
   for (const controller of controllers) {
     if (controller.type.toLowerCase() !== 'changestate') continue;
 
-    const triggerAllCommands = collectPositiveCommandTriggerNames(
+    const triggerAllCommandNames = collectPositiveCommandNames(
       controller.triggers.filter((trigger) => trigger.name.toLowerCase() === 'triggerall'),
     );
 
-    if (triggerAllCommands.size > 0) {
-      addAll(names, triggerAllCommands);
+    if (triggerAllCommandNames.size > 0) {
+      addAll(names, triggerAllCommandNames);
       continue;
     }
 
-    addAll(names, collectPositiveCommandTriggerNames(controller.triggers));
+    // If a controller has no triggerall command, fall back to its positive command triggers.
+    // This keeps small test fixtures and simple real-world CNS snippets working.
+    addAll(names, collectPositiveCommandNames(controller.triggers));
   }
 
   return names;
 }
 
-function collectPositiveCommandTriggerNames(
+function collectPositiveCommandNames(
   triggers: readonly CnsStateController['triggers'][number][],
 ): Set<string> {
   const names = new Set<string>();
