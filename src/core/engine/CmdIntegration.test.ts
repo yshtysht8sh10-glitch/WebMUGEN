@@ -109,4 +109,57 @@ time = 20
     expect(state.players[0].stateNo).toBe(300);
     expect(state.commandNames?.[0].has('qcf_x')).toBe(true);
   });
+
+  it('executes Statedef -1 command routes before the current state', () => {
+    const commandStateCns = parseCnsText(`
+[StateDef -1]
+
+[State -1, CrouchRoute]
+type = ChangeState
+trigger1 = command = "holddown"
+value = 123
+ctrl = 1
+
+[StateDef 0]
+type = S
+movetype = I
+physics = S
+anim = 0
+ctrl = 0
+
+[StateDef 123]
+type = C
+movetype = I
+physics = C
+anim = 11
+ctrl = 1
+`);
+    const commandStateCmd = parseCmdText(`
+[Command]
+name = "holddown"
+command = /$D
+`);
+    const initial = createInitialGameState();
+
+    const state = stepGameByCns(
+      {
+        ...initial,
+        players: [{ ...initial.players[0], ctrl: false }, initial.players[1]],
+      },
+      commandStateCns,
+      {
+        p1: { left: false, right: false, down: true, up: false, attack: false },
+      },
+      undefined,
+      commandStateCmd,
+    );
+
+    expect(state.players[0]).toMatchObject({
+      stateNo: 123,
+      animNo: 11,
+      stateType: 'C',
+      physics: 'C',
+      ctrl: true,
+    });
+  });
 });
