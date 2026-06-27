@@ -9,6 +9,9 @@ export type CnsRuntimeTriggerContext = {
   roundNo?: number;
   aiLevel?: number;
   teamSide?: number;
+  gameTime?: number;
+  screenWidth?: number;
+  screenHeight?: number;
 };
 
 type NumberSource = (context: CnsRuntimeTriggerContext) => number;
@@ -33,7 +36,6 @@ function evaluateBooleanExpression(expression: string, context: CnsRuntimeTrigge
   if (andParts.length > 1) return andParts.every((part) => evaluateBooleanExpression(part, context));
 
   if (trimmed.startsWith('!')) return !evaluateBooleanExpression(trimmed.slice(1), context);
-
   if (trimmed === '1') return true;
   if (trimmed === '0') return false;
 
@@ -44,14 +46,14 @@ function evaluateBooleanExpression(expression: string, context: CnsRuntimeTrigge
 }
 
 function evaluateComparison(expression: string, context: CnsRuntimeTriggerContext): boolean {
-  const rangeMatch = expression.match(/^(.+?)\s*=\s*\[\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]$/);
+  const rangeMatch = expression.match(/^(.+?)\s*(=|!=)\s*\[\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]$/);
   if (rangeMatch) {
-    const source = getNumberSource(rangeMatch[1]);
-    if (!source) return false;
-    const actual = source(context);
-    const min = Number(rangeMatch[2]);
-    const max = Number(rangeMatch[3]);
-    return actual >= Math.min(min, max) && actual <= Math.max(min, max);
+    const actual = readNumberExpression(rangeMatch[1], context);
+    if (actual === null) return false;
+    const min = Math.min(Number(rangeMatch[3]), Number(rangeMatch[4]));
+    const max = Math.max(Number(rangeMatch[3]), Number(rangeMatch[4]));
+    const inside = actual >= min && actual <= max;
+    return rangeMatch[2] === '=' ? inside : !inside;
   }
 
   const stringMatch = expression.match(/^(.+?)\s*(=|!=)\s*"([^"]*)"$/);
@@ -68,9 +70,9 @@ function evaluateComparison(expression: string, context: CnsRuntimeTriggerContex
 
   const numberMatch = expression.match(/^(.+?)\s*(=|!=|>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)$/);
   if (numberMatch) {
-    const source = getNumberSource(numberMatch[1]);
-    if (!source) return false;
-    return compareNumber(source(context), numberMatch[2], Number(numberMatch[3]));
+    const actual = readNumberExpression(numberMatch[1], context);
+    if (actual === null) return false;
+    return compareNumber(actual, numberMatch[2], Number(numberMatch[3]));
   }
 
   const enumMatch = expression.match(/^(.+?)\s*(=|!=)\s*([a-z]+)$/i);
@@ -120,13 +122,21 @@ function getBooleanSource(name: string): BooleanSource | null {
     case 'ctrl': return (context) => context.player.ctrl;
     case 'alive': return (context) => context.player.life > 0;
     case 'hitover': return () => true;
-    case 'movecontact': return (context) => Boolean(context.player.activeHitDef) || context.player.hitDefUsed;
-    case 'movehit': return (context) => Boolean(context.player.activeHitDef) || context.player.hitDefUsed;
+    case 'hitshakeover': return () => true;
+    case 'hitfall': return (context) => readOptionalBool(context.player, 'hitFall', false);
+    case 'canrecover': return () => true;
+    case 'inguarddist': return (context) => Math.abs((context.opponent?.x ?? context.player.x + 999) - context.player.x) < 80;
+    case 'movecontact': return (context) => hasMoveContact(context.player);
+    case 'movehit': return (context) => hasMoveContact(context.player);
     case 'moveguarded': return () => false;
     case 'win': return () => false;
     case 'lose': return () => false;
     case 'drawgame': return () => false;
     case 'roundsexisted': return () => true;
+    case 'p2ctrl': return (context) => context.opponent?.ctrl ?? true;
+    case 'root': return () => true;
+    case 'parent': return () => true;
+    case 'enemynear': return (context) => Boolean(context.opponent);
     default: return null;
   }
 }
@@ -139,10 +149,39 @@ function getStringSource(rawName: string): StringSource | null {
     case 'physics': return (context) => context.player.physics;
     case 'p2statetype': return (context) => context.opponent?.stateType ?? 'S';
     case 'p2movetype': return (context) => context.opponent?.moveType ?? 'I';
-    case 'name': return () => '';
-    case 'authorname': return () => '';
-    default: return null;
+    case 'p2name': return (context) => readOptionalString(context.opponent, 'name', '');
+    case 'p2authorname': return (context) => readOptionalString(context.opponent, 'authorName', '');
+    case 'name': return (context) => readOptionalString(context.player, 'name', '');
+    case 'authorname': return (context) => readOptionalString(context.player, 'authorName', '');
+    default: return getRedirectStringSource(name);
   }
+}
+
+function readNumberExpression(rawExpression: string, context: CnsRuntimeTriggerContext): number | null {
+  const expression = stripOuterParentheses(normalizeName(rawExpression));
+  const numericLiteral = Number(expression);
+  if (Number.isFinite(numericLiteral)) return numericLiteral;
+
+  const absMatch = expression.match(/^abs\((.+)\)$/);
+  if (absMatch) {
+    const value = readNumberExpression(absMatch[1], context);
+    return value === null ? null : Math.abs(value);
+  }
+
+  const floorMatch = expression.match(/^floor\((.+)\)$/);
+  if (floorMatch) {
+    const value = readNumberExpression(floorMatch[1], context);
+    return value === null ? null : Math.floor(value);
+  }
+
+  const ceilMatch = expression.match(/^ceil\((.+)\)$/);
+  if (ceilMatch) {
+    const value = readNumberExpression(ceilMatch[1], context);
+    return value === null ? null : Math.ceil(value);
+  }
+
+  const source = getNumberSource(expression);
+  return source ? source(context) : null;
 }
 
 function getNumberSource(rawName: string): NumberSource | null {
@@ -160,8 +199,16 @@ function getNumberSource(rawName: string): NumberSource | null {
   const constMatch = name.match(/^const\(([^)]+)\)$/);
   if (constMatch) return () => readDefaultConst(constMatch[1]);
 
+  const getHitVarMatch = name.match(/^gethitvar\(([^)]+)\)$/);
+  if (getHitVarMatch) return (context) => readGetHitVar(context.player, getHitVarMatch[1]);
+
+  const numProjIdMatch = name.match(/^numprojid\((\d+)\)$/);
+  if (numProjIdMatch) return () => 0;
+
   switch (name) {
     case 'time': return (context) => context.player.stateTime;
+    case 'gametime': return (context) => context.gameTime ?? readOptionalNumber(context.player, 'gameTime', 0);
+    case 'tickspersecond': return () => 60;
     case 'animtime': return (context) => context.animTime ?? context.player.animTime;
     case 'anim': return (context) => context.player.animNo;
     case 'animelem': return (context) => context.player.animTime;
@@ -172,6 +219,7 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'ailevel': return (context) => context.aiLevel ?? 0;
     case 'teamside': return (context) => context.teamSide ?? context.player.id;
     case 'power': return (context) => readOptionalNumber(context.player, 'power', 0);
+    case 'powermax': return () => 3000;
     case 'life': return (context) => context.player.life;
     case 'lifemax': return () => 1000;
     case 'random': return () => 500;
@@ -180,14 +228,23 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'pos x': return (context) => context.player.x;
     case 'posy':
     case 'pos y': return (context) => context.player.y;
+    case 'screenposx':
+    case 'screenpos x': return (context) => context.player.x;
+    case 'screenposy':
+    case 'screenpos y': return (context) => context.player.y;
     case 'velx':
     case 'vel x': return (context) => context.player.vx;
     case 'vely':
     case 'vel y': return (context) => context.player.vy;
+    case 'hitvelx':
+    case 'hitvel x': return (context) => readOptionalNumber(context.player, 'hitVelX', 0);
+    case 'hitvely':
+    case 'hitvel y': return (context) => readOptionalNumber(context.player, 'hitVelY', 0);
     case 'hitpausetime': return (context) => context.player.hitPause;
     case 'hitcount': return () => 0;
-    case 'movecontact': return (context) => (Boolean(context.player.activeHitDef) || context.player.hitDefUsed ? 1 : 0);
-    case 'movehit': return (context) => (Boolean(context.player.activeHitDef) || context.player.hitDefUsed ? 1 : 0);
+    case 'hitfall': return (context) => readOptionalBool(context.player, 'hitFall', false) ? 1 : 0;
+    case 'movecontact': return (context) => hasMoveContact(context.player) ? 1 : 0;
+    case 'movehit': return (context) => hasMoveContact(context.player) ? 1 : 0;
     case 'moveguarded': return () => 0;
     case 'numenemy': return (context) => (context.opponent ? 1 : 1);
     case 'numtarget': return () => 0;
@@ -195,8 +252,13 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'numproj': return () => 0;
     case 'numexplod': return () => 0;
     case 'numpartner': return () => 0;
+    case 'numcommand': return (context) => context.commands?.size ?? 0;
     case 'ishelper': return () => 0;
+    case 'backedgedist': return (context) => context.player.x;
+    case 'frontedgedist': return (context) => (context.screenWidth ?? 960) - context.player.x;
     case 'p2life': return (context) => context.opponent?.life ?? 1000;
+    case 'p2stateno': return (context) => context.opponent?.stateNo ?? 0;
+    case 'p2facing': return (context) => context.opponent?.facing ?? -context.player.facing;
     case 'p2bodydistx':
     case 'p2bodydist x':
     case 'p2distx':
@@ -207,7 +269,7 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'p2dist y': return (context) => (context.opponent ? context.opponent.y - context.player.y : 0);
     case 'p2statetype': return (context) => stateTypeToNumber(context.opponent?.stateType ?? 'S');
     case 'p2movetype': return (context) => moveTypeToNumber(context.opponent?.moveType ?? 'I');
-    default: return getFunctionNumberSource(name);
+    default: return getFunctionNumberSource(name) ?? getRedirectNumberSource(name);
   }
 }
 
@@ -220,14 +282,45 @@ function getFunctionNumberSource(name: string): NumberSource | null {
 
   const projContactTimeMatch = name.match(/^projcontacttime\((\d+)\)$/);
   if (projContactTimeMatch) return () => -1;
-
   const projHitTimeMatch = name.match(/^projhittime\((\d+)\)$/);
   if (projHitTimeMatch) return () => -1;
-
   const projGuardedTimeMatch = name.match(/^projguardedtime\((\d+)\)$/);
   if (projGuardedTimeMatch) return () => -1;
+  const projCancelTimeMatch = name.match(/^projcanceltime\((\d+)\)$/);
+  if (projCancelTimeMatch) return () => -1;
 
   return null;
+}
+
+function getRedirectNumberSource(name: string): NumberSource | null {
+  const redirectMatch = name.match(/^(enemynear|enemy|target|parent|root)\s*,\s*(.+)$/);
+  if (!redirectMatch) return null;
+
+  const redirect = redirectMatch[1];
+  const redirectedExpression = redirectMatch[2];
+
+  return (context) => {
+    const redirectedPlayer = redirect === 'parent' || redirect === 'root'
+      ? context.player
+      : context.opponent ?? context.player;
+    return readNumberExpression(redirectedExpression, { ...context, player: redirectedPlayer, opponent: context.player }) ?? 0;
+  };
+}
+
+function getRedirectStringSource(name: string): StringSource | null {
+  const redirectMatch = name.match(/^(enemynear|enemy|target|parent|root)\s*,\s*(.+)$/);
+  if (!redirectMatch) return null;
+
+  const redirect = redirectMatch[1];
+  const redirectedExpression = redirectMatch[2];
+
+  return (context) => {
+    const redirectedPlayer = redirect === 'parent' || redirect === 'root'
+      ? context.player
+      : context.opponent ?? context.player;
+    const source = getStringSource(redirectedExpression);
+    return source ? source({ ...context, player: redirectedPlayer, opponent: context.player }) : '';
+  };
 }
 
 function normalizeExpression(expression: string): string {
@@ -303,8 +396,20 @@ function compareString(actual: string, operator: string, expected: string): bool
   }
 }
 
-function readOptionalNumber(player: PlayerState, key: string, fallback: number): number {
-  return (player as PlayerState & Record<string, number | undefined>)[key] ?? fallback;
+function hasMoveContact(player: PlayerState): boolean {
+  return Boolean(player.activeHitDef) || player.hitDefUsed;
+}
+
+function readOptionalNumber(player: PlayerState | undefined, key: string, fallback: number): number {
+  return (player as PlayerState & Record<string, number | undefined> | undefined)?.[key] ?? fallback;
+}
+
+function readOptionalBool(player: PlayerState | undefined, key: string, fallback: boolean): boolean {
+  return (player as PlayerState & Record<string, boolean | undefined> | undefined)?.[key] ?? fallback;
+}
+
+function readOptionalString(player: PlayerState | undefined, key: string, fallback: string): string {
+  return (player as PlayerState & Record<string, string | undefined> | undefined)?.[key] ?? fallback;
 }
 
 function readPlayerVar(player: PlayerState, index: number): number {
@@ -319,10 +424,36 @@ function readPlayerFVar(player: PlayerState, index: number): number {
   return (player as PlayerState & { fvars?: Record<number, number> }).fvars?.[index] ?? 0;
 }
 
+function readGetHitVar(player: PlayerState, name: string): number {
+  const normalized = name.trim().toLowerCase();
+  const vars = (player as PlayerState & { getHitVars?: Record<string, number> }).getHitVars;
+  if (vars?.[normalized] !== undefined) return vars[normalized];
+
+  switch (normalized) {
+    case 'xvel': return readOptionalNumber(player, 'hitVelX', 0);
+    case 'yvel': return readOptionalNumber(player, 'hitVelY', 0);
+    case 'fall': return readOptionalBool(player, 'hitFall', false) ? 1 : 0;
+    case 'damage': return 0;
+    case 'hitcount': return 0;
+    case 'hittime': return 0;
+    case 'slidetime': return 0;
+    case 'ctrltime': return 0;
+    default: return 0;
+  }
+}
+
 function readDefaultConst(name: string): number {
   switch (name.trim().toLowerCase()) {
     case 'data.life': return 1000;
     case 'data.power': return 3000;
+    case 'size.xscale': return 1;
+    case 'size.yscale': return 1;
+    case 'size.ground.back': return 15;
+    case 'size.ground.front': return 16;
+    case 'size.air.back': return 12;
+    case 'size.air.front': return 12;
+    case 'size.height': return 60;
+    case 'size.attack.dist': return 160;
     case 'velocity.walk.fwd.x': return 2;
     case 'velocity.walk.back.x': return -2;
     case 'velocity.jump.y': return -8.4;
@@ -330,6 +461,8 @@ function readDefaultConst(name: string): number {
     case 'velocity.jump.fwd.x': return 3.2;
     case 'velocity.jump.back.x': return -3.2;
     case 'movement.airjump.num': return 1;
+    case 'movement.airjump.height': return 35;
+    case 'movement.yaccel': return 0.6;
     default: return 0;
   }
 }
