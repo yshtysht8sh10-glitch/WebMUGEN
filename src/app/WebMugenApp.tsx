@@ -154,12 +154,13 @@ export function WebMugenApp() {
 
           if (ENABLE_RUNTIME_FALLBACKS) {
             nextState = stepFallbackMotion(nextState);
-            nextState = applyFallbackStageRules(nextState);
-            nextState = resolveFallbackHits(nextState, character.air);
-            nextState = applyFallbackHitRecovery(nextState);
           } else {
             nextState = stepCnsPhysicsMotion(nextState);
           }
+
+          nextState = applyFallbackStageRules(nextState);
+          nextState = resolveFallbackHits(nextState, character.air);
+          nextState = applyFallbackHitRecovery(nextState);
 
           nextRoundState = stepRoundState(nextRoundState, nextState);
           nextScore = updateRoundScore(nextScore, nextRoundState);
