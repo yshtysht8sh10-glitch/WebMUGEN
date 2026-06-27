@@ -70,6 +70,7 @@ const RECOGNIZED_NO_OP_CONTROLLERS = new Map<string, string>([
   ['hitdef', 'HitDef'],
   ['hitfallset', 'HitFallSet'],
   ['hitoverride', 'HitOverride'],
+  ['makedust', 'MakeDust'],
   ['modifyexplod', 'ModifyExplod'],
   ['movehitreset', 'MoveHitReset'],
   ['palfx', 'PalFX'],
@@ -91,6 +92,7 @@ const RECOGNIZED_NO_OP_CONTROLLERS = new Map<string, string>([
   ['targetstate', 'TargetState'],
   ['targetveladd', 'TargetVelAdd'],
   ['targetvelset', 'TargetVelSet'],
+  ['zoom', 'Zoom'],
 ]);
 
 export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, input: CnsRuntimeInput = {}): CnsRuntimeResult {
@@ -244,7 +246,7 @@ function executeController(player: PlayerState, controller: CnsStateController, 
   if (type === 'sprpriority') return withExtendedPlayer(player, { sprPriority: num(controller, 'value') ?? 0 }, 'SprPriority');
   if (type === 'offset') return withExtendedPlayer(player, { drawOffset: { x: num(controller, 'x') ?? 0, y: num(controller, 'y') ?? 0 } }, 'Offset');
   if (type === 'trans') return withExtendedPlayer(player, { transparent: str(controller, 'trans') ?? str(controller, 'value') ?? '' }, 'Trans');
-  if (type === 'width') return withExtendedPlayer(player, { width: { edge: num(controller, 'edge'), player: num(controller, 'player') } }, 'Width');
+  if (type === 'width') return withExtendedPlayer(player, { width: { edge: num(controller, 'edge') ?? undefined, player: num(controller, 'player') ?? undefined } }, 'Width');
   if (type === 'afterimagetime') return withExtendedPlayer(player, { afterImageTime: num(controller, 'time') ?? num(controller, 'value') ?? 0 }, 'AfterImageTime');
   if (type === 'angleadd') return withExtendedPlayer(player, { angle: readAngle(player) + (num(controller, 'value') ?? 0) }, 'AngleAdd');
   if (type === 'anglemul') return withExtendedPlayer(player, { angle: readAngle(player) * (num(controller, 'value') ?? 1) }, 'AngleMul');
@@ -253,7 +255,7 @@ function executeController(player: PlayerState, controller: CnsStateController, 
   if (type === 'nothitby') return withExtendedPlayer(player, { notHitBy: str(controller, 'value') ?? str(controller, 'attr') }, 'NotHitBy');
   if (type === 'hitfallvel') return withPlayer({ ...player, vy: num(controller, 'y') ?? player.vy }, hasNum(controller, 'y'), 'HitFallVel');
   if (type === 'hitvelset') return withPlayer({ ...player, vx: num(controller, 'x') ?? player.vx, vy: num(controller, 'y') ?? player.vy }, hasNum(controller, 'x') || hasNum(controller, 'y'), 'HitVelSet');
-  if (type === 'hitfalldamage') return addLife(player, { ...controller, params: { ...controller.params, value: -(num(controller, 'value') ?? 0) } });
+  if (type === 'hitfalldamage') return hitFallDamage(player, controller);
   if (type === 'pause') return withExtendedPlayer(player, { pauseTime: num(controller, 'time') ?? 0 }, 'Pause');
   if (type === 'superpause') return withExtendedPlayer(player, { superPauseTime: num(controller, 'time') ?? 0 }, 'SuperPause');
   if (type === 'selfstate') {
@@ -331,6 +333,11 @@ function hitAdd(player: PlayerState, controller: CnsStateController): Controller
   const value = num(controller, 'value');
   const extended = player as ExtendedPlayerState;
   return value === null ? withPlayer(player, false, 'HitAdd') : withPlayer({ ...player, hitCount: Math.max(0, (extended.hitCount ?? 0) + value) } as PlayerState, true, 'HitAdd');
+}
+
+function hitFallDamage(player: PlayerState, controller: CnsStateController): ControllerResult {
+  const value = num(controller, 'value');
+  return value === null ? withPlayer(player, false, 'HitFallDamage') : withPlayer({ ...player, life: Math.max(0, player.life - value) }, true, 'HitFallDamage');
 }
 
 function setVarController(player: PlayerState, controller: CnsStateController): ControllerResult {
