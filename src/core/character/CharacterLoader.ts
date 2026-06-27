@@ -120,27 +120,50 @@ function filterCommonCommandControllers(
   characterCommandState: CnsStateDefinition,
   commonControllers: readonly CnsStateController[],
 ): CnsStateController[] {
-  const characterChangeStateCommandNames = collectPositiveChangeStateCommandTriggerNames(characterCommandState.controllers);
+  const characterPrimaryCommandNames = collectPrimaryChangeStateCommandTriggerNames(characterCommandState.controllers);
 
   return commonControllers.filter((controller) => {
-    const commonCommandNames = collectPositiveChangeStateCommandTriggerNames([controller]);
-    return !Array.from(commonCommandNames).some((commandName) => characterChangeStateCommandNames.has(commandName));
+    const commonPrimaryCommandNames = collectPrimaryChangeStateCommandTriggerNames([controller]);
+    return !Array.from(commonPrimaryCommandNames).some((commandName) => characterPrimaryCommandNames.has(commandName));
   });
 }
 
-function collectPositiveChangeStateCommandTriggerNames(controllers: readonly CnsStateController[]): Set<string> {
+function collectPrimaryChangeStateCommandTriggerNames(controllers: readonly CnsStateController[]): Set<string> {
   const names = new Set<string>();
 
   for (const controller of controllers) {
     if (controller.type.toLowerCase() !== 'changestate') continue;
 
-    for (const trigger of controller.triggers) {
-      const match = trigger.expression.match(/^\s*command\s*=\s*"([^"]+)"\s*$/i);
-      if (match) names.add(match[1].toLowerCase());
+    const triggerAllCommands = collectPositiveCommandTriggerNames(
+      controller.triggers.filter((trigger) => trigger.name.toLowerCase() === 'triggerall'),
+    );
+
+    if (triggerAllCommands.size > 0) {
+      addAll(names, triggerAllCommands);
+      continue;
     }
+
+    addAll(names, collectPositiveCommandTriggerNames(controller.triggers));
   }
 
   return names;
+}
+
+function collectPositiveCommandTriggerNames(
+  triggers: readonly CnsStateController['triggers'][number][],
+): Set<string> {
+  const names = new Set<string>();
+
+  for (const trigger of triggers) {
+    const match = trigger.expression.match(/^\s*command\s*=\s*"([^"]+)"\s*$/i);
+    if (match) names.add(match[1].toLowerCase());
+  }
+
+  return names;
+}
+
+function addAll(target: Set<string>, source: ReadonlySet<string>): void {
+  for (const item of source) target.add(item);
 }
 
 function mergeCmdDocuments(character: CmdDocument, commonDocuments: readonly CmdDocument[]): CmdDocument {
