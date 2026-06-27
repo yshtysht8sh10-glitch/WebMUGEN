@@ -11,6 +11,8 @@ describe('CnsRuntimeTrigger', () => {
     ctrl: true,
     stateType: 'S' as const,
     moveType: 'I' as const,
+    vx: 3,
+    vy: -2,
   };
 
   it('evaluates animtime using MUGEN-like value when supplied', () => {
@@ -42,6 +44,7 @@ describe('CnsRuntimeTrigger', () => {
     expect(evaluateCnsRuntimeTrigger('Alive', { player })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('Var(59) = 0', { player })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('SysVar(0) = 0', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('FVar(0) = 0', { player })).toBe(true);
   });
 
   it('evaluates physics and internal y-position triggers', () => {
@@ -58,6 +61,32 @@ describe('CnsRuntimeTrigger', () => {
     expect(evaluateCnsRuntimeTrigger(`pos y < ${DEFAULT_GROUND_Y}`, {
       player: { ...groundedAirPhysicsPlayer, y: DEFAULT_GROUND_Y - 1 },
     })).toBe(true);
+  });
+
+  it('evaluates boolean operators and ranges', () => {
+    expect(evaluateCnsRuntimeTrigger('ctrl && statetype = S', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('!(statetype = A)', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('time = [0, 10]', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('vel x > 2 || vel y > 0', { player })).toBe(true);
+  });
+
+  it('evaluates opponent and count-style triggers with safe defaults', () => {
+    const opponent = { ...createInitialGameState().players[1], x: player.x + 20, stateType: 'C' as const };
+
+    expect(evaluateCnsRuntimeTrigger('P2BodyDist X < 30', { player, opponent })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('P2StateType = C', { player, opponent })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('NumEnemy > 0', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('NumHelper = 0', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('NumExplod = 0', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('NumProj = 0', { player })).toBe(true);
+  });
+
+  it('evaluates constants and misc numeric triggers', () => {
+    expect(evaluateCnsRuntimeTrigger('Const(data.life) = 1000', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('Life > 0', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('Power = 0', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('Random < 1000', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('HitPauseTime = 0', { player })).toBe(true);
   });
 
   it('evaluates trigger groups as OR of AND groups', () => {
