@@ -11,7 +11,6 @@ import { findSprite } from '../../core/sprite/SpritePackLoader';
 import type { SpritePack } from '../../core/sprite/SpriteTypes';
 import type { ImageDataSpritePack } from '../../core/sprite/ImageDataSpriteTypes';
 import { ImageDataSpriteRenderer } from './ImageDataSpriteRenderer';
-import { createSpriteDebugInfo } from '../../core/sprite/SpriteDebugInfo';
 import type { HitFeedbackState } from '../../core/engine/HitFeedback';
 import { HitFeedbackRenderer } from './HitFeedbackRenderer';
 import type { RoundState } from '../../core/engine/RoundState';
@@ -53,8 +52,6 @@ export class CanvasRenderer {
     this.drawDebugBoxes(ctx, state.players[0]);
     this.drawDebugBoxes(ctx, state.players[1]);
     this.drawProjectileDebugBoxes(ctx, state.projectiles);
-    this.drawDebug(ctx, state);
-    this.drawSpriteDebug(ctx, state);
   }
 
   private drawStage(ctx: CanvasRenderingContext2D): void {
@@ -245,50 +242,5 @@ export class CanvasRenderer {
   private strokeRect(ctx: CanvasRenderingContext2D, rect: Rect, color: string): void {
     ctx.strokeStyle = color;
     ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
-  }
-
-  private drawDebug(ctx: CanvasRenderingContext2D, state: GameState): void {
-    const [p1, p2] = state.players;
-    ctx.fillStyle = '#fff';
-    ctx.font = '14px monospace';
-    ctx.fillText(
-      `frame=${state.frame} p1=${p1.stateNo}/${p1.animNo}:${p1.animTime} p2=${p2.stateNo}/${p2.animNo}:${p2.animTime}`,
-      12,
-      72,
-    );
-    ctx.fillText(`p1 life=${p1.life} p2 life=${p2.life} projectiles=${state.projectiles.length}`, 12, 92);
-  }
-
-  private drawSpriteDebug(ctx: CanvasRenderingContext2D, state: GameState): void {
-    const info = createSpriteDebugInfo(
-      state.players,
-      this.airDocument,
-      this.imageDataSpritePack,
-      this.spritePack,
-    );
-
-    ctx.save();
-    ctx.fillStyle = 'rgba(17, 24, 39, 0.78)';
-    ctx.fillRect(8, 104, 360, 78);
-    ctx.font = '12px monospace';
-    ctx.fillStyle = '#e5e7eb';
-    ctx.fillText(`sprites imageData=${info.imageDataSpriteCount} png=${info.pngSpriteCount}`, 16, 122);
-
-    info.players.forEach((playerInfo, index) => {
-      const y = 142 + index * 18;
-      const status = playerInfo.hasImageDataSprite
-        ? 'imageData:yes'
-        : playerInfo.hasPngSprite
-          ? 'png:yes'
-          : 'missing';
-      ctx.fillStyle = playerInfo.hasImageDataSprite || playerInfo.hasPngSprite ? '#bbf7d0' : '#fecaca';
-      ctx.fillText(
-        `p${playerInfo.playerId} anim=${playerInfo.animNo}:${playerInfo.animTime} sprite=${playerInfo.key ?? 'none'} ${status}`,
-        16,
-        y,
-      );
-    });
-
-    ctx.restore();
   }
 }
