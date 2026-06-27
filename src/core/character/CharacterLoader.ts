@@ -9,7 +9,6 @@ import type { CharacterAssets, CharacterPaletteAsset } from './CharacterTypes';
 
 const COMMON_CNS_PATH = '/chars/common1.cns';
 const COMMON_CMD_PATHS = ['/chars/common.cmd', '/chars/common1.cmd'];
-const COMMON_BASELINE_MOVEMENT_COMMANDS = new Set(['holdup', 'holddown', 'holdfwd', 'holdback']);
 
 export type CharacterAssetFetcher = {
   text(path: string): Promise<string>;
@@ -125,14 +124,8 @@ function filterCommonCommandControllers(
 
   return commonControllers.filter((controller) => {
     const commonPrimaryCommandNames = collectPrimaryChangeStateCommandTriggerNames([controller]);
-    if (hasCommonBaselineMovementCommand(commonPrimaryCommandNames)) return true;
-
     return !Array.from(commonPrimaryCommandNames).some((commandName) => characterPrimaryCommandNames.has(commandName));
   });
-}
-
-function hasCommonBaselineMovementCommand(commandNames: ReadonlySet<string>): boolean {
-  return Array.from(commandNames).some((commandName) => COMMON_BASELINE_MOVEMENT_COMMANDS.has(commandName));
 }
 
 function collectPrimaryChangeStateCommandTriggerNames(controllers: readonly CnsStateController[]): Set<string> {
