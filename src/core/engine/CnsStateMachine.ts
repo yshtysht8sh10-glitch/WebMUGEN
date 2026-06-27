@@ -17,6 +17,7 @@ const GROUND_Y = 285;
 const GROUND_FRICTION = 0.82;
 const AIR_GRAVITY = 0.45;
 const COMMON_JUMP_LAND_STATE = 52;
+const GLOBAL_STATE_ORDER = [-2, -1];
 
 export function stepPlayerByCns(
   player: PlayerState,
@@ -41,41 +42,28 @@ export function stepPlayerByCnsWithEvents(
     };
   }
 
-  const state = findStateDefinition(document, player.stateNo);
   let nextPlayer = player;
-  let changedState = false;
   let velocityChanged = false;
   let projectiles: ProjectileState[] = [];
 
-  if (state !== undefined) {
-    nextPlayer = applyStateDefDefaults(nextPlayer, state);
+  for (const stateNo of GLOBAL_STATE_ORDER) {
+    const globalResult = executeStateIfPresent(nextPlayer, document, context, stateNo);
+    nextPlayer = globalResult.player;
+    velocityChanged = velocityChanged || globalResult.velocityChanged;
+    projectiles = [...projectiles, ...globalResult.projectiles];
 
-    const result = executeControllers(nextPlayer, state.controllers, {
-      input: context.input,
-      animLength: context.animLength,
-      moveHit: context.moveHit,
-    });
-
-    nextPlayer = result.player;
-    changedState = result.changedState;
-    velocityChanged = result.velocityChanged;
-    projectiles = result.projectiles;
+    if (globalResult.changedState) {
+      return enterChangedState(nextPlayer, document, projectiles);
+    }
   }
 
-  if (changedState) {
-    const nextState = findStateDefinition(document, nextPlayer.stateNo);
-    if (nextState !== undefined) {
-      nextPlayer = applyStateDefDefaults(nextPlayer, nextState);
-    }
+  const stateResult = executeStateIfPresent(nextPlayer, document, context, nextPlayer.stateNo);
+  nextPlayer = stateResult.player;
+  velocityChanged = velocityChanged || stateResult.velocityChanged;
+  projectiles = [...projectiles, ...stateResult.projectiles];
 
-    return {
-      player: {
-        ...nextPlayer,
-        stateTime: 0,
-        animTime: 0,
-      },
-      projectiles,
-    };
+  if (stateResult.changedState) {
+    return enterChangedState(nextPlayer, document, projectiles);
   }
 
   nextPlayer = applyPhysics(nextPlayer, velocityChanged, context.input);
@@ -97,6 +85,44 @@ export function findStateDefinition(
   stateNo: number,
 ): CnsStateDefinition | undefined {
   return document.states.find((state) => state.stateNo === stateNo);
+}
+
+function executeStateIfPresent(
+  player: PlayerState,
+  document: CnsDocument,
+  context: StepPlayerByCnsContext,
+  stateNo: number,
+): { player: PlayerState; changedState: boolean; velocityChanged: boolean; projectiles: ProjectileState[] } {
+  const state = findStateDefinition(document, stateNo);
+  if (state === undefined) {
+    return { player, changedState: false, velocityChanged: false, projectiles: [] };
+  }
+
+  const result = executeControllers(applyStateDefDefaults(player, state), state.controllers, context);
+  return {
+    player: result.player,
+    changedState: result.changedState,
+    velocityChanged: result.velocityChanged,
+    projectiles: result.projectiles,
+  };
+}
+
+function enterChangedState(
+  player: PlayerState,
+  document: CnsDocument,
+  projectiles: ProjectileState[],
+): StepPlayerByCnsResult {
+  const nextState = findStateDefinition(document, player.stateNo);
+  const nextPlayer = nextState !== undefined ? applyStateDefDefaults(player, nextState) : player;
+
+  return {
+    player: {
+      ...nextPlayer,
+      stateTime: 0,
+      animTime: 0,
+    },
+    projectiles,
+  };
 }
 
 function applyStateDefDefaults(player: PlayerState, state: CnsStateDefinition): PlayerState {
