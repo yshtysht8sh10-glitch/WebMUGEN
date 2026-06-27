@@ -22,6 +22,10 @@ const DIRECTIONAL_COMMAND_NAMES = new Set([
   'b',
   'u',
   'd',
+  'df',
+  'db',
+  'uf',
+  'ub',
 ]);
 
 export type CharacterAssetFetcher = {
@@ -147,18 +151,6 @@ function collectPrimaryCommandRoutes(controllers: readonly CnsStateController[])
 
   for (const controller of controllers) {
     if (controller.type.toLowerCase() !== 'changestate') continue;
-
-    const triggerAllCommandNames = selectPrimaryCommandNames(collectPositiveCommandNames(
-      controller.triggers.filter((trigger) => trigger.name.toLowerCase() === 'triggerall'),
-    ));
-
-    if (triggerAllCommandNames.size > 0) {
-      addAll(names, triggerAllCommandNames);
-      continue;
-    }
-
-    // If a controller has no triggerall command, fall back to its positive command triggers.
-    // Direction-only controllers such as common crouch/jump still remain primary commands.
     addAll(names, selectPrimaryCommandNames(collectPositiveCommandNames(controller.triggers)));
   }
 
