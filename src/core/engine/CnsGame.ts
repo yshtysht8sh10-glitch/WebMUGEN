@@ -7,6 +7,7 @@ import { getAnimationLength } from '../animation/AnimationPlayer';
 import { resolveClsnHits } from '../collision/CollisionResolver';
 import { resolveProjectileHits, stepProjectiles } from '../projectile/ProjectileSystem';
 import { applyFallbackControls } from './FallbackControls';
+import { applyFallbackStageRules } from './FallbackStageRules';
 import { stepPlayerByCnsWithEvents } from './CnsStateMachine';
 import { resolveSimpleHits } from './SimpleCollision';
 import type { FrameInput, GameState, PlayerInput, PlayerState } from './types';
@@ -58,14 +59,14 @@ export function stepGameByCns(
 
   const projectileResult = resolveProjectileHits(directHitResult.players, steppedProjectiles);
 
-  return {
+  return applyFallbackStageRules({
     frame: current.frame + 1,
     players: projectileResult.players,
     projectiles: projectileResult.projectiles,
     hitEvents: [...directHitResult.hitEvents, ...projectileResult.hitEvents],
     commandBuffers: [p1CommandInput.buffer, p2CommandInput.buffer],
     commandNames: [p1CommandInput.commandNames, p2CommandInput.commandNames],
-  };
+  });
 }
 
 type AttachedCommandInput = {
