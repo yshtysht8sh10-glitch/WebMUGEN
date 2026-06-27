@@ -1,8 +1,16 @@
 ; WebMUGEN common command routing
 ; This file provides baseline MUGEN-style movement ChangeState routes.
-; Character CMD Statedef -1 routes take precedence when they define the same command.
+; Character CMD Statedef -1 routes take precedence when they define the same primary command.
 ; Physics integration is handled by the runtime, but common movement state routing lives here.
 ; NOTE: current WebMUGEN trigger coordinates use the internal screen Y ground value 285.
+
+[Command]
+name = "FF"
+command = F, F
+
+[Command]
+name = "BB"
+command = B, B
 
 [Command]
 name = "holdup"
@@ -22,6 +30,22 @@ command = /B
 
 [Statedef -1]
 
+[State -1, Common Forward Dash]
+type = ChangeState
+triggerall = command = "FF"
+triggerall = command != "holddown"
+trigger1 = statetype = S
+trigger1 = ctrl
+value = 100
+
+[State -1, Common Back Dash]
+type = ChangeState
+triggerall = command = "BB"
+triggerall = command != "holddown"
+trigger1 = statetype = S
+trigger1 = ctrl
+value = 105
+
 [State -1, Common Jump]
 type = ChangeState
 triggerall = command = "holdup"
@@ -30,13 +54,35 @@ trigger1 = statetype = S
 trigger1 = ctrl
 value = 40
 
-[State -1, Common Jump Velocity]
+[State -1, Common Jump Vertical Velocity]
 type = VelSet
 triggerall = command = "holdup"
+triggerall = command != "holdfwd"
+triggerall = command != "holdback"
 triggerall = command != "holddown"
 trigger1 = stateno = 40
 trigger1 = time = 0
 x = 0
+y = -8.4
+
+[State -1, Common Jump Forward Velocity]
+type = VelSet
+triggerall = command = "holdup"
+triggerall = command = "holdfwd"
+triggerall = command != "holddown"
+trigger1 = stateno = 40
+trigger1 = time = 0
+x = 3.2
+y = -8.4
+
+[State -1, Common Jump Back Velocity]
+type = VelSet
+triggerall = command = "holdup"
+triggerall = command = "holdback"
+triggerall = command != "holddown"
+trigger1 = stateno = 40
+trigger1 = time = 0
+x = -3.2
 y = -8.4
 
 [State -1, Common Jump Rising]
@@ -80,8 +126,8 @@ triggerall = command = "holdback"
 triggerall = command != "holddown"
 trigger1 = statetype = S
 trigger1 = ctrl
-trigger1 = stateno != 20
-value = 20
+trigger1 = stateno != 21
+value = 21
 
 [Statedef -2]
 
