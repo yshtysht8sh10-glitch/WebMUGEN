@@ -9,6 +9,20 @@ import type { CharacterAssets, CharacterPaletteAsset } from './CharacterTypes';
 
 const COMMON_CNS_PATH = '/chars/common1.cns';
 const COMMON_CMD_PATHS = ['/chars/common.cmd', '/chars/common1.cmd'];
+const DIRECTIONAL_COMMAND_NAMES = new Set([
+  'holdfwd',
+  'holdback',
+  'holdup',
+  'holddown',
+  'fwd',
+  'back',
+  'up',
+  'down',
+  'f',
+  'b',
+  'u',
+  'd',
+]);
 
 export type CharacterAssetFetcher = {
   text(path: string): Promise<string>;
@@ -134,9 +148,9 @@ function collectPrimaryCommandRoutes(controllers: readonly CnsStateController[])
   for (const controller of controllers) {
     if (controller.type.toLowerCase() !== 'changestate') continue;
 
-    const triggerAllCommandNames = collectPositiveCommandNames(
+    const triggerAllCommandNames = selectPrimaryCommandNames(collectPositiveCommandNames(
       controller.triggers.filter((trigger) => trigger.name.toLowerCase() === 'triggerall'),
-    );
+    ));
 
     if (triggerAllCommandNames.size > 0) {
       addAll(names, triggerAllCommandNames);
@@ -144,11 +158,16 @@ function collectPrimaryCommandRoutes(controllers: readonly CnsStateController[])
     }
 
     // If a controller has no triggerall command, fall back to its positive command triggers.
-    // This keeps small test fixtures and simple real-world CNS snippets working.
-    addAll(names, collectPositiveCommandNames(controller.triggers));
+    // Direction-only controllers such as common crouch/jump still remain primary commands.
+    addAll(names, selectPrimaryCommandNames(collectPositiveCommandNames(controller.triggers)));
   }
 
   return names;
+}
+
+function selectPrimaryCommandNames(commandNames: ReadonlySet<string>): Set<string> {
+  const nonDirectionalNames = Array.from(commandNames).filter((commandName) => !DIRECTIONAL_COMMAND_NAMES.has(commandName));
+  return new Set(nonDirectionalNames.length > 0 ? nonDirectionalNames : Array.from(commandNames));
 }
 
 function collectPositiveCommandNames(
