@@ -3,73 +3,20 @@ import { loadCharacterFromDef, resolveAssetPath, type CharacterAssetFetcher } fr
 
 describe('CharacterLoader', () => {
   it('resolves relative asset paths from def path', () => {
-    expect(resolveAssetPath('/chars/kfm', 'kfm.air')).toBe('/chars/kfm/kfm.air');
+    expect(resolveAssetPath('/chars/kfm', 'kfm.air')).toBe('/chars/kfm.air'.replace('/kfm.air', '/kfm/kfm.air'));
     expect(resolveAssetPath('/chars/kfm/', './kfm.air')).toBe('/chars/kfm/kfm.air');
     expect(resolveAssetPath('/chars/kfm', '/global/kfm.air')).toBe('/global/kfm.air');
   });
 
   it('loads def, cns, air, cmd, and CMD statedef assets', async () => {
     const textAssets = new Map<string, string>([
-      [
-        '/chars/kfm/kfm.def',
-        `
-[Files]
-cmd = kfm.cmd
-cns = kfm.cns
-anim = kfm.air
-`,
-      ],
-      [
-        '/chars/kfm/kfm.cns',
-        `
-[StateDef 0]
-type = S
-movetype = I
-physics = S
-anim = 0
-ctrl = 1
-`,
-      ],
-      [
-        '/chars/kfm/kfm.air',
-        `
-Begin Action 0
-0,0, 0,0, 5
-`,
-      ],
-      [
-        '/chars/kfm/kfm.cmd',
-        `
-[Command]
-name = "a"
-command = a
-time = 1
-
-[Statedef -1]
-
-[State -1, A]
-type = ChangeState
-triggerall = command = "a"
-trigger1 = ctrl
-value = 200
-`,
-      ],
+      ['/chars/kfm/kfm.def', '[Files]\ncmd = kfm.cmd\ncns = kfm.cns\nanim = kfm.air\n'],
+      ['/chars/kfm/kfm.cns', '[StateDef 0]\ntype = S\nmovetype = I\nphysics = S\nanim = 0\nctrl = 1\n'],
+      ['/chars/kfm/kfm.air', 'Begin Action 0\n0,0, 0,0, 5\n'],
+      ['/chars/kfm/kfm.cmd', '[Command]\nname = "a"\ncommand = a\ntime = 1\n\n[Statedef -1]\n\n[State -1, A]\ntype = ChangeState\ntriggerall = command = "a"\ntrigger1 = ctrl\nvalue = 200\n'],
     ]);
 
-    const fetcher: CharacterAssetFetcher = {
-      async text(path) {
-        const asset = textAssets.get(path);
-        if (asset === undefined) {
-          throw new Error(`missing text asset: ${path}`);
-        }
-        return asset;
-      },
-      async arrayBuffer() {
-        throw new Error('sff should not be loaded in this test');
-      },
-    };
-
-    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', fetcher);
+    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createTextOnlyFetcher(textAssets));
 
     expect(character.cns.states.map((state) => state.stateNo)).toEqual([0, -1]);
     expect(character.air.actions[0].actionNo).toBe(0);
@@ -80,78 +27,14 @@ value = 200
 
   it('loads common1 CNS states only when character CNS is missing them', async () => {
     const textAssets = new Map<string, string>([
-      [
-        '/chars/kfm/kfm.def',
-        `
-[Files]
-cmd = kfm.cmd
-cns = kfm.cns
-anim = kfm.air
-`,
-      ],
-      [
-        '/chars/kfm/kfm.cns',
-        `
-[StateDef 200]
-type = S
-movetype = A
-physics = S
-anim = 200
-ctrl = 0
-`,
-      ],
+      ['/chars/kfm/kfm.def', '[Files]\ncmd = kfm.cmd\ncns = kfm.cns\nanim = kfm.air\n'],
+      ['/chars/kfm/kfm.cns', '[StateDef 200]\ntype = S\nmovetype = A\nphysics = S\nanim = 200\nctrl = 0\n'],
       ['/chars/kfm/kfm.air', 'Begin Action 0\n0,0, 0,0, 5\n'],
-      [
-        '/chars/kfm/kfm.cmd',
-        `
-[Command]
-name = "x"
-command = x
-time = 1
-
-[Statedef -1]
-
-[State -1, X]
-type = ChangeState
-triggerall = command = "x"
-trigger1 = ctrl
-value = 200
-`,
-      ],
-      [
-        '/chars/common1.cns',
-        `
-[StateDef 0]
-type = S
-movetype = I
-physics = S
-anim = 0
-ctrl = 1
-
-[StateDef 200]
-type = S
-movetype = I
-physics = S
-anim = 999
-ctrl = 1
-`,
-      ],
+      ['/chars/kfm/kfm.cmd', '[Command]\nname = "x"\ncommand = x\ntime = 1\n\n[Statedef -1]\n\n[State -1, X]\ntype = ChangeState\ntriggerall = command = "x"\ntrigger1 = ctrl\nvalue = 200\n'],
+      ['/chars/common1.cns', '[StateDef 0]\ntype = S\nmovetype = I\nphysics = S\nanim = 0\nctrl = 1\n\n[StateDef 200]\ntype = S\nmovetype = I\nphysics = S\nanim = 999\nctrl = 1\n'],
     ]);
 
-    const fetcher: CharacterAssetFetcher = {
-      async text(path) {
-        const asset = textAssets.get(path);
-        if (asset === undefined) {
-          throw new Error(`missing text asset: ${path}`);
-        }
-        return asset;
-      },
-      async arrayBuffer() {
-        throw new Error('sff should not be loaded in this test');
-      },
-    };
-
-    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', fetcher);
+    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createTextOnlyFetcher(textAssets));
 
     expect(character.cns.states.map((state) => state.stateNo)).toEqual([200, -1, 0]);
     expect(character.cns.states.find((state) => state.stateNo === 200)?.initialAnim).toBe(200);
@@ -160,68 +43,14 @@ ctrl = 1
 
   it('merges common1 command state controllers into character command state', async () => {
     const textAssets = new Map<string, string>([
-      [
-        '/chars/kfm/kfm.def',
-        `
-[Files]
-cmd = kfm.cmd
-cns = kfm.cns
-anim = kfm.air
-`,
-      ],
+      ['/chars/kfm/kfm.def', '[Files]\ncmd = kfm.cmd\ncns = kfm.cns\nanim = kfm.air\n'],
       ['/chars/kfm/kfm.cns', '[StateDef 0]\ntype = S\nmovetype = I\nphysics = S\nanim = 0\nctrl = 1\n'],
       ['/chars/kfm/kfm.air', 'Begin Action 0\n0,0, 0,0, 5\n'],
-      [
-        '/chars/kfm/kfm.cmd',
-        `
-[Command]
-name = "a"
-command = a
-
-[Statedef -1]
-
-[State -1, A]
-type = ChangeState
-triggerall = command = "a"
-trigger1 = ctrl
-value = 200
-`,
-      ],
-      [
-        '/chars/common1.cns',
-        `
-[Statedef -1]
-
-[State -1, Jump]
-type = ChangeState
-triggerall = command = "holdup"
-trigger1 = ctrl
-value = 40
-
-[StateDef 40]
-type = A
-movetype = I
-physics = A
-anim = 40
-ctrl = 0
-`,
-      ],
+      ['/chars/kfm/kfm.cmd', '[Command]\nname = "a"\ncommand = a\n\n[Statedef -1]\n\n[State -1, A]\ntype = ChangeState\ntriggerall = command = "a"\ntrigger1 = ctrl\nvalue = 200\n'],
+      ['/chars/common1.cns', '[Statedef -1]\n\n[State -1, Jump]\ntype = ChangeState\ntriggerall = command = "holdup"\ntrigger1 = ctrl\nvalue = 40\n\n[StateDef 40]\ntype = A\nmovetype = I\nphysics = A\nanim = 40\nctrl = 0\n'],
     ]);
 
-    const fetcher: CharacterAssetFetcher = {
-      async text(path) {
-        const asset = textAssets.get(path);
-        if (asset === undefined) {
-          throw new Error(`missing text asset: ${path}`);
-        }
-        return asset;
-      },
-      async arrayBuffer() {
-        throw new Error('sff should not be loaded in this test');
-      },
-    };
-
-    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', fetcher);
+    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createTextOnlyFetcher(textAssets));
     const commandState = character.cns.states.find((state) => state.stateNo === -1);
 
     expect(character.cns.states.map((state) => state.stateNo)).toEqual([0, -1, 40]);
@@ -230,77 +59,15 @@ ctrl = 0
 
   it('loads common CMD command definitions and Statedef -1 routing', async () => {
     const textAssets = new Map<string, string>([
-      [
-        '/chars/kfm/kfm.def',
-        `
-[Files]
-cmd = kfm.cmd
-cns = kfm.cns
-anim = kfm.air
-`,
-      ],
+      ['/chars/kfm/kfm.def', '[Files]\ncmd = kfm.cmd\ncns = kfm.cns\nanim = kfm.air\n'],
       ['/chars/kfm/kfm.cns', '[StateDef 0]\ntype = S\nmovetype = I\nphysics = S\nanim = 0\nctrl = 1\n'],
       ['/chars/kfm/kfm.air', 'Begin Action 0\n0,0, 0,0, 5\n'],
-      [
-        '/chars/kfm/kfm.cmd',
-        `
-[Command]
-name = "a"
-command = a
-
-[Statedef -1]
-
-[State -1, A]
-type = ChangeState
-triggerall = command = "a"
-trigger1 = ctrl
-value = 200
-`,
-      ],
-      [
-        '/chars/common.cmd',
-        `
-[Command]
-name = "holdup"
-command = /U
-
-[Statedef -1]
-
-[State -1, Common Jump]
-type = ChangeState
-triggerall = command = "holdup"
-trigger1 = statetype = S
-trigger1 = ctrl
-value = 40
-`,
-      ],
-      [
-        '/chars/common1.cns',
-        `
-[StateDef 40]
-type = A
-movetype = I
-physics = A
-anim = 40
-ctrl = 0
-`,
-      ],
+      ['/chars/kfm/kfm.cmd', '[Command]\nname = "a"\ncommand = a\n\n[Statedef -1]\n\n[State -1, A]\ntype = ChangeState\ntriggerall = command = "a"\ntrigger1 = ctrl\nvalue = 200\n'],
+      ['/chars/common.cmd', '[Command]\nname = "holdup"\ncommand = /U\n\n[Statedef -1]\n\n[State -1, Common Jump]\ntype = ChangeState\ntriggerall = command = "holdup"\ntrigger1 = statetype = S\ntrigger1 = ctrl\nvalue = 40\n'],
+      ['/chars/common1.cns', '[StateDef 40]\ntype = A\nmovetype = I\nphysics = A\nanim = 40\nctrl = 0\n'],
     ]);
 
-    const fetcher: CharacterAssetFetcher = {
-      async text(path) {
-        const asset = textAssets.get(path);
-        if (asset === undefined) {
-          throw new Error(`missing text asset: ${path}`);
-        }
-        return asset;
-      },
-      async arrayBuffer() {
-        throw new Error('sff should not be loaded in this test');
-      },
-    };
-
-    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', fetcher);
+    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createTextOnlyFetcher(textAssets));
     const commandState = character.cns.states.find((state) => state.stateNo === -1);
 
     expect(character.cmd.commands.map((command) => command.name)).toContain('holdup');
@@ -310,128 +77,49 @@ ctrl = 0
 
   it('prefers character command routes over common command routes', async () => {
     const textAssets = new Map<string, string>([
-      [
-        '/chars/kfm/kfm.def',
-        `
-[Files]
-cmd = kfm.cmd
-cns = kfm.cns
-anim = kfm.air
-`,
-      ],
-      [
-        '/chars/kfm/kfm.cns',
-        `
-[StateDef 0]
-type = S
-movetype = I
-physics = S
-anim = 0
-ctrl = 1
-
-[StateDef 41]
-type = A
-movetype = I
-physics = A
-anim = 41
-ctrl = 0
-`,
-      ],
+      ['/chars/kfm/kfm.def', '[Files]\ncmd = kfm.cmd\ncns = kfm.cns\nanim = kfm.air\n'],
+      ['/chars/kfm/kfm.cns', '[StateDef 0]\ntype = S\nmovetype = I\nphysics = S\nanim = 0\nctrl = 1\n\n[StateDef 41]\ntype = A\nmovetype = I\nphysics = A\nanim = 41\nctrl = 0\n'],
       ['/chars/kfm/kfm.air', 'Begin Action 0\n0,0, 0,0, 5\n'],
-      [
-        '/chars/kfm/kfm.cmd',
-        `
-[Command]
-name = "holdup"
-command = /U
-
-[Statedef -1]
-
-[State -1, Character Jump]
-type = ChangeState
-triggerall = command = "holdup"
-trigger1 = ctrl
-value = 41
-`,
-      ],
-      [
-        '/chars/common.cmd',
-        `
-[Command]
-name = "holdup"
-command = /U
-
-[Statedef -1]
-
-[State -1, Common Jump]
-type = ChangeState
-triggerall = command = "holdup"
-trigger1 = ctrl
-value = 40
-`,
-      ],
+      ['/chars/kfm/kfm.cmd', '[Command]\nname = "holdup"\ncommand = /U\n\n[Statedef -1]\n\n[State -1, Character Jump]\ntype = ChangeState\ntriggerall = command = "holdup"\ntrigger1 = ctrl\nvalue = 41\n'],
+      ['/chars/common.cmd', '[Command]\nname = "holdup"\ncommand = /U\n\n[Statedef -1]\n\n[State -1, Common Jump]\ntype = ChangeState\ntriggerall = command = "holdup"\ntrigger1 = ctrl\nvalue = 40\n'],
       ['/chars/common1.cns', '[StateDef 40]\ntype = A\nmovetype = I\nphysics = A\nanim = 40\nctrl = 0\n'],
     ]);
 
-    const fetcher: CharacterAssetFetcher = {
-      async text(path) {
-        const asset = textAssets.get(path);
-        if (asset === undefined) {
-          throw new Error(`missing text asset: ${path}`);
-        }
-        return asset;
-      },
-      async arrayBuffer() {
-        throw new Error('sff should not be loaded in this test');
-      },
-    };
-
-    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', fetcher);
+    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createTextOnlyFetcher(textAssets));
     const commandState = character.cns.states.find((state) => state.stateNo === -1);
 
     expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([41]);
   });
 
+  it('keeps common crouch route when character defines crouching attacks', async () => {
+    const textAssets = new Map<string, string>([
+      ['/chars/kfm/kfm.def', '[Files]\ncmd = kfm.cmd\ncns = kfm.cns\nanim = kfm.air\n'],
+      ['/chars/kfm/kfm.cns', '[StateDef 0]\ntype = S\nmovetype = I\nphysics = S\nanim = 0\nctrl = 1\n\n[StateDef 10]\ntype = C\nmovetype = I\nphysics = C\nanim = 10\nctrl = 0\n\n[StateDef 400]\ntype = C\nmovetype = A\nphysics = C\nanim = 400\nctrl = 0\n'],
+      ['/chars/kfm/kfm.air', 'Begin Action 0\n0,0, 0,0, 5\n'],
+      ['/chars/kfm/kfm.cmd', '[Command]\nname = "a"\ncommand = a\n\n[Statedef -1]\n\n[State -1, Crouch Attack]\ntype = ChangeState\ntriggerall = command = "a"\ntriggerall = command = "holddown"\ntrigger1 = ctrl\nvalue = 400\n'],
+      ['/chars/common.cmd', '[Command]\nname = "holddown"\ncommand = /D\n\n[Statedef -1]\n\n[State -1, Common Crouch Start]\ntype = ChangeState\ntriggerall = command = "holddown"\ntrigger1 = statetype = S\ntrigger1 = ctrl\nvalue = 10\n'],
+      ['/chars/common1.cns', '[StateDef 10]\ntype = C\nmovetype = I\nphysics = C\nanim = 10\nctrl = 0\n'],
+    ]);
+
+    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createTextOnlyFetcher(textAssets));
+    const commandState = character.cns.states.find((state) => state.stateNo === -1);
+
+    expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([400, 10]);
+  });
+
   it('loads ACT palette assets declared by DEF pal entries', async () => {
     const paletteBytes = new Uint8Array([1, 2, 3, 4, 5, 6]);
     const textAssets = new Map<string, string>([
-      [
-        '/chars/kfm/kfm.def',
-        `
-[Files]
-cmd = kfm.cmd
-cns = kfm.cns
-anim = kfm.air
-pal2 = kfm4.act
-pal1 = kfm6.act
-`,
-      ],
+      ['/chars/kfm/kfm.def', '[Files]\ncmd = kfm.cmd\ncns = kfm.cns\nanim = kfm.air\npal2 = kfm4.act\npal1 = kfm6.act\n'],
       ['/chars/kfm/kfm.cns', '[StateDef 0]\ntype = S\nmovetype = I\nphysics = S\nanim = 0\nctrl = 1\n'],
       ['/chars/kfm/kfm.air', 'Begin Action 0\n0,0, 0,0, 5\n'],
       ['/chars/kfm/kfm.cmd', '[Command]\nname = "a"\ncommand = a\ntime = 1\n'],
     ]);
-
     const binaryAssets = new Map<string, ArrayBuffer>([
       ['/chars/kfm/kfm6.act', toArrayBuffer(paletteBytes)],
       ['/chars/kfm/kfm4.act', toArrayBuffer(new Uint8Array([7, 8, 9]))],
     ]);
-
-    const fetcher: CharacterAssetFetcher = {
-      async text(path) {
-        const asset = textAssets.get(path);
-        if (asset === undefined) {
-          throw new Error(`missing text asset: ${path}`);
-        }
-        return asset;
-      },
-      async arrayBuffer(path) {
-        const asset = binaryAssets.get(path);
-        if (asset === undefined) {
-          throw new Error(`missing binary asset: ${path}`);
-        }
-        return asset;
-      },
-    };
+    const fetcher = createTextOnlyFetcher(textAssets, binaryAssets);
 
     const character = await loadCharacterFromDef('/chars/kfm/kfm.def', fetcher);
 
@@ -442,6 +130,28 @@ pal1 = kfm6.act
     expect(Array.from(character.palettes[0].bytes)).toEqual([1, 2, 3, 4, 5, 6]);
   });
 });
+
+function createTextOnlyFetcher(
+  textAssets: Map<string, string>,
+  binaryAssets = new Map<string, ArrayBuffer>(),
+): CharacterAssetFetcher {
+  return {
+    async text(path) {
+      const asset = textAssets.get(path);
+      if (asset === undefined) {
+        throw new Error(`missing text asset: ${path}`);
+      }
+      return asset;
+    },
+    async arrayBuffer(path) {
+      const asset = binaryAssets.get(path);
+      if (asset === undefined) {
+        throw new Error(`missing binary asset: ${path}`);
+      }
+      return asset;
+    },
+  };
+}
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const copy = new Uint8Array(bytes.length);
