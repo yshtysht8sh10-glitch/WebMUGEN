@@ -254,9 +254,9 @@ export class CanvasRenderer {
     ctx.fillText(
       `frame=${state.frame} p1=${p1.stateNo}/${p1.animNo}:${p1.animTime} p2=${p2.stateNo}/${p2.animNo}:${p2.animTime}`,
       12,
-      56,
+      72,
     );
-    ctx.fillText(`p1 life=${p1.life} p2 life=${p2.life} projectiles=${state.projectiles.length}`, 12, 76);
+    ctx.fillText(`p1 life=${p1.life} p2 life=${p2.life} projectiles=${state.projectiles.length}`, 12, 92);
   }
 
   private drawSpriteDebug(ctx: CanvasRenderingContext2D, state: GameState): void {
@@ -269,13 +269,13 @@ export class CanvasRenderer {
 
     ctx.save();
     ctx.fillStyle = 'rgba(17, 24, 39, 0.78)';
-    ctx.fillRect(8, 88, 360, 78);
+    ctx.fillRect(8, 104, 360, 78);
     ctx.font = '12px monospace';
     ctx.fillStyle = '#e5e7eb';
-    ctx.fillText(`sprites imageData=${info.imageDataSpriteCount} png=${info.pngSpriteCount}`, 16, 106);
+    ctx.fillText(`sprites imageData=${info.imageDataSpriteCount} png=${info.pngSpriteCount}`, 16, 122);
 
     info.players.forEach((playerInfo, index) => {
-      const y = 126 + index * 18;
+      const y = 142 + index * 18;
       const status = playerInfo.hasImageDataSprite
         ? 'imageData:yes'
         : playerInfo.hasPngSprite
