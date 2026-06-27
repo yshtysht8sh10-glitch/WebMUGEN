@@ -2,7 +2,7 @@
 
 Updated: 2026-06-28
 
-This document is the working compatibility checklist for WebMUGEN. Status is intentionally conservative: **Complete** requires either focused tests or a confirmed app integration path. Runtime shims that return safe defaults are marked **Partial**, not Complete.
+This document is the working compatibility checklist for WebMUGEN. Status is intentionally conservative: **Complete** requires either focused tests or a confirmed app integration path. Runtime shims that only recognize a controller or preserve safe no-op behavior are marked **Partial**, not Complete.
 
 Baseline references:
 
@@ -17,13 +17,11 @@ Baseline references:
 | Status | Meaning |
 |---|---|
 | Complete | Implemented and covered by tests or known runtime usage. |
-| Partial | Implemented for simple cases, implemented as a safe default, or implemented in one runtime path but not broadly compatible. |
+| Partial | Implemented for simple cases, implemented as a safe default, or recognized as a compatibility shim without full WinMUGEN behavior. |
 | Unsupported | Not implemented and no compatibility shim exists. |
 | Untested | Needs verification against WinMUGEN or existing code before marking. |
 
 ## StateDef Compatibility
-
-MUGEN characters may define arbitrary positive state numbers. Therefore the finite checklist is the common/reserved state set plus known conventional ranges. Character-specific state numbers are open-ended.
 
 | StateNo / Range | WinMUGEN Meaning | Status | Notes |
 |---:|---|---|---|
@@ -74,31 +72,102 @@ MUGEN characters may define arbitrary positive state numbers. Therefore the fini
 | hitdefpersist | Keep HitDef on state change | Unsupported | Hit system compatibility. |
 | movehitpersist | Keep MoveHit info | Unsupported | Hit system compatibility. |
 | hitcountpersist | Keep hit count | Unsupported | Hit system compatibility. |
-| sprpriority | Sprite priority | Partial | Runtime/rendering needs audit. |
+| sprpriority | Sprite priority | Partial | Runtime field exists; rendering needs audit. |
 
 ## State Controller Compatibility
 
+Each State Controller is listed on its own row. **Partial** means the controller is now recognized by runtime and will not silently disappear as unknown, but full WinMUGEN side effects may still be missing.
+
 | Controller | Status | Notes |
 |---|---|---|
+| AfterImage | Partial | Recognized safe no-op. Rendering effect not implemented. |
+| AfterImageTime | Partial | Stores duration field only. |
+| AllPalFX | Partial | Recognized safe no-op. Palette effect not implemented. |
+| AngleAdd | Partial | Tracks numeric angle only. Rendering transform incomplete. |
+| AngleDraw | Partial | Recognized safe no-op. Rendering transform incomplete. |
+| AngleMul | Partial | Tracks numeric angle only. Rendering transform incomplete. |
+| AngleSet | Partial | Tracks numeric angle only. Rendering transform incomplete. |
+| AppendToClipboard | Partial | Recognized safe no-op. Debug clipboard not implemented. |
+| AssertSpecial | Partial | Recognized safe no-op. Flag effects not implemented. |
+| AttackDist | Partial | Recognized safe no-op. Attack distance behavior not implemented. |
+| AttackMulSet | Partial | Stores attack multiplier field only. |
+| BGPalFX | Partial | Recognized safe no-op. Background palette effect not implemented. |
+| BindToParent | Partial | Recognized safe no-op. Binding behavior not implemented. |
+| BindToRoot | Partial | Recognized safe no-op. Binding behavior not implemented. |
+| BindToTarget | Partial | Recognized safe no-op. Binding behavior not implemented. |
 | ChangeAnim | Complete | Basic implementation exists. |
+| ChangeAnim2 | Partial | Recognized safe no-op. Target/common animation behavior not implemented. |
 | ChangeState | Complete | Basic implementation exists and state entry is centralized. |
+| ClearClipboard | Partial | Recognized safe no-op. Debug clipboard not implemented. |
 | CtrlSet | Complete | Basic implementation exists. |
+| DefenceMulSet | Partial | Stores defense multiplier field only. |
+| DestroySelf | Partial | Recognized safe no-op. Helper destruction not implemented. |
+| DisplayToClipboard | Partial | Recognized safe no-op. Debug clipboard not implemented. |
+| EnvColor | Partial | Recognized safe no-op. Screen color flash not implemented. |
+| EnvShake | Partial | Recognized safe no-op. Screen shake not implemented. |
+| Explod | Partial | Recognized safe no-op in CNS runtime; Explod system exists separately. |
+| ExplodBindTime | Partial | Recognized safe no-op. Explod binding not implemented here. |
+| ForceFeedback | Partial | Recognized safe no-op. Input device feedback not implemented. |
+| GameMakeAnim | Partial | Recognized safe no-op. Global animation effect not implemented. |
+| Gravity | Partial | Recognized safe no-op. Physics layer applies gravity separately. |
+| Helper | Partial | Recognized safe no-op in CNS runtime; Helper system exists separately. |
+| HitAdd | Partial | Stores hit count field only. |
+| HitBy | Partial | Stores allowed-hit attribute string only. |
+| HitDef | Partial | Recognized safe no-op in CNS runtime; HitDef parser/runtime exists separately. |
+| HitFallDamage | Partial | Applies simple life reduction. Full fall damage semantics incomplete. |
+| HitFallSet | Partial | Recognized safe no-op. Fall flags not implemented. |
+| HitFallVel | Partial | Applies simple Y velocity. Full get-hit semantics incomplete. |
+| HitOverride | Partial | Recognized safe no-op. Override table not implemented. |
+| HitVelSet | Partial | Applies simple velocity set. Full get-hit semantics incomplete. |
 | LifeAdd | Complete | Basic implementation exists. |
+| LifeSet | Complete | Basic implementation exists. |
+| MakeDust | Partial | Recognized safe no-op. Dust rendering not implemented. |
+| ModifyExplod | Partial | Recognized safe no-op. Explod mutation not implemented here. |
+| MoveHitReset | Partial | Recognized safe no-op. Move contact reset incomplete. |
+| MoveTypeSet | Complete | Basic implementation exists. |
+| NotHitBy | Partial | Stores not-hit attribute string only. |
+| Null | Complete | Explicit no-op. |
+| Offset | Partial | Stores draw offset field only. Rendering needs audit. |
+| PalFX | Partial | Recognized safe no-op. Palette effect not implemented. |
+| ParentVarAdd | Partial | Recognized safe no-op. Parent var lookup not implemented. |
+| ParentVarSet | Partial | Recognized safe no-op. Parent var lookup not implemented. |
+| Pause | Partial | Stores pause time field only. Full pause effect handled elsewhere/incomplete. |
+| PlayerPush | Partial | Stores player push flag only. Collision push integration needs audit. |
+| PlaySnd | Partial | Recognized safe no-op. Sound playback not implemented. |
 | PosAdd | Complete | Basic implementation exists. |
+| PosFreeze | Partial | Recognized safe no-op. Freeze behavior not implemented. |
 | PosSet | Complete | Basic implementation exists. |
 | PowerAdd | Complete | Basic implementation exists. |
+| PowerSet | Complete | Basic implementation exists. |
+| Projectile | Partial | Recognized safe no-op in CNS runtime; Projectile system exists separately. |
+| RemoveExplod | Partial | Recognized safe no-op. Explod removal not implemented here. |
+| ReversalDef | Partial | Recognized safe no-op. Reversal behavior not implemented. |
+| ScreenBound | Partial | Recognized safe no-op. Camera/screen bound behavior not implemented. |
+| SelfState | Partial | Basic state entry exists. Full custom-state ownership semantics incomplete. |
+| SndPan | Partial | Recognized safe no-op. Sound pan not implemented. |
+| SprPriority | Partial | Stores priority field only. Rendering priority needs audit. |
 | StateTypeSet | Complete | Basic implementation exists. |
+| StopSnd | Partial | Recognized safe no-op. Sound stopping not implemented. |
+| SuperPause | Partial | Stores super pause time field only. Full superpause behavior incomplete. |
+| TargetBind | Partial | Recognized safe no-op. Target binding not implemented. |
+| TargetDrop | Partial | Recognized safe no-op. Target list not implemented. |
+| TargetFacing | Partial | Recognized safe no-op. Target mutation not implemented. |
+| TargetLifeAdd | Partial | Recognized safe no-op. Target mutation not implemented. |
+| TargetPowerAdd | Partial | Recognized safe no-op. Target mutation not implemented. |
+| TargetState | Partial | Recognized safe no-op. Target custom state transition not implemented. |
+| TargetVelAdd | Partial | Recognized safe no-op. Target velocity mutation not implemented. |
+| TargetVelSet | Partial | Recognized safe no-op. Target velocity mutation not implemented. |
+| Trans | Partial | Stores transparency mode only. Rendering needs audit. |
+| Turn | Complete | Flips facing. |
 | VarAdd | Complete | Basic implementation exists. |
+| VarRandom | Partial | Deterministic midpoint placeholder. True RNG/range semantics incomplete. |
+| VarRangeSet | Partial | Basic integer var range set exists. Full syntax incomplete. |
 | VarSet | Complete | Basic implementation exists. |
 | VelAdd | Complete | Basic implementation exists. |
+| VelMul | Complete | Basic implementation exists. |
 | VelSet | Complete | Basic implementation exists. |
-| Explod | Partial | Explod system exists; CNS controller coverage needs audit. |
-| Helper | Partial | Helper system exists; CNS controller compatibility needs audit. |
-| HitDef | Partial | Parser/runtime exists; full compatibility incomplete. |
-| Null | Partial | Unknown controllers are effectively no-op; explicit Null should be tested. |
-| Pause | Partial | Pause system exists; controller compatibility needs audit. |
-| Projectile | Partial | Projectile system exists; CNS controller compatibility needs audit. |
-| All other listed sctrls | Unsupported | AfterImage, AssertSpecial, AttackDist, Bind*, ChangeAnim2, DestroySelf, EnvShake, Gravity, HitBy, HitOverride, HitVelSet, NotHitBy, PalFX, PlaySnd, SelfState, TargetState, Trans, Turn, Width, etc. remain unsupported unless individually upgraded. |
+| Width | Partial | Stores width fields only. Collision integration needs audit. |
+| Zoom | Partial | Recognized safe no-op. Camera zoom not implemented. |
 
 ## Trigger Compatibility
 
@@ -277,6 +346,7 @@ MUGEN characters may define arbitrary positive state numbers. Therefore the fini
 | 1 | Air physics and State51/52 landing | Jump compatibility depends on this. |
 | 1 | Arithmetic expression parser | Many real CNS triggers use arithmetic, not just simple comparisons. |
 | 2 | True P2/enemy/target/helper lookup | Current redirect support is mostly safe fallback. |
+| 2 | Full State Controller side effects | Every listed controller is recognized, but many are still safe shims. |
 | 2 | HitDef runtime completeness | Required for normal attacks and specials. |
 | 2 | SelfState / TargetState / custom states | Required for throws and get-hit states. |
 | 3 | Explod / Helper controller compatibility | Required for visual effects and projectiles beyond basics. |
