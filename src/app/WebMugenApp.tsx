@@ -115,8 +115,8 @@ export function WebMugenApp() {
         const p2Input = keysToP2Input(pressedKeys);
         p1CommandBufferRef.current.push(p1Input);
         p2CommandBufferRef.current.push(p2Input);
-        const p1Commands = resolveCommands(character.cmd, p1Input, p1CommandBufferRef.current).activeCommandNames;
-        const p2Commands = resolveCommands(character.cmd, p2Input, p2CommandBufferRef.current).activeCommandNames;
+        const p1Commands = normalizeResolvedCommands(resolveCommands(character.cmd, p1Input, p1CommandBufferRef.current).activeCommandNames);
+        const p2Commands = normalizeResolvedCommands(resolveCommands(character.cmd, p2Input, p2CommandBufferRef.current).activeCommandNames);
 
         setInputDebugLines(formatInputDebugOverlay(inputSnapshot));
         setCommandDebugLines(formatCnsCommandDebugOverlay(p1Commands, p2Commands));
@@ -231,4 +231,8 @@ export function WebMugenApp() {
       <p>Place character files under <code>public/chars/kfm/</code> to try DEF-based loading.</p>
     </div>
   );
+}
+
+function normalizeResolvedCommands(commands: Iterable<string>): ReadonlySet<string> {
+  return new Set(Array.from(commands, (command) => command.toLowerCase()));
 }
