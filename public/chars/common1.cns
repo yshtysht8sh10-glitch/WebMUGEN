@@ -56,23 +56,35 @@ triggerall = command != "holddown"
 trigger1 = facing = -1
 x = -2
 
-[State 20, WalkBack FacingRight]
+[State 20, ReturnToStand]
+type = ChangeState
+triggerall = command != "holdfwd"
+trigger1 = 1
+value = 0
+
+[Statedef 21]
+type = S
+movetype = I
+physics = S
+ctrl = 1
+anim = 21
+
+[State 21, WalkBack FacingRight]
 type = PosAdd
 triggerall = command = "holdback"
 triggerall = command != "holddown"
 trigger1 = facing = 1
 x = -2
 
-[State 20, WalkBack FacingLeft]
+[State 21, WalkBack FacingLeft]
 type = PosAdd
 triggerall = command = "holdback"
 triggerall = command != "holddown"
 trigger1 = facing = -1
 x = 2
 
-[State 20, ReturnToStand]
+[State 21, ReturnToStand]
 type = ChangeState
-triggerall = command != "holdfwd"
 triggerall = command != "holdback"
 trigger1 = 1
 value = 0
@@ -100,4 +112,48 @@ anim = 47
 [State 52, ReturnToStand]
 type = ChangeState
 trigger1 = time > 5
+value = 0
+
+[Statedef 100]
+type = S
+movetype = I
+physics = S
+ctrl = 0
+anim = 100
+
+[State 100, DashForward FacingRight]
+type = PosAdd
+trigger1 = facing = 1
+x = 6
+
+[State 100, DashForward FacingLeft]
+type = PosAdd
+trigger1 = facing = -1
+x = -6
+
+[State 100, ReturnToStand]
+type = ChangeState
+trigger1 = time > 12
+value = 0
+
+[Statedef 105]
+type = S
+movetype = I
+physics = S
+ctrl = 0
+anim = 105
+
+[State 105, DashBack FacingRight]
+type = PosAdd
+trigger1 = facing = 1
+x = -5
+
+[State 105, DashBack FacingLeft]
+type = PosAdd
+trigger1 = facing = -1
+x = 5
+
+[State 105, ReturnToStand]
+type = ChangeState
+trigger1 = time > 12
 value = 0
