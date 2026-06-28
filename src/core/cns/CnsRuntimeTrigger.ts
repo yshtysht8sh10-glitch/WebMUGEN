@@ -68,11 +68,13 @@ function evaluateComparison(expression: string, context: CnsRuntimeTriggerContex
     return compareString(source(context), stringMatch[2], stringMatch[3]);
   }
 
-  const numberMatch = expression.match(/^(.+?)\s*(=|!=|>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)$/);
-  if (numberMatch) {
-    const actual = readNumberExpression(numberMatch[1], context);
-    if (actual === null) return false;
-    return compareNumber(actual, numberMatch[2], Number(numberMatch[3]));
+  const numberComparison = splitTopLevelComparison(expression);
+  if (numberComparison) {
+    const actual = readNumberExpression(numberComparison.left, context);
+    const expected = readNumberExpression(numberComparison.right, context);
+    if (actual !== null && expected !== null) {
+      return compareNumber(actual, numberComparison.operator, expected);
+    }
   }
 
   const enumMatch = expression.match(/^(.+?)\s*(=|!=)\s*([a-z]+)$/i);
@@ -162,6 +164,24 @@ function readNumberExpression(rawExpression: string, context: CnsRuntimeTriggerC
   const numericLiteral = Number(expression);
   if (Number.isFinite(numericLiteral)) return numericLiteral;
 
+  const additive = splitTopLevelArithmetic(expression, ['+', '-']);
+  if (additive) {
+    const left = readNumberExpression(additive.left, context);
+    const right = readNumberExpression(additive.right, context);
+    if (left === null || right === null) return null;
+    return additive.operator === '+' ? left + right : left - right;
+  }
+
+  const multiplicative = splitTopLevelArithmetic(expression, ['*', '/', '%']);
+  if (multiplicative) {
+    const left = readNumberExpression(multiplicative.left, context);
+    const right = readNumberExpression(multiplicative.right, context);
+    if (left === null || right === null) return null;
+    if (multiplicative.operator === '*') return left * right;
+    if (multiplicative.operator === '/') return right === 0 ? null : left / right;
+    return right === 0 ? null : left % right;
+  }
+
   const absMatch = expression.match(/^abs\((.+)\)$/);
   if (absMatch) {
     const value = readNumberExpression(absMatch[1], context);
@@ -178,6 +198,31 @@ function readNumberExpression(rawExpression: string, context: CnsRuntimeTriggerC
   if (ceilMatch) {
     const value = readNumberExpression(ceilMatch[1], context);
     return value === null ? null : Math.ceil(value);
+  }
+
+  const mathMatch = expression.match(/^(acos|asin|atan|cos|exp|ln|log|sin|tan)\((.+)\)$/);
+  if (mathMatch) {
+    const value = readNumberExpression(mathMatch[2], context);
+    if (value === null) return null;
+    switch (mathMatch[1]) {
+      case 'acos': return Math.acos(value);
+      case 'asin': return Math.asin(value);
+      case 'atan': return Math.atan(value);
+      case 'cos': return Math.cos(value);
+      case 'exp': return Math.exp(value);
+      case 'ln': return value > 0 ? Math.log(value) : null;
+      case 'log': return value > 0 ? Math.log10(value) : null;
+      case 'sin': return Math.sin(value);
+      case 'tan': return Math.tan(value);
+      default: return null;
+    }
+  }
+
+  const conditionalMatch = expression.match(/^(cond|ifelse)\((.+)\)$/);
+  if (conditionalMatch) {
+    const args = splitTopLevelArguments(conditionalMatch[2]);
+    if (args.length !== 3) return null;
+    return readNumberExpression(evaluateBooleanExpression(args[0], context) ? args[1] : args[2], context);
   }
 
   const source = getNumberSource(expression);
@@ -206,6 +251,8 @@ function getNumberSource(rawName: string): NumberSource | null {
   if (numProjIdMatch) return () => 0;
 
   switch (name) {
+    case 'e': return () => Math.E;
+    case 'pi': return () => Math.PI;
     case 'time': return (context) => context.player.stateTime;
     case 'gametime': return (context) => context.gameTime ?? readOptionalNumber(context.player, 'gameTime', 0);
     case 'tickspersecond': return () => 60;
@@ -352,6 +399,103 @@ function splitTopLevel(expression: string, operator: '&&' | '||'): string[] {
 
   parts.push(expression.slice(start).trim());
   return parts.filter(Boolean);
+}
+
+function splitTopLevelArguments(expression: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let inQuote = false;
+  let start = 0;
+
+  for (let index = 0; index < expression.length; index += 1) {
+    const char = expression[index];
+    if (char === '"') inQuote = !inQuote;
+    if (inQuote) continue;
+    if (char === '(' || char === '[') depth += 1;
+    if (char === ')' || char === ']') depth -= 1;
+    if (depth === 0 && char === ',') {
+      parts.push(expression.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+
+  parts.push(expression.slice(start).trim());
+  return parts.filter(Boolean);
+}
+
+function splitTopLevelComparison(
+  expression: string,
+): { left: string; operator: string; right: string } | null {
+  for (const operator of ['!=', '>=', '<=', '=', '>', '<']) {
+    const index = findTopLevelOperator(expression, operator, false);
+    if (index < 0) continue;
+    return {
+      left: expression.slice(0, index).trim(),
+      operator,
+      right: expression.slice(index + operator.length).trim(),
+    };
+  }
+
+  return null;
+}
+
+function splitTopLevelArithmetic(
+  expression: string,
+  operators: readonly string[],
+): { left: string; operator: string; right: string } | null {
+  for (let index = expression.length - 1; index >= 0; index -= 1) {
+    const operator = expression[index];
+    if (!operators.includes(operator)) continue;
+    if (!isTopLevelOperatorAt(expression, operator, index)) continue;
+    if ((operator === '+' || operator === '-') && isUnarySign(expression, index)) continue;
+    return {
+      left: expression.slice(0, index).trim(),
+      operator,
+      right: expression.slice(index + 1).trim(),
+    };
+  }
+
+  return null;
+}
+
+function findTopLevelOperator(expression: string, operator: string, allowUnarySign: boolean): number {
+  for (let index = 0; index <= expression.length - operator.length; index += 1) {
+    if (expression.slice(index, index + operator.length) !== operator) continue;
+    if (!isTopLevelOperatorAt(expression, operator, index)) continue;
+    if (!allowUnarySign && (operator === '+' || operator === '-') && isUnarySign(expression, index)) continue;
+    return index;
+  }
+
+  return -1;
+}
+
+function isTopLevelOperatorAt(expression: string, operator: string, operatorIndex: number): boolean {
+  let depth = 0;
+  let inQuote = false;
+
+  for (let index = 0; index < operatorIndex; index += 1) {
+    const char = expression[index];
+    if (char === '"') inQuote = !inQuote;
+    if (inQuote) continue;
+    if (char === '(' || char === '[') depth += 1;
+    if (char === ')' || char === ']') depth -= 1;
+  }
+
+  if (depth !== 0 || inQuote) return false;
+
+  for (let index = operatorIndex; index < operatorIndex + operator.length; index += 1) {
+    const char = expression[index];
+    if (char === '"' || char === '(' || char === ')' || char === '[' || char === ']') return false;
+  }
+
+  return true;
+}
+
+function isUnarySign(expression: string, index: number): boolean {
+  const before = expression.slice(0, index).trimEnd();
+  const previous = before.length > 0 ? before[before.length - 1] : undefined;
+  return previous === undefined || previous === '(' || previous === '[' || previous === ',' ||
+    previous === '+' || previous === '-' || previous === '*' || previous === '/' || previous === '%';
 }
 
 function stripOuterParentheses(expression: string): string {

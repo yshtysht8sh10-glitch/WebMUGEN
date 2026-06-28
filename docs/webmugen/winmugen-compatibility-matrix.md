@@ -27,7 +27,7 @@ Baseline references:
 
 | StateNo | WinMUGEN Meaning | Status | Notes |
 |---:|---|---|---|
-| -3 | Global state | Unsupported | Runtime currently handles -1/-2. -3 should be added. |
+| -3 | Global state | Partial | `stepCnsStateRuntime` executes -3 before -2/-1. Broader coverage incomplete. |
 | -2 | Global state | Partial | `stepCnsStateRuntime` handles -2. Coverage incomplete. |
 | -1 | Command state | Partial | Used for CMD routing. Broader trigger support was added. |
 | 0 | Stand | Complete | Common baseline and idle fallback exist. |
@@ -213,7 +213,7 @@ Baseline references:
 | Trigger | Status | Notes |
 |---|---|---|
 | Abs | Complete | `Abs(...)` supported for numeric expressions. |
-| ACos | Unsupported | Math function not implemented. |
+| ACos | Complete | Numeric math function supported in runtime trigger evaluator. |
 | AILevel | Complete | Basic trigger support with default 0. |
 | Alive | Complete | Basic support. |
 | Anim | Complete | Numeric comparison. |
@@ -222,8 +222,8 @@ Baseline references:
 | AnimElemTime | Complete | Simplified approximation. |
 | AnimExist | Unsupported | Needs AIR lookup. |
 | AnimTime | Complete | Uses MUGEN-style animation duration helper. |
-| ASin | Unsupported | Math function not implemented. |
-| ATan | Unsupported | Math function not implemented. |
+| ASin | Complete | Numeric math function supported in runtime trigger evaluator. |
+| ATan | Complete | Numeric math function supported in runtime trigger evaluator. |
 | AuthorName | Partial | String source exists; metadata currently defaults empty. |
 | BackEdge | Unsupported | Screen/camera edge value not implemented. |
 | BackEdgeDist | Partial | Uses internal screen/player coordinate approximation. |
@@ -232,13 +232,13 @@ Baseline references:
 | CanRecover | Partial | Safe default currently returns true. |
 | Ceil | Complete | `Ceil(...)` supported for numeric expressions. |
 | Command | Complete | Basic command set matching. |
-| Cond | Unsupported | Expression function not implemented. |
+| Cond | Complete | Numeric conditional function supported in runtime trigger evaluator. |
 | Const | Partial | Common constants return default approximations. |
-| Cos | Unsupported | Math function not implemented. |
+| Cos | Complete | Numeric math function supported in runtime trigger evaluator. |
 | Ctrl | Complete | Basic support. |
 | DrawGame | Partial | Safe default false. Round result not implemented. |
-| E | Unsupported | Math constant not implemented. |
-| Exp | Unsupported | Math function not implemented. |
+| E | Complete | Numeric math constant supported in runtime trigger evaluator. |
+| Exp | Complete | Numeric math function supported in runtime trigger evaluator. |
 | Facing | Complete | Numeric comparison. |
 | Floor | Complete | `Floor(...)` supported for numeric expressions. |
 | FrontEdge | Unsupported | Screen/camera edge value not implemented. |
@@ -255,14 +255,14 @@ Baseline references:
 | HitVel X | Partial | Optional hit velocity field, default 0. |
 | HitVel Y | Partial | Optional hit velocity field, default 0. |
 | ID | Unsupported | Player/helper id trigger not implemented. |
-| IfElse | Unsupported | Expression function not implemented. |
+| IfElse | Complete | Numeric conditional function supported in runtime trigger evaluator. |
 | InGuardDist | Partial | Simple distance approximation. |
 | IsHelper | Partial | Safe default 0. |
 | IsHomeTeam | Unsupported | Team metadata not implemented. |
 | Life | Complete | Numeric comparison. |
 | LifeMax | Partial | Default 1000. |
-| Ln | Unsupported | Math function not implemented. |
-| Log | Unsupported | Math function not implemented. |
+| Ln | Complete | Numeric math function supported in runtime trigger evaluator. |
+| Log | Complete | Numeric math function supported in runtime trigger evaluator. |
 | Lose | Partial | Safe default false. Round result not implemented. |
 | LoseKO | Unsupported | Round result not implemented. |
 | LoseTime | Unsupported | Round result not implemented. |
@@ -296,7 +296,7 @@ Baseline references:
 | PalNo | Unsupported | Palette slot trigger not implemented. |
 | ParentDist X | Unsupported | Parent distance not implemented. |
 | ParentDist Y | Unsupported | Parent distance not implemented. |
-| Pi | Unsupported | Math constant not implemented. |
+| Pi | Complete | Numeric math constant supported in runtime trigger evaluator. |
 | PlayerIDExist | Unsupported | Player/helper lookup by id not implemented. |
 | Pos X | Complete | Basic X comparison. |
 | Pos Y | Complete | Basic Y comparison. |
@@ -319,12 +319,12 @@ Baseline references:
 | ScreenPos X | Partial | Uses internal position approximation. |
 | ScreenPos Y | Partial | Uses internal position approximation. |
 | SelfAnimExist | Unsupported | AIR lookup not implemented. |
-| Sin | Unsupported | Math function not implemented. |
+| Sin | Complete | Numeric math function supported in runtime trigger evaluator. |
 | StateNo | Complete | Numeric comparison. |
 | StateType | Complete | Basic support. |
 | SysFVar | Unsupported | System float vars not implemented. |
 | SysVar | Complete | Basic numeric comparison. |
-| Tan | Unsupported | Math function not implemented. |
+| Tan | Complete | Numeric math function supported in runtime trigger evaluator. |
 | TeamMode | Unsupported | Team mode not implemented. |
 | TeamSide | Partial | Context/player id fallback. |
 | TicksPerSecond | Complete | Constant 60. |
@@ -369,11 +369,11 @@ Baseline references:
 | `||` | Complete | Supported for simple expressions. |
 | `!` | Complete | Supported for simple expressions. |
 | Parentheses | Partial | Outer/group parentheses supported; full expression grammar incomplete. |
-| `+` | Unsupported | Needed for broad CNS compatibility. |
-| `-` | Unsupported | Binary subtraction not implemented. |
-| `*` | Unsupported | Needed for broad CNS compatibility. |
-| `/` | Unsupported | Needed for broad CNS compatibility. |
-| `%` | Unsupported | Needed for broad CNS compatibility. |
+| `+` | Complete | Supported in numeric trigger expressions with tests. |
+| `-` | Complete | Binary subtraction supported in numeric trigger expressions with tests. |
+| `*` | Complete | Supported in numeric trigger expressions with tests. |
+| `/` | Complete | Supported in numeric trigger expressions with tests. Division by zero fails the expression safely. |
+| `%` | Complete | Supported in numeric trigger expressions with tests. Modulo by zero fails the expression safely. |
 | Unary minus | Partial | Supported as numeric literal. |
 | `var(n)` | Complete | Basic integer var lookup supported. |
 | `sysvar(n)` | Complete | Basic system var lookup supported. |
@@ -404,7 +404,6 @@ Baseline references:
 
 | Priority | Gap | Reason |
 |---:|---|---|
-| 1 | State -3 execution | Many common systems depend on -3/-2/-1 ordering. |
 | 1 | State20 runtime validation | Forward walk must be reliable before attacks. |
 | 1 | State21 runtime validation | Back walk must be reliable before attacks. |
 | 1 | State10 runtime validation | Crouch start must be reliable before attacks. |
@@ -413,7 +412,6 @@ Baseline references:
 | 1 | Air physics | Jump compatibility depends on this. |
 | 1 | State51 implementation | Jump-down compatibility depends on this. |
 | 1 | State52 landing validation | Landing compatibility depends on this. |
-| 1 | Arithmetic expression parser | Many real CNS triggers use arithmetic, not just simple comparisons. |
 | 2 | True P2 lookup | Current support is mostly safe fallback. |
 | 2 | True enemy lookup | Current support is mostly safe fallback. |
 | 2 | True target lookup | Current support is mostly safe fallback. |

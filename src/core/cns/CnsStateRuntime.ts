@@ -126,7 +126,7 @@ function stepPlayer(
     executedControllers: [],
   };
 
-  for (const negativeStateNo of [-1, -2]) {
+  for (const negativeStateNo of [-3, -2, -1]) {
     const negativeState = findState(cns, negativeStateNo);
     if (!negativeState) continue;
     const result = executeStateControllers(next, negativeState, cns, input, commands);

@@ -70,6 +70,35 @@ describe('CnsRuntimeTrigger', () => {
     expect(evaluateCnsRuntimeTrigger('vel x > 2 || vel y > 0', { player })).toBe(true);
   });
 
+  it('evaluates arithmetic in numeric trigger expressions', () => {
+    expect(evaluateCnsRuntimeTrigger('time + 4 = 10', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('time - 1 = 5', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('(time + 2) * 3 = 24', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('time / 2 = 3', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('time % 4 = 2', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('time = 3 + 3', { player })).toBe(true);
+  });
+
+  it('evaluates math constants and numeric functions', () => {
+    expect(evaluateCnsRuntimeTrigger('Pi > 3', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('E > 2', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('Sin(0) = 0', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('Cos(0) = 1', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('Tan(0) = 0', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('ACos(1) = 0', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('ASin(0) = 0', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('ATan(0) = 0', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('Exp(0) = 1', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('Ln(E) = 1', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('Log(100) = 2', { player })).toBe(true);
+  });
+
+  it('evaluates conditional numeric functions', () => {
+    expect(evaluateCnsRuntimeTrigger('IfElse(ctrl, 4, 9) = 4', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('Cond(statetype = A, 4, 9) = 9', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('IfElse(time > 5, time + 1, 0) = 7', { player })).toBe(true);
+  });
+
   it('evaluates opponent and count-style triggers with safe defaults', () => {
     const opponent = { ...createInitialGameState().players[1], x: player.x + 20, stateType: 'C' as const };
 

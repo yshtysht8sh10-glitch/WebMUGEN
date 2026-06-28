@@ -203,6 +203,50 @@ ctrl = 0
 });
 
 describe('CnsStateRuntime state controllers', () => {
+  it('executes State -3 before State -2 and State -1', () => {
+    const cns = parseCnsText(`
+[Statedef -3]
+[State -3, MarkGlobal]
+type = VarSet
+trigger1 = 1
+v = 0
+value = 3
+
+[Statedef -2]
+[State -2, SeeGlobal]
+type = VarAdd
+trigger1 = var(0) = 3
+v = 0
+value = 2
+
+[Statedef -1]
+[State -1, RouteAfterGlobals]
+type = ChangeState
+trigger1 = var(0) = 5
+value = 20
+
+[Statedef 0]
+type = S
+movetype = I
+physics = S
+ctrl = 1
+anim = 0
+
+[Statedef 20]
+type = S
+movetype = I
+physics = S
+ctrl = 1
+anim = 20
+`);
+
+    const result = stepCnsStateRuntime(createInitialGameState(), cns);
+
+    expect(result.state.players[0].stateNo).toBe(20);
+    expect((result.state.players[0] as { vars?: Record<number, number> }).vars?.[0]).toBe(5);
+    expect(result.traces[0].executedControllers).toEqual(['VarSet', 'VarAdd', 'ChangeState']);
+  });
+
   it('recognizes WinMUGEN state controllers that have runtime shims', () => {
     const controllerBlocks = recognizedControllerFixtures
       .map(({ type, params }) => `
