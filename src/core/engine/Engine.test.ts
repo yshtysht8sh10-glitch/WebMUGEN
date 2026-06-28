@@ -76,9 +76,16 @@ function runFrames(initial: GameState, frames: { label: string; input: FrameInpu
   return { state, diagnostics };
 }
 
+type ExpectedPlayerFields = Partial<
+  Pick<PlayerState, 'stateNo' | 'animNo' | 'stateType' | 'moveType' | 'physics' | 'ctrl' | 'facing'>
+> & {
+  vx?: number | { sign: 'positive' | 'negative' | 'zero' };
+};
+
 function expectPlayerState(
+  label: string,
   player: PlayerState,
-  expected: Partial<Pick<PlayerState, 'stateNo' | 'animNo' | 'stateType' | 'physics' | 'ctrl'>>,
+  expected: ExpectedPlayerFields,
   diagnostics: DiagnosticFrame[],
 ): void {
   const failures: string[] = [];
@@ -95,6 +102,10 @@ function expectPlayerState(
     failures.push(`stateType expected=${expected.stateType} actual=${player.stateType}`);
   }
 
+  if (expected.moveType !== undefined && player.moveType !== expected.moveType) {
+    failures.push(`moveType expected=${expected.moveType} actual=${player.moveType}`);
+  }
+
   if (expected.physics !== undefined && player.physics !== expected.physics) {
     failures.push(`physics expected=${expected.physics} actual=${player.physics}`);
   }
@@ -103,14 +114,35 @@ function expectPlayerState(
     failures.push(`ctrl expected=${expected.ctrl} actual=${player.ctrl}`);
   }
 
+  if (expected.facing !== undefined && player.facing !== expected.facing) {
+    failures.push(`facing expected=${expected.facing} actual=${player.facing}`);
+  }
+
+  if (expected.vx !== undefined) {
+    const vxFailure = checkVelocityX(player.vx, expected.vx);
+    if (vxFailure) failures.push(vxFailure);
+  }
+
   if (failures.length > 0) {
     throw new Error([
-      'Crouch transition assertion failed.',
+      `${label} assertion failed.`,
       ...failures,
       '',
       formatDiagnostics(diagnostics),
     ].join('\n'));
   }
+}
+
+function checkVelocityX(actual: number, expected: ExpectedPlayerFields['vx']): string | null {
+  if (expected === undefined) return null;
+  if (typeof expected === 'number') {
+    return actual === expected ? null : `vx expected=${expected} actual=${actual}`;
+  }
+
+  if (expected.sign === 'positive' && actual > 0) return null;
+  if (expected.sign === 'negative' && actual < 0) return null;
+  if (expected.sign === 'zero' && actual === 0) return null;
+  return `vx expected ${expected.sign} actual=${actual}`;
 }
 
 function formatDiagnostics(diagnostics: DiagnosticFrame[]): string {
@@ -155,13 +187,95 @@ function formatPlayer(player: PlayerState): string {
   });
 }
 
+describe('stepGame basic state routing', () => {
+  it('keeps state 0 when no input is active', () => {
+    const { state, diagnostics } = runFrames(createState(), [
+      { label: 'neutral from stand', input: input() },
+    ]);
+
+    expectPlayerState('stand idle', state.players[0], {
+      stateNo: 0,
+      animNo: 0,
+      stateType: 'S',
+      physics: 'S',
+      ctrl: true,
+      vx: 0,
+    }, diagnostics);
+  });
+
+  it('enters state 20 and moves right when right is pressed', () => {
+    const { state, diagnostics } = runFrames(createState(), [
+      { label: 'press right from stand', input: input({ right: true }) },
+    ]);
+
+    expectPlayerState('walk right', state.players[0], {
+      stateNo: 20,
+      animNo: 20,
+      stateType: 'S',
+      physics: 'S',
+      ctrl: true,
+      facing: 1,
+      vx: { sign: 'positive' },
+    }, diagnostics);
+  });
+
+  it('enters state 20 and moves left when left is pressed', () => {
+    const { state, diagnostics } = runFrames(createState(), [
+      { label: 'press left from stand', input: input({ left: true }) },
+    ]);
+
+    expectPlayerState('walk left', state.players[0], {
+      stateNo: 20,
+      animNo: 20,
+      stateType: 'S',
+      physics: 'S',
+      ctrl: true,
+      facing: -1,
+      vx: { sign: 'negative' },
+    }, diagnostics);
+  });
+
+  it('enters state 200 and disables ctrl when attack is pressed', () => {
+    const { state, diagnostics } = runFrames(createState(), [
+      { label: 'press attack from stand', input: input({ attack: true }) },
+    ]);
+
+    expectPlayerState('stand attack', state.players[0], {
+      stateNo: 200,
+      animNo: 200,
+      ctrl: false,
+      vx: 0,
+    }, diagnostics);
+  });
+
+  it('returns from state 200 to state 0 after the fallback attack duration', () => {
+    const frames = [
+      { label: 'press attack from stand', input: input({ attack: true }) },
+      ...Array.from({ length: 19 }, (_, index) => ({
+        label: `attack recovery frame ${index + 1}`,
+        input: input(),
+      })),
+    ];
+    const { state, diagnostics } = runFrames(createState(), frames);
+
+    expectPlayerState('attack recovery', state.players[0], {
+      stateNo: 0,
+      animNo: 0,
+      stateType: 'S',
+      physics: 'S',
+      ctrl: true,
+      vx: 0,
+    }, diagnostics);
+  });
+});
+
 describe('stepGame crouch routing', () => {
   it('enters state 10 when down is pressed from stand', () => {
     const { state, diagnostics } = runFrames(createState(), [
       { label: 'press down from stand', input: input({ down: true }) },
     ]);
 
-    expectPlayerState(state.players[0], {
+    expectPlayerState('crouch start', state.players[0], {
       stateNo: 10,
       animNo: 10,
       stateType: 'C',
@@ -175,7 +289,7 @@ describe('stepGame crouch routing', () => {
       { label: 'hold down after crouch start', input: input({ down: true }) },
     ]);
 
-    expectPlayerState(state.players[0], {
+    expectPlayerState('crouch hold', state.players[0], {
       stateNo: 11,
       animNo: 11,
       stateType: 'C',
@@ -190,11 +304,37 @@ describe('stepGame crouch routing', () => {
       { label: 'release down from crouch', input: input({ down: false }) },
     ]);
 
-    expectPlayerState(state.players[0], {
+    expectPlayerState('crouch end', state.players[0], {
       stateNo: 12,
       animNo: 12,
       stateType: 'S',
       physics: 'S',
+    }, diagnostics);
+  });
+
+  it('prioritizes crouch over walking when down and right are both held', () => {
+    const { state, diagnostics } = runFrames(createState(), [
+      { label: 'press down-right from stand', input: input({ down: true, right: true }) },
+    ]);
+
+    expectPlayerState('down-right crouch priority', state.players[0], {
+      stateNo: 10,
+      animNo: 10,
+      stateType: 'C',
+      physics: 'C',
+      vx: 0,
+    }, diagnostics);
+  });
+
+  it('prioritizes attack over crouch when attack and down are both pressed', () => {
+    const { state, diagnostics } = runFrames(createState(), [
+      { label: 'press attack and down from stand', input: input({ attack: true, down: true }) },
+    ]);
+
+    expectPlayerState('attack-over-crouch priority', state.players[0], {
+      stateNo: 200,
+      animNo: 200,
+      ctrl: false,
     }, diagnostics);
   });
 });
