@@ -177,8 +177,8 @@ export async function loadCharacterFromDef(
       })
     : null;
 
-  const commonCmdTexts = [BASELINE_COMMON_CMD_TEXT, ...fetchedCommonCmdTexts];
-  const commonCnsTexts = [BASELINE_COMMON_CNS_TEXT, ...(commonCnsText ? [commonCnsText] : [])];
+  const commonCmdTexts = fetchedCommonCmdTexts.length > 0 ? fetchedCommonCmdTexts : [BASELINE_COMMON_CMD_TEXT];
+  const commonCnsTexts = commonCnsText ? [commonCnsText] : [BASELINE_COMMON_CNS_TEXT];
   const characterCmd = parseCmdText(cmdText);
   const commonCmdDocuments = commonCmdTexts.map(parseCmdText);
   const commonCmdCnsDocuments = commonCmdTexts.map(parseCnsText);
