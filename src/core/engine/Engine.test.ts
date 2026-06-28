@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, it } from 'vitest';
 import { stepGame } from './Engine';
 import type { FrameInput, GameState, PlayerInput, PlayerState } from './types';
 
@@ -76,10 +76,15 @@ function runFrames(initial: GameState, frames: { label: string; input: FrameInpu
   return { state, diagnostics };
 }
 
+type Sign = 'positive' | 'negative' | 'zero';
+
 type ExpectedPlayerFields = Partial<
   Pick<PlayerState, 'stateNo' | 'animNo' | 'stateType' | 'moveType' | 'physics' | 'ctrl' | 'facing'>
 > & {
-  vx?: number | { sign: 'positive' | 'negative' | 'zero' };
+  x?: number | { sign: Sign; relativeTo: number };
+  y?: number | { sign: Sign; relativeTo: number };
+  vx?: number | { sign: Sign };
+  vy?: number | { sign: Sign };
 };
 
 function expectPlayerState(
@@ -118,10 +123,17 @@ function expectPlayerState(
     failures.push(`facing expected=${expected.facing} actual=${player.facing}`);
   }
 
-  if (expected.vx !== undefined) {
-    const vxFailure = checkVelocityX(player.vx, expected.vx);
-    if (vxFailure) failures.push(vxFailure);
-  }
+  const xFailure = checkNumber('x', player.x, expected.x);
+  if (xFailure) failures.push(xFailure);
+
+  const yFailure = checkNumber('y', player.y, expected.y);
+  if (yFailure) failures.push(yFailure);
+
+  const vxFailure = checkNumber('vx', player.vx, expected.vx);
+  if (vxFailure) failures.push(vxFailure);
+
+  const vyFailure = checkNumber('vy', player.vy, expected.vy);
+  if (vyFailure) failures.push(vyFailure);
 
   if (failures.length > 0) {
     throw new Error([
@@ -133,16 +145,22 @@ function expectPlayerState(
   }
 }
 
-function checkVelocityX(actual: number, expected: ExpectedPlayerFields['vx']): string | null {
+function checkNumber(
+  field: string,
+  actual: number,
+  expected: number | { sign: Sign } | { sign: Sign; relativeTo: number } | undefined,
+): string | null {
   if (expected === undefined) return null;
   if (typeof expected === 'number') {
-    return actual === expected ? null : `vx expected=${expected} actual=${actual}`;
+    return actual === expected ? null : `${field} expected=${expected} actual=${actual}`;
   }
 
-  if (expected.sign === 'positive' && actual > 0) return null;
-  if (expected.sign === 'negative' && actual < 0) return null;
-  if (expected.sign === 'zero' && actual === 0) return null;
-  return `vx expected ${expected.sign} actual=${actual}`;
+  const relativeTo = 'relativeTo' in expected ? expected.relativeTo : 0;
+  const delta = actual - relativeTo;
+  if (expected.sign === 'positive' && delta > 0) return null;
+  if (expected.sign === 'negative' && delta < 0) return null;
+  if (expected.sign === 'zero' && delta === 0) return null;
+  return `${field} expected ${expected.sign}${'relativeTo' in expected ? ` relativeTo=${relativeTo}` : ''} actual=${actual}`;
 }
 
 function formatDiagnostics(diagnostics: DiagnosticFrame[]): string {
@@ -216,6 +234,7 @@ describe('stepGame basic state routing', () => {
       ctrl: true,
       facing: 1,
       vx: { sign: 'positive' },
+      x: { sign: 'positive', relativeTo: 120 },
     }, diagnostics);
   });
 
@@ -232,6 +251,39 @@ describe('stepGame basic state routing', () => {
       ctrl: true,
       facing: -1,
       vx: { sign: 'negative' },
+      x: { sign: 'negative', relativeTo: 120 },
+    }, diagnostics);
+  });
+
+  it('enters state 100 and moves forward when FF command is active', () => {
+    const { state, diagnostics } = runFrames(createState(), [
+      { label: 'trigger FF from stand', input: input({ commandNames: new Set(['ff']) }) },
+    ]);
+
+    expectPlayerState('forward dash', state.players[0], {
+      stateNo: 100,
+      animNo: 100,
+      stateType: 'S',
+      physics: 'S',
+      ctrl: true,
+      vx: { sign: 'positive' },
+      x: { sign: 'positive', relativeTo: 120 },
+    }, diagnostics);
+  });
+
+  it('enters state 105 and moves backward when BB command is active', () => {
+    const { state, diagnostics } = runFrames(createState(), [
+      { label: 'trigger BB from stand', input: input({ commandNames: new Set(['bb']) }) },
+    ]);
+
+    expectPlayerState('back dash', state.players[0], {
+      stateNo: 105,
+      animNo: 105,
+      stateType: 'S',
+      physics: 'S',
+      ctrl: true,
+      vx: { sign: 'negative' },
+      x: { sign: 'negative', relativeTo: 120 },
     }, diagnostics);
   });
 
@@ -269,6 +321,91 @@ describe('stepGame basic state routing', () => {
   });
 });
 
+describe('stepGame jump routing', () => {
+  it('enters state 40 when up is pressed from stand', () => {
+    const { state, diagnostics } = runFrames(createState(), [
+      { label: 'press up from stand', input: input({ up: true }) },
+    ]);
+
+    expectPlayerState('jump start', state.players[0], {
+      stateNo: 40,
+      animNo: 40,
+      stateType: 'A',
+      physics: 'A',
+      y: { sign: 'negative', relativeTo: 285 },
+      vy: { sign: 'negative' },
+    }, diagnostics);
+  });
+
+  it('enters state 50 after jump start', () => {
+    const { state, diagnostics } = runFrames(createState(), [
+      { label: 'press up from stand', input: input({ up: true }) },
+      { label: 'release up after jump start', input: input() },
+    ]);
+
+    expectPlayerState('jump up', state.players[0], {
+      stateNo: 50,
+      animNo: 50,
+      stateType: 'A',
+      physics: 'A',
+      y: { sign: 'negative', relativeTo: 285 },
+    }, diagnostics);
+  });
+
+  it('keeps horizontal jump velocity for forward jump', () => {
+    const { state, diagnostics } = runFrames(createState(), [
+      { label: 'press up-right from stand', input: input({ up: true, right: true }) },
+    ]);
+
+    expectPlayerState('forward jump start', state.players[0], {
+      stateNo: 40,
+      animNo: 40,
+      stateType: 'A',
+      physics: 'A',
+      vx: { sign: 'positive' },
+      y: { sign: 'negative', relativeTo: 285 },
+    }, diagnostics);
+  });
+
+  it('enters state 52 when an airborne player reaches the ground', () => {
+    const fallingPlayer = createPlayer({ stateNo: 50, animNo: 50, stateType: 'A', physics: 'A', y: 285, vy: 1, ctrl: true });
+    const { state, diagnostics } = runFrames(createState(fallingPlayer), [
+      { label: 'falling player reaches ground', input: input() },
+    ]);
+
+    expectPlayerState('jump land', state.players[0], {
+      stateNo: 52,
+      animNo: 52,
+      stateType: 'S',
+      physics: 'S',
+      ctrl: false,
+      y: 285,
+      vx: 0,
+      vy: 0,
+    }, diagnostics);
+  });
+
+  it('returns from state 52 to state 0 after landing recovery', () => {
+    const landingPlayer = createPlayer({ stateNo: 52, animNo: 52, stateType: 'S', physics: 'S', y: 285, ctrl: false });
+    const frames = Array.from({ length: 4 }, (_, index) => ({
+      label: `landing recovery frame ${index + 1}`,
+      input: input(),
+    }));
+    const { state, diagnostics } = runFrames(createState(landingPlayer), frames);
+
+    expectPlayerState('landing recovery', state.players[0], {
+      stateNo: 0,
+      animNo: 0,
+      stateType: 'S',
+      physics: 'S',
+      ctrl: true,
+      y: 285,
+      vx: 0,
+      vy: 0,
+    }, diagnostics);
+  });
+});
+
 describe('stepGame crouch routing', () => {
   it('enters state 10 when down is pressed from stand', () => {
     const { state, diagnostics } = runFrames(createState(), [
@@ -280,6 +417,8 @@ describe('stepGame crouch routing', () => {
       animNo: 10,
       stateType: 'C',
       physics: 'C',
+      y: 285,
+      vx: 0,
     }, diagnostics);
   });
 
@@ -294,6 +433,8 @@ describe('stepGame crouch routing', () => {
       animNo: 11,
       stateType: 'C',
       physics: 'C',
+      y: 285,
+      vx: 0,
     }, diagnostics);
   });
 
@@ -309,6 +450,26 @@ describe('stepGame crouch routing', () => {
       animNo: 12,
       stateType: 'S',
       physics: 'S',
+      y: 285,
+      vx: 0,
+    }, diagnostics);
+  });
+
+  it('returns from state 12 to state 0 after crouch end recovery', () => {
+    const crouchEndPlayer = createPlayer({ stateNo: 12, animNo: 12, stateType: 'S', physics: 'S' });
+    const frames = Array.from({ length: 7 }, (_, index) => ({
+      label: `crouch end recovery frame ${index + 1}`,
+      input: input(),
+    }));
+    const { state, diagnostics } = runFrames(createState(crouchEndPlayer), frames);
+
+    expectPlayerState('crouch end recovery', state.players[0], {
+      stateNo: 0,
+      animNo: 0,
+      stateType: 'S',
+      physics: 'S',
+      ctrl: true,
+      vx: 0,
     }, diagnostics);
   });
 
