@@ -10,6 +10,8 @@ This document records the current design policy for loading WinMUGEN-style commo
 
 Do not replace, rewrite, minimize, or regenerate `public/chars/common1.cns` from the loader or from embedded fallback text. Many characters are authored against a specific common state file, and changing that file changes the compatibility baseline. That makes character behavior difficult to reproduce and debug.
 
+`public/chars/common.cmd`, on the other hand, is a WebMUGEN-owned compatibility/control surface. It may be edited freely to expose WinMUGEN-like common control flow in data form.
+
 ## Loader Responsibilities
 
 The character loader may merge files, but it must preserve ownership boundaries:
@@ -19,7 +21,7 @@ The character loader may merge files, but it must preserve ownership boundaries:
 | Character `.cns` | Character | Load as the primary state source. |
 | Character `.cmd` | Character | Load command definitions and character-specific `Statedef -1` routes. |
 | `/chars/common1.cns` | Project/user compatibility asset | Load if present and merge only states/routes missing from the character. Never replace with embedded CNS. |
-| `/chars/common.cmd` | Project/user compatibility asset | Load if present and merge common command definitions/routes. |
+| `/chars/common.cmd` | WebMUGEN common control surface | Load if present and merge common command definitions/routes. This file may be changed to represent common WinMUGEN control logic. |
 | Embedded common CMD fallback | Engine safety fallback | Use only when `/chars/common.cmd` is unavailable. Provides minimal routing only. |
 | Embedded common CNS fallback | Not allowed | Do not use. State definitions must come from character CNS or external `common1.cns`. |
 
@@ -40,6 +42,27 @@ The corrected model is stricter:
 ## Common CMD Routing Policy
 
 Common movement routes are command routes, not state-body replacements.
+
+`public/chars/common.cmd` is intentionally allowed to evolve. Prefer exposing WinMUGEN-like control decisions in this file when that logic can be represented as CMD/CNS-style `Statedef -1` or `Statedef -2` routes.
+
+This policy has two goals:
+
+1. Keep common behavior visible and debuggable as MUGEN-like text.
+2. Avoid hiding basic movement and common control flow inside TypeScript-only fallback code.
+
+Examples of logic that should preferably live in `common.cmd` when possible:
+
+| Logic | Preferred representation |
+|---|---|
+| Crouch entry | `holddown -> State 10` route in `Statedef -1` |
+| Walk forward | `holdfwd -> State 20` route in `Statedef -1` |
+| Walk back | `holdback -> State 21` route in `Statedef -1` |
+| Jump start | `holdup -> State 40` route in `Statedef -1` |
+| Landing transition | `physics = A` and ground-contact trigger in common routing when practical |
+| Basic dash routes | `FF -> State 100`, `BB -> State 105` style routes when practical |
+| Guard routes | `holdback`/guard-distance based routes when trigger support is ready |
+
+TypeScript runtime support is still required for parsing, trigger evaluation, controller execution, physics, collision, and rendering. However, when a common control decision can be expressed in `common.cmd`, prefer doing so there first.
 
 The loader may provide embedded baseline CMD routes when `/chars/common.cmd` is missing. These routes should be minimal and should point to conventional states, for example:
 
@@ -88,6 +111,7 @@ As of this policy:
 
 - `CharacterLoader` no longer embeds replacement common CNS text.
 - `CharacterLoader` still provides embedded baseline common CMD text when `/chars/common.cmd` is missing.
+- `public/chars/common.cmd` is editable and should be the preferred place to expose common WinMUGEN-like routing logic.
 - `mergeMissingCnsStates` keeps character-owned states first and appends missing common states only when absent.
 - Common command controllers are inserted before character modifier routes so baseline movement remains reachable.
 - Direction-only character routes can still override baseline direction routes.
@@ -107,6 +131,8 @@ When crouch or walk does not work, do not modify `common1.cns` first. Check thes
 
 1. Do not edit `public/chars/common1.cns` as part of engine fixes unless the explicit task is to update that compatibility asset.
 2. Do not add embedded common CNS replacement text to `CharacterLoader`.
-3. If a movement bug appears after restoring `common1.cns`, fix loader merging, command routing, trigger evaluation, or runtime state execution.
-4. Update this policy when the common loading model changes.
-5. Keep the compatibility matrix aligned with this policy.
+3. `public/chars/common.cmd` may be edited freely as the common control/routing surface.
+4. Prefer representing common WinMUGEN control flow in `common.cmd` when possible, instead of hiding it in TypeScript fallback code.
+5. If a movement bug appears after restoring `common1.cns`, fix loader merging, command routing, trigger evaluation, runtime state execution, or `common.cmd` routing.
+6. Update this policy when the common loading model changes.
+7. Keep the compatibility matrix aligned with this policy.
