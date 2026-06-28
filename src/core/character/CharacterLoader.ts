@@ -237,7 +237,10 @@ export function mergeMissingCnsStates(base: CnsDocument, common: CnsDocument): C
   const states = base.states.map((state) => {
     if (state.stateNo !== -1 || !commonCommandState) return state;
 
-    const baselineMovementControllers = commonCommandState.controllers.filter(isBaselineMovementController);
+    const characterPrimaryCommands = collectPrimaryCommandRoutes(state.controllers);
+    const baselineMovementControllers = commonCommandState.controllers.filter(
+      (controller) => isBaselineMovementController(controller) && !isOverriddenByCharacterPrimaryCommand(controller, characterPrimaryCommands),
+    );
     const otherCommonControllers = commonCommandState.controllers.filter((controller) => !isBaselineMovementController(controller));
 
     return {
@@ -262,6 +265,14 @@ function isBaselineMovementController(controller: CnsStateController): boolean {
   if (controller.type.toLowerCase() !== 'changestate') return false;
   const value = Number(controller.params.value);
   return BASELINE_MOVEMENT_STATE_VALUES.has(value);
+}
+
+function isOverriddenByCharacterPrimaryCommand(
+  controller: CnsStateController,
+  characterPrimaryCommands: ReadonlySet<string>,
+): boolean {
+  const commonPrimaryCommands = collectPrimaryCommandRoutes([controller]);
+  return Array.from(commonPrimaryCommands).some((commandName) => characterPrimaryCommands.has(commandName));
 }
 
 function filterCommonCommandControllers(
