@@ -1,0 +1,74 @@
+# WebMUGEN Testing Policy
+
+Updated: 2026-06-28
+
+## Purpose
+
+WebMUGEN prioritizes WinMUGEN compatibility. Manual confirmation in the game screen is useful, but it must not be the only way to decide whether a movement or state transition works.
+
+For every basic movement, command route, trigger, and controller implementation, add focused tests that confirm the expected state transition and expose enough diagnostics to identify where the route failed.
+
+## State transition tests
+
+When implementing or fixing a movement/state route, the test must confirm the actual target state number.
+
+Examples:
+
+- Stand idle: neutral input keeps `stateNo = 0`.
+- Crouch start: pressing down from stand enters `stateNo = 10`.
+- Crouch hold: holding down after crouch start enters or keeps `stateNo = 11`.
+- Crouch end: releasing down from crouch enters `stateNo = 12`.
+- Walk: holding left/right enters the expected walking state and velocity direction.
+- Attack: pressing attack enters the expected attack state and applies the expected control flag.
+
+Do not mark a basic movement route as complete only because the screen appears to move. The test must check the runtime state directly.
+
+## Diagnostic logs
+
+Regression tests for state routing should print frame-by-frame diagnostics when they fail.
+
+Each diagnostic frame should include:
+
+- frame label / intent
+- input values: `left`, `right`, `up`, `down`, `attack`, buttons, command names
+- state before stepping: `stateNo`, `stateTime`, `stateType`, `moveType`, `physics`, `ctrl`, `animNo`, `animTime`, position, velocity, facing
+- state after stepping with the same fields
+
+The goal is that a failing test log can answer where the route broke:
+
+1. Input was not set.
+2. Command was not resolved.
+3. Trigger did not become true.
+4. ChangeState did not run.
+5. State header did not apply.
+6. Physics or animation overwrote the result.
+
+## Compatibility matrix rule
+
+`docs/webmugen/winmugen-compatibility-matrix.md` and `.html` remain the source of truth for compatibility status.
+
+A row should be promoted to **Complete** only when at least one of the following is true:
+
+- a focused unit/regression test verifies the behavior;
+- the behavior is exercised by a known runtime integration path and can be inspected through Debug Overlay;
+- the item is intentionally a no-op and the no-op behavior is tested or explicitly documented.
+
+When a behavior is implemented but not yet covered by tests or runtime verification, keep it **Partial**.
+
+## Manual game-screen verification
+
+Manual checks are still important for rendering and feel.
+
+For game-screen checks, use Debug Overlay to compare:
+
+1. Input
+2. Command
+3. Trigger
+4. State
+5. Controller
+6. Physics
+7. Animation
+8. Collision
+9. Rendering
+
+If the screen behavior and UnitTest result disagree, treat that as an integration bug and add a new test at the layer where the mismatch occurs.
