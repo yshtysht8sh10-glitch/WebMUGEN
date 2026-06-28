@@ -9,6 +9,119 @@ import type { CharacterAssets, CharacterPaletteAsset } from './CharacterTypes';
 
 const COMMON_CNS_PATH = '/chars/common1.cns';
 const COMMON_CMD_PATHS = ['/chars/common.cmd', '/chars/common1.cmd'];
+const BASELINE_COMMON_CMD_TEXT = `
+[Command]
+name = "holdup"
+command = /U
+
+[Command]
+name = "holddown"
+command = /D
+
+[Command]
+name = "holdfwd"
+command = /F
+
+[Command]
+name = "holdback"
+command = /B
+
+[Statedef -1]
+
+[State -1, Baseline Crouch Start]
+type = ChangeState
+triggerall = command = "holddown"
+trigger1 = statetype = S
+trigger1 = ctrl
+value = 10
+
+[State -1, Baseline Crouch Hold]
+type = ChangeState
+triggerall = command = "holddown"
+trigger1 = stateno = 10
+trigger1 = time > 0
+value = 11
+
+[State -1, Baseline Crouch End]
+type = ChangeState
+triggerall = command != "holddown"
+trigger1 = statetype = C
+value = 12
+
+[State -1, Baseline Walk Forward]
+type = ChangeState
+triggerall = command = "holdfwd"
+triggerall = command != "holddown"
+trigger1 = statetype = S
+trigger1 = ctrl
+trigger1 = stateno != 20
+value = 20
+
+[State -1, Baseline Walk Back]
+type = ChangeState
+triggerall = command = "holdback"
+triggerall = command != "holddown"
+trigger1 = statetype = S
+trigger1 = ctrl
+trigger1 = stateno != 21
+value = 21
+
+[State -1, Baseline Jump]
+type = ChangeState
+triggerall = command = "holdup"
+triggerall = command != "holddown"
+trigger1 = statetype = S
+trigger1 = ctrl
+value = 40
+`;
+const BASELINE_COMMON_CNS_TEXT = `
+[Statedef 10]
+type = C
+movetype = I
+physics = C
+ctrl = 0
+anim = 10
+
+[Statedef 11]
+type = C
+movetype = I
+physics = C
+ctrl = 1
+anim = 11
+
+[Statedef 12]
+type = S
+movetype = I
+physics = S
+ctrl = 0
+anim = 12
+
+[State 12, ReturnToStand]
+type = ChangeState
+trigger1 = time > 3
+value = 0
+
+[Statedef 20]
+type = S
+movetype = I
+physics = S
+ctrl = 1
+anim = 20
+
+[Statedef 21]
+type = S
+movetype = I
+physics = S
+ctrl = 1
+anim = 21
+
+[Statedef 40]
+type = A
+movetype = I
+physics = A
+ctrl = 0
+anim = 40
+`;
 const DIRECTIONAL_COMMAND_NAMES = new Set([
   'holdfwd',
   'holdback',
@@ -46,7 +159,7 @@ export async function loadCharacterFromDef(
   if (!files.anim) throw new Error('[Files] anim is missing.');
   if (!files.cmd) throw new Error('[Files] cmd is missing.');
 
-  const [cnsText, airText, cmdText, commonCnsText, commonCmdTexts, palettes] = await Promise.all([
+  const [cnsText, airText, cmdText, commonCnsText, fetchedCommonCmdTexts, palettes] = await Promise.all([
     fetcher.text(resolveAssetPath(basePath, files.cns)),
     fetcher.text(resolveAssetPath(basePath, files.anim)),
     fetcher.text(resolveAssetPath(basePath, files.cmd)),
@@ -64,6 +177,8 @@ export async function loadCharacterFromDef(
       })
     : null;
 
+  const commonCmdTexts = [BASELINE_COMMON_CMD_TEXT, ...fetchedCommonCmdTexts];
+  const commonCnsTexts = [BASELINE_COMMON_CNS_TEXT, ...(commonCnsText ? [commonCnsText] : [])];
   const characterCmd = parseCmdText(cmdText);
   const commonCmdDocuments = commonCmdTexts.map(parseCmdText);
   const commonCmdCnsDocuments = commonCmdTexts.map(parseCnsText);
@@ -71,10 +186,14 @@ export async function loadCharacterFromDef(
     (merged, commonCmdCns) => mergeMissingCnsStates(merged, commonCmdCns),
     mergeCnsDocuments(parseCnsText(cnsText), parseCnsText(cmdText)),
   );
+  const cns = commonCnsTexts.reduce(
+    (merged, commonCns) => mergeMissingCnsStates(merged, parseCnsText(commonCns)),
+    characterCns,
+  );
 
   return {
     def,
-    cns: commonCnsText ? mergeMissingCnsStates(characterCns, parseCnsText(commonCnsText)) : characterCns,
+    cns,
     air: parseAirText(airText),
     cmd: mergeCmdDocuments(characterCmd, commonCmdDocuments),
     sprites,
