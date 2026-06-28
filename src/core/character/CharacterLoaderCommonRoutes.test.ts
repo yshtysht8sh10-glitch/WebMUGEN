@@ -15,7 +15,7 @@ anim = kfm.air
 `,
     ],
     ['/chars/kfm/kfm.cns', '[StateDef 0]\ntype = S\nmovetype = I\nphysics = S\nanim = 0\nctrl = 1\n'],
-    ['/chars/kfm/kfm.air', 'Begin Action 0\n0,0, 0,0, 5\nBegin Action 20\n0,0, 0,0, 5\n'],
+    ['/chars/kfm/kfm.air', 'Begin Action 0\n0,0, 0,0, 5\nBegin Action 10\n0,0, 0,0, 5\nBegin Action 20\n0,0, 0,0, 5\n'],
     [
       '/chars/kfm/kfm.cmd',
       `
@@ -26,6 +26,10 @@ command = y
 [Command]
 name = "holdfwd"
 command = /$F
+
+[Command]
+name = "holddown"
+command = /$D
 
 [Statedef -1]
 
@@ -45,17 +49,29 @@ value = 800
 name = "holdfwd"
 command = /F
 
+[Command]
+name = "holddown"
+command = /D
+
 [Statedef -1]
+
+[State -1, Common Crouch Start]
+type = ChangeState
+triggerall = command = "holddown"
+trigger1 = statetype = S
+trigger1 = ctrl
+value = 10
 
 [State -1, Common Walk Forward]
 type = ChangeState
 triggerall = command = "holdfwd"
+triggerall = command != "holddown"
 trigger1 = statetype = S
 trigger1 = ctrl
 value = 20
 `,
     ],
-    ['/chars/common1.cns', '[StateDef 20]\ntype = S\nmovetype = I\nphysics = S\nanim = 20\nctrl = 1\n'],
+    ['/chars/common1.cns', '[StateDef 10]\ntype = C\nmovetype = I\nphysics = C\nanim = 10\nctrl = 0\n\n[StateDef 20]\ntype = S\nmovetype = I\nphysics = S\nanim = 20\nctrl = 1\n'],
   ]);
 
   return {
@@ -75,7 +91,7 @@ describe('CharacterLoader common movement routes', () => {
     const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createCommonRouteTestFetcher());
     const commandState = character.cns.states.find((state) => state.stateNo === -1);
 
-    expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([800, 20]);
+    expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([800, 10, 20]);
   });
 
   it('runs common holdfwd route into State 20 at runtime', async () => {
@@ -86,6 +102,23 @@ describe('CharacterLoader common movement routes', () => {
     });
 
     expect(result.state.players[0].stateNo).toBe(20);
+    expect(result.traces[0].executedControllers).toContain('ChangeState');
+  });
+
+  it('runs common holddown route into State 10 at runtime', async () => {
+    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createCommonRouteTestFetcher());
+    const result = stepCnsStateRuntime(createInitialGameState(), character.cns, {
+      p1Commands: new Set(['holddown', 'down']),
+      p2Commands: new Set(),
+    });
+
+    expect(result.state.players[0]).toMatchObject({
+      stateNo: 10,
+      animNo: 10,
+      stateType: 'C',
+      physics: 'C',
+      ctrl: false,
+    });
     expect(result.traces[0].executedControllers).toContain('ChangeState');
   });
 });
