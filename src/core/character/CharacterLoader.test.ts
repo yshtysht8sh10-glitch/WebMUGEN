@@ -8,7 +8,7 @@ describe('CharacterLoader', () => {
     expect(resolveAssetPath('/chars/kfm', '/global/kfm.air')).toBe('/global/kfm.air');
   });
 
-  it('loads def, cns, air, cmd, and embedded common baseline assets', async () => {
+  it('loads def, cns, air, cmd, and embedded common command fallback', async () => {
     const textAssets = new Map<string, string>([
       ['/chars/kfm/kfm.def', '[Files]\ncmd = kfm.cmd\ncns = kfm.cns\nanim = kfm.air\n'],
       ['/chars/kfm/kfm.cns', '[StateDef 0]\ntype = S\nmovetype = I\nphysics = S\nanim = 0\nctrl = 1\n'],
@@ -18,7 +18,7 @@ describe('CharacterLoader', () => {
 
     const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createTextOnlyFetcher(textAssets));
 
-    expect(character.cns.states.map((state) => state.stateNo)).toEqual([0, -1, 10, 11, 12, 20, 21, 40]);
+    expect(character.cns.states.map((state) => state.stateNo)).toEqual([0, -1]);
     expect(character.air.actions[0].actionNo).toBe(0);
     expect(character.cmd.commands.map((command) => command.name)).toContain('a');
     expect(character.cmd.commands.map((command) => command.name)).toContain('holddown');

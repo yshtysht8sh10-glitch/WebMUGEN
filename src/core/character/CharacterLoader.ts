@@ -75,54 +75,6 @@ trigger1 = statetype = S
 trigger1 = ctrl
 value = 40
 `;
-const BASELINE_COMMON_CNS_TEXT = `
-[Statedef 10]
-type = C
-movetype = I
-physics = C
-ctrl = 0
-anim = 10
-
-[Statedef 11]
-type = C
-movetype = I
-physics = C
-ctrl = 1
-anim = 11
-
-[Statedef 12]
-type = S
-movetype = I
-physics = S
-ctrl = 0
-anim = 12
-
-[State 12, ReturnToStand]
-type = ChangeState
-trigger1 = time > 3
-value = 0
-
-[Statedef 20]
-type = S
-movetype = I
-physics = S
-ctrl = 1
-anim = 20
-
-[Statedef 21]
-type = S
-movetype = I
-physics = S
-ctrl = 1
-anim = 21
-
-[Statedef 40]
-type = A
-movetype = I
-physics = A
-ctrl = 0
-anim = 40
-`;
 const DIRECTIONAL_COMMAND_NAMES = new Set([
   'holdfwd',
   'holdback',
@@ -179,7 +131,7 @@ export async function loadCharacterFromDef(
     : null;
 
   const commonCmdTexts = fetchedCommonCmdTexts.length > 0 ? fetchedCommonCmdTexts : [BASELINE_COMMON_CMD_TEXT];
-  const commonCnsTexts = commonCnsText ? [commonCnsText] : [BASELINE_COMMON_CNS_TEXT];
+  const commonCnsTexts = commonCnsText ? [commonCnsText] : [];
   const characterCmd = parseCmdText(cmdText);
   const commonCmdDocuments = commonCmdTexts.map(parseCmdText);
   const commonCmdCnsDocuments = commonCmdTexts.map(parseCnsText);
