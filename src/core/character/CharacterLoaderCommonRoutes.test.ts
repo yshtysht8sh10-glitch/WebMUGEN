@@ -87,11 +87,11 @@ value = 20
 }
 
 describe('CharacterLoader common movement routes', () => {
-  it('keeps common holdfwd movement when character uses holdfwd only as a modifier', async () => {
+  it('keeps common holdfwd movement before character routes when holdfwd is only a modifier', async () => {
     const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createCommonRouteTestFetcher());
     const commandState = character.cns.states.find((state) => state.stateNo === -1);
 
-    expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([800, 10, 20]);
+    expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([10, 20, 800]);
   });
 
   it('runs common holdfwd route into State 20 at runtime', async () => {
