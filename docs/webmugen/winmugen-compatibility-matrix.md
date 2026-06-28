@@ -2,7 +2,9 @@
 
 Updated: 2026-06-28
 
-This document is the working compatibility checklist for WebMUGEN. Status is intentionally conservative: **Complete** requires either focused tests or a confirmed app integration path. Runtime shims that only recognize a controller or preserve safe no-op behavior are marked **Partial**, not Complete.
+This document is the working compatibility checklist for WebMUGEN. Every compatibility item is tracked on its own row. Do not combine multiple triggers, controllers, states, operators, redirects, or CMD features into a single matrix item.
+
+Status is intentionally conservative: **Complete** requires either focused tests or a confirmed app integration path. Runtime shims that only recognize an item or preserve safe no-op behavior are marked **Partial**, not Complete.
 
 Baseline references:
 
@@ -23,7 +25,7 @@ Baseline references:
 
 ## StateDef Compatibility
 
-| StateNo / Range | WinMUGEN Meaning | Status | Notes |
+| StateNo | WinMUGEN Meaning | Status | Notes |
 |---:|---|---|---|
 | -3 | Global state | Unsupported | Runtime currently handles -1/-2. -3 should be added. |
 | -2 | Global state | Partial | `stepCnsStateRuntime` handles -2. Coverage incomplete. |
@@ -42,20 +44,59 @@ Baseline references:
 | 51 | Jump down | Unsupported | Needed for more accurate air-state sequencing. |
 | 52 | Jump land | Partial | Common baseline exists. Landing logic under active work. |
 | 100 | Run / dash forward | Partial | Common route added with PosAdd. Needs true velocity/friction behavior. |
-| 101-104 | Run / dash substates | Untested | Common implementations vary. |
+| 101 | Run / dash substate | Untested | Common implementations vary. |
+| 102 | Run / dash substate | Untested | Common implementations vary. |
+| 103 | Run / dash substate | Untested | Common implementations vary. |
+| 104 | Run / dash substate | Untested | Common implementations vary. |
 | 105 | Hop back / back dash | Partial | Common route added with PosAdd. |
-| 106-107 | Back dash substates | Untested | Common implementations vary. |
+| 106 | Back dash substate | Untested | Common implementations vary. |
+| 107 | Back dash substate | Untested | Common implementations vary. |
 | 120 | Guard start | Unsupported | Required for basic defense. |
 | 130 | Standing guard | Unsupported | Required for basic defense. |
 | 131 | Crouching guard | Unsupported | Required for basic defense. |
 | 132 | Air guard | Unsupported | Required for basic defense. |
-| 140-155 | Guard hit / guard recoil states | Unsupported | Required for blocking. |
-| 170-181 | Lose / win states | Unsupported | Round flow only partially implemented. |
-| 190-199 | Intro states | Unsupported | Round intro not implemented. |
-| 5000-5210 | Common get-hit / fall / recovery states | Unsupported | Required for hit reactions and knockdown. |
-| 5300+ | Character/system/custom states | Untested | Open-ended. Track per character. |
-| 800-899 | Throw states by convention | Untested | KFM uses command routes in this range. |
-| 1000+ | Specials/projectiles/helpers by convention | Untested | Character-specific. |
+| 140 | Guard hit state | Unsupported | Required for blocking. |
+| 150 | Guard recoil state | Unsupported | Required for blocking. |
+| 151 | Guard recoil state | Unsupported | Required for blocking. |
+| 152 | Guard recoil state | Unsupported | Required for blocking. |
+| 153 | Guard recoil state | Unsupported | Required for blocking. |
+| 154 | Guard recoil state | Unsupported | Required for blocking. |
+| 155 | Guard recoil state | Unsupported | Required for blocking. |
+| 170 | Lose state | Unsupported | Round flow only partially implemented. |
+| 171 | Lose state | Unsupported | Round flow only partially implemented. |
+| 172 | Lose state | Unsupported | Round flow only partially implemented. |
+| 173 | Lose state | Unsupported | Round flow only partially implemented. |
+| 180 | Win state | Unsupported | Round flow only partially implemented. |
+| 181 | Win state | Unsupported | Round flow only partially implemented. |
+| 190 | Intro state | Unsupported | Round intro not implemented. |
+| 191 | Intro state | Unsupported | Round intro not implemented. |
+| 192 | Intro state | Unsupported | Round intro not implemented. |
+| 193 | Intro state | Unsupported | Round intro not implemented. |
+| 194 | Intro state | Unsupported | Round intro not implemented. |
+| 195 | Intro state | Unsupported | Round intro not implemented. |
+| 196 | Intro state | Unsupported | Round intro not implemented. |
+| 197 | Intro state | Unsupported | Round intro not implemented. |
+| 198 | Intro state | Unsupported | Round intro not implemented. |
+| 199 | Intro state | Unsupported | Round intro not implemented. |
+| 5000 | Common get-hit state | Unsupported | Required for hit reactions. |
+| 5001 | Common get-hit state | Unsupported | Required for hit reactions. |
+| 5010 | Common get-hit state | Unsupported | Required for hit reactions. |
+| 5011 | Common get-hit state | Unsupported | Required for hit reactions. |
+| 5020 | Common get-hit state | Unsupported | Required for hit reactions. |
+| 5030 | Fall state | Unsupported | Required for knockdown. |
+| 5035 | Fall state | Unsupported | Required for knockdown. |
+| 5040 | Fall state | Unsupported | Required for knockdown. |
+| 5050 | Fall state | Unsupported | Required for knockdown. |
+| 5060 | Fall state | Unsupported | Required for knockdown. |
+| 5070 | Fall state | Unsupported | Required for knockdown. |
+| 5080 | Fall recovery state | Unsupported | Required for recovery. |
+| 5090 | Fall recovery state | Unsupported | Required for recovery. |
+| 5100 | Down state | Unsupported | Required for knockdown. |
+| 5110 | Down state | Unsupported | Required for knockdown. |
+| 5120 | Recovery state | Unsupported | Required for recovery. |
+| 5150 | Dead state | Unsupported | Required for KO behavior. |
+| 5200 | Lie dead state | Unsupported | Required for KO behavior. |
+| 5210 | Lie dead state | Unsupported | Required for KO behavior. |
 
 ## StateDef Header Fields
 
@@ -75,8 +116,6 @@ Baseline references:
 | sprpriority | Sprite priority | Partial | Runtime field exists; rendering needs audit. |
 
 ## State Controller Compatibility
-
-Each State Controller is listed on its own row. **Partial** means the controller is now recognized by runtime and will not silently disappear as unknown, but full WinMUGEN side effects may still be missing.
 
 | Controller | Status | Notes |
 |---|---|---|
@@ -188,7 +227,8 @@ Each State Controller is listed on its own row. **Partial** means the controller
 | AuthorName | Partial | String source exists; metadata currently defaults empty. |
 | BackEdge | Unsupported | Screen/camera edge value not implemented. |
 | BackEdgeDist | Partial | Uses internal screen/player coordinate approximation. |
-| BodyDist | Unsupported | Body edge distance not implemented. |
+| BodyDist X | Unsupported | Body edge distance not implemented. |
+| BodyDist Y | Unsupported | Body edge distance not implemented. |
 | CanRecover | Partial | Safe default currently returns true. |
 | Ceil | Complete | `Ceil(...)` supported for numeric expressions. |
 | Command | Complete | Basic command set matching. |
@@ -212,7 +252,8 @@ Each State Controller is listed on its own row. **Partial** means the controller
 | HitOver | Partial | Safe default true. |
 | HitPauseTime | Complete | Reads player hitPause. |
 | HitShakeOver | Partial | Safe default true. |
-| HitVel | Partial | Optional hit velocity fields, default 0. |
+| HitVel X | Partial | Optional hit velocity field, default 0. |
+| HitVel Y | Partial | Optional hit velocity field, default 0. |
 | ID | Unsupported | Player/helper id trigger not implemented. |
 | IfElse | Unsupported | Expression function not implemented. |
 | InGuardDist | Partial | Simple distance approximation. |
@@ -241,8 +282,10 @@ Each State Controller is listed on its own row. **Partial** means the controller
 | NumProjID | Partial | Safe default 0. |
 | NumTarget | Partial | Safe default 0. |
 | P1Name | Unsupported | Alias not implemented. `Name` exists. |
-| P2BodyDist | Partial | Uses opponent/player coordinate difference. |
-| P2Dist | Partial | Uses opponent/player coordinate difference. |
+| P2BodyDist X | Partial | Uses opponent/player coordinate difference. |
+| P2BodyDist Y | Partial | Uses opponent/player coordinate difference. |
+| P2Dist X | Partial | Uses opponent/player coordinate difference. |
+| P2Dist Y | Partial | Uses opponent/player coordinate difference. |
 | P2Life | Partial | Uses opponent life or default. |
 | P2MoveType | Partial | Opponent move type supported. |
 | P2Name | Partial | Opponent metadata source exists, default empty. |
@@ -251,10 +294,12 @@ Each State Controller is listed on its own row. **Partial** means the controller
 | P3Name | Unsupported | Team metadata not implemented. |
 | P4Name | Unsupported | Team metadata not implemented. |
 | PalNo | Unsupported | Palette slot trigger not implemented. |
-| ParentDist | Unsupported | Parent distance not implemented. |
+| ParentDist X | Unsupported | Parent distance not implemented. |
+| ParentDist Y | Unsupported | Parent distance not implemented. |
 | Pi | Unsupported | Math constant not implemented. |
 | PlayerIDExist | Unsupported | Player/helper lookup by id not implemented. |
-| Pos | Complete | Basic x/y comparison. |
+| Pos X | Complete | Basic X comparison. |
+| Pos Y | Complete | Basic Y comparison. |
 | Power | Complete | Basic support with default 0. |
 | PowerMax | Partial | Default 3000. |
 | PrevStateNo | Partial | Optional field read; previous-state tracking incomplete. |
@@ -266,11 +311,13 @@ Each State Controller is listed on its own row. **Partial** means the controller
 | ProjHit | Unsupported | Boolean projectile hit not implemented. |
 | ProjHitTime | Partial | Safe default -1. |
 | Random | Partial | Deterministic placeholder 500. |
-| RootDist | Unsupported | Root distance not implemented. |
+| RootDist X | Unsupported | Root distance not implemented. |
+| RootDist Y | Unsupported | Root distance not implemented. |
 | RoundNo | Partial | Context/default support. |
 | RoundsExisted | Partial | Safe default true. |
 | RoundState | Complete | Basic support with default 2 unless supplied. |
-| ScreenPos | Partial | Uses internal position approximation. |
+| ScreenPos X | Partial | Uses internal position approximation. |
+| ScreenPos Y | Partial | Uses internal position approximation. |
 | SelfAnimExist | Unsupported | AIR lookup not implemented. |
 | Sin | Unsupported | Math function not implemented. |
 | StateNo | Complete | Numeric comparison. |
@@ -284,7 +331,8 @@ Each State Controller is listed on its own row. **Partial** means the controller
 | Time | Complete | State time comparison. |
 | UniqHitCount | Unsupported | Hit counter not implemented. |
 | Var | Complete | Basic numeric comparison. |
-| Vel | Complete | Basic x/y comparison. |
+| Vel X | Complete | Basic X velocity comparison. |
+| Vel Y | Complete | Basic Y velocity comparison. |
 | Win | Partial | Safe default false. Round result not implemented. |
 | WinKO | Unsupported | Round result not implemented. |
 | WinPerfect | Unsupported | Round result not implemented. |
@@ -307,25 +355,40 @@ Each State Controller is listed on its own row. **Partial** means the controller
 
 | Feature | Status | Notes |
 |---|---|---|
-| Numeric comparisons = != > >= < <= | Complete | Simple trigger forms. |
-| Range comparisons `= [a,b]` / `!= [a,b]` | Complete | Numeric ranges supported. |
-| String equality | Partial | Command, state type, move type, physics, name-like sources. |
-| Boolean AND between triggerall and triggerN | Complete | Covered by trigger group evaluator. |
-| OR between trigger groups | Complete | Multiple triggerN groups supported. |
-| Top-level `&&` / `||` / `!` | Complete | Supported for simple expressions. |
+| `=` | Complete | Simple numeric and string equality supported. |
+| `!=` | Complete | Simple numeric and string inequality supported. |
+| `>` | Complete | Simple numeric comparison supported. |
+| `>=` | Complete | Simple numeric comparison supported. |
+| `<` | Complete | Simple numeric comparison supported. |
+| `<=` | Complete | Simple numeric comparison supported. |
+| `= [a,b]` | Complete | Numeric range equality supported. |
+| `!= [a,b]` | Complete | Numeric range inequality supported. |
+| `triggerall` AND | Complete | Covered by trigger group evaluator. |
+| `triggerN` OR | Complete | Multiple triggerN groups supported. |
+| `&&` | Complete | Supported for simple expressions. |
+| `||` | Complete | Supported for simple expressions. |
+| `!` | Complete | Supported for simple expressions. |
 | Parentheses | Partial | Outer/group parentheses supported; full expression grammar incomplete. |
-| Arithmetic + - * / % | Unsupported | Needed for broad CNS compatibility. |
+| `+` | Unsupported | Needed for broad CNS compatibility. |
+| `-` | Unsupported | Binary subtraction not implemented. |
+| `*` | Unsupported | Needed for broad CNS compatibility. |
+| `/` | Unsupported | Needed for broad CNS compatibility. |
+| `%` | Unsupported | Needed for broad CNS compatibility. |
 | Unary minus | Partial | Supported as numeric literal. |
-| Functions | Partial | `Abs`, `Floor`, `Ceil`; trig/log/IfElse/Cond unsupported. |
-| Indexed access var(n), sysvar(n), fvar(n) | Partial | var/sysvar basic; fvar default lookup. |
-| Redirection expression chains | Partial | `enemynear, stateno` style basic support. |
+| `var(n)` | Complete | Basic integer var lookup supported. |
+| `sysvar(n)` | Complete | Basic system var lookup supported. |
+| `fvar(n)` | Partial | Float var lookup defaults to 0. |
+| Redirect expression chain | Partial | `enemynear, stateno` style basic support. |
 
 ## CMD Compatibility
 
 | Feature | Status | Notes |
 |---|---|---|
 | Single button commands | Complete | Basic support. |
-| Hold direction `/D`, `/F`, etc. | Complete | Basic support. |
+| Hold direction `/D` | Complete | Basic support. |
+| Hold direction `/F` | Complete | Basic support. |
+| Hold direction `/B` | Complete | Basic support. |
+| Hold direction `/U` | Complete | Basic support. |
 | Direction sequences | Partial | Command matcher exists; needs WinMUGEN timing audit. |
 | Button sequences | Partial | Basic support. |
 | Simultaneous buttons | Partial | Needs full syntax audit. |
@@ -333,7 +396,7 @@ Each State Controller is listed on its own row. **Partial** means the controller
 | Buffer time | Partial | InputBuffer exists, timing needs compatibility tests. |
 | command.time | Untested | Parser/runtime status needs verification. |
 | command.buffer.time | Untested | Parser/runtime status needs verification. |
-| `$` 4-way direction match | Partial | KFM hold commands work; full syntax needs tests. |
+| `$` direction match | Partial | KFM hold commands work; full syntax needs tests. |
 | `/` hold prefix | Partial | Used in common commands. Needs syntax coverage. |
 | `+` simultaneous input | Partial | Needs tests. |
 
@@ -342,16 +405,30 @@ Each State Controller is listed on its own row. **Partial** means the controller
 | Priority | Gap | Reason |
 |---:|---|---|
 | 1 | State -3 execution | Many common systems depend on -3/-2/-1 ordering. |
-| 1 | State20/21/10/11/12 runtime validation | Basic movement must be reliable before attacks. |
-| 1 | Air physics and State51/52 landing | Jump compatibility depends on this. |
+| 1 | State20 runtime validation | Forward walk must be reliable before attacks. |
+| 1 | State21 runtime validation | Back walk must be reliable before attacks. |
+| 1 | State10 runtime validation | Crouch start must be reliable before attacks. |
+| 1 | State11 runtime validation | Crouch hold must be reliable before attacks. |
+| 1 | State12 runtime validation | Crouch end must be reliable before attacks. |
+| 1 | Air physics | Jump compatibility depends on this. |
+| 1 | State51 implementation | Jump-down compatibility depends on this. |
+| 1 | State52 landing validation | Landing compatibility depends on this. |
 | 1 | Arithmetic expression parser | Many real CNS triggers use arithmetic, not just simple comparisons. |
-| 2 | True P2/enemy/target/helper lookup | Current redirect support is mostly safe fallback. |
+| 2 | True P2 lookup | Current support is mostly safe fallback. |
+| 2 | True enemy lookup | Current support is mostly safe fallback. |
+| 2 | True target lookup | Current support is mostly safe fallback. |
+| 2 | True helper lookup | Current support is mostly safe fallback. |
 | 2 | Full State Controller side effects | Every listed controller is recognized, but many are still safe shims. |
 | 2 | HitDef runtime completeness | Required for normal attacks and specials. |
-| 2 | SelfState / TargetState / custom states | Required for throws and get-hit states. |
-| 3 | Explod / Helper controller compatibility | Required for visual effects and projectiles beyond basics. |
-| 3 | Sound controllers | Required for presentation compatibility. |
-| 3 | PalFX/AfterImage/Trans | Required for visual compatibility. |
+| 2 | SelfState ownership semantics | Required for throws and get-hit states. |
+| 2 | TargetState ownership semantics | Required for throws and get-hit states. |
+| 3 | Explod controller compatibility | Required for visual effects. |
+| 3 | Helper controller compatibility | Required for projectiles and assists. |
+| 3 | PlaySnd compatibility | Required for presentation compatibility. |
+| 3 | StopSnd compatibility | Required for presentation compatibility. |
+| 3 | PalFX compatibility | Required for visual compatibility. |
+| 3 | AfterImage compatibility | Required for visual compatibility. |
+| 3 | Trans compatibility | Required for visual compatibility. |
 
 ## Maintenance Rules
 
@@ -360,3 +437,4 @@ Each State Controller is listed on its own row. **Partial** means the controller
 3. Partial entries should include what subset is implemented.
 4. WinMUGEN-specific deviations from MUGEN 1.0/1.1 docs should be recorded in Notes.
 5. Character-specific issues should link to the character file and state number where possible.
+6. Matrix rows must remain one item per row. Do not group items with slashes, ranges, or comma-separated lists in the item column.
