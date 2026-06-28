@@ -23,6 +23,14 @@ Baseline references:
 | Unsupported | Not implemented and no compatibility shim exists. |
 | Untested | Needs verification against WinMUGEN or existing code before marking. |
 
+## Testing Rule
+
+State transitions must be validated by focused UnitTests whenever possible. Manual game-screen checks are useful, but they are not sufficient by themselves.
+
+A movement or command route test should assert the actual runtime result, especially `stateNo`, `animNo`, `stateType`, `physics`, `ctrl`, velocity, and facing when relevant. On failure, the test should print frame-by-frame diagnostics containing input, state before stepping, and state after stepping. This lets a pasted test log narrow the failure to input handling, command resolution, trigger evaluation, ChangeState execution, state header application, physics, animation, or rendering integration.
+
+The detailed policy lives in `docs/webmugen/testing-policy.md`.
+
 ## StateDef Compatibility
 
 | StateNo | WinMUGEN Meaning | Status | Notes |
@@ -30,11 +38,11 @@ Baseline references:
 | -3 | Global state | Partial | `stepCnsStateRuntime` executes -3 before -2/-1. Broader coverage incomplete. |
 | -2 | Global state | Partial | `stepCnsStateRuntime` handles -2. Coverage incomplete. |
 | -1 | Command state | Partial | Used for CMD routing. Broader trigger support was added. |
-| 0 | Stand | Complete | Common baseline and idle fallback exist. |
-| 10 | Crouch start | Partial | Common route exists. Runtime validation ongoing. |
-| 11 | Crouching | Partial | Common route exists. |
-| 12 | Crouch end | Partial | Common route exists. |
-| 20 | Walk forward | Partial | Common route exists. Debugging ongoing. |
+| 0 | Stand | Complete | Common baseline and idle fallback exist. Fallback route has diagnostic regression coverage. |
+| 10 | Crouch start | Partial | Common route exists. Fallback route has diagnostic regression coverage. CNS/common integration still needs full verification. |
+| 11 | Crouching | Partial | Common route exists. Fallback route has diagnostic regression coverage. CNS/common integration still needs full verification. |
+| 12 | Crouch end | Partial | Common route exists. Fallback route has diagnostic regression coverage. CNS/common integration still needs full verification. |
+| 20 | Walk forward | Partial | Common route exists. Fallback route has diagnostic regression coverage. CNS/common integration still needs full verification. |
 | 21 | Walk back | Partial | Added as common back-walk state. |
 | 40 | Jump start | Partial | Common route exists. Jump velocity is minimal. |
 | 41 | Character-defined jump variant | Untested | KFM can define this. Not common-guaranteed. |
@@ -398,41 +406,3 @@ Baseline references:
 | command.buffer.time | Untested | Parser/runtime status needs verification. |
 | `$` direction match | Partial | KFM hold commands work; full syntax needs tests. |
 | `/` hold prefix | Partial | Used in common commands. Needs syntax coverage. |
-| `+` simultaneous input | Partial | Needs tests. |
-
-## Current High-Priority Compatibility Gaps
-
-| Priority | Gap | Reason |
-|---:|---|---|
-| 1 | State20 runtime validation | Forward walk must be reliable before attacks. |
-| 1 | State21 runtime validation | Back walk must be reliable before attacks. |
-| 1 | State10 runtime validation | Crouch start must be reliable before attacks. |
-| 1 | State11 runtime validation | Crouch hold must be reliable before attacks. |
-| 1 | State12 runtime validation | Crouch end must be reliable before attacks. |
-| 1 | Air physics | Jump compatibility depends on this. |
-| 1 | State51 implementation | Jump-down compatibility depends on this. |
-| 1 | State52 landing validation | Landing compatibility depends on this. |
-| 2 | True P2 lookup | Current support is mostly safe fallback. |
-| 2 | True enemy lookup | Current support is mostly safe fallback. |
-| 2 | True target lookup | Current support is mostly safe fallback. |
-| 2 | True helper lookup | Current support is mostly safe fallback. |
-| 2 | Full State Controller side effects | Every listed controller is recognized, but many are still safe shims. |
-| 2 | HitDef runtime completeness | Required for normal attacks and specials. |
-| 2 | SelfState ownership semantics | Required for throws and get-hit states. |
-| 2 | TargetState ownership semantics | Required for throws and get-hit states. |
-| 3 | Explod controller compatibility | Required for visual effects. |
-| 3 | Helper controller compatibility | Required for projectiles and assists. |
-| 3 | PlaySnd compatibility | Required for presentation compatibility. |
-| 3 | StopSnd compatibility | Required for presentation compatibility. |
-| 3 | PalFX compatibility | Required for visual compatibility. |
-| 3 | AfterImage compatibility | Required for visual compatibility. |
-| 3 | Trans compatibility | Required for visual compatibility. |
-
-## Maintenance Rules
-
-1. Every new controller or trigger implementation should update this file and the HTML matrix in the same commit.
-2. Status must not be marked Complete without either a focused unit test or a confirmed app integration path.
-3. Partial entries should include what subset is implemented.
-4. WinMUGEN-specific deviations from MUGEN 1.0/1.1 docs should be recorded in Notes.
-5. Character-specific issues should link to the character file and state number where possible.
-6. Matrix rows must remain one item per row. Do not group items with slashes, ranges, or comma-separated lists in the item column.
