@@ -61,7 +61,7 @@ value = 10
 
     const commandState = character.cns.states.find((state) => state.stateNo === -1);
 
-    expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([400, 10]);
+    expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([10, 400]);
   });
 
   it('still lets a character override a direction-only common route', async () => {
