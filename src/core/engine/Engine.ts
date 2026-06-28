@@ -140,7 +140,13 @@ function jumpVelocityX(input: PlayerInput): number {
 
 function commandActive(input: PlayerInput, commandName: string): boolean {
   const expected = commandName.toLowerCase();
-  return input.commandNames?.has(expected) ?? false;
+  if (!input.commandNames) return false;
+
+  for (const activeCommandName of input.commandNames) {
+    if (activeCommandName.toLowerCase() === expected) return true;
+  }
+
+  return false;
 }
 
 function isCrouchState(stateNo: number): boolean {
