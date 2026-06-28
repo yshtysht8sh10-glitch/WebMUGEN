@@ -55,7 +55,7 @@ describe('CharacterLoader', () => {
     const commandState = character.cns.states.find((state) => state.stateNo === -1);
 
     expect(character.cns.states.map((state) => state.stateNo)).toEqual([0, -1, 40]);
-    expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([200, 10, 11, 12, 20, 21, 40]);
+    expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([40, 10, 11, 12, 20, 21, 40, 200]);
   });
 
   it('loads common CMD command definitions and Statedef -1 routing', async () => {
@@ -73,7 +73,7 @@ describe('CharacterLoader', () => {
 
     expect(character.cmd.commands.map((command) => command.name)).toContain('holdup');
     expect(character.cns.states.map((state) => state.stateNo)).toEqual([0, -1, 40]);
-    expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([200, 40]);
+    expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([40, 200]);
   });
 
   it('prefers character command routes over common command routes', async () => {
@@ -105,7 +105,7 @@ describe('CharacterLoader', () => {
     const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createTextOnlyFetcher(textAssets));
     const commandState = character.cns.states.find((state) => state.stateNo === -1);
 
-    expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([400, 10]);
+    expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([10, 400]);
   });
 
   it('loads ACT palette assets declared by DEF pal entries', async () => {
