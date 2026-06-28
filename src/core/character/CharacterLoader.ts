@@ -9,6 +9,7 @@ import type { CharacterAssets, CharacterPaletteAsset } from './CharacterTypes';
 
 const COMMON_CNS_PATH = '/chars/common1.cns';
 const COMMON_CMD_PATHS = ['/chars/common.cmd', '/chars/common1.cmd'];
+const BASELINE_MOVEMENT_STATE_VALUES = new Set([10, 11, 12, 20, 21, 40, 50, 52, 100, 105]);
 const BASELINE_COMMON_CMD_TEXT = `
 [Command]
 name = "holdup"
@@ -236,11 +237,15 @@ export function mergeMissingCnsStates(base: CnsDocument, common: CnsDocument): C
   const states = base.states.map((state) => {
     if (state.stateNo !== -1 || !commonCommandState) return state;
 
+    const baselineMovementControllers = commonCommandState.controllers.filter(isBaselineMovementController);
+    const otherCommonControllers = commonCommandState.controllers.filter((controller) => !isBaselineMovementController(controller));
+
     return {
       ...state,
       controllers: [
+        ...baselineMovementControllers,
         ...state.controllers,
-        ...filterCommonCommandControllers(state, commonCommandState.controllers),
+        ...filterCommonCommandControllers(state, otherCommonControllers),
       ],
     };
   });
@@ -251,6 +256,12 @@ export function mergeMissingCnsStates(base: CnsDocument, common: CnsDocument): C
     states: [...states, ...missingCommonStates],
     metadataSections: [...base.metadataSections, ...common.metadataSections],
   };
+}
+
+function isBaselineMovementController(controller: CnsStateController): boolean {
+  if (controller.type.toLowerCase() !== 'changestate') return false;
+  const value = Number(controller.params.value);
+  return BASELINE_MOVEMENT_STATE_VALUES.has(value);
 }
 
 function filterCommonCommandControllers(
