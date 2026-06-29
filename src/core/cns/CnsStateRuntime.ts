@@ -149,6 +149,7 @@ function stepPlayer(
       continue;
     }
     if (debugEnabled) appendDebug(trace, `enter S${negativeStateNo} state=${next.stateNo} controllers=${negativeState.controllers.length}`);
+    if (debugEnabled) appendDebug(trace, formatStateDefOverview(negativeState));
     const result = executeStateControllers(next, negativeState, cns, input, commands, debugEnabled);
     next = result.player;
     trace.executedControllers.push(...result.executedControllers);
@@ -165,6 +166,7 @@ function stepPlayer(
   if (!stateDef) return finishTrace(next, trace);
 
   if (debugEnabled) appendDebug(trace, `enter current S${stateDef.stateNo} state=${next.stateNo}`);
+  if (debugEnabled) appendDebug(trace, formatStateDefOverview(stateDef));
   next = applyStateHeader(next, stateDef, false);
   if (debugEnabled) appendDebug(trace, `after header S${stateDef.stateNo} state=${next.stateNo} type=${next.stateType} ctrl=${next.ctrl ? 1 : 0}`);
   const result = executeStateControllers(next, stateDef, cns, input, commands, debugEnabled);
@@ -312,6 +314,20 @@ function debugControllerCheck(
 
   const animTime = mugenAnimTime(player, input);
   return `S${stateDef.stateNo} ${controller.type} v=${value ?? '?'} ${run ? 'OK' : 'NG'} state=${player.stateNo} type=${player.stateType} ctrl=${player.ctrl ? 1 : 0} time=${player.stateTime} animtime=${animTime} cmds=${formatCommands(commands)} trig=[${triggerText}] eval=[${formatTriggerEvaluations(controller, player, input, commands)}] group=[${formatTriggerGroupEvaluation(controller, player, input, commands)}]`;
+}
+
+function formatStateDefOverview(stateDef: CnsStateDefinition): string {
+  const routes = stateDef.controllers
+    .filter((controller) => controller.type.toLowerCase() === 'changestate')
+    .map((controller) => `${controller.type}:${num(controller, 'value') ?? '?'}`)
+    .join(',');
+
+  const head = stateDef.controllers
+    .slice(0, 16)
+    .map((controller, index) => `${index}:${controller.type} v=${num(controller, 'value') ?? '?'}`)
+    .join(' | ');
+
+  return `STATEDEF S${stateDef.stateNo} controllers=${stateDef.controllers.length} routes=[${routes || 'none'}] head=[${head || 'none'}]`;
 }
 
 function formatState10Process(
