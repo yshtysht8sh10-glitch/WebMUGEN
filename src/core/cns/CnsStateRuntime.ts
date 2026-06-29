@@ -1,7 +1,7 @@
 import type { CnsDocument, CnsStateController, CnsStateDefinition, CnsTrigger, CnsValue } from '../../mugen/common/cnsTypes';
 import type { GameState, PlayerState } from '../engine/types';
 import { calculateMugenAnimTime } from '../animation/AnimationDuration';
-import { evaluateCnsRuntimeTriggerGroup } from './CnsRuntimeTrigger';
+import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup } from './CnsRuntimeTrigger';
 
 export type CnsRuntimeTrace = {
   playerId: 1 | 2;
@@ -273,7 +273,19 @@ function debugControllerCheck(
   if (!isCrouchRoute) return null;
 
   const animTime = mugenAnimTime(player, input);
-  return `S${stateDef.stateNo} ${controller.type} v=${value ?? '?'} ${run ? 'OK' : 'NG'} state=${player.stateNo} type=${player.stateType} ctrl=${player.ctrl ? 1 : 0} time=${player.stateTime} animtime=${animTime} cmds=${formatCommands(commands)} trig=[${triggerText}]`;
+  return `S${stateDef.stateNo} ${controller.type} v=${value ?? '?'} ${run ? 'OK' : 'NG'} state=${player.stateNo} type=${player.stateType} ctrl=${player.ctrl ? 1 : 0} time=${player.stateTime} animtime=${animTime} cmds=${formatCommands(commands)} trig=[${triggerText}] eval=[${formatTriggerEvaluations(controller, player, input, commands)}]`;
+}
+
+function formatTriggerEvaluations(
+  controller: CnsStateController,
+  player: PlayerState,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): string {
+  const context = { player, commands, animTime: mugenAnimTime(player, input) };
+  return controller.triggers
+    .map((trigger) => `${formatTrigger(trigger)}=>${evaluateCnsRuntimeTrigger(trigger.expression, context) ? 'T' : 'F'}`)
+    .join(' | ');
 }
 
 function formatTrigger(trigger: CnsTrigger): string {
