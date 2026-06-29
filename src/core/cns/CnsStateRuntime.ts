@@ -284,7 +284,7 @@ function debugControllerCheck(
   if (!isCrouchRoute) return null;
 
   const animTime = mugenAnimTime(player, input);
-  return `S${stateDef.stateNo} ${controller.type} v=${value ?? '?'} ${run ? 'OK' : 'NG'} state=${player.stateNo} type=${player.stateType} ctrl=${player.ctrl ? 1 : 0} time=${player.stateTime} animtime=${animTime} cmds=${formatCommands(commands)} trig=[${triggerText}] eval=[${formatTriggerEvaluations(controller, player, input, commands)}]`;
+  return `S${stateDef.stateNo} ${controller.type} v=${value ?? '?'} ${run ? 'OK' : 'NG'} state=${player.stateNo} type=${player.stateType} ctrl=${player.ctrl ? 1 : 0} time=${player.stateTime} animtime=${animTime} cmds=${formatCommands(commands)} trig=[${triggerText}] eval=[${formatTriggerEvaluations(controller, player, input, commands)}] group=[${formatTriggerGroupEvaluation(controller, player, input, commands)}]`;
 }
 
 function formatTriggerEvaluations(
@@ -297,6 +297,43 @@ function formatTriggerEvaluations(
   return controller.triggers
     .map((trigger) => `${formatTrigger(trigger)}=>${evaluateCnsRuntimeTrigger(trigger.expression, context) ? 'T' : 'F'}`)
     .join(' | ');
+}
+
+function formatTriggerGroupEvaluation(
+  controller: CnsStateController,
+  player: PlayerState,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): string {
+  const context = { player, commands, animTime: mugenAnimTime(player, input) };
+  const triggerAll: CnsTrigger[] = [];
+  const groups = new Map<number, CnsTrigger[]>();
+
+  for (const trigger of controller.triggers) {
+    if (/^triggerall$/i.test(trigger.name)) {
+      triggerAll.push(trigger);
+      continue;
+    }
+
+    const match = trigger.name.match(/^trigger(\d+)$/i);
+    const groupNo = match ? Number(match[1]) : 1;
+    const existing = groups.get(groupNo) ?? [];
+    existing.push(trigger);
+    groups.set(groupNo, existing);
+  }
+
+  const allResult = triggerAll.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context));
+  const sortedGroups = Array.from(groups.entries()).sort(([left], [right]) => left - right);
+  const groupSummaries = sortedGroups.map(([groupNo, triggers]) => {
+    const items = triggers.map((trigger) => `${trigger.expression}:${evaluateCnsRuntimeTrigger(trigger.expression, context) ? 'T' : 'F'}`).join('&');
+    const result = triggers.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context));
+    return `g${groupNo}(${items})=${result ? 'T' : 'F'}`;
+  });
+  const anyGroupResult = sortedGroups.length === 0 ? triggerAll.length > 0 : sortedGroups.some(([, triggers]) => triggers.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context)));
+  const runtimeResult = evaluateCnsRuntimeTriggerGroup(controller.triggers.map(formatTrigger), context);
+  const allItems = triggerAll.map((trigger) => `${trigger.expression}:${evaluateCnsRuntimeTrigger(trigger.expression, context) ? 'T' : 'F'}`).join('&') || 'none';
+
+  return `all(${allItems})=${allResult ? 'T' : 'F'} | ${groupSummaries.join(' | ') || 'groups=none'} | anyGroup=${anyGroupResult ? 'T' : 'F'} | final=${allResult && anyGroupResult ? 'T' : 'F'} | runtime=${runtimeResult ? 'T' : 'F'}`;
 }
 
 function formatTrigger(trigger: CnsTrigger): string {
