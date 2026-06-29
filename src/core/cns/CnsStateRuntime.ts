@@ -353,12 +353,19 @@ function formatTriggerGroupEvaluation(
     const result = triggers.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context));
     return `g${groupNo}(${items})=${result ? 'T' : 'F'}`;
   });
+  const groupDetails = sortedGroups.map(([groupNo, triggers]) => {
+    const result = triggers.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context));
+    const names = triggers.map((trigger) => trigger.name).join(',');
+    const items = triggers.map((trigger) => `${trigger.name}:${trigger.expression}:${evaluateCnsRuntimeTrigger(trigger.expression, context) ? 'T' : 'F'}`).join('&');
+    return `key=${groupNo} size=${triggers.length} result=${result ? 'T' : 'F'} names=[${names}] items=[${items}]`;
+  });
+  const groupKeys = sortedGroups.map(([groupNo]) => groupNo).join(',') || 'none';
   const anyGroupResult = sortedGroups.length === 0 ? triggerAll.length > 0 : sortedGroups.some(([, triggers]) => triggers.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context)));
   const recordResult = evaluateTriggerRecords(controller.triggers, context);
   const stringRuntimeResult = evaluateCnsRuntimeTriggerGroup(controller.triggers.map(formatTrigger), context);
   const allItems = triggerAll.map((trigger) => `${trigger.expression}:${evaluateCnsRuntimeTrigger(trigger.expression, context) ? 'T' : 'F'}`).join('&') || 'none';
 
-  return `all(${allItems})=${allResult ? 'T' : 'F'} | ${groupSummaries.join(' | ') || 'groups=none'} | anyGroup=${anyGroupResult ? 'T' : 'F'} | final=${allResult && anyGroupResult ? 'T' : 'F'} | records=${recordResult ? 'T' : 'F'} | string=${stringRuntimeResult ? 'T' : 'F'}`;
+  return `all(${allItems})=${allResult ? 'T' : 'F'} | ${groupSummaries.join(' | ') || 'groups=none'} | groupCount=${groups.size} allCount=${triggerAll.length} keys=[${groupKeys}] details=[${groupDetails.join(' || ') || 'none'}] | anyGroup=${anyGroupResult ? 'T' : 'F'} | final=${allResult && anyGroupResult ? 'T' : 'F'} | records=${recordResult ? 'T' : 'F'} | string=${stringRuntimeResult ? 'T' : 'F'}`;
 }
 
 function formatTrigger(trigger: CnsTrigger): string {
