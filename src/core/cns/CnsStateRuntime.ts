@@ -201,7 +201,12 @@ function executeStateControllers(
     const result = executeController(next, controller, cns);
     next = result.player;
     if (result.executed) {
-      executedControllers.push(beforeStateNo === next.stateNo ? result.name : `${result.name} ${beforeStateNo}->${next.stateNo}`);
+      executedControllers.push(result.name);
+      if (debugEnabled && beforeStateNo !== next.stateNo) {
+        const transitionLine = `${result.name} ${beforeStateNo}->${next.stateNo}`;
+        debugLines.push(transitionLine);
+        executedControllers.push(`dbg ${transitionLine}`);
+      }
     }
   }
 
