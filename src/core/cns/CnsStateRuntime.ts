@@ -202,6 +202,9 @@ function executeStateControllers(
     const debugLine = debugControllerCheck(stateDef, controller, next, input, commands, run);
     if (debugEnabled && debugLine) {
       pushDebug(debugLines, executedControllers, debugLine);
+      for (const line of formatState10Process(stateDef, controller, next, input, commands, run)) {
+        pushDebug(debugLines, executedControllers, line);
+      }
       pushDebug(debugLines, executedControllers, `pipe before S${stateDef.stateNo} ${controller.type} v=${num(controller, 'value') ?? '?'} state=${next.stateNo} run=${run ? 1 : 0}`);
     }
     if (!run) continue;
@@ -309,6 +312,55 @@ function debugControllerCheck(
 
   const animTime = mugenAnimTime(player, input);
   return `S${stateDef.stateNo} ${controller.type} v=${value ?? '?'} ${run ? 'OK' : 'NG'} state=${player.stateNo} type=${player.stateType} ctrl=${player.ctrl ? 1 : 0} time=${player.stateTime} animtime=${animTime} cmds=${formatCommands(commands)} trig=[${triggerText}] eval=[${formatTriggerEvaluations(controller, player, input, commands)}] group=[${formatTriggerGroupEvaluation(controller, player, input, commands)}]`;
+}
+
+function formatState10Process(
+  stateDef: CnsStateDefinition,
+  controller: CnsStateController,
+  player: PlayerState,
+  input: CnsRuntimeInput,
+  commands: ReadonlySet<string> | undefined,
+  run: boolean,
+): string[] {
+  if (stateDef.stateNo !== -1 || controller.type.toLowerCase() !== 'changestate' || num(controller, 'value') !== 10) return [];
+
+  const context = { player, commands, animTime: mugenAnimTime(player, input) };
+  const triggerAll = controller.triggers.filter((trigger) => /^triggerall$/i.test(trigger.name));
+  const groups = collectTriggerGroups(controller.triggers);
+  const sortedGroups = Array.from(groups.entries()).sort(([left], [right]) => left - right);
+  const allResult = triggerAll.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context));
+  const anyGroupResult = sortedGroups.length === 0
+    ? triggerAll.length > 0
+    : sortedGroups.some(([, triggers]) => triggers.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context)));
+  const recordsResult = evaluateTriggerRecords(controller.triggers, context);
+  const stringResult = evaluateCnsRuntimeTriggerGroup(controller.triggers.map(formatTrigger), context);
+
+  return [
+    `STATE10 01 input cmds=${formatCommands(commands)}`,
+    `STATE10 02 candidate S-1 ChangeState value=10 current=${player.stateNo} type=${player.stateType} ctrl=${player.ctrl ? 1 : 0}`,
+    `STATE10 03 triggerall ${formatTriggerList(triggerAll, context)} result=${allResult ? 'T' : 'F'}`,
+    ...sortedGroups.map(([groupNo, triggers]) => `STATE10 04 group${groupNo} ${formatTriggerList(triggers, context)} result=${triggers.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context)) ? 'T' : 'F'}`),
+    `STATE10 05 final all=${allResult ? 'T' : 'F'} anyGroup=${anyGroupResult ? 'T' : 'F'} records=${recordsResult ? 'T' : 'F'} string=${stringResult ? 'T' : 'F'} shouldRun=${run ? 'T' : 'F'}`,
+    `STATE10 06 next ${run ? 'execute ChangeState' : 'skip ChangeState'} before=${player.stateNo}`,
+  ];
+}
+
+function collectTriggerGroups(triggers: readonly CnsTrigger[]): Map<number, CnsTrigger[]> {
+  const groups = new Map<number, CnsTrigger[]>();
+  for (const trigger of triggers) {
+    if (/^triggerall$/i.test(trigger.name)) continue;
+    const match = trigger.name.match(/^trigger(\d+)$/i);
+    const groupNo = match ? Number(match[1]) : 1;
+    const existing = groups.get(groupNo) ?? [];
+    existing.push(trigger);
+    groups.set(groupNo, existing);
+  }
+  return groups;
+}
+
+function formatTriggerList(triggers: readonly CnsTrigger[], context: CnsRuntimeTriggerContext): string {
+  if (triggers.length === 0) return 'none';
+  return triggers.map((trigger) => `${trigger.name}:${trigger.expression}=${evaluateCnsRuntimeTrigger(trigger.expression, context) ? 'T' : 'F'}`).join(',');
 }
 
 function formatTriggerEvaluations(
