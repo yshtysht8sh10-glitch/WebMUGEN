@@ -14,6 +14,7 @@ export type CnsRuntimeTrace = {
   mugenAnimTime: number;
   stateFound: boolean;
   executedControllers: string[];
+  debugLines: string[];
 };
 
 export type CnsRuntimeInput = {
@@ -25,6 +26,12 @@ export type CnsRuntimeInput = {
 export type CnsRuntimeResult = { state: GameState; traces: CnsRuntimeTrace[] };
 
 type ControllerResult = { player: PlayerState; executed: boolean; name: string };
+
+type ControllerExecutionResult = {
+  player: PlayerState;
+  executedControllers: string[];
+  debugLines: string[];
+};
 
 type ExtendedPlayerState = PlayerState & {
   power?: number;
@@ -43,6 +50,8 @@ type ExtendedPlayerState = PlayerState & {
   hitBy?: string | null;
   notHitBy?: string | null;
 };
+
+const DEBUG_STATES = [-3, -2, -1, 0, 10, 11, 12] as const;
 
 const RECOGNIZED_NO_OP_CONTROLLERS = new Map<string, string>([
   ['afterimage', 'AfterImage'],
@@ -124,14 +133,25 @@ function stepPlayer(
     mugenAnimTime: mugenAnimTime(player, input),
     stateFound: Boolean(findState(cns, player.stateNo)),
     executedControllers: [],
+    debugLines: [],
   };
+
+  const debugEnabled = shouldDebugRuntime(commands);
+  if (debugEnabled) {
+    appendDebug(trace, `scan ${stateScanSummary(cns)} cmds=${formatCommands(commands)}`);
+  }
 
   for (const negativeStateNo of [-3, -2, -1]) {
     const negativeState = findState(cns, negativeStateNo);
-    if (!negativeState) continue;
-    const result = executeStateControllers(next, negativeState, cns, input, commands);
+    if (!negativeState) {
+      if (debugEnabled) appendDebug(trace, `S${negativeStateNo} missing`);
+      continue;
+    }
+    if (debugEnabled) appendDebug(trace, `S${negativeStateNo} controllers=${negativeState.controllers.length}`);
+    const result = executeStateControllers(next, negativeState, cns, input, commands, debugEnabled);
     next = result.player;
     trace.executedControllers.push(...result.executedControllers);
+    trace.debugLines.push(...result.debugLines);
     if (next.stateNo !== originalStateNo) return finishTrace(next, trace);
   }
 
@@ -140,9 +160,11 @@ function stepPlayer(
   if (!stateDef) return finishTrace(next, trace);
 
   next = applyStateHeader(next, stateDef, false);
-  const result = executeStateControllers(next, stateDef, cns, input, commands);
+  if (debugEnabled) appendDebug(trace, `S${stateDef.stateNo} controllers=${stateDef.controllers.length}`);
+  const result = executeStateControllers(next, stateDef, cns, input, commands, debugEnabled);
   next = result.player;
   trace.executedControllers.push(...result.executedControllers);
+  trace.debugLines.push(...result.debugLines);
 
   return finishTrace(next, trace);
 }
@@ -160,18 +182,30 @@ function executeStateControllers(
   cns: CnsDocument,
   input: CnsRuntimeInput,
   commands?: ReadonlySet<string>,
-): { player: PlayerState; executedControllers: string[] } {
+  debugEnabled = false,
+): ControllerExecutionResult {
   let next = player;
   const executedControllers: string[] = [];
+  const debugLines: string[] = [];
 
   for (const controller of stateDef.controllers) {
-    if (!shouldRun(controller, next, input, commands)) continue;
+    const run = shouldRun(controller, next, input, commands);
+    const debugLine = debugControllerCheck(stateDef, controller, next, input, commands, run);
+    if (debugEnabled && debugLine) {
+      debugLines.push(debugLine);
+      executedControllers.push(`dbg ${debugLine}`);
+    }
+    if (!run) continue;
+
+    const beforeStateNo = next.stateNo;
     const result = executeController(next, controller, cns);
     next = result.player;
-    if (result.executed) executedControllers.push(result.name);
+    if (result.executed) {
+      executedControllers.push(beforeStateNo === next.stateNo ? result.name : `${result.name} ${beforeStateNo}->${next.stateNo}`);
+    }
   }
 
-  return { player: next, executedControllers };
+  return { player: next, executedControllers, debugLines };
 }
 
 function findState(cns: CnsDocument, stateNo: number): CnsStateDefinition | undefined {
@@ -212,6 +246,29 @@ function applyStateHeader(player: PlayerState, stateDef: CnsStateDefinition, res
 function shouldRun(controller: CnsStateController, player: PlayerState, input: CnsRuntimeInput, commands?: ReadonlySet<string>): boolean {
   if (controller.triggers.length === 0) return true;
   return evaluateCnsRuntimeTriggerGroup(controller.triggers.map(formatTrigger), { player, commands, animTime: mugenAnimTime(player, input) });
+}
+
+function debugControllerCheck(
+  stateDef: CnsStateDefinition,
+  controller: CnsStateController,
+  player: PlayerState,
+  input: CnsRuntimeInput,
+  commands: ReadonlySet<string> | undefined,
+  run: boolean,
+): string | null {
+  const value = num(controller, 'value');
+  const triggerText = controller.triggers.map(formatTrigger).join(' | ');
+  const lowerTriggerText = triggerText.toLowerCase();
+  const controllerType = controller.type.toLowerCase();
+  const isCrouchRoute =
+    stateDef.stateNo === -1 &&
+    controllerType === 'changestate' &&
+    (value === 10 || value === 11 || value === 12 || lowerTriggerText.includes('holddown'));
+
+  if (!isCrouchRoute) return null;
+
+  const animTime = mugenAnimTime(player, input);
+  return `S${stateDef.stateNo} ${controller.type} v=${value ?? '?'} ${run ? 'OK' : 'NG'} state=${player.stateNo} type=${player.stateType} ctrl=${player.ctrl ? 1 : 0} time=${player.stateTime} animtime=${animTime} cmds=${formatCommands(commands)} trig=[${triggerText}]`;
 }
 
 function formatTrigger(trigger: CnsTrigger): string {
@@ -426,6 +483,26 @@ function setVar(player: PlayerState, index: number, value: number): PlayerState 
   return { ...player, vars: { ...vars, [index]: value } } as PlayerState;
 }
 
+function shouldDebugRuntime(commands?: ReadonlySet<string>): boolean {
+  return commands?.has('holddown') === true || commands?.has('down') === true;
+}
+
+function appendDebug(trace: CnsRuntimeTrace, line: string): void {
+  trace.debugLines.push(line);
+  trace.executedControllers.push(`dbg ${line}`);
+}
+
+function stateScanSummary(cns: CnsDocument): string {
+  return DEBUG_STATES.map((stateNo) => {
+    const state = findState(cns, stateNo);
+    return `S${stateNo}:${state ? state.controllers.length : 'missing'}`;
+  }).join(' ');
+}
+
+function formatCommands(commands?: ReadonlySet<string>): string {
+  return commands ? Array.from(commands).join(',') : '';
+}
+
 function missingTrace(playerId: 1 | 2, player: PlayerState, input: CnsRuntimeInput): CnsRuntimeTrace {
-  return { playerId, stateNo: player.stateNo, afterStateNo: player.stateNo, animNo: player.animNo, afterAnimNo: player.animNo, stateTime: player.stateTime, afterStateTime: player.stateTime, mugenAnimTime: mugenAnimTime(player, input), stateFound: false, executedControllers: [] };
+  return { playerId, stateNo: player.stateNo, afterStateNo: player.stateNo, animNo: player.animNo, afterAnimNo: player.animNo, stateTime: player.stateTime, afterStateTime: player.stateTime, mugenAnimTime: mugenAnimTime(player, input), stateFound: false, executedControllers: [], debugLines: [] };
 }
