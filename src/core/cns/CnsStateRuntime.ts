@@ -139,6 +139,7 @@ function stepPlayer(
   const debugEnabled = shouldDebugRuntime(commands);
   if (debugEnabled) {
     appendDebug(trace, `scan ${stateScanSummary(cns)} cmds=${formatCommands(commands)}`);
+    appendDebug(trace, `pipeline start state=${next.stateNo} type=${next.stateType} ctrl=${next.ctrl ? 1 : 0} time=${next.stateTime}`);
   }
 
   for (const negativeStateNo of [-3, -2, -1]) {
@@ -147,24 +148,30 @@ function stepPlayer(
       if (debugEnabled) appendDebug(trace, `S${negativeStateNo} missing`);
       continue;
     }
-    if (debugEnabled) appendDebug(trace, `S${negativeStateNo} controllers=${negativeState.controllers.length}`);
+    if (debugEnabled) appendDebug(trace, `enter S${negativeStateNo} state=${next.stateNo} controllers=${negativeState.controllers.length}`);
     const result = executeStateControllers(next, negativeState, cns, input, commands, debugEnabled);
     next = result.player;
     trace.executedControllers.push(...result.executedControllers);
     trace.debugLines.push(...result.debugLines);
-    if (next.stateNo !== originalStateNo) return finishTrace(next, trace);
+    if (debugEnabled) appendDebug(trace, `leave S${negativeStateNo} state=${next.stateNo}`);
+    if (next.stateNo !== originalStateNo) {
+      if (debugEnabled) appendDebug(trace, `negative exit original=${originalStateNo} current=${next.stateNo}`);
+      return finishTrace(next, trace);
+    }
   }
 
   const stateDef = findState(cns, next.stateNo);
   trace.stateFound = Boolean(stateDef);
   if (!stateDef) return finishTrace(next, trace);
 
+  if (debugEnabled) appendDebug(trace, `enter current S${stateDef.stateNo} state=${next.stateNo}`);
   next = applyStateHeader(next, stateDef, false);
-  if (debugEnabled) appendDebug(trace, `S${stateDef.stateNo} controllers=${stateDef.controllers.length}`);
+  if (debugEnabled) appendDebug(trace, `after header S${stateDef.stateNo} state=${next.stateNo} type=${next.stateType} ctrl=${next.ctrl ? 1 : 0}`);
   const result = executeStateControllers(next, stateDef, cns, input, commands, debugEnabled);
   next = result.player;
   trace.executedControllers.push(...result.executedControllers);
   trace.debugLines.push(...result.debugLines);
+  if (debugEnabled) appendDebug(trace, `leave current S${stateDef.stateNo} state=${next.stateNo}`);
 
   return finishTrace(next, trace);
 }
@@ -173,6 +180,8 @@ function finishTrace(player: PlayerState, trace: CnsRuntimeTrace): { player: Pla
   trace.afterStateNo = player.stateNo;
   trace.afterAnimNo = player.animNo;
   trace.afterStateTime = player.stateTime;
+  trace.debugLines.push(`finish state=${player.stateNo}`);
+  if (shouldDebugExecuted(trace)) trace.executedControllers.push(`dbg finish state=${player.stateNo}`);
   return { player, trace };
 }
 
@@ -192,24 +201,26 @@ function executeStateControllers(
     const run = shouldRun(controller, next, input, commands);
     const debugLine = debugControllerCheck(stateDef, controller, next, input, commands, run);
     if (debugEnabled && debugLine) {
-      debugLines.push(debugLine);
-      executedControllers.push(`dbg ${debugLine}`);
+      pushDebug(debugLines, executedControllers, debugLine);
+      pushDebug(debugLines, executedControllers, `pipe before S${stateDef.stateNo} ${controller.type} v=${num(controller, 'value') ?? '?'} state=${next.stateNo} run=${run ? 1 : 0}`);
     }
     if (!run) continue;
 
     const beforeStateNo = next.stateNo;
     const result = executeController(next, controller, cns);
     next = result.player;
+    if (debugEnabled && debugLine) {
+      pushDebug(debugLines, executedControllers, `pipe after S${stateDef.stateNo} ${controller.type} executed=${result.executed ? 1 : 0} before=${beforeStateNo} after=${next.stateNo}`);
+    }
     if (result.executed) {
       executedControllers.push(result.name);
       if (debugEnabled && beforeStateNo !== next.stateNo) {
-        const transitionLine = `${result.name} ${beforeStateNo}->${next.stateNo}`;
-        debugLines.push(transitionLine);
-        executedControllers.push(`dbg ${transitionLine}`);
+        pushDebug(debugLines, executedControllers, `${result.name} ${beforeStateNo}->${next.stateNo}`);
       }
     }
   }
 
+  if (debugEnabled) pushDebug(debugLines, executedControllers, `return S${stateDef.stateNo} state=${next.stateNo}`);
   return { player: next, executedControllers, debugLines };
 }
 
@@ -504,9 +515,18 @@ function shouldDebugRuntime(commands?: ReadonlySet<string>): boolean {
   return commands?.has('holddown') === true || commands?.has('down') === true;
 }
 
+function shouldDebugExecuted(trace: CnsRuntimeTrace): boolean {
+  return trace.executedControllers.some((line) => line.startsWith('dbg '));
+}
+
 function appendDebug(trace: CnsRuntimeTrace, line: string): void {
   trace.debugLines.push(line);
   trace.executedControllers.push(`dbg ${line}`);
+}
+
+function pushDebug(debugLines: string[], executedControllers: string[], line: string): void {
+  debugLines.push(line);
+  executedControllers.push(`dbg ${line}`);
 }
 
 function stateScanSummary(cns: CnsDocument): string {
