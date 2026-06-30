@@ -81,6 +81,43 @@ canvas {
   color: #0f172a;
 }
 
+.copy-toolbar {
+  align-items: center;
+  background: #0f172a;
+  border-left: 1px solid #334155;
+  border-right: 1px solid #334155;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.copy-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.copy-buttons button {
+  background: #2563eb;
+  border: 1px solid #60a5fa;
+  border-radius: 6px;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 8px 12px;
+}
+
+.copy-buttons button:hover {
+  background: #1d4ed8;
+}
+
+.copy-status {
+  color: #a7f3d0;
+  font-size: 13px;
+}
+
 .debug-panel {
   border: 1px solid #334155;
   border-top: none;
