@@ -48,6 +48,23 @@ import { formatCmdControlHelp } from './CmdControlHelp';
 
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/kfm/kfm.def';
 const ENABLE_RUNTIME_FALLBACKS = false;
+const RUNTIME_HISTORY_LIMIT = 500;
+
+type DebugTab = 'static' | 'runtime' | 'ideas';
+
+type StaticDebugInfo = {
+  characterRows: string[];
+  commandRoutes: string[];
+  stateRows: string[];
+  commandRows: string[];
+};
+
+const EMPTY_STATIC_DEBUG_INFO: StaticDebugInfo = {
+  characterRows: ['character=-'],
+  commandRoutes: ['routes=-'],
+  stateRows: ['states=-'],
+  commandRows: ['commands=-'],
+};
 
 export function WebMugenApp() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -62,6 +79,9 @@ export function WebMugenApp() {
   const p2CommandBufferRef = useRef(new InputBuffer(60));
   const restartPressedRef = useRef(false);
   const inputRef = useRef<BrowserInput | null>(null);
+  const frameNoRef = useRef(0);
+  const runtimeHistoryRef = useRef<string[]>([]);
+  const lastRuntimeSignatureRef = useRef('');
   const [loadMessage, setLoadMessage] = useState('Loading character...');
   const [inputDebugLines, setInputDebugLines] = useState<string[]>(['keys=-']);
   const [roundDebugLine, setRoundDebugLine] = useState(formatRoundState(createInitialRoundState()));
@@ -71,6 +91,9 @@ export function WebMugenApp() {
   const [physicsDebugLines, setPhysicsDebugLines] = useState<string[]>(['phys p1=-', 'phys p2=-']);
   const [coverageDebugLines, setCoverageDebugLines] = useState<string[]>(['coverage=-']);
   const [controlHelpLines, setControlHelpLines] = useState<string[]>(['CMD: -']);
+  const [staticDebugInfo, setStaticDebugInfo] = useState<StaticDebugInfo>(EMPTY_STATIC_DEBUG_INFO);
+  const [runtimeHistoryLines, setRuntimeHistoryLines] = useState<string[]>(['操作すると、ここにタイムスタンプ付きで内部処理ログが残ります。']);
+  const [activeDebugTab, setActiveDebugTab] = useState<DebugTab>('static');
 
   useEffect(() => {
     let disposed = false;
@@ -96,6 +119,7 @@ export function WebMugenApp() {
 
       const spriteCount = character.sprites?.sprites.size ?? 0;
 
+      setStaticDebugInfo(createStaticDebugInfo(character, loadResult.source, spriteCount));
       setLoadMessage(
         loadResult.source === 'def'
           ? `Loaded character: ${DEFAULT_CHARACTER_DEF_PATH} sprites=${spriteCount} cnsStates=${character.cns.states.length} fallback=${ENABLE_RUNTIME_FALLBACKS ? 'on' : 'off'}`
@@ -108,6 +132,7 @@ export function WebMugenApp() {
       p2CommandBufferRef.current = new InputBuffer(60);
 
       const tick = () => {
+        frameNoRef.current += 1;
         const input = inputRef.current;
         const pressedKeys = input?.getPressedKeys() ?? new Set<string>();
         const inputSnapshot = createInputDebugSnapshot(pressedKeys);
@@ -118,8 +143,10 @@ export function WebMugenApp() {
         const p1Commands = normalizeResolvedCommands(resolveCommands(character.cmd, p1Input, p1CommandBufferRef.current).activeCommandNames);
         const p2Commands = normalizeResolvedCommands(resolveCommands(character.cmd, p2Input, p2CommandBufferRef.current).activeCommandNames);
 
-        setInputDebugLines(formatInputDebugOverlay(inputSnapshot));
-        setCommandDebugLines(formatCnsCommandDebugOverlay(p1Commands, p2Commands));
+        const nextInputDebugLines = formatInputDebugOverlay(inputSnapshot);
+        const nextCommandDebugLines = formatCnsCommandDebugOverlay(p1Commands, p2Commands);
+        setInputDebugLines(nextInputDebugLines);
+        setCommandDebugLines(nextCommandDebugLines);
 
         let nextState = gameStateRef.current;
         let nextRoundState = roundStateRef.current;
@@ -178,10 +205,30 @@ export function WebMugenApp() {
         roundStateRef.current = nextRoundState;
         roundScoreRef.current = nextScore;
         cnsTraceRef.current = nextCnsTraces;
-        setRoundDebugLine(formatRoundState(nextRoundState));
-        setScoreDebugLine(formatRoundScore(nextScore));
-        setCnsDebugLines(formatCnsRuntimeDebugOverlay(nextCnsTraces));
-        setPhysicsDebugLines(formatPhysicsDebugOverlay(nextState));
+
+        const nextRoundDebugLine = formatRoundState(nextRoundState);
+        const nextScoreDebugLine = formatRoundScore(nextScore);
+        const nextCnsDebugLines = formatCnsRuntimeDebugOverlay(nextCnsTraces);
+        const nextPhysicsDebugLines = formatPhysicsDebugOverlay(nextState);
+        setRoundDebugLine(nextRoundDebugLine);
+        setScoreDebugLine(nextScoreDebugLine);
+        setCnsDebugLines(nextCnsDebugLines);
+        setPhysicsDebugLines(nextPhysicsDebugLines);
+
+        appendRuntimeHistoryIfNeeded({
+          frameNo: frameNoRef.current,
+          inputLines: nextInputDebugLines,
+          commandLines: nextCommandDebugLines,
+          physicsLines: nextPhysicsDebugLines,
+          roundLine: nextRoundDebugLine,
+          scoreLine: nextScoreDebugLine,
+          cnsLines: nextCnsDebugLines,
+          traces: nextCnsTraces,
+          pressedKeys,
+          historyRef: runtimeHistoryRef,
+          lastSignatureRef: lastRuntimeSignatureRef,
+          setHistoryLines: setRuntimeHistoryLines,
+        });
 
         rendererRef.current?.render(nextState, nextFeedback, nextRoundState, nextScore);
 
@@ -201,37 +248,259 @@ export function WebMugenApp() {
     };
   }, []);
 
+  const liveDebugLines = [
+    ...inputDebugLines,
+    ...commandDebugLines,
+    ...physicsDebugLines,
+    roundDebugLine,
+    scoreDebugLine,
+    ...cnsDebugLines,
+  ];
+
   return (
-    <div>
-      <h1>WebMUGEN</h1>
-      <p>CharacterLoader app integration prototype</p>
-      <canvas
-        ref={canvasRef}
-        width={960}
-        height={540}
-        style={{ border: '1px solid #475569', background: '#0f172a' }}
-      />
-      <p>{loadMessage}</p>
-      <div style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', marginBottom: 16 }}>
-        {[
-          ...inputDebugLines,
-          ...commandDebugLines,
-          ...physicsDebugLines,
-          roundDebugLine,
-          scoreDebugLine,
-          ...cnsDebugLines,
-          ...coverageDebugLines,
-        ].join('\n')}
-      </div>
-      <div style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', marginBottom: 16 }}>
-        {controlHelpLines.join('\n')}
-      </div>
-      <p>P1 keys: arrows move, A/S/D = a/b/c, Q/W/E = x/y/z</p>
-      <p>P2 keys: J/L/I/K move, F/G/H = a/b/c, U/O/P = x/y/z</p>
-      <p>System: R ラウンド再開（KO/TIME OVER後）</p>
-      <p>Place character files under <code>public/chars/kfm/</code> to try DEF-based loading.</p>
+    <div className="app-shell">
+      <header className="app-header">
+        <h1>WebMUGEN</h1>
+        <p>CharacterLoader app integration prototype</p>
+      </header>
+
+      <section className="stage-panel">
+        <canvas
+          ref={canvasRef}
+          width={960}
+          height={540}
+        />
+        <div className="live-debug-strip" aria-label="live runtime debug">
+          {liveDebugLines.join('\n')}
+        </div>
+      </section>
+
+      <DebugTabs activeTab={activeDebugTab} onChange={setActiveDebugTab} />
+
+      <section className="debug-panel">
+        {activeDebugTab === 'static' && (
+          <StaticDebugPanel
+            loadMessage={loadMessage}
+            staticDebugInfo={staticDebugInfo}
+            coverageDebugLines={coverageDebugLines}
+            controlHelpLines={controlHelpLines}
+          />
+        )}
+        {activeDebugTab === 'runtime' && (
+          <RuntimeHistoryPanel runtimeHistoryLines={runtimeHistoryLines} />
+        )}
+        {activeDebugTab === 'ideas' && <IdeasPanel />}
+      </section>
+
+      <section className="help-panel">
+        <p>P1 keys: arrows move, A/S/D = a/b/c, Q/W/E = x/y/z</p>
+        <p>P2 keys: J/L/I/K move, F/G/H = a/b/c, U/O/P = x/y/z</p>
+        <p>System: R ラウンド再開（KO/TIME OVER後）</p>
+        <p>Place character files under <code>public/chars/kfm/</code> to try DEF-based loading.</p>
+      </section>
     </div>
   );
+}
+
+function DebugTabs({ activeTab, onChange }: { activeTab: DebugTab; onChange: (tab: DebugTab) => void }) {
+  return (
+    <nav className="debug-tabs" aria-label="debug tabs">
+      <button className={activeTab === 'static' ? 'active' : ''} onClick={() => onChange('static')} type="button">
+        タブ1 静的情報
+      </button>
+      <button className={activeTab === 'runtime' ? 'active' : ''} onClick={() => onChange('runtime')} type="button">
+        タブ2 実行履歴
+      </button>
+      <button className={activeTab === 'ideas' ? 'active' : ''} onClick={() => onChange('ideas')} type="button">
+        タブ3 調査メモ
+      </button>
+    </nav>
+  );
+}
+
+function StaticDebugPanel({
+  loadMessage,
+  staticDebugInfo,
+  coverageDebugLines,
+  controlHelpLines,
+}: {
+  loadMessage: string;
+  staticDebugInfo: StaticDebugInfo;
+  coverageDebugLines: string[];
+  controlHelpLines: string[];
+}) {
+  return (
+    <div className="debug-grid">
+      <DebugBlock title="Character / DEF 読込結果" lines={[loadMessage, ...staticDebugInfo.characterRows]} />
+      <DebugBlock title="Command → State 期待遷移" lines={staticDebugInfo.commandRoutes} />
+      <DebugBlock title="StateDef 一覧" lines={staticDebugInfo.stateRows} />
+      <DebugBlock title="CMD コマンド一覧" lines={staticDebugInfo.commandRows} />
+      <DebugBlock title="互換カバレッジ" lines={coverageDebugLines} />
+      <DebugBlock title="操作ヘルプ" lines={controlHelpLines} />
+    </div>
+  );
+}
+
+function RuntimeHistoryPanel({ runtimeHistoryLines }: { runtimeHistoryLines: string[] }) {
+  return (
+    <div>
+      <p className="debug-note">
+        入力、Command、State、Controller、Physics の変化をタイムスタンプ付きで蓄積します。操作を止めても消えません。
+      </p>
+      <pre className="debug-pre history-pre">{runtimeHistoryLines.join('\n')}</pre>
+    </div>
+  );
+}
+
+function IdeasPanel() {
+  return (
+    <div className="debug-grid">
+      <DebugBlock
+        title="次に作ると便利な表示"
+        lines={[
+          '1. State遷移グラフ: State 0 → -1 → 10 → 11 のように矢印で表示',
+          '2. Controller 実行表: ChangeState / VelSet / ChangeAnim が OK/NG どちらだったかを行単位で表示',
+          '3. Trigger 詳細: expected / actual / result を分けて表示',
+          '4. Collision / HitDef タブ: Clsn と HitDef の当たり判定を可視化',
+          '5. 差分比較: WinMUGEN期待値とWebMUGEN実測値を横並び表示',
+        ]}
+      />
+      <DebugBlock
+        title="現在の調査メモ"
+        lines={[
+          'State10問題では、入力とCommand認識は確認済み。',
+          '次は「StateDefにどのControllerが入っているか」と「どのControllerが実行されたか」をGUIで追う。',
+          '長い1行ログではなく、タブ内で静的情報と実行履歴を分離して見る。',
+        ]}
+      />
+    </div>
+  );
+}
+
+function DebugBlock({ title, lines }: { title: string; lines: string[] }) {
+  return (
+    <section className="debug-block">
+      <h2>{title}</h2>
+      <pre className="debug-pre">{lines.join('\n')}</pre>
+    </section>
+  );
+}
+
+function createStaticDebugInfo(character: any, source: string, spriteCount: number): StaticDebugInfo {
+  const infoRows = [
+    `source=${source}`,
+    `name=${readDefValue(character.def, 'Info', 'name') ?? '-'}`,
+    `displayname=${readDefValue(character.def, 'Info', 'displayname') ?? '-'}`,
+    `author=${readDefValue(character.def, 'Info', 'author') ?? '-'}`,
+    `sprites=${spriteCount}`,
+    `cnsStates=${character.cns.states.length}`,
+    `cmdCommands=${character.cmd.commands.length}`,
+  ];
+
+  const commandRoutes = character.cns.states
+    .filter((state: any) => state.stateNo === -1 || state.stateNo === -2 || state.stateNo === -3)
+    .flatMap((state: any) => state.controllers.map((controller: any) => formatExpectedRoute(state.stateNo, controller)))
+    .filter(Boolean)
+    .slice(0, 80);
+
+  const stateRows = character.cns.states
+    .slice()
+    .sort((left: any, right: any) => left.stateNo - right.stateNo)
+    .map((state: any) => `S${state.stateNo} type=${state.stateType ?? '-'} phys=${state.physics ?? '-'} ctrl=${state.ctrl === undefined ? '-' : Number(state.ctrl)} anim=${state.initialAnim ?? '-'} controllers=${state.controllers.length}`)
+    .slice(0, 120);
+
+  const commandRows = character.cmd.commands
+    .map((command: any) => `${command.name}: ${command.command}${command.time ? ` time=${command.time}` : ''}`)
+    .slice(0, 120);
+
+  return {
+    characterRows: infoRows,
+    commandRoutes: commandRoutes.length > 0 ? commandRoutes : ['ChangeState routes=-'],
+    stateRows,
+    commandRows,
+  };
+}
+
+function formatExpectedRoute(stateNo: number, controller: any): string | null {
+  if (String(controller.type).toLowerCase() !== 'changestate') return null;
+  const value = readParamNumber(controller, 'value');
+  const commandTriggers = controller.triggers
+    .filter((trigger: any) => /command\s*[!=]?=/.test(String(trigger.expression).toLowerCase()))
+    .map((trigger: any) => `${trigger.name}:${trigger.expression}`);
+  if (commandTriggers.length === 0 && stateNo === -1) return null;
+
+  const otherTriggers = controller.triggers
+    .filter((trigger: any) => !/command\s*[!=]?=/.test(String(trigger.expression).toLowerCase()))
+    .map((trigger: any) => `${trigger.name}:${trigger.expression}`)
+    .join(' | ');
+
+  return `S${stateNo} ${commandTriggers.join(' | ') || 'auto'} -> ChangeState ${value ?? '?'}${otherTriggers ? ` if ${otherTriggers}` : ''}`;
+}
+
+function readDefValue(def: any, sectionName: string, key: string): string | null {
+  const section = def?.sections?.find((candidate: any) => String(candidate.name).toLowerCase() === sectionName.toLowerCase());
+  const value = section?.values?.get?.(key.toLowerCase()) ?? section?.values?.get?.(key);
+  if (value === undefined || value === null) return null;
+  return String(value).trim().replace(/^"|"$/g, '');
+}
+
+function readParamNumber(controller: any, key: string): number | null {
+  const raw = controller.params?.[key.toLowerCase()];
+  const parsed = Number(String(raw ?? '').trim());
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function appendRuntimeHistoryIfNeeded({
+  frameNo,
+  inputLines,
+  commandLines,
+  physicsLines,
+  roundLine,
+  scoreLine,
+  cnsLines,
+  traces,
+  pressedKeys,
+  historyRef,
+  lastSignatureRef,
+  setHistoryLines,
+}: {
+  frameNo: number;
+  inputLines: string[];
+  commandLines: string[];
+  physicsLines: string[];
+  roundLine: string;
+  scoreLine: string;
+  cnsLines: string[];
+  traces: CnsRuntimeTrace[];
+  pressedKeys: ReadonlySet<string>;
+  historyRef: React.MutableRefObject<string[]>;
+  lastSignatureRef: React.MutableRefObject<string>;
+  setHistoryLines: (lines: string[]) => void;
+}) {
+  const stateChanged = traces.some((trace) => trace.stateNo !== trace.afterStateNo || trace.animNo !== trace.afterAnimNo);
+  const controllerRan = traces.some((trace) => trace.executedControllers.length > 0 || trace.debugLines.length > 0);
+  const hasInput = pressedKeys.size > 0;
+  if (!hasInput && !stateChanged && !controllerRan) return;
+
+  const snapshot = [
+    ...inputLines,
+    ...commandLines,
+    ...physicsLines,
+    roundLine,
+    scoreLine,
+    ...cnsLines,
+  ];
+  const signature = snapshot.join('|');
+  if (signature === lastSignatureRef.current) return;
+
+  lastSignatureRef.current = signature;
+  const timestamp = new Date().toLocaleTimeString('ja-JP', { hour12: false });
+  const entry = [
+    `---- ${timestamp} frame=${frameNo} ----`,
+    ...snapshot.map((line) => `  ${line}`),
+  ];
+  historyRef.current = [...historyRef.current, ...entry].slice(-RUNTIME_HISTORY_LIMIT);
+  setHistoryLines([...historyRef.current]);
 }
 
 function normalizeResolvedCommands(commands: Iterable<string>): ReadonlySet<string> {
