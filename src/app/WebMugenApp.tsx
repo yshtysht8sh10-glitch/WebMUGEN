@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { CanvasRenderer } from '../renderer/canvas2d/CanvasRenderer';
 import { createInitialGameState } from '../core/engine/GameState';
 import type { GameState } from '../core/engine/types';
@@ -94,6 +94,7 @@ export function WebMugenApp() {
   const [staticDebugInfo, setStaticDebugInfo] = useState<StaticDebugInfo>(EMPTY_STATIC_DEBUG_INFO);
   const [runtimeHistoryLines, setRuntimeHistoryLines] = useState<string[]>(['操作すると、ここにタイムスタンプ付きで内部処理ログが残ります。']);
   const [activeDebugTab, setActiveDebugTab] = useState<DebugTab>('static');
+  const [copyStatus, setCopyStatus] = useState('');
 
   useEffect(() => {
     let disposed = false;
@@ -256,6 +257,24 @@ export function WebMugenApp() {
     scoreDebugLine,
     ...cnsDebugLines,
   ];
+  const staticTabLines = formatStaticTabLines(loadMessage, staticDebugInfo, coverageDebugLines, controlHelpLines);
+  const ideasTabLines = formatIdeasLines();
+  const activeTabText = formatActiveTabText(activeDebugTab, staticTabLines, runtimeHistoryLines, ideasTabLines);
+  const fullDebugText = formatFullDebugText({
+    liveDebugLines,
+    staticTabLines,
+    runtimeHistoryLines,
+    ideasTabLines,
+  });
+
+  const handleCopy = async (label: string, text: string) => {
+    try {
+      await copyTextToClipboard(text);
+      setCopyStatus(`${label}をコピーしました (${text.split('\n').length}行)`);
+    } catch (error) {
+      setCopyStatus(`コピーに失敗しました: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
 
   return (
     <div className="app-shell">
@@ -276,6 +295,14 @@ export function WebMugenApp() {
       </section>
 
       <DebugTabs activeTab={activeDebugTab} onChange={setActiveDebugTab} />
+      <CopyToolbar
+        activeTab={activeDebugTab}
+        liveText={liveDebugLines.join('\n')}
+        activeTabText={activeTabText}
+        fullText={fullDebugText}
+        copyStatus={copyStatus}
+        onCopy={handleCopy}
+      />
 
       <section className="debug-panel">
         {activeDebugTab === 'static' && (
@@ -315,6 +342,40 @@ function DebugTabs({ activeTab, onChange }: { activeTab: DebugTab; onChange: (ta
         タブ3 調査メモ
       </button>
     </nav>
+  );
+}
+
+function CopyToolbar({
+  activeTab,
+  liveText,
+  activeTabText,
+  fullText,
+  copyStatus,
+  onCopy,
+}: {
+  activeTab: DebugTab;
+  liveText: string;
+  activeTabText: string;
+  fullText: string;
+  copyStatus: string;
+  onCopy: (label: string, text: string) => void;
+}) {
+  const activeLabel = activeTab === 'static' ? '現在のタブ' : activeTab === 'runtime' ? '現在のタブ' : '現在のタブ';
+  return (
+    <div className="copy-toolbar">
+      <div className="copy-buttons">
+        <button type="button" onClick={() => onCopy('画面内リアルタイム表示', liveText)}>
+          画面情報をコピー
+        </button>
+        <button type="button" onClick={() => onCopy(activeLabel, activeTabText)}>
+          現在タブをコピー
+        </button>
+        <button type="button" onClick={() => onCopy('全ログ', fullText)}>
+          全コピー
+        </button>
+      </div>
+      {copyStatus && <span className="copy-status">{copyStatus}</span>}
+    </div>
   );
 }
 
@@ -450,6 +511,108 @@ function readParamNumber(controller: any, key: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function formatStaticTabLines(
+  loadMessage: string,
+  staticDebugInfo: StaticDebugInfo,
+  coverageDebugLines: string[],
+  controlHelpLines: string[],
+): string[] {
+  return [
+    '=== Character / DEF 読込結果 ===',
+    loadMessage,
+    ...staticDebugInfo.characterRows,
+    '',
+    '=== Command → State 期待遷移 ===',
+    ...staticDebugInfo.commandRoutes,
+    '',
+    '=== StateDef 一覧 ===',
+    ...staticDebugInfo.stateRows,
+    '',
+    '=== CMD コマンド一覧 ===',
+    ...staticDebugInfo.commandRows,
+    '',
+    '=== 互換カバレッジ ===',
+    ...coverageDebugLines,
+    '',
+    '=== 操作ヘルプ ===',
+    ...controlHelpLines,
+  ];
+}
+
+function formatIdeasLines(): string[] {
+  return [
+    '=== 次に作ると便利な表示 ===',
+    '1. State遷移グラフ: State 0 → -1 → 10 → 11 のように矢印で表示',
+    '2. Controller 実行表: ChangeState / VelSet / ChangeAnim が OK/NG どちらだったかを行単位で表示',
+    '3. Trigger 詳細: expected / actual / result を分けて表示',
+    '4. Collision / HitDef タブ: Clsn と HitDef の当たり判定を可視化',
+    '5. 差分比較: WinMUGEN期待値とWebMUGEN実測値を横並び表示',
+    '',
+    '=== 現在の調査メモ ===',
+    'State10問題では、入力とCommand認識は確認済み。',
+    '次は「StateDefにどのControllerが入っているか」と「どのControllerが実行されたか」をGUIで追う。',
+    '長い1行ログではなく、タブ内で静的情報と実行履歴を分離して見る。',
+  ];
+}
+
+function formatActiveTabText(
+  activeTab: DebugTab,
+  staticTabLines: string[],
+  runtimeHistoryLines: string[],
+  ideasTabLines: string[],
+): string {
+  if (activeTab === 'static') return staticTabLines.join('\n');
+  if (activeTab === 'runtime') return runtimeHistoryLines.join('\n');
+  return ideasTabLines.join('\n');
+}
+
+function formatFullDebugText({
+  liveDebugLines,
+  staticTabLines,
+  runtimeHistoryLines,
+  ideasTabLines,
+}: {
+  liveDebugLines: string[];
+  staticTabLines: string[];
+  runtimeHistoryLines: string[];
+  ideasTabLines: string[];
+}): string {
+  return [
+    '=== WebMUGEN Debug Dump ===',
+    `copiedAt=${new Date().toLocaleString('ja-JP', { hour12: false })}`,
+    '',
+    '=== 画面内リアルタイム表示 ===',
+    ...liveDebugLines,
+    '',
+    '=== タブ1 静的情報 ===',
+    ...staticTabLines,
+    '',
+    '=== タブ2 実行履歴 ===',
+    ...runtimeHistoryLines,
+    '',
+    '=== タブ3 調査メモ ===',
+    ...ideasTabLines,
+  ].join('\n');
+}
+
+async function copyTextToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textArea = document.createElement('textarea');
+  textArea.value = text;
+  textArea.setAttribute('readonly', 'true');
+  textArea.style.position = 'fixed';
+  textArea.style.left = '-9999px';
+  document.body.appendChild(textArea);
+  textArea.select();
+  const succeeded = document.execCommand('copy');
+  document.body.removeChild(textArea);
+  if (!succeeded) throw new Error('clipboard API is unavailable');
+}
+
 function appendRuntimeHistoryIfNeeded({
   frameNo,
   inputLines,
@@ -473,8 +636,8 @@ function appendRuntimeHistoryIfNeeded({
   cnsLines: string[];
   traces: CnsRuntimeTrace[];
   pressedKeys: ReadonlySet<string>;
-  historyRef: React.MutableRefObject<string[]>;
-  lastSignatureRef: React.MutableRefObject<string>;
+  historyRef: MutableRefObject<string[]>;
+  lastSignatureRef: MutableRefObject<string>;
   setHistoryLines: (lines: string[]) => void;
 }) {
   const stateChanged = traces.some((trace) => trace.stateNo !== trace.afterStateNo || trace.animNo !== trace.afterAnimNo);
