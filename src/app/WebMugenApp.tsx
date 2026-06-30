@@ -645,25 +645,30 @@ function appendRuntimeHistoryIfNeeded({
   const hasInput = pressedKeys.size > 0;
   if (!hasInput && !stateChanged && !controllerRan) return;
 
-  const snapshot = [
+  const snapshot = freezeHistoryLines([
     ...inputLines,
     ...commandLines,
     ...physicsLines,
     roundLine,
     scoreLine,
     ...cnsLines,
-  ];
+  ]);
   const signature = snapshot.join('|');
   if (signature === lastSignatureRef.current) return;
 
   lastSignatureRef.current = signature;
   const timestamp = new Date().toLocaleTimeString('ja-JP', { hour12: false });
-  const entry = [
+  const entry = freezeHistoryLines([
     `---- ${timestamp} frame=${frameNo} ----`,
     ...snapshot.map((line) => `  ${line}`),
-  ];
-  historyRef.current = [...historyRef.current, ...entry].slice(-RUNTIME_HISTORY_LIMIT);
-  setHistoryLines([...historyRef.current]);
+  ]);
+  const nextHistory = freezeHistoryLines([...historyRef.current, ...entry]).slice(-RUNTIME_HISTORY_LIMIT);
+  historyRef.current = nextHistory;
+  setHistoryLines(nextHistory.slice());
+}
+
+function freezeHistoryLines(lines: Iterable<unknown>): string[] {
+  return Array.from(lines, (line) => String(line));
 }
 
 function normalizeResolvedCommands(commands: Iterable<string>): ReadonlySet<string> {
