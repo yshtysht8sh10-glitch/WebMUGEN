@@ -6,7 +6,7 @@ body {
 }
 
 .app-shell {
-  max-width: 980px;
+  max-width: 1180px;
   margin: 0 auto;
   padding: 24px;
 }
@@ -39,7 +39,98 @@ canvas {
   image-rendering: pixelated;
 }
 
+.live-debug-strip {
+  margin-top: 12px;
+  max-height: 160px;
+  overflow: auto;
+  border: 1px solid #334155;
+  background: #020617;
+  color: #e5e7eb;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.35;
+  padding: 10px;
+  white-space: pre-wrap;
+}
+
+.debug-tabs {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  border-bottom: 1px solid #334155;
+}
+
+.debug-tabs button {
+  border: 1px solid #334155;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  background: #1e293b;
+  color: #cbd5e1;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 10px 14px;
+}
+
+.debug-tabs button:hover {
+  background: #334155;
+  color: #ffffff;
+}
+
+.debug-tabs button.active {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.debug-panel {
+  border: 1px solid #334155;
+  border-top: none;
+  background: #0f172a;
+  padding: 16px;
+}
+
+.debug-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.debug-block {
+  border: 1px solid #334155;
+  background: #020617;
+  padding: 12px;
+}
+
+.debug-block h2 {
+  color: #e2e8f0;
+  font-size: 15px;
+  margin: 0 0 10px;
+}
+
+.debug-pre {
+  margin: 0;
+  max-height: 360px;
+  overflow: auto;
+  color: #e5e7eb;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.history-pre {
+  max-height: 560px;
+  border: 1px solid #334155;
+  background: #020617;
+  padding: 12px;
+}
+
+.debug-note {
+  margin: 0 0 12px;
+  color: #cbd5e1;
+}
+
 .help-panel {
   color: #d1d5db;
   line-height: 1.7;
+  margin-top: 16px;
 }
