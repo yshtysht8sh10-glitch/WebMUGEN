@@ -47,7 +47,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | 40 | Jump start | Complete | Common holdup route into State 40 is covered by CNS command/runtime tests. |
 | 41 | Character-defined jump variant | Complete | Character-defined holdup override into State 41 is covered by CNS runtime assertions. |
 | 42 | Character-defined jump variant | Complete | Character-defined holdup route into State 42 is covered by CNS runtime assertions. |
-| 45 | Air jump / jump transition variant | Unsupported | Needs WinMUGEN/common1 verification. |
+| 45 | Air jump / jump transition variant | Partial | Character-defined State 45 entry is covered; common air-jump rules still need WinMUGEN/common1 verification. |
 | 50 | Jump up | Partial | Common baseline exists. Air physics incomplete. |
 | 51 | Jump down | Unsupported | Needed for more accurate air-state sequencing. |
 | 52 | Jump land | Partial | Common baseline exists. Landing logic under active work. |
