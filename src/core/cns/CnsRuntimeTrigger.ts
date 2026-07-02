@@ -316,6 +316,8 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'p2bodydist y':
     case 'p2disty':
     case 'p2dist y': return (context) => (context.opponent ? context.opponent.y - context.player.y : 0);
+    case 'bodydisty':
+    case 'bodydist y': return (context) => (context.opponent ? context.opponent.y - context.player.y : 0);
     case 'p2statetype': return (context) => stateTypeToNumber(context.opponent?.stateType ?? 'S');
     case 'p2movetype': return (context) => moveTypeToNumber(context.opponent?.moveType ?? 'I');
     default: return getFunctionNumberSource(name) ?? getRedirectNumberSource(name);

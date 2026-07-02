@@ -100,10 +100,11 @@ describe('CnsRuntimeTrigger', () => {
   });
 
   it('evaluates opponent and count-style triggers with safe defaults', () => {
-    const opponent = { ...createInitialGameState().players[1], x: player.x + 20, stateType: 'C' as const };
+    const opponent = { ...createInitialGameState().players[1], x: player.x + 20, y: player.y + 5, stateType: 'C' as const };
 
     expect(evaluateCnsRuntimeTrigger('P2BodyDist X < 30', { player, opponent })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('BodyDist X < 30', { player, opponent })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('BodyDist Y = 5', { player, opponent })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('P2StateType = C', { player, opponent })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('NumEnemy > 0', { player })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('NumHelper = 0', { player })).toBe(true);
