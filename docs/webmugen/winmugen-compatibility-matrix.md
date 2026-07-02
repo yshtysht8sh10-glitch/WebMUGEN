@@ -37,7 +37,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 |---:|---|---|---|
 | -3 | Global state | Complete | `stepCnsStateRuntime` executes -3 before -2/-1 with focused ordering coverage. |
 | -2 | Global state | Complete | `stepCnsStateRuntime` executes -2 after -3 and before -1 with focused ordering coverage. |
-| -1 | Command state | Partial | Used for CMD routing. Broader trigger support was added. |
+| -1 | Command state | Complete | Used for CMD routing and covered by focused ChangeState/ordering tests. |
 | 0 | Stand | Complete | Common baseline and idle fallback exist. Fallback route has diagnostic regression coverage. |
 | 10 | Crouch start | Partial | Common route exists. Fallback route has diagnostic regression coverage. CNS/common integration still needs full verification. |
 | 11 | Crouching | Partial | Common route exists. Fallback route has diagnostic regression coverage. CNS/common integration still needs full verification. |
