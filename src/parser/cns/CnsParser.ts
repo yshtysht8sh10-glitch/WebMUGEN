@@ -126,6 +126,9 @@ function applyStateDefValue(state: CnsStateDefinition, key: string, value: CnsVa
     case 'poweradd':
       state.powerAdd = Number(value);
       break;
+    case 'facep2':
+      state.faceP2 = Number(value) !== 0;
+      break;
     default:
       break;
   }

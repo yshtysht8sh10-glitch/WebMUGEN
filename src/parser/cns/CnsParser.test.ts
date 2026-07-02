@@ -130,4 +130,17 @@ poweradd = 20
 
     expect(doc.states[0].powerAdd).toBe(20);
   });
+
+  it('parses StateDef facep2 header value', () => {
+    const doc = parseCnsText(`
+[StateDef 210]
+type = S
+movetype = A
+physics = S
+anim = 210
+facep2 = 1
+`);
+
+    expect(doc.states[0].faceP2).toBe(true);
+  });
 });
