@@ -64,6 +64,73 @@ value = 10
     expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([10, 400]);
   });
 
+  it('does not treat the MUGEN b attack button as the back direction command', async () => {
+    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createFetcher(new Map([
+      ['/chars/kfm/kfm.def', '[Files]\ncmd = kfm.cmd\ncns = kfm.cns\nanim = kfm.air\n'],
+      ['/chars/kfm/kfm.cns', `
+[StateDef 0]
+type = S
+movetype = I
+physics = S
+anim = 0
+ctrl = 1
+
+[StateDef 10]
+type = C
+movetype = I
+physics = C
+anim = 10
+ctrl = 0
+
+[StateDef 440]
+type = C
+movetype = A
+physics = C
+anim = 440
+ctrl = 0
+`],
+      ['/chars/kfm/kfm.air', 'Begin Action 0\n0,0, 0,0, 5\n'],
+      ['/chars/kfm/kfm.cmd', `
+[Command]
+name = "b"
+command = b
+
+[Command]
+name = "holddown"
+command = /$D
+
+[Statedef -1]
+
+[State -1, Crouching Strong Kick]
+type = ChangeState
+triggerall = command = "b"
+triggerall = command = "holddown"
+trigger1 = statetype = C
+trigger1 = ctrl
+value = 440
+`],
+      ['/chars/common.cmd', `
+[Command]
+name = "holddown"
+command = /D
+
+[Statedef -1]
+
+[State -1, Common Crouch Start]
+type = ChangeState
+triggerall = command = "holddown"
+trigger1 = statetype = S
+trigger1 = ctrl
+value = 10
+`],
+      ['/chars/common1.cns', '[StateDef 10]\ntype = C\nmovetype = I\nphysics = C\nanim = 10\nctrl = 0\n'],
+    ])));
+
+    const commandState = character.cns.states.find((state) => state.stateNo === -1);
+
+    expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([10, 440]);
+  });
+
   it('still lets a character override a direction-only common route', async () => {
     const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createFetcher(new Map([
       ['/chars/kfm/kfm.def', '[Files]\ncmd = kfm.cmd\ncns = kfm.cns\nanim = kfm.air\n'],
