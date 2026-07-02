@@ -88,6 +88,7 @@ triggerall = command = "holdfwd"
 triggerall = command != "holddown"
 trigger1 = statetype = S
 trigger1 = ctrl
+trigger1 = stateno != 20
 value = 20
 
 [State -1, Common Walk Back]
