@@ -143,4 +143,17 @@ facep2 = 1
 
     expect(doc.states[0].faceP2).toBe(true);
   });
+
+  it('parses StateDef juggle header value', () => {
+    const doc = parseCnsText(`
+[StateDef 220]
+type = S
+movetype = A
+physics = S
+anim = 220
+juggle = 6
+`);
+
+    expect(doc.states[0].juggle).toBe(6);
+  });
 });

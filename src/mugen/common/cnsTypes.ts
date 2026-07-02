@@ -19,6 +19,7 @@ export type CnsStateDefinition = {
   initialAnim?: number;
   ctrl?: boolean;
   powerAdd?: number;
+  juggle?: number;
   faceP2?: boolean;
   controllers: CnsStateController[];
 };

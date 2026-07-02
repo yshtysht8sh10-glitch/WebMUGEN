@@ -43,6 +43,34 @@ facep2 = 1
     expect(result.traces[0].executedControllers).toContain('ChangeState');
   });
 
+  it('stores StateDef juggle when entering a state', () => {
+    const cns = parseCnsText(`
+[Statedef -1]
+
+[State -1, Attack]
+type = ChangeState
+trigger1 = command = "x"
+value = 210
+
+[Statedef 210]
+type = S
+movetype = A
+physics = S
+ctrl = 0
+anim = 210
+juggle = 6
+`);
+
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime(state, cns, { p1Commands: new Set(['x']) });
+
+    expect(result.state.players[0]).toMatchObject({
+      stateNo: 210,
+      juggle: 6,
+    });
+    expect(result.traces[0].executedControllers).toContain('ChangeState');
+  });
+
   it('returns from state 200 when MUGEN AnimTime reaches 0', () => {
     const cns = parseCnsText(`
 [Statedef 200]

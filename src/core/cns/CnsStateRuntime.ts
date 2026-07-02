@@ -35,6 +35,7 @@ type ControllerExecutionResult = {
 
 type ExtendedPlayerState = PlayerState & {
   power?: number;
+  juggle?: number;
   hitCount?: number;
   attackMultiplier?: number;
   defenseMultiplier?: number;
@@ -257,6 +258,7 @@ function enterState(player: PlayerState, opponent: PlayerState, stateNo: number,
     ctrl: stateDef.ctrl ?? player.ctrl,
     facing: stateDef.faceP2 ? faceToward(player, opponent) : player.facing,
     power,
+    juggle: stateDef.juggle ?? powered.juggle,
   } as PlayerState;
 }
 

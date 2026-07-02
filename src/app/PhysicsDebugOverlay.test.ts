@@ -9,7 +9,7 @@ describe('PhysicsDebugOverlay', () => {
       ...state,
       players: [
         { ...state.players[0], power: 120 },
-        state.players[1],
+        { ...state.players[1], juggle: 6 },
       ],
     });
 
@@ -17,5 +17,7 @@ describe('PhysicsDebugOverlay', () => {
     expect(lines[1]).toContain('power=0');
     expect(lines[0]).toContain('facing=1');
     expect(lines[1]).toContain('facing=-1');
+    expect(lines[0]).toContain('juggle=-');
+    expect(lines[1]).toContain('juggle=6');
   });
 });
