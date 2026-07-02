@@ -310,6 +310,8 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'p2bodydist x':
     case 'p2distx':
     case 'p2dist x': return (context) => (context.opponent ? Math.abs(context.opponent.x - context.player.x) : 999);
+    case 'bodydistx':
+    case 'bodydist x': return (context) => (context.opponent ? Math.abs(context.opponent.x - context.player.x) : 999);
     case 'p2bodydisty':
     case 'p2bodydist y':
     case 'p2disty':

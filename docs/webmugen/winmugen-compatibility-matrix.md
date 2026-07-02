@@ -235,7 +235,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | AuthorName | Partial | String source exists; metadata currently defaults empty. |
 | BackEdge | Unsupported | Screen/camera edge value not implemented. |
 | BackEdgeDist | Partial | Uses internal screen/player coordinate approximation. |
-| BodyDist X | Unsupported | Body edge distance not implemented. |
+| BodyDist X | Partial | Evaluates opponent center distance like P2BodyDist X; precise body edge width is still incomplete. |
 | BodyDist Y | Unsupported | Body edge distance not implemented. |
 | CanRecover | Partial | Safe default currently returns true. |
 | Ceil | Complete | `Ceil(...)` supported for numeric expressions. |
