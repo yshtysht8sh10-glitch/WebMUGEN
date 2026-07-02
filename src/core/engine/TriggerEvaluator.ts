@@ -1,5 +1,6 @@
 import type { PlayerInput, PlayerState } from './types';
 import type { TriggerExpression } from '../../parser/cns/TriggerExpression';
+import { DEFAULT_GROUND_Y } from './GroundClamp';
 
 export type TriggerEvaluationContext = {
   player: PlayerState;
@@ -63,7 +64,7 @@ function evaluateIdentifier(
       return context.player.x;
 
     case 'pos y':
-      return context.player.y;
+      return context.player.y - DEFAULT_GROUND_Y;
 
     case 'vel x':
       return context.player.vx;

@@ -78,7 +78,7 @@ ctrl = 0
 [State 40, Land]
 type = ChangeState
 trigger1 = time > 0
-trigger1 = pos y >= 285
+trigger1 = pos y >= 0
 value = 0
 ctrl = 1
 `);

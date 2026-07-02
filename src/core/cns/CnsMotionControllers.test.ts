@@ -70,6 +70,37 @@ y = -2
     expect(result.traces[0].executedControllers).toEqual(['PosAdd']);
   });
 
+  it('maps WinMUGEN PosSet y=0 to the internal ground y', () => {
+    const cns = parseCnsText(`
+[Statedef 101]
+type = S
+movetype = I
+physics = S
+ctrl = 0
+anim = 101
+
+[State 101, Ground]
+type = PosSet
+trigger1 = 1
+y = 0
+`);
+
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime(
+      {
+        ...state,
+        players: [
+          { ...state.players[0], stateNo: 101, y: 140 },
+          state.players[1],
+        ],
+      },
+      cns,
+    );
+
+    expect(result.state.players[0].y).toBe(285);
+    expect(result.traces[0].executedControllers).toEqual(['PosSet']);
+  });
+
   it('executes CtrlSet', () => {
     const cns = parseCnsText(`
 [Statedef 102]

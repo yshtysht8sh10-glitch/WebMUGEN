@@ -500,7 +500,7 @@ const recognizedControllerFixtures: { type: string; traceName: string; params?: 
   { type: 'PlaySnd', traceName: 'PlaySnd' },
   { type: 'PosAdd', traceName: 'PosAdd', params: 'x = 0\ny = 0' },
   { type: 'PosFreeze', traceName: 'PosFreeze' },
-  { type: 'PosSet', traceName: 'PosSet', params: 'x = 220\ny = 285' },
+  { type: 'PosSet', traceName: 'PosSet', params: 'x = 220\ny = 0' },
   { type: 'PowerAdd', traceName: 'PowerAdd', params: 'value = 0' },
   { type: 'PowerSet', traceName: 'PowerSet', params: 'value = 0' },
   { type: 'Projectile', traceName: 'Projectile' },

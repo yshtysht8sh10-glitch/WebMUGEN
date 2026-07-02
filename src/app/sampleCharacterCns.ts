@@ -102,7 +102,7 @@ y = -8
 [State 40, Land]
 type = ChangeState
 trigger1 = time > 0
-trigger1 = pos y >= 285
+trigger1 = pos y >= 0
 value = 0
 ctrl = 1
 
@@ -122,7 +122,7 @@ y = -8
 [State 41, Land]
 type = ChangeState
 trigger1 = time > 0
-trigger1 = pos y >= 285
+trigger1 = pos y >= 0
 value = 0
 ctrl = 1
 
@@ -142,7 +142,7 @@ y = -8
 [State 42, Land]
 type = ChangeState
 trigger1 = time > 0
-trigger1 = pos y >= 285
+trigger1 = pos y >= 0
 value = 0
 ctrl = 1
 
@@ -243,7 +243,7 @@ ctrl = 0
 [State 5030, Land]
 type = ChangeState
 trigger1 = time > 0
-trigger1 = pos y >= 285
+trigger1 = pos y >= 0
 value = 5000
 ctrl = 0
 `;

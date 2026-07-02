@@ -1,6 +1,7 @@
 import type { CnsDocument, CnsStateController, CnsStateDefinition, CnsTrigger, CnsValue } from '../../mugen/common/cnsTypes';
 import type { GameState, PlayerState } from '../engine/types';
 import { calculateMugenAnimTime } from '../animation/AnimationDuration';
+import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, type CnsRuntimeTriggerContext } from './CnsRuntimeTrigger';
 
 export type CnsRuntimeTrace = {
@@ -484,7 +485,7 @@ function executeController(player: PlayerState, opponent: PlayerState, controlle
   if (type === 'velset') return withPlayer({ ...player, vx: num(controller, 'x') ?? player.vx, vy: num(controller, 'y') ?? player.vy }, hasNum(controller, 'x') || hasNum(controller, 'y'), 'VelSet');
   if (type === 'veladd') return withPlayer({ ...player, vx: player.vx + (num(controller, 'x') ?? 0), vy: player.vy + (num(controller, 'y') ?? 0) }, hasNum(controller, 'x') || hasNum(controller, 'y'), 'VelAdd');
   if (type === 'velmul') return velMul(player, controller);
-  if (type === 'posset') return withPlayer({ ...player, x: num(controller, 'x') ?? player.x, y: num(controller, 'y') ?? player.y }, hasNum(controller, 'x') || hasNum(controller, 'y'), 'PosSet');
+  if (type === 'posset') return posSet(player, controller);
   if (type === 'posadd') return withPlayer({ ...player, x: player.x + (num(controller, 'x') ?? 0), y: player.y + (num(controller, 'y') ?? 0) }, hasNum(controller, 'x') || hasNum(controller, 'y'), 'PosAdd');
   if (type === 'ctrlset') return setCtrl(player, controller);
   if (type === 'statetypeset') return stateTypeSet(player, controller);
@@ -542,6 +543,16 @@ function velMul(player: PlayerState, controller: CnsStateController): Controller
   const x = num(controller, 'x');
   const y = num(controller, 'y');
   return withPlayer({ ...player, vx: player.vx * (x ?? 1), vy: player.vy * (y ?? 1) }, x !== null || y !== null, 'VelMul');
+}
+
+function posSet(player: PlayerState, controller: CnsStateController): ControllerResult {
+  const x = num(controller, 'x');
+  const y = num(controller, 'y');
+  return withPlayer(
+    { ...player, x: x ?? player.x, y: y === null ? player.y : mugenYToInternalY(y) },
+    x !== null || y !== null,
+    'PosSet',
+  );
 }
 
 function setCtrl(player: PlayerState, controller: CnsStateController): ControllerResult {
@@ -654,6 +665,10 @@ function cnsValueToNumber(value: CnsValue | undefined): number | null {
   if (typeof value === 'number') return value;
   const parsed = Number(String(value).trim());
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function mugenYToInternalY(y: number): number {
+  return y + DEFAULT_GROUND_Y;
 }
 
 function toStateType(value: string | null): PlayerState['stateType'] | null {

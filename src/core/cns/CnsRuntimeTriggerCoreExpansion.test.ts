@@ -38,7 +38,7 @@ describe('CnsRuntimeTrigger core expansion', () => {
 
   it('evaluates Pos and Vel comparisons', () => {
     expect(evaluateCnsRuntimeTrigger('Pos X >= 100', { player })).toBe(true);
-    expect(evaluateCnsRuntimeTrigger('Pos Y = 360', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('Pos Y = 75', { player })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('Vel X > 2', { player })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('Vel Y < 0', { player })).toBe(true);
   });

@@ -1,4 +1,5 @@
 import type { PlayerState } from '../engine/types';
+import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 
 export type CnsRuntimeTriggerContext = {
   player: PlayerState;
@@ -293,7 +294,7 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'posx':
     case 'pos x': return (context) => context.player.x;
     case 'posy':
-    case 'pos y': return (context) => context.player.y;
+    case 'pos y': return (context) => internalYToMugenY(context.player.y);
     case 'screenposx':
     case 'screenpos x': return (context) => context.player.x;
     case 'screenposy':
@@ -569,6 +570,10 @@ function hasMoveContact(player: PlayerState): boolean {
 
 function readOptionalNumber(player: PlayerState | undefined, key: string, fallback: number): number {
   return (player as PlayerState & Record<string, number | undefined> | undefined)?.[key] ?? fallback;
+}
+
+function internalYToMugenY(y: number): number {
+  return y - DEFAULT_GROUND_Y;
 }
 
 function readOptionalBool(player: PlayerState | undefined, key: string, fallback: boolean): boolean {
