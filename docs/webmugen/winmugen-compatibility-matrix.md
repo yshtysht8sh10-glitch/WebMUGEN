@@ -44,7 +44,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | 12 | Crouch end | Complete | Common crouch-release route from State 11 is covered by CNS runtime assertions. |
 | 20 | Walk forward | Complete | Common holdfwd route is covered by CNS runtime ChangeState assertions. |
 | 21 | Walk back | Complete | Common holdback route is covered by CNS runtime ChangeState assertions. |
-| 40 | Jump start | Partial | Common route exists. Jump velocity is minimal. |
+| 40 | Jump start | Complete | Common holdup route into State 40 is covered by CNS command/runtime tests. |
 | 41 | Character-defined jump variant | Untested | KFM can define this. Not common-guaranteed. |
 | 42 | Character-defined jump variant | Untested | Common implementations may vary. |
 | 45 | Air jump / jump transition variant | Unsupported | Needs WinMUGEN/common1 verification. |
