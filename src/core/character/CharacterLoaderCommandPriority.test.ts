@@ -184,6 +184,43 @@ value = 40
       ctrl: false,
     });
   });
+
+  it('runs a character-defined jump variant State 42 at runtime', async () => {
+    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createFetcher(new Map([
+      ['/chars/kfm/kfm.def', '[Files]\ncmd = kfm.cmd\ncns = kfm.cns\nanim = kfm.air\n'],
+      ['/chars/kfm/kfm.cns', '[StateDef 0]\ntype = S\nmovetype = I\nphysics = S\nanim = 0\nctrl = 1\n\n[StateDef 42]\ntype = A\nmovetype = I\nphysics = A\nanim = 42\nctrl = 0\n'],
+      ['/chars/kfm/kfm.air', 'Begin Action 0\n0,0, 0,0, 5\nBegin Action 42\n0,0, 0,0, 5\n'],
+      ['/chars/kfm/kfm.cmd', `
+[Command]
+name = "holdup"
+command = /U
+
+[Statedef -1]
+
+[State -1, Character Jump Variant]
+type = ChangeState
+triggerall = command = "holdup"
+trigger1 = ctrl
+value = 42
+`],
+      ['/chars/common.cmd', '[Command]\nname = "holdup"\ncommand = /U\n'],
+      ['/chars/common1.cns', '[StateDef 40]\ntype = A\nmovetype = I\nphysics = A\nanim = 40\nctrl = 0\n'],
+    ])));
+
+    const result = stepCnsStateRuntime(createInitialGameState(), character.cns, {
+      p1Commands: new Set(['holdup', 'up']),
+      p2Commands: new Set(),
+    });
+
+    expect(result.state.players[0]).toMatchObject({
+      stateNo: 42,
+      animNo: 42,
+      stateType: 'A',
+      physics: 'A',
+      ctrl: false,
+    });
+    expect(result.traces[0].executedControllers).toContain('ChangeState');
+  });
 });
 
 function createFetcher(textAssets: Map<string, string>): CharacterAssetFetcher {

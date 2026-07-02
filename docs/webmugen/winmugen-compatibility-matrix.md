@@ -46,7 +46,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | 21 | Walk back | Complete | Common holdback route is covered by CNS runtime ChangeState assertions. |
 | 40 | Jump start | Complete | Common holdup route into State 40 is covered by CNS command/runtime tests. |
 | 41 | Character-defined jump variant | Complete | Character-defined holdup override into State 41 is covered by CNS runtime assertions. |
-| 42 | Character-defined jump variant | Untested | Common implementations may vary. |
+| 42 | Character-defined jump variant | Complete | Character-defined holdup route into State 42 is covered by CNS runtime assertions. |
 | 45 | Air jump / jump transition variant | Unsupported | Needs WinMUGEN/common1 verification. |
 | 50 | Jump up | Partial | Common baseline exists. Air physics incomplete. |
 | 51 | Jump down | Unsupported | Needed for more accurate air-state sequencing. |
