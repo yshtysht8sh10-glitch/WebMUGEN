@@ -31,6 +31,16 @@ describe('CnsRuntimeTrigger', () => {
     expect(evaluateCnsRuntimeTrigger('AnimExist(anim) = 0', context)).toBe(true);
   });
 
+  it('evaluates SelfAnimExist using the animation lookup hook', () => {
+    const context = {
+      player,
+      animationExists: (animNo: number) => animNo === 12,
+    };
+
+    expect(evaluateCnsRuntimeTrigger('SelfAnimExist(12) = 1', context)).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('SelfAnimExist(999) = 0', context)).toBe(true);
+  });
+
   it('evaluates command equality and inequality', () => {
     expect(evaluateCnsRuntimeTrigger('command = "QCF_x"', {
       player,

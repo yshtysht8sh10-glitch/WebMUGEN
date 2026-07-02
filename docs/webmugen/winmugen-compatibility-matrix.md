@@ -326,7 +326,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | RoundState | Complete | Basic support with default 2 unless supplied. |
 | ScreenPos X | Partial | Uses internal position approximation. |
 | ScreenPos Y | Partial | Uses internal position approximation. |
-| SelfAnimExist | Unsupported | AIR lookup not implemented. |
+| SelfAnimExist | Partial | Evaluates through runtime self-animation lookup when provided; redirect-specific AIR ownership still needs audit. |
 | Sin | Complete | Numeric math function supported in runtime trigger evaluator. |
 | StateNo | Complete | Numeric comparison. |
 | StateType | Complete | Basic support. |

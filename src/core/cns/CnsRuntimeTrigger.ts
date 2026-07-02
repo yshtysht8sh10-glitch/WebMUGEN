@@ -259,6 +259,14 @@ function getNumberSource(rawName: string): NumberSource | null {
     };
   }
 
+  const selfAnimExistMatch = name.match(/^selfanimexist\(([^)]+)\)$/);
+  if (selfAnimExistMatch) {
+    return (context) => {
+      const animNo = readNumberExpression(selfAnimExistMatch[1], context);
+      return animNo !== null && context.animationExists?.(animNo) ? 1 : 0;
+    };
+  }
+
   switch (name) {
     case 'e': return () => Math.E;
     case 'pi': return () => Math.PI;
