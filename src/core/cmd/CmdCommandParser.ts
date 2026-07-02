@@ -10,6 +10,7 @@ export type CmdCommandDefinition = {
   name: string;
   command: string;
   time: number;
+  bufferTime: number;
   steps: CmdCommandStep[];
 };
 
@@ -86,6 +87,7 @@ function parseCommandSection(section: string): CmdCommandDefinition | null {
     name,
     command,
     time: readNumber(values.get('time')) ?? 15,
+    bufferTime: readNumber(values.get('buffer.time')) ?? 0,
     steps: parseCommandExpression(command),
   };
 }

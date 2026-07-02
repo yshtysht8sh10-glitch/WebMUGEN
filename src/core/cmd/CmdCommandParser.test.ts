@@ -17,6 +17,7 @@ describe('Phase89 CmdCommandParser', () => {
       name = "hadouken_x"
       command = D, DF, F, x
       time = 20
+      buffer.time = 4
     `);
 
     expect(commands).toEqual([
@@ -24,6 +25,7 @@ describe('Phase89 CmdCommandParser', () => {
         name: 'hadouken_x',
         command: 'D, DF, F, x',
         time: 20,
+        bufferTime: 4,
         steps: [
           { tokens: ['D'], hold: false, release: false },
           { tokens: ['DF'], hold: false, release: false },

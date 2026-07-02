@@ -8,6 +8,7 @@ describe('parseCmdText', () => {
 name = "holdfwd"
 command = /F
 time = 1
+buffer.time = 3
 
 [Command]
 name = "a"
@@ -20,6 +21,7 @@ time = 1
       name: 'holdfwd',
       command: '/F',
       time: 1,
+      bufferTime: 3,
     });
     expect(findCommand(document, 'a')?.command).toBe('a');
   });

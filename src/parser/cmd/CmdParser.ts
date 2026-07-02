@@ -45,6 +45,10 @@ export function parseCmdText(text: string): CmdDocument {
         currentCommand.time = Number(keyValue.value);
         break;
 
+      case 'buffer.time':
+        currentCommand.bufferTime = Number(keyValue.value);
+        break;
+
       default:
         break;
     }

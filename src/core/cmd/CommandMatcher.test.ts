@@ -57,4 +57,26 @@ describe('Phase90 CommandMatcher', () => {
 
     expect(matchCommands(commands, buffer, 1).map((result) => result.commandName)).toEqual(['x']);
   });
+
+  it('keeps commands active for buffer.time frames', () => {
+    const [command] = parseCmdCommands(`
+      [Command]
+      name = "x"
+      command = x
+      time = 1
+      buffer.time = 2
+    `);
+
+    let buffer = createInputBuffer();
+    buffer = pushInputFrame(buffer, 1, { direction: 'N', buttons: ['x'] });
+    buffer = pushInputFrame(buffer, 2, { direction: 'N', buttons: [] });
+    buffer = pushInputFrame(buffer, 3, { direction: 'N', buttons: [] });
+
+    expect(matchCommand(command, buffer, 3)).toEqual({
+      matched: true,
+      commandName: 'x',
+      matchedFrames: [1],
+    });
+    expect(matchCommand({ ...command, bufferTime: 1 }, buffer, 3).matched).toBe(false);
+  });
 });

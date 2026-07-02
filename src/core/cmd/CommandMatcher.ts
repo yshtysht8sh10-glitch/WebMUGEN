@@ -13,6 +13,20 @@ export function matchCommand(
   buffer: InputBuffer,
   currentFrame: number,
 ): CommandMatchResult {
+  const bufferTime = Math.max(0, command.bufferTime);
+  for (let offset = 0; offset <= bufferTime; offset += 1) {
+    const result = matchCommandAtFrame(command, buffer, currentFrame - offset);
+    if (result.matched) return result;
+  }
+
+  return { matched: false, commandName: command.name, matchedFrames: [] };
+}
+
+function matchCommandAtFrame(
+  command: CmdCommandDefinition,
+  buffer: InputBuffer,
+  currentFrame: number,
+): CommandMatchResult {
   const windowStart = currentFrame - command.time + 1;
   const frames = buffer.frames.filter((frame) => frame.frame >= windowStart && frame.frame <= currentFrame);
   const matchedFrames: number[] = [];

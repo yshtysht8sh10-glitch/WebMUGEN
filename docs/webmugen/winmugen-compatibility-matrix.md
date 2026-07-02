@@ -403,6 +403,6 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | Release commands | Untested | Check `~` syntax behavior. |
 | Buffer time | Partial | InputBuffer exists, timing needs compatibility tests. |
 | command.time | Untested | Parser/runtime status needs verification. |
-| command.buffer.time | Untested | Parser/runtime status needs verification. |
+| command.buffer.time | Partial | Parser and command matcher honor buffer.time as a post-match active window; WinMUGEN timing audit still needed. |
 | `$` direction match | Partial | KFM hold commands work; full syntax needs tests. |
 | `/` hold prefix | Partial | Used in common commands. Needs syntax coverage. |

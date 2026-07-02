@@ -9,6 +9,7 @@ describe('Phase97 CmdDocumentAdapter', () => {
 name = "qcf_a"
 command = D, DF, F, a
 time = 20
+buffer.time = 3
 
 [Command]
 name = "empty"
@@ -20,6 +21,7 @@ command =
         name: 'qcf_a',
         command: 'D, DF, F, a',
         time: 20,
+        bufferTime: 3,
         steps: [
           { tokens: ['D'], hold: false, release: false },
           { tokens: ['DF'], hold: false, release: false },

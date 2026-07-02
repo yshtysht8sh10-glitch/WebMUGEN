@@ -77,6 +77,16 @@ describe('CommandMatcher', () => {
     );
   });
 
+  it('keeps a completed command active for buffer.time frames', () => {
+    const buffer = new InputBuffer(10);
+    buffer.push({ left: false, right: false, up: false, down: false, attack: false, buttons: ['x'] });
+    buffer.push({ left: false, right: false, up: false, down: false, attack: false });
+    buffer.push({ left: false, right: false, up: false, down: false, attack: false });
+
+    expect(matchesCommand({ name: 'x', command: 'x', time: 1, bufferTime: 2 }, buffer.getFrames())).toBe(true);
+    expect(matchesCommand({ name: 'x', command: 'x', time: 1, bufferTime: 1 }, buffer.getFrames())).toBe(false);
+  });
+
   it('matches simultaneous diagonal hold command', () => {
     const buffer = new InputBuffer();
     buffer.push({ left: false, right: true, up: true, down: false, attack: false });

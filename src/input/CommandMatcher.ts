@@ -22,6 +22,15 @@ export function parseCommandSteps(command: string): CommandStep[] {
 }
 
 export function matchesCommand(command: CmdCommand, frames: readonly InputFrame[]): boolean {
+  const bufferTime = Math.max(0, command.bufferTime ?? 0);
+  for (let offset = 0; offset <= bufferTime; offset += 1) {
+    if (matchesCommandAtOffset(command, frames.slice(offset))) return true;
+  }
+
+  return false;
+}
+
+function matchesCommandAtOffset(command: CmdCommand, frames: readonly InputFrame[]): boolean {
   const steps = parseCommandSteps(command.command);
   if (steps.length === 0) {
     return false;

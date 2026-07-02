@@ -6,4 +6,5 @@ export type CmdCommand = {
   name: string;
   command: string;
   time?: number;
+  bufferTime?: number;
 };

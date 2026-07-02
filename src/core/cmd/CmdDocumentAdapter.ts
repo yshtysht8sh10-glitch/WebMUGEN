@@ -8,6 +8,7 @@ export function cmdDocumentToCommandDefinitions(document: CmdDocument): CmdComma
       name: command.name,
       command: command.command,
       time: command.time ?? 15,
+      bufferTime: command.bufferTime ?? 0,
       steps: parseCommandExpression(command.command),
     }))
     .filter((definition) => definition.steps.length > 0);
