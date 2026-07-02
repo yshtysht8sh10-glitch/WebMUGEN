@@ -18,6 +18,7 @@ export type CnsStateDefinition = {
   physics?: string;
   initialAnim?: number;
   ctrl?: boolean;
+  powerAdd?: number;
   controllers: CnsStateController[];
 };
 

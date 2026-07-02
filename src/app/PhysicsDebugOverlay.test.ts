@@ -1,0 +1,19 @@
+import { describe, expect, it } from 'vitest';
+import { createInitialGameState } from '../core/engine/GameState';
+import { formatPhysicsDebugOverlay } from './PhysicsDebugOverlay';
+
+describe('PhysicsDebugOverlay', () => {
+  it('includes player power for StateDef poweradd diagnostics', () => {
+    const state = createInitialGameState();
+    const lines = formatPhysicsDebugOverlay({
+      ...state,
+      players: [
+        { ...state.players[0], power: 120 },
+        state.players[1],
+      ],
+    });
+
+    expect(lines[0]).toContain('power=120');
+    expect(lines[1]).toContain('power=0');
+  });
+});

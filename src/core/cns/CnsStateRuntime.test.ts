@@ -203,6 +203,56 @@ ctrl = 0
 });
 
 describe('CnsStateRuntime state controllers', () => {
+  it('applies StateDef poweradd only when entering a state', () => {
+    const cns = parseCnsText(`
+[Statedef -1]
+[State -1, Attack]
+type = ChangeState
+trigger1 = command = "x"
+value = 200
+
+[Statedef 0]
+type = S
+movetype = I
+physics = S
+ctrl = 1
+anim = 0
+
+[Statedef 200]
+type = S
+movetype = A
+physics = S
+ctrl = 0
+anim = 200
+poweradd = 20
+`);
+
+    const state = createInitialGameState();
+    const entered = stepCnsStateRuntime(
+      {
+        ...state,
+        players: [{ ...state.players[0], power: 10 }, state.players[1]],
+      },
+      cns,
+      { p1Commands: new Set(['x']) },
+    );
+
+    expect(entered.state.players[0]).toMatchObject({
+      stateNo: 200,
+      animNo: 200,
+      moveType: 'A',
+      ctrl: false,
+      power: 30,
+    });
+
+    const stayed = stepCnsStateRuntime(entered.state, cns);
+
+    expect(stayed.state.players[0]).toMatchObject({
+      stateNo: 200,
+      power: 30,
+    });
+  });
+
   it('executes State -3 before State -2 and State -1', () => {
     const cns = parseCnsText(`
 [Statedef -3]

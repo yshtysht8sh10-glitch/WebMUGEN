@@ -123,6 +123,9 @@ function applyStateDefValue(state: CnsStateDefinition, key: string, value: CnsVa
     case 'ctrl':
       state.ctrl = Number(value) !== 0;
       break;
+    case 'poweradd':
+      state.powerAdd = Number(value);
+      break;
     default:
       break;
   }

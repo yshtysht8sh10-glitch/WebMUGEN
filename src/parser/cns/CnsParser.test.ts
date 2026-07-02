@@ -117,4 +117,17 @@ ground.velocity = -4, 0
     expect(doc.states[0].controllers[0].params.damage).toEqual([80, 10]);
     expect(doc.states[0].controllers[0].params['ground.velocity']).toEqual([-4, 0]);
   });
+
+  it('parses StateDef poweradd header value', () => {
+    const doc = parseCnsText(`
+[StateDef 200]
+type = S
+movetype = A
+physics = S
+anim = 200
+poweradd = 20
+`);
+
+    expect(doc.states[0].powerAdd).toBe(20);
+  });
 });

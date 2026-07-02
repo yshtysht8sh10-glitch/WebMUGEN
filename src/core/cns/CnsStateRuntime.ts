@@ -240,6 +240,8 @@ function enterState(player: PlayerState, stateNo: number, cns: CnsDocument): Pla
   const inferredAnimNo = inferDefaultAnimNo(stateNo, player.animNo);
   const animNo = stateDef.initialAnim ?? inferredAnimNo;
   const animChanged = player.animNo !== animNo;
+  const powered = player as ExtendedPlayerState;
+  const power = Math.max(0, (powered.power ?? 0) + (stateDef.powerAdd ?? 0));
 
   return {
     ...player,
@@ -251,7 +253,8 @@ function enterState(player: PlayerState, stateNo: number, cns: CnsDocument): Pla
     moveType: stateDef.moveType ?? player.moveType,
     physics: stateDef.physics ?? player.physics,
     ctrl: stateDef.ctrl ?? player.ctrl,
-  };
+    power,
+  } as PlayerState;
 }
 
 function inferDefaultAnimNo(stateNo: number, currentAnimNo: number): number {

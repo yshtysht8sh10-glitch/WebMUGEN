@@ -115,7 +115,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | physics | S/C/A/N | Partial | Parsed and applied. Physics behavior incomplete. |
 | anim | Initial animation | Complete | Parsed and applied. Animless state preservation exists. |
 | ctrl | Control flag | Complete | Parsed and applied. |
-| poweradd | Power gain on state entry | Unsupported | Need parser/runtime support. |
+| poweradd | Power gain on state entry | Complete | Parsed and applied once when entering a state. |
 | juggle | Juggle points | Unsupported | Needed for hit system compatibility. |
 | facep2 | Face opponent on state entry | Unsupported | Needed for many attacks. |
 | hitdefpersist | Keep HitDef on state change | Unsupported | Hit system compatibility. |

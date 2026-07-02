@@ -14,11 +14,16 @@ function formatPlayerPhysicsDebug(label: string, player: PlayerState): string {
     `type=${player.stateType}`,
     `physics=${player.physics}`,
     `ctrl=${player.ctrl ? 1 : 0}`,
+    `power=${readPower(player)}`,
     `pos=(${formatNumber(player.x)},${formatNumber(player.y)})`,
     `vel=(${formatNumber(player.vx)},${formatNumber(player.vy)})`,
     `time=${player.stateTime}`,
     `anim=${player.animNo}:${player.animTime}`,
   ].join(' ');
+}
+
+function readPower(player: PlayerState): number {
+  return (player as PlayerState & { power?: number }).power ?? 0;
 }
 
 function formatNumber(value: number): string {
