@@ -158,6 +158,15 @@ trigger1 = stateno = 21
 trigger1 = anim != 21
 value = 21
 
+[State -1, Common Walk Stop]
+type = ChangeState
+triggerall = command != "holdfwd"
+triggerall = command != "holdback"
+triggerall = command != "holddown"
+trigger1 = stateno = 20
+trigger2 = stateno = 21
+value = 0
+
 [Statedef -2]
 
 [State -2, Common Air Physics Landing]

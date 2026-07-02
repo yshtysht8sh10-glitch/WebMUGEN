@@ -55,7 +55,7 @@ describe('CharacterLoader', () => {
     const commandState = character.cns.states.find((state) => state.stateNo === -1);
 
     expect(character.cns.states.map((state) => state.stateNo)).toEqual([0, -1, 40]);
-    expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([10, 11, 12, 20, 21, 40, 200]);
+    expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([10, 11, 12, 20, 21, 40, 200, 0]);
   });
 
   it('loads common CMD command definitions and Statedef -1 routing', async () => {

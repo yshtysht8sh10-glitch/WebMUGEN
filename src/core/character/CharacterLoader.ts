@@ -67,6 +67,15 @@ trigger1 = ctrl
 trigger1 = stateno != 21
 value = 21
 
+[State -1, Baseline Walk Stop]
+type = ChangeState
+triggerall = command != "holdfwd"
+triggerall = command != "holdback"
+triggerall = command != "holddown"
+trigger1 = stateno = 20
+trigger2 = stateno = 21
+value = 0
+
 [State -1, Baseline Jump]
 type = ChangeState
 triggerall = command = "holdup"

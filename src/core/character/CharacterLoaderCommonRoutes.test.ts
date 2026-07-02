@@ -85,6 +85,15 @@ triggerall = command != "holddown"
 trigger1 = statetype = S
 trigger1 = ctrl
 value = 21
+
+[State -1, Common Walk Stop]
+type = ChangeState
+triggerall = command != "holdfwd"
+triggerall = command != "holdback"
+triggerall = command != "holddown"
+trigger1 = stateno = 20
+trigger2 = stateno = 21
+value = 0
 `,
     ],
     ['/chars/common1.cns', '[StateDef 10]\ntype = C\nmovetype = I\nphysics = C\nanim = 10\nctrl = 0\n\n[State 10, Hold]\ntype = ChangeState\ntrigger1 = command = "holddown"\nvalue = 11\n\n[StateDef 11]\ntype = C\nmovetype = I\nphysics = C\nanim = 11\nctrl = 1\n\n[State 11, Release]\ntype = ChangeState\ntrigger1 = command != "holddown"\nvalue = 12\n\n[StateDef 12]\ntype = S\nmovetype = I\nphysics = S\nanim = 12\nctrl = 0\n\n[StateDef 20]\ntype = S\nmovetype = I\nphysics = S\nanim = 20\nctrl = 1\n\n[StateDef 21]\ntype = S\nmovetype = I\nphysics = S\nanim = 20\nctrl = 1\n'],
@@ -107,7 +116,7 @@ describe('CharacterLoader common movement routes', () => {
     const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createCommonRouteTestFetcher());
     const commandState = character.cns.states.find((state) => state.stateNo === -1);
 
-    expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([10, 20, 21, 800]);
+    expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([10, 20, 21, 800, 0]);
   });
 
   it('runs common holdfwd route into State 20 at runtime', async () => {
@@ -147,6 +156,34 @@ describe('CharacterLoader common movement routes', () => {
 
     expect(result.state.players[0]).toMatchObject({
       stateNo: 21,
+      stateType: 'S',
+      physics: 'S',
+      ctrl: true,
+    });
+    expect(result.traces[0].executedControllers).toContain('ChangeState');
+  });
+
+  it('returns from State 20 to stand when holdfwd is released', async () => {
+    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createCommonRouteTestFetcher());
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime(
+      {
+        ...state,
+        players: [
+          { ...state.players[0], stateNo: 20, animNo: 20, stateType: 'S', physics: 'S', ctrl: true },
+          state.players[1],
+        ],
+      },
+      character.cns,
+      {
+        p1Commands: new Set(),
+        p2Commands: new Set(),
+      },
+    );
+
+    expect(result.state.players[0]).toMatchObject({
+      stateNo: 0,
+      animNo: 0,
       stateType: 'S',
       physics: 'S',
       ctrl: true,
