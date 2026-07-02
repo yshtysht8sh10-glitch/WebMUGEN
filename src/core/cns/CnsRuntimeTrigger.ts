@@ -12,6 +12,7 @@ export type CnsRuntimeTriggerContext = {
   gameTime?: number;
   screenWidth?: number;
   screenHeight?: number;
+  animationExists?: (animNo: number) => boolean;
 };
 
 type NumberSource = (context: CnsRuntimeTriggerContext) => number;
@@ -249,6 +250,14 @@ function getNumberSource(rawName: string): NumberSource | null {
 
   const numProjIdMatch = name.match(/^numprojid\((\d+)\)$/);
   if (numProjIdMatch) return () => 0;
+
+  const animExistMatch = name.match(/^animexist\(([^)]+)\)$/);
+  if (animExistMatch) {
+    return (context) => {
+      const animNo = readNumberExpression(animExistMatch[1], context);
+      return animNo !== null && context.animationExists?.(animNo) ? 1 : 0;
+    };
+  }
 
   switch (name) {
     case 'e': return () => Math.E;

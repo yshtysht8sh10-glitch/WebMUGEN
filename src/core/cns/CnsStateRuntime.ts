@@ -278,7 +278,20 @@ function applyStateHeader(player: PlayerState, stateDef: CnsStateDefinition, res
 
 function shouldRun(controller: CnsStateController, player: PlayerState, input: CnsRuntimeInput, commands?: ReadonlySet<string>): boolean {
   if (controller.triggers.length === 0) return true;
-  return evaluateTriggerRecords(controller.triggers, { player, commands, animTime: mugenAnimTime(player, input) });
+  return evaluateTriggerRecords(controller.triggers, createTriggerContext(player, input, commands));
+}
+
+function createTriggerContext(
+  player: PlayerState,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): CnsRuntimeTriggerContext {
+  return {
+    player,
+    commands,
+    animTime: mugenAnimTime(player, input),
+    animationExists: input.getAnimationDuration ? (animNo) => input.getAnimationDuration?.(animNo) !== null : undefined,
+  };
 }
 
 function evaluateTriggerRecords(triggers: readonly CnsTrigger[], context: CnsRuntimeTriggerContext): boolean {

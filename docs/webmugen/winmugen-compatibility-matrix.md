@@ -228,7 +228,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | AnimElem | Complete | Simplified approximation. |
 | AnimElemNo | Unsupported | Needs animation element resolver. |
 | AnimElemTime | Complete | Simplified approximation. |
-| AnimExist | Unsupported | Needs AIR lookup. |
+| AnimExist | Partial | Evaluates through runtime animation lookup when provided; AIR ownership edge cases still need audit. |
 | AnimTime | Complete | Uses MUGEN-style animation duration helper. |
 | ASin | Complete | Numeric math function supported in runtime trigger evaluator. |
 | ATan | Complete | Numeric math function supported in runtime trigger evaluator. |
