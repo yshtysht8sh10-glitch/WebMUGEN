@@ -15,7 +15,7 @@ anim = kfm.air
 `,
     ],
     ['/chars/kfm/kfm.cns', '[StateDef 0]\ntype = S\nmovetype = I\nphysics = S\nanim = 0\nctrl = 1\n'],
-    ['/chars/kfm/kfm.air', 'Begin Action 0\n0,0, 0,0, 5\nBegin Action 10\n0,0, 0,0, 5\nBegin Action 11\n0,0, 0,0, 5\nBegin Action 12\n0,0, 0,0, 5\nBegin Action 20\n0,0, 0,0, 5\n'],
+    ['/chars/kfm/kfm.air', 'Begin Action 0\n0,0, 0,0, 5\nBegin Action 10\n0,0, 0,0, 5\nBegin Action 11\n0,0, 0,0, 5\nBegin Action 12\n0,0, 0,0, 5\nBegin Action 20\n0,0, 0,0, 5\nBegin Action 40\n0,0, 0,0, 5\n'],
     [
       '/chars/kfm/kfm.cmd',
       `
@@ -61,7 +61,19 @@ command = /B
 name = "holddown"
 command = /D
 
+[Command]
+name = "holdup"
+command = /U
+
 [Statedef -1]
+
+[State -1, Common Jump]
+type = ChangeState
+triggerall = command = "holdup"
+triggerall = command != "holddown"
+trigger1 = statetype = S
+trigger1 = ctrl
+value = 40
 
 [State -1, Common Crouch Start]
 type = ChangeState
@@ -96,7 +108,7 @@ trigger2 = stateno = 21
 value = 0
 `,
     ],
-    ['/chars/common1.cns', '[StateDef 10]\ntype = C\nmovetype = I\nphysics = C\nanim = 10\nctrl = 0\n\n[State 10, Hold]\ntype = ChangeState\ntrigger1 = command = "holddown"\nvalue = 11\n\n[StateDef 11]\ntype = C\nmovetype = I\nphysics = C\nanim = 11\nctrl = 1\n\n[State 11, Release]\ntype = ChangeState\ntrigger1 = command != "holddown"\nvalue = 12\n\n[StateDef 12]\ntype = S\nmovetype = I\nphysics = S\nanim = 12\nctrl = 0\n\n[StateDef 20]\ntype = S\nmovetype = I\nphysics = S\nanim = 20\nctrl = 1\n\n[StateDef 21]\ntype = S\nmovetype = I\nphysics = S\nanim = 20\nctrl = 1\n'],
+    ['/chars/common1.cns', '[StateDef 10]\ntype = C\nmovetype = I\nphysics = C\nanim = 10\nctrl = 0\n\n[State 10, Hold]\ntype = ChangeState\ntrigger1 = command = "holddown"\nvalue = 11\n\n[StateDef 11]\ntype = C\nmovetype = I\nphysics = C\nanim = 11\nctrl = 1\n\n[State 11, Release]\ntype = ChangeState\ntrigger1 = command != "holddown"\nvalue = 12\n\n[StateDef 12]\ntype = S\nmovetype = I\nphysics = S\nanim = 12\nctrl = 0\n\n[StateDef 20]\ntype = S\nmovetype = I\nphysics = S\nanim = 20\nctrl = 1\n\n[StateDef 21]\ntype = S\nmovetype = I\nphysics = S\nanim = 20\nctrl = 1\n\n[StateDef 40]\ntype = S\nmovetype = I\nphysics = S\nanim = 40\nctrl = 0\n'],
   ]);
 
   return {
@@ -116,7 +128,7 @@ describe('CharacterLoader common movement routes', () => {
     const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createCommonRouteTestFetcher());
     const commandState = character.cns.states.find((state) => state.stateNo === -1);
 
-    expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([10, 20, 21, 800, 0]);
+    expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([40, 10, 20, 21, 800, 0]);
   });
 
   it('runs common holdfwd route into State 20 at runtime', async () => {
@@ -187,6 +199,34 @@ describe('CharacterLoader common movement routes', () => {
       stateType: 'S',
       physics: 'S',
       ctrl: true,
+    });
+    expect(result.traces[0].executedControllers).toContain('ChangeState');
+  });
+
+  it('runs common holdup route from State 20 into State 40', async () => {
+    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createCommonRouteTestFetcher());
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime(
+      {
+        ...state,
+        players: [
+          { ...state.players[0], stateNo: 20, animNo: 20, stateType: 'S', physics: 'S', ctrl: true },
+          state.players[1],
+        ],
+      },
+      character.cns,
+      {
+        p1Commands: new Set(['holdup', 'up', 'holdfwd']),
+        p2Commands: new Set(),
+      },
+    );
+
+    expect(result.state.players[0]).toMatchObject({
+      stateNo: 40,
+      animNo: 40,
+      stateType: 'S',
+      physics: 'S',
+      ctrl: false,
     });
     expect(result.traces[0].executedControllers).toContain('ChangeState');
   });

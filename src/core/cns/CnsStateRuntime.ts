@@ -256,7 +256,7 @@ function enterState(player: PlayerState, opponent: PlayerState, stateNo: number,
     stateType: stateDef.stateType ?? player.stateType,
     moveType: stateDef.moveType ?? player.moveType,
     physics: stateDef.physics ?? player.physics,
-    ctrl: stateDef.ctrl ?? player.ctrl,
+    ctrl: stateDef.ctrl ?? inferDefaultCtrl(stateNo, player.ctrl),
     facing: stateDef.faceP2 ? faceToward(player, opponent) : player.facing,
     power,
     juggle: stateDef.juggle ?? powered.juggle,
@@ -270,6 +270,11 @@ function faceToward(player: PlayerState, opponent: PlayerState): PlayerState['fa
 function inferDefaultAnimNo(stateNo: number, currentAnimNo: number): number {
   if (stateNo === 0) return 0;
   return currentAnimNo;
+}
+
+function inferDefaultCtrl(stateNo: number, currentCtrl: boolean): boolean {
+  if (stateNo === 0) return true;
+  return currentCtrl;
 }
 
 function applyStateHeader(player: PlayerState, stateDef: CnsStateDefinition, resetAnimOnChange: boolean): PlayerState {

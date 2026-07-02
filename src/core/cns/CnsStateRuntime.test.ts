@@ -213,6 +213,61 @@ ctrl = 1
     });
   });
 
+  it('restores control when entering State 0 even when the target StateDef omits ctrl', () => {
+    const cns = parseCnsText(`
+[Statedef 20]
+type = S
+movetype = I
+physics = S
+ctrl = 0
+anim = 20
+
+[State 20, Stop]
+type = ChangeState
+trigger1 = command != "holdfwd"
+value = 0
+
+[Statedef 0]
+type = S
+movetype = I
+physics = S
+anim = 0
+`);
+
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime(
+      {
+        ...state,
+        players: [
+          {
+            ...state.players[0],
+            stateNo: 20,
+            animNo: 20,
+            stateTime: 12,
+            stateType: 'S',
+            moveType: 'I',
+            physics: 'S',
+            ctrl: false,
+          },
+          state.players[1],
+        ],
+      },
+      cns,
+      { p1Commands: new Set() },
+    );
+
+    expect(result.state.players[0]).toMatchObject({
+      stateNo: 0,
+      animNo: 0,
+      stateTime: 0,
+      stateType: 'S',
+      moveType: 'I',
+      physics: 'S',
+      ctrl: true,
+    });
+    expect(result.traces[0].executedControllers).toContain('ChangeState');
+  });
+
   it('preserves the current animation when entering an animless non-idle state', () => {
     const cns = parseCnsText(`
 [Statedef 40]
