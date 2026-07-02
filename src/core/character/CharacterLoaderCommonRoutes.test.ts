@@ -28,6 +28,10 @@ name = "holdfwd"
 command = /$F
 
 [Command]
+name = "holdback"
+command = /$B
+
+[Command]
 name = "holddown"
 command = /$D
 
@@ -50,6 +54,10 @@ name = "holdfwd"
 command = /F
 
 [Command]
+name = "holdback"
+command = /B
+
+[Command]
 name = "holddown"
 command = /D
 
@@ -69,9 +77,17 @@ triggerall = command != "holddown"
 trigger1 = statetype = S
 trigger1 = ctrl
 value = 20
+
+[State -1, Common Walk Back]
+type = ChangeState
+triggerall = command = "holdback"
+triggerall = command != "holddown"
+trigger1 = statetype = S
+trigger1 = ctrl
+value = 21
 `,
     ],
-    ['/chars/common1.cns', '[StateDef 10]\ntype = C\nmovetype = I\nphysics = C\nanim = 10\nctrl = 0\n\n[State 10, Hold]\ntype = ChangeState\ntrigger1 = command = "holddown"\nvalue = 11\n\n[StateDef 11]\ntype = C\nmovetype = I\nphysics = C\nanim = 11\nctrl = 1\n\n[State 11, Release]\ntype = ChangeState\ntrigger1 = command != "holddown"\nvalue = 12\n\n[StateDef 12]\ntype = S\nmovetype = I\nphysics = S\nanim = 12\nctrl = 0\n\n[StateDef 20]\ntype = S\nmovetype = I\nphysics = S\nanim = 20\nctrl = 1\n'],
+    ['/chars/common1.cns', '[StateDef 10]\ntype = C\nmovetype = I\nphysics = C\nanim = 10\nctrl = 0\n\n[State 10, Hold]\ntype = ChangeState\ntrigger1 = command = "holddown"\nvalue = 11\n\n[StateDef 11]\ntype = C\nmovetype = I\nphysics = C\nanim = 11\nctrl = 1\n\n[State 11, Release]\ntype = ChangeState\ntrigger1 = command != "holddown"\nvalue = 12\n\n[StateDef 12]\ntype = S\nmovetype = I\nphysics = S\nanim = 12\nctrl = 0\n\n[StateDef 20]\ntype = S\nmovetype = I\nphysics = S\nanim = 20\nctrl = 1\n\n[StateDef 21]\ntype = S\nmovetype = I\nphysics = S\nanim = 20\nctrl = 1\n'],
   ]);
 
   return {
@@ -91,7 +107,7 @@ describe('CharacterLoader common movement routes', () => {
     const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createCommonRouteTestFetcher());
     const commandState = character.cns.states.find((state) => state.stateNo === -1);
 
-    expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([10, 20, 800]);
+    expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([10, 20, 21, 800]);
   });
 
   it('runs common holdfwd route into State 20 at runtime', async () => {
@@ -118,6 +134,22 @@ describe('CharacterLoader common movement routes', () => {
       stateType: 'C',
       physics: 'C',
       ctrl: false,
+    });
+    expect(result.traces[0].executedControllers).toContain('ChangeState');
+  });
+
+  it('runs common holdback route into State 21 at runtime', async () => {
+    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createCommonRouteTestFetcher());
+    const result = stepCnsStateRuntime(createInitialGameState(), character.cns, {
+      p1Commands: new Set(['holdback']),
+      p2Commands: new Set(),
+    });
+
+    expect(result.state.players[0]).toMatchObject({
+      stateNo: 21,
+      stateType: 'S',
+      physics: 'S',
+      ctrl: true,
     });
     expect(result.traces[0].executedControllers).toContain('ChangeState');
   });
