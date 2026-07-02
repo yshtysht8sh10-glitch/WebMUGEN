@@ -40,7 +40,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | -1 | Command state | Complete | Used for CMD routing and covered by focused ChangeState/ordering tests. |
 | 0 | Stand | Complete | Common baseline and idle fallback exist. Fallback route has diagnostic regression coverage. |
 | 10 | Crouch start | Complete | Common route integration is covered by runtime assertions for state, anim, type, physics, and ctrl. |
-| 11 | Crouching | Partial | Common route exists. Fallback route has diagnostic regression coverage. CNS/common integration still needs full verification. |
+| 11 | Crouching | Complete | Common crouch-hold route from State 10 is covered by CNS runtime assertions. |
 | 12 | Crouch end | Partial | Common route exists. Fallback route has diagnostic regression coverage. CNS/common integration still needs full verification. |
 | 20 | Walk forward | Partial | Common route exists. Fallback route has diagnostic regression coverage. CNS/common integration still needs full verification. |
 | 21 | Walk back | Partial | Added as common back-walk state. |
