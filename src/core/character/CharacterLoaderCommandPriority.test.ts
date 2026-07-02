@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { stepCnsStateRuntime } from '../cns/CnsStateRuntime';
+import { createInitialGameState } from '../engine/GameState';
 import { loadCharacterFromDef, type CharacterAssetFetcher } from './CharacterLoader';
 
 describe('CharacterLoader command route priority', () => {
@@ -168,6 +170,19 @@ value = 40
     const commandState = character.cns.states.find((state) => state.stateNo === -1);
 
     expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([41]);
+
+    const result = stepCnsStateRuntime(createInitialGameState(), character.cns, {
+      p1Commands: new Set(['holdup', 'up']),
+      p2Commands: new Set(),
+    });
+
+    expect(result.state.players[0]).toMatchObject({
+      stateNo: 41,
+      animNo: 41,
+      stateType: 'A',
+      physics: 'A',
+      ctrl: false,
+    });
   });
 });
 
