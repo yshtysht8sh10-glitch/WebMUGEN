@@ -5,6 +5,7 @@ export type CnsRuntimeTriggerContext = {
   opponent?: PlayerState;
   commands?: ReadonlySet<string>;
   animTime?: number;
+  animElemNo?: number;
   roundState?: number;
   roundNo?: number;
   aiLevel?: number;
@@ -275,6 +276,7 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'tickspersecond': return () => 60;
     case 'animtime': return (context) => context.animTime ?? context.player.animTime;
     case 'anim': return (context) => context.player.animNo;
+    case 'animelemno': return (context) => context.animElemNo ?? 1;
     case 'animelem': return (context) => context.player.animTime;
     case 'stateno': return (context) => context.player.stateNo;
     case 'prevstateno': return (context) => readOptionalNumber(context.player, 'prevStateNo', context.player.stateNo);

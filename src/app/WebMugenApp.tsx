@@ -30,6 +30,7 @@ import {
 } from '../core/engine/RoundScore';
 import { canRestartRound, restartRound } from '../core/engine/RoundRestart';
 import { getAnimationDuration } from '../core/animation/AnimationDuration';
+import { getCurrentAnimationElement } from '../core/animation/AnimationPlayer';
 import { attachFallbackAttackStates } from '../core/cns/CnsFallbackDocument';
 import { analyzeCnsCoverage } from '../core/cns/CnsCoverageDiagnostics';
 import type { CnsCoverageDiagnostics } from '../core/cns/CnsCoverageDiagnostics';
@@ -176,6 +177,10 @@ export function WebMugenApp() {
             p1Commands,
             p2Commands,
             getAnimationDuration: (animNo) => getAnimationDuration(character.air, animNo),
+            getAnimationElementNo: (animNo, animTime) => {
+              const element = getCurrentAnimationElement(character.air, animNo, animTime);
+              return element ? element.elementIndex + 1 : null;
+            },
           });
           nextState = cnsResult.state;
           nextCnsTraces = cnsResult.traces;

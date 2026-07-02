@@ -21,6 +21,7 @@ export type CnsRuntimeInput = {
   p1Commands?: ReadonlySet<string>;
   p2Commands?: ReadonlySet<string>;
   getAnimationDuration?: (animNo: number) => number | null;
+  getAnimationElementNo?: (animNo: number, animTime: number) => number | null;
 };
 
 export type CnsRuntimeResult = { state: GameState; traces: CnsRuntimeTrace[] };
@@ -290,6 +291,7 @@ function createTriggerContext(
     player,
     commands,
     animTime: mugenAnimTime(player, input),
+    animElemNo: input.getAnimationElementNo?.(player.animNo, player.animTime) ?? undefined,
     animationExists: input.getAnimationDuration ? (animNo) => input.getAnimationDuration?.(animNo) !== null : undefined,
   };
 }

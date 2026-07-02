@@ -226,7 +226,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | Alive | Complete | Basic support. |
 | Anim | Complete | Numeric comparison. |
 | AnimElem | Complete | Simplified approximation. |
-| AnimElemNo | Unsupported | Needs animation element resolver. |
+| AnimElemNo | Partial | Uses runtime animation element lookup when provided; AIR timing edge cases still need audit. |
 | AnimElemTime | Complete | Simplified approximation. |
 | AnimExist | Partial | Evaluates through runtime animation lookup when provided; AIR ownership edge cases still need audit. |
 | AnimTime | Complete | Uses MUGEN-style animation duration helper. |

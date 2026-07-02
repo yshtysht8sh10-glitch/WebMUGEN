@@ -41,6 +41,11 @@ describe('CnsRuntimeTrigger', () => {
     expect(evaluateCnsRuntimeTrigger('SelfAnimExist(999) = 0', context)).toBe(true);
   });
 
+  it('evaluates AnimElemNo using the current animation element hook', () => {
+    expect(evaluateCnsRuntimeTrigger('AnimElemNo = 3', { player, animElemNo: 3 })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('AnimElemNo != 2', { player, animElemNo: 3 })).toBe(true);
+  });
+
   it('evaluates command equality and inequality', () => {
     expect(evaluateCnsRuntimeTrigger('command = "QCF_x"', {
       player,
