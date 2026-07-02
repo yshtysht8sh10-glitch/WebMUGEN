@@ -268,6 +268,53 @@ value = 45
     });
     expect(result.traces[0].executedControllers).toContain('ChangeState');
   });
+
+  it('runs a character-defined jump down State 51 at runtime', async () => {
+    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createFetcher(new Map([
+      ['/chars/kfm/kfm.def', '[Files]\ncmd = kfm.cmd\ncns = kfm.cns\nanim = kfm.air\n'],
+      ['/chars/kfm/kfm.cns', '[StateDef 51]\ntype = A\nmovetype = I\nphysics = A\nanim = 51\nctrl = 0\n'],
+      ['/chars/kfm/kfm.air', 'Begin Action 51\n0,0, 0,0, 5\n'],
+      ['/chars/kfm/kfm.cmd', `
+[Command]
+name = "jumpdown"
+command = /D
+
+[Statedef -1]
+
+[State -1, Jump Down]
+type = ChangeState
+triggerall = command = "jumpdown"
+trigger1 = statetype = A
+value = 51
+`],
+      ['/chars/common.cmd', ''],
+      ['/chars/common1.cns', ''],
+    ])));
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime(
+      {
+        ...state,
+        players: [
+          { ...state.players[0], stateNo: 50, animNo: 50, stateType: 'A', physics: 'A', ctrl: false },
+          state.players[1],
+        ],
+      },
+      character.cns,
+      {
+        p1Commands: new Set(['jumpdown', 'holddown', 'down']),
+        p2Commands: new Set(),
+      },
+    );
+
+    expect(result.state.players[0]).toMatchObject({
+      stateNo: 51,
+      animNo: 51,
+      stateType: 'A',
+      physics: 'A',
+      ctrl: false,
+    });
+    expect(result.traces[0].executedControllers).toContain('ChangeState');
+  });
 });
 
 function createFetcher(textAssets: Map<string, string>): CharacterAssetFetcher {

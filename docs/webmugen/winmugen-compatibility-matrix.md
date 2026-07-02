@@ -49,7 +49,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | 42 | Character-defined jump variant | Complete | Character-defined holdup route into State 42 is covered by CNS runtime assertions. |
 | 45 | Air jump / jump transition variant | Partial | Character-defined State 45 entry is covered; common air-jump rules still need WinMUGEN/common1 verification. |
 | 50 | Jump up | Partial | Common baseline exists. Air physics incomplete. |
-| 51 | Jump down | Unsupported | Needed for more accurate air-state sequencing. |
+| 51 | Jump down | Partial | Character-defined State 51 entry is covered; full common air-state sequencing is still incomplete. |
 | 52 | Jump land | Partial | Common baseline exists. Landing logic under active work. |
 | 100 | Run / dash forward | Partial | Common route added with PosAdd. Needs true velocity/friction behavior. |
 | 101 | Run / dash substate | Untested | Common implementations vary. |
