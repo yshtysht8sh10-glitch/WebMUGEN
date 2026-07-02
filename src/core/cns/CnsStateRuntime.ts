@@ -107,14 +107,15 @@ const RECOGNIZED_NO_OP_CONTROLLERS = new Map<string, string>([
 export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, input: CnsRuntimeInput = {}): CnsRuntimeResult {
   if (!cns) return { state, traces: [missingTrace(1, state.players[0], input), missingTrace(2, state.players[1], input)] };
 
-  const p1 = stepPlayer(state.players[0], 1, cns, input, input.p1Commands);
-  const p2 = stepPlayer(state.players[1], 2, cns, input, input.p2Commands);
+  const p1 = stepPlayer(state.players[0], state.players[1], 1, cns, input, input.p1Commands);
+  const p2 = stepPlayer(state.players[1], state.players[0], 2, cns, input, input.p2Commands);
 
   return { state: { ...state, players: [p1.player, p2.player] }, traces: [p1.trace, p2.trace] };
 }
 
 function stepPlayer(
   player: PlayerState,
+  opponent: PlayerState,
   playerId: 1 | 2,
   cns: CnsDocument,
   input: CnsRuntimeInput,
@@ -150,7 +151,7 @@ function stepPlayer(
     }
     if (debugEnabled) appendDebug(trace, `enter S${negativeStateNo} state=${next.stateNo} controllers=${negativeState.controllers.length}`);
     if (debugEnabled) appendDebug(trace, formatStateDefOverview(negativeState));
-    const result = executeStateControllers(next, negativeState, cns, input, commands, debugEnabled);
+    const result = executeStateControllers(next, opponent, negativeState, cns, input, commands, debugEnabled);
     next = result.player;
     trace.executedControllers.push(...result.executedControllers);
     trace.debugLines.push(...result.debugLines);
@@ -169,7 +170,7 @@ function stepPlayer(
   if (debugEnabled) appendDebug(trace, formatStateDefOverview(stateDef));
   next = applyStateHeader(next, stateDef, false);
   if (debugEnabled) appendDebug(trace, `after header S${stateDef.stateNo} state=${next.stateNo} type=${next.stateType} ctrl=${next.ctrl ? 1 : 0}`);
-  const result = executeStateControllers(next, stateDef, cns, input, commands, debugEnabled);
+  const result = executeStateControllers(next, opponent, stateDef, cns, input, commands, debugEnabled);
   next = result.player;
   trace.executedControllers.push(...result.executedControllers);
   trace.debugLines.push(...result.debugLines);
@@ -189,6 +190,7 @@ function finishTrace(player: PlayerState, trace: CnsRuntimeTrace): { player: Pla
 
 function executeStateControllers(
   player: PlayerState,
+  opponent: PlayerState,
   stateDef: CnsStateDefinition,
   cns: CnsDocument,
   input: CnsRuntimeInput,
@@ -212,7 +214,7 @@ function executeStateControllers(
     if (!run) continue;
 
     const beforeStateNo = next.stateNo;
-    const result = executeController(next, controller, cns);
+    const result = executeController(next, opponent, controller, cns);
     next = result.player;
     if (debugEnabled && debugLine) {
       pushDebug(debugLines, executedControllers, `pipe after S${stateDef.stateNo} ${controller.type} executed=${result.executed ? 1 : 0} before=${beforeStateNo} after=${next.stateNo}`);
@@ -233,7 +235,7 @@ function findState(cns: CnsDocument, stateNo: number): CnsStateDefinition | unde
   return cns.states.find((state) => state.stateNo === stateNo);
 }
 
-function enterState(player: PlayerState, stateNo: number, cns: CnsDocument): PlayerState {
+function enterState(player: PlayerState, opponent: PlayerState, stateNo: number, cns: CnsDocument): PlayerState {
   const stateDef = findState(cns, stateNo);
   if (!stateDef) return { ...player, stateNo, stateTime: 0 };
 
@@ -253,8 +255,13 @@ function enterState(player: PlayerState, stateNo: number, cns: CnsDocument): Pla
     moveType: stateDef.moveType ?? player.moveType,
     physics: stateDef.physics ?? player.physics,
     ctrl: stateDef.ctrl ?? player.ctrl,
+    facing: stateDef.faceP2 ? faceToward(player, opponent) : player.facing,
     power,
   } as PlayerState;
+}
+
+function faceToward(player: PlayerState, opponent: PlayerState): PlayerState['facing'] {
+  return player.x <= opponent.x ? 1 : -1;
 }
 
 function inferDefaultAnimNo(stateNo: number, currentAnimNo: number): number {
@@ -448,7 +455,7 @@ function mugenAnimTime(player: PlayerState, input: CnsRuntimeInput): number {
   return calculateMugenAnimTime(player.animTime, duration);
 }
 
-function executeController(player: PlayerState, controller: CnsStateController, cns: CnsDocument): ControllerResult {
+function executeController(player: PlayerState, opponent: PlayerState, controller: CnsStateController, cns: CnsDocument): ControllerResult {
   const type = controller.type.toLowerCase();
   if (type === 'null') return withPlayer(player, true, 'Null');
   if (type === 'changeanim') return changeAnim(player, controller);
@@ -485,7 +492,7 @@ function executeController(player: PlayerState, controller: CnsStateController, 
   if (type === 'superpause') return withExtendedPlayer(player, { superPauseTime: num(controller, 'time') ?? 0 }, 'SuperPause');
   if (type === 'selfstate') {
     const value = num(controller, 'value');
-    return value === null ? withPlayer(player, false, 'SelfState') : withPlayer(enterState(player, value, cns), true, 'SelfState');
+    return value === null ? withPlayer(player, false, 'SelfState') : withPlayer(enterState(player, opponent, value, cns), true, 'SelfState');
   }
   if (type === 'turn') return withPlayer({ ...player, facing: player.facing === 1 ? -1 : 1 }, true, 'Turn');
   if (type === 'varset') return setVarController(player, controller);
@@ -494,7 +501,7 @@ function executeController(player: PlayerState, controller: CnsStateController, 
   if (type === 'varrandom') return varRandom(player, controller);
   if (type === 'changestate') {
     const value = num(controller, 'value');
-    return value === null ? withPlayer(player, false, 'ChangeState') : withPlayer(enterState(player, value, cns), true, 'ChangeState');
+    return value === null ? withPlayer(player, false, 'ChangeState') : withPlayer(enterState(player, opponent, value, cns), true, 'ChangeState');
   }
 
   const noOpName = RECOGNIZED_NO_OP_CONTROLLERS.get(type);

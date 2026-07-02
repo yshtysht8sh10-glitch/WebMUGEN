@@ -14,6 +14,7 @@ function formatPlayerPhysicsDebug(label: string, player: PlayerState): string {
     `type=${player.stateType}`,
     `physics=${player.physics}`,
     `ctrl=${player.ctrl ? 1 : 0}`,
+    `facing=${player.facing}`,
     `power=${readPower(player)}`,
     `pos=(${formatNumber(player.x)},${formatNumber(player.y)})`,
     `vel=(${formatNumber(player.vx)},${formatNumber(player.vy)})`,

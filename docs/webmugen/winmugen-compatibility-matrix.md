@@ -117,7 +117,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | ctrl | Control flag | Complete | Parsed and applied. |
 | poweradd | Power gain on state entry | Complete | Parsed and applied once when entering a state. |
 | juggle | Juggle points | Unsupported | Needed for hit system compatibility. |
-| facep2 | Face opponent on state entry | Unsupported | Needed for many attacks. |
+| facep2 | Face opponent on state entry | Complete | Parsed and applied when entering a state; Debug Overlay exposes facing. |
 | hitdefpersist | Keep HitDef on state change | Unsupported | Hit system compatibility. |
 | movehitpersist | Keep MoveHit info | Unsupported | Hit system compatibility. |
 | hitcountpersist | Keep hit count | Unsupported | Hit system compatibility. |

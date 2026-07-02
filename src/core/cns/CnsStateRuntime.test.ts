@@ -4,6 +4,45 @@ import { createInitialGameState } from '../engine/GameState';
 import { stepCnsStateRuntime } from './CnsStateRuntime';
 
 describe('CnsStateRuntime AnimTime', () => {
+  it('faces the opponent when entering a StateDef with facep2', () => {
+    const cns = parseCnsText(`
+[Statedef -1]
+
+[State -1, Attack]
+type = ChangeState
+trigger1 = command = "x"
+value = 200
+
+[Statedef 200]
+type = S
+movetype = A
+physics = S
+ctrl = 0
+anim = 200
+facep2 = 1
+`);
+
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime(
+      {
+        ...state,
+        players: [
+          { ...state.players[0], x: 420, facing: 1 },
+          { ...state.players[1], x: 220, facing: -1 },
+        ],
+      },
+      cns,
+      { p1Commands: new Set(['x']) },
+    );
+
+    expect(result.state.players[0]).toMatchObject({
+      stateNo: 200,
+      animNo: 200,
+      facing: -1,
+    });
+    expect(result.traces[0].executedControllers).toContain('ChangeState');
+  });
+
   it('returns from state 200 when MUGEN AnimTime reaches 0', () => {
     const cns = parseCnsText(`
 [Statedef 200]

@@ -15,5 +15,7 @@ describe('PhysicsDebugOverlay', () => {
 
     expect(lines[0]).toContain('power=120');
     expect(lines[1]).toContain('power=0');
+    expect(lines[0]).toContain('facing=1');
+    expect(lines[1]).toContain('facing=-1');
   });
 });
