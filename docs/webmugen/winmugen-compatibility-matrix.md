@@ -41,7 +41,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | 0 | Stand | Complete | Common baseline and idle fallback exist. Fallback route has diagnostic regression coverage. |
 | 10 | Crouch start | Complete | Common route integration is covered by runtime assertions for state, anim, type, physics, and ctrl. |
 | 11 | Crouching | Complete | Common crouch-hold route from State 10 is covered by CNS runtime assertions. |
-| 12 | Crouch end | Partial | Common route exists. Fallback route has diagnostic regression coverage. CNS/common integration still needs full verification. |
+| 12 | Crouch end | Complete | Common crouch-release route from State 11 is covered by CNS runtime assertions. |
 | 20 | Walk forward | Partial | Common route exists. Fallback route has diagnostic regression coverage. CNS/common integration still needs full verification. |
 | 21 | Walk back | Partial | Added as common back-walk state. |
 | 40 | Jump start | Partial | Common route exists. Jump velocity is minimal. |
