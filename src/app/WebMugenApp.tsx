@@ -613,7 +613,7 @@ async function copyTextToClipboard(text: string): Promise<void> {
   if (!succeeded) throw new Error('clipboard API is unavailable');
 }
 
-function appendRuntimeHistoryIfNeeded({
+export function appendRuntimeHistoryIfNeeded({
   frameNo,
   inputLines,
   commandLines,
@@ -663,7 +663,7 @@ function appendRuntimeHistoryIfNeeded({
     ...snapshot.map((line) => `  ${line}`),
   ]);
   const nextHistory = freezeHistoryLines([...historyRef.current, ...entry]).slice(-RUNTIME_HISTORY_LIMIT);
-  historyRef.current = nextHistory;
+  historyRef.current = nextHistory.slice();
   setHistoryLines(nextHistory.slice());
 }
 
