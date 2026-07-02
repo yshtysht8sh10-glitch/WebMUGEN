@@ -86,7 +86,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | 197 | Intro state | Unsupported | Round intro not implemented. |
 | 198 | Intro state | Unsupported | Round intro not implemented. |
 | 199 | Intro state | Unsupported | Round intro not implemented. |
-| 5000 | Common get-hit state | Unsupported | Required for hit reactions. |
+| 5000 | Common get-hit state | Partial | Fallback standing hit reaction enters State 5000, emits transient hit events, and recovers attack reuse; full WinMUGEN GetHitVar/common1 flow is incomplete. |
 | 5001 | Common get-hit state | Unsupported | Required for hit reactions. |
 | 5010 | Common get-hit state | Unsupported | Required for hit reactions. |
 | 5011 | Common get-hit state | Unsupported | Required for hit reactions. |
