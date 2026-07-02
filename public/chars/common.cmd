@@ -119,6 +119,21 @@ trigger1 = statetype = S
 trigger1 = stateno != 20
 value = 20
 
+[State -1, Common Walk Forward Velocity]
+type = VelSet
+triggerall = command = "holdfwd"
+triggerall = command != "holddown"
+trigger1 = stateno = 20
+x = 2.4
+
+[State -1, Common Walk Forward Anim]
+type = ChangeAnim
+triggerall = command = "holdfwd"
+triggerall = command != "holddown"
+trigger1 = stateno = 20
+trigger1 = anim != 20
+value = 20
+
 [State -1, Common Walk Back]
 type = ChangeState
 triggerall = command = "holdback"
@@ -126,6 +141,21 @@ triggerall = command != "holddown"
 trigger1 = statetype = S
 trigger1 = ctrl
 trigger1 = stateno != 21
+value = 21
+
+[State -1, Common Walk Back Velocity]
+type = VelSet
+triggerall = command = "holdback"
+triggerall = command != "holddown"
+trigger1 = stateno = 21
+x = -2.2
+
+[State -1, Common Walk Back Anim]
+type = ChangeAnim
+triggerall = command = "holdback"
+triggerall = command != "holddown"
+trigger1 = stateno = 21
+trigger1 = anim != 21
 value = 21
 
 [Statedef -2]
