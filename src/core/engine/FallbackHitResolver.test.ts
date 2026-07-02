@@ -87,4 +87,38 @@ describe('FallbackHitResolver', () => {
     expect(next.hitEvents).toHaveLength(0);
     expect(next.players[1].life).toBe(1000);
   });
+
+  it('does not keep stale hit events when no new contact occurs', () => {
+    const state = createInitialGameState();
+    const next = resolveFallbackHits(
+      {
+        ...state,
+        hitEvents: [{ attackerId: 1, defenderId: 2, damage: 60 }],
+        players: [
+          {
+            ...state.players[0],
+            x: 120,
+            y: 285,
+            facing: 1,
+            stateNo: 0,
+            animNo: 0,
+            moveType: 'I',
+            hitDefUsed: false,
+          },
+          {
+            ...state.players[1],
+            x: 420,
+            y: 285,
+            facing: -1,
+            stateNo: 0,
+            animNo: 0,
+            moveType: 'I',
+          },
+        ],
+      },
+      air,
+    );
+
+    expect(next.hitEvents).toHaveLength(0);
+  });
 });

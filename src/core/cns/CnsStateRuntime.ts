@@ -261,6 +261,8 @@ function enterState(player: PlayerState, opponent: PlayerState, stateNo: number,
     facing: stateDef.faceP2 ? faceToward(player, opponent) : player.facing,
     power,
     juggle: stateDef.juggle ?? powered.juggle,
+    activeHitDef: null,
+    hitDefUsed: false,
   } as PlayerState;
 }
 

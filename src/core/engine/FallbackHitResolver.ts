@@ -40,7 +40,7 @@ export function resolveFallbackHits(state: GameState, airDocument?: AirDocument 
   return {
     ...state,
     players: [p1, p2],
-    hitEvents: [...state.hitEvents, ...hitEvents],
+    hitEvents,
   };
 }
 

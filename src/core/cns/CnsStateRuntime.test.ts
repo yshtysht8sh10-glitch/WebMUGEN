@@ -268,6 +268,63 @@ anim = 0
     expect(result.traces[0].executedControllers).toContain('ChangeState');
   });
 
+  it('clears used hit flags when entering a new state', () => {
+    const cns = parseCnsText(`
+[Statedef 200]
+type = S
+movetype = A
+physics = S
+ctrl = 0
+anim = 200
+
+[State 200, End]
+type = ChangeState
+trigger1 = time > 5
+value = 0
+
+[Statedef 0]
+type = S
+movetype = I
+physics = S
+anim = 0
+`);
+
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime(
+      {
+        ...state,
+        players: [
+          {
+            ...state.players[0],
+            stateNo: 200,
+            animNo: 200,
+            stateTime: 6,
+            moveType: 'A',
+            ctrl: false,
+            hitDefUsed: true,
+            activeHitDef: {
+              damage: 20,
+              guardDamage: 0,
+              pauseTime: { attacker: 4, defender: 8 },
+              groundVelocity: { x: -4, y: 0 },
+              airVelocity: { x: -2, y: -4 },
+            },
+          },
+          state.players[1],
+        ],
+      },
+      cns,
+    );
+
+    expect(result.state.players[0]).toMatchObject({
+      stateNo: 0,
+      moveType: 'I',
+      hitDefUsed: false,
+      activeHitDef: null,
+    });
+    expect(result.traces[0].executedControllers).toContain('ChangeState');
+  });
+
   it('preserves the current animation when entering an animless non-idle state', () => {
     const cns = parseCnsText(`
 [Statedef 40]
