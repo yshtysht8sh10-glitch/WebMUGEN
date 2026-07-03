@@ -2,7 +2,7 @@ import type { CnsDocument, CnsStateController, CnsStateDefinition, CnsTrigger, C
 import type { GameState, PlayerState } from '../engine/types';
 import { calculateMugenAnimTime } from '../animation/AnimationDuration';
 import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
-import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, type CnsRuntimeTriggerContext } from './CnsRuntimeTrigger';
+import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, readNumberExpression, type CnsRuntimeTriggerContext } from './CnsRuntimeTrigger';
 
 export type CnsRuntimeTrace = {
   playerId: 1 | 2;
@@ -52,6 +52,10 @@ type ExtendedPlayerState = PlayerState & {
   superPauseTime?: number;
   hitBy?: string | null;
   notHitBy?: string | null;
+  prevStateNo?: number;
+  vars?: Record<number, number>;
+  sysVars?: Record<number, number>;
+  fvars?: Record<number, number>;
 };
 
 const DEBUG_STATES = [-3, -2, -1, 0, 10, 11, 12] as const;
@@ -217,7 +221,7 @@ function executeStateControllers(
     if (!run) continue;
 
     const beforeStateNo = next.stateNo;
-    const result = executeController(next, opponent, controller, cns);
+    const result = executeController(next, opponent, controller, cns, input, commands);
     next = result.player;
     if (debugEnabled && debugLine) {
       pushDebug(debugLines, executedControllers, `pipe after S${stateDef.stateNo} ${controller.type} executed=${result.executed ? 1 : 0} before=${beforeStateNo} after=${next.stateNo}`);
@@ -250,6 +254,7 @@ function enterState(player: PlayerState, opponent: PlayerState, stateNo: number,
 
   return {
     ...player,
+    prevStateNo: player.stateNo,
     stateNo,
     stateTime: 0,
     animNo,
@@ -480,12 +485,19 @@ function mugenAnimTime(player: PlayerState, input: CnsRuntimeInput): number {
   return calculateMugenAnimTime(player.animTime, duration);
 }
 
-function executeController(player: PlayerState, opponent: PlayerState, controller: CnsStateController, cns: CnsDocument): ControllerResult {
+function executeController(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  cns: CnsDocument,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
   const type = controller.type.toLowerCase();
   if (type === 'null') return withPlayer(player, true, 'Null');
   if (type === 'changeanim') return changeAnim(player, controller);
-  if (type === 'velset') return withPlayer({ ...player, vx: num(controller, 'x') ?? player.vx, vy: num(controller, 'y') ?? player.vy }, hasNum(controller, 'x') || hasNum(controller, 'y'), 'VelSet');
-  if (type === 'veladd') return withPlayer({ ...player, vx: player.vx + (num(controller, 'x') ?? 0), vy: player.vy + (num(controller, 'y') ?? 0) }, hasNum(controller, 'x') || hasNum(controller, 'y'), 'VelAdd');
+  if (type === 'velset') return withPlayer({ ...player, vx: num(controller, 'x', player, input, commands, opponent) ?? player.vx, vy: num(controller, 'y', player, input, commands, opponent) ?? player.vy }, hasNum(controller, 'x', player, input, commands, opponent) || hasNum(controller, 'y', player, input, commands, opponent), 'VelSet');
+  if (type === 'veladd') return withPlayer({ ...player, vx: player.vx + (num(controller, 'x', player, input, commands, opponent) ?? 0), vy: player.vy + (num(controller, 'y', player, input, commands, opponent) ?? 0) }, hasNum(controller, 'x', player, input, commands, opponent) || hasNum(controller, 'y', player, input, commands, opponent), 'VelAdd');
   if (type === 'velmul') return velMul(player, controller);
   if (type === 'posset') return posSet(player, controller);
   if (type === 'posadd') return withPlayer({ ...player, x: player.x + (num(controller, 'x') ?? 0), y: player.y + (num(controller, 'y') ?? 0) }, hasNum(controller, 'x') || hasNum(controller, 'y'), 'PosAdd');
@@ -511,7 +523,7 @@ function executeController(player: PlayerState, opponent: PlayerState, controlle
   if (type === 'hitby') return withExtendedPlayer(player, { hitBy: str(controller, 'value') ?? str(controller, 'attr') }, 'HitBy');
   if (type === 'nothitby') return withExtendedPlayer(player, { notHitBy: str(controller, 'value') ?? str(controller, 'attr') }, 'NotHitBy');
   if (type === 'hitfallvel') return withPlayer({ ...player, vy: num(controller, 'y') ?? player.vy }, hasNum(controller, 'y'), 'HitFallVel');
-  if (type === 'hitvelset') return withPlayer({ ...player, vx: num(controller, 'x') ?? player.vx, vy: num(controller, 'y') ?? player.vy }, hasNum(controller, 'x') || hasNum(controller, 'y'), 'HitVelSet');
+  if (type === 'hitvelset') return withPlayer({ ...player, vx: num(controller, 'x', player, input, commands, opponent) ?? player.vx, vy: num(controller, 'y', player, input, commands, opponent) ?? player.vy }, hasNum(controller, 'x', player, input, commands, opponent) || hasNum(controller, 'y', player, input, commands, opponent), 'HitVelSet');
   if (type === 'hitfalldamage') return hitFallDamage(player, controller);
   if (type === 'pause') return withExtendedPlayer(player, { pauseTime: num(controller, 'time') ?? 0 }, 'Pause');
   if (type === 'superpause') return withExtendedPlayer(player, { superPauseTime: num(controller, 'time') ?? 0 }, 'SuperPause');
@@ -520,13 +532,16 @@ function executeController(player: PlayerState, opponent: PlayerState, controlle
     return value === null ? withPlayer(player, false, 'SelfState') : withPlayer(enterState(player, opponent, value, cns), true, 'SelfState');
   }
   if (type === 'turn') return withPlayer({ ...player, facing: player.facing === 1 ? -1 : 1 }, true, 'Turn');
-  if (type === 'varset') return setVarController(player, controller);
-  if (type === 'varadd') return addVarController(player, controller);
+  if (type === 'varset') return setVarController(player, controller, input, commands, opponent);
+  if (type === 'varadd') return addVarController(player, controller, input, commands, opponent);
   if (type === 'varrangeset') return varRangeSet(player, controller);
   if (type === 'varrandom') return varRandom(player, controller);
   if (type === 'changestate') {
-    const value = num(controller, 'value');
-    return value === null ? withPlayer(player, false, 'ChangeState') : withPlayer(enterState(player, opponent, value, cns), true, 'ChangeState');
+    const value = num(controller, 'value', player, input, commands, opponent);
+    if (value === null) return withPlayer(player, false, 'ChangeState');
+    const entered = enterState(player, opponent, value, cns);
+    const ctrl = num(controller, 'ctrl', player, input, commands, opponent);
+    return withPlayer(ctrl === null ? entered : { ...entered, ctrl: ctrl !== 0 }, true, 'ChangeState');
   }
 
   const noOpName = RECOGNIZED_NO_OP_CONTROLLERS.get(type);
@@ -607,15 +622,32 @@ function hitFallDamage(player: PlayerState, controller: CnsStateController): Con
   return value === null ? withPlayer(player, false, 'HitFallDamage') : withPlayer({ ...player, life: Math.max(0, player.life - value) }, true, 'HitFallDamage');
 }
 
-function setVarController(player: PlayerState, controller: CnsStateController): ControllerResult {
-  const index = num(controller, 'v');
-  const value = num(controller, 'value');
+function setVarController(
+  player: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands: ReadonlySet<string> | undefined,
+  opponent: PlayerState,
+): ControllerResult {
+  const direct = findDirectVarAssignment(controller, player, input, commands, opponent);
+  if (direct) {
+    return withPlayer(setIndexedVar(player, direct.kind, direct.index, direct.value), true, 'VarSet');
+  }
+
+  const index = num(controller, 'v', player, input, commands, opponent);
+  const value = num(controller, 'value', player, input, commands, opponent);
   return index === null || value === null ? withPlayer(player, false, 'VarSet') : withPlayer(setVar(player, index, value), true, 'VarSet');
 }
 
-function addVarController(player: PlayerState, controller: CnsStateController): ControllerResult {
-  const index = num(controller, 'v');
-  const value = num(controller, 'value');
+function addVarController(
+  player: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands: ReadonlySet<string> | undefined,
+  opponent: PlayerState,
+): ControllerResult {
+  const index = num(controller, 'v', player, input, commands, opponent);
+  const value = num(controller, 'value', player, input, commands, opponent);
   return index === null || value === null ? withPlayer(player, false, 'VarAdd') : withPlayer(setVar(player, index, getVar(player, index) + value), true, 'VarAdd');
 }
 
@@ -649,12 +681,26 @@ function withPlayer(player: PlayerState, executed: boolean, name: string): Contr
   return { player, executed, name };
 }
 
-function num(controller: CnsStateController, key: string): number | null {
-  return cnsValueToNumber(controller.params[key.toLowerCase()]);
+function num(
+  controller: CnsStateController,
+  key: string,
+  player?: PlayerState,
+  input?: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+  opponent?: PlayerState,
+): number | null {
+  return cnsValueToNumber(controller.params[key.toLowerCase()], player, input, commands, opponent);
 }
 
-function hasNum(controller: CnsStateController, key: string): boolean {
-  return num(controller, key) !== null;
+function hasNum(
+  controller: CnsStateController,
+  key: string,
+  player?: PlayerState,
+  input?: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+  opponent?: PlayerState,
+): boolean {
+  return num(controller, key, player, input, commands, opponent) !== null;
 }
 
 function str(controller: CnsStateController, key: string): string | null {
@@ -662,11 +708,60 @@ function str(controller: CnsStateController, key: string): string | null {
   return value === undefined || value === null ? null : String(value).trim();
 }
 
-function cnsValueToNumber(value: CnsValue | undefined): number | null {
+function cnsValueToNumber(
+  value: CnsValue | undefined,
+  player?: PlayerState,
+  input?: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+  opponent?: PlayerState,
+): number | null {
   if (value === undefined || value === null) return null;
   if (typeof value === 'number') return value;
+  if (player && input) {
+    const evaluated = readNumberExpression(String(value), {
+      ...createTriggerContext(player, input, commands),
+      ...(opponent ? { opponent } : {}),
+    });
+    if (evaluated !== null) return evaluated;
+  }
   const parsed = Number(String(value).trim());
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function setIndexedVar(player: PlayerState, kind: 'var' | 'sysvar' | 'fvar', index: number, value: number): PlayerState {
+  if (kind === 'sysvar') {
+    const sysVars = (player as ExtendedPlayerState).sysVars ?? {};
+    return { ...player, sysVars: { ...sysVars, [index]: value } } as PlayerState;
+  }
+
+  if (kind === 'fvar') {
+    const fvars = (player as ExtendedPlayerState).fvars ?? {};
+    return { ...player, fvars: { ...fvars, [index]: value } } as PlayerState;
+  }
+
+  return setVar(player, index, value);
+}
+
+function findDirectVarAssignment(
+  controller: CnsStateController,
+  player: PlayerState,
+  input: CnsRuntimeInput,
+  commands: ReadonlySet<string> | undefined,
+  opponent: PlayerState,
+): { kind: 'var' | 'sysvar' | 'fvar'; index: number; value: number } | null {
+  for (const [key, value] of Object.entries(controller.params)) {
+    const match = key.match(/^(var|sysvar|fvar)\((\d+)\)$/i);
+    if (!match) continue;
+    const resolved = cnsValueToNumber(value, player, input, commands, opponent);
+    if (resolved === null) continue;
+    return {
+      kind: match[1].toLowerCase() as 'var' | 'sysvar' | 'fvar',
+      index: Number(match[2]),
+      value: resolved,
+    };
+  }
+
+  return null;
 }
 
 function mugenYToInternalY(y: number): number {

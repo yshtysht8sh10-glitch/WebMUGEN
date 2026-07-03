@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { zipSync, strToU8 } from 'fflate';
 import { readFile } from 'node:fs/promises';
+import { getAnimationDuration } from '../core/animation/AnimationDuration';
+import { stepCnsStateRuntime } from '../core/cns/CnsStateRuntime';
+import { createInitialGameState } from '../core/engine/GameState';
 import { createSampleCharacterAssets, loadAppCharacter } from './AppCharacterLoader';
 
 class FakeImageData {
@@ -83,6 +86,63 @@ describe('AppCharacterLoader', () => {
       expect(result.character?.cns.states.length).toBeGreaterThan(9);
       expect(result.character?.cmd.commands.length).toBeGreaterThan(8);
       expect(result.character?.sprites?.sprites.size ?? 0).toBeGreaterThan(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('applies T-H-M-A jump startup velocity instead of sticking in air state at ground level', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (path: RequestInfo | URL) => {
+      const url = String(path);
+      if (url === '/chars/T-H-M-A.zip') {
+        return new Response(await readFile('public/chars/T-H-M-A.zip'), { status: 200 });
+      }
+      if (url === '/chars/common.cmd') {
+        return new Response(await readFile('public/chars/common.cmd', 'utf8'), { status: 200 });
+      }
+      if (url === '/chars/common1.cns') {
+        return new Response(await readFile('public/chars/common1.cns', 'utf8'), { status: 200 });
+      }
+      return new Response('missing', { status: 404 });
+    }) as typeof fetch;
+
+    try {
+      const result = await loadAppCharacter('/chars/T-H-M-A.zip');
+      const character = result.character;
+      expect(character).not.toBeNull();
+
+      const state = createInitialGameState();
+      const jumpStartupDuration = getAnimationDuration(character!.air, 40) ?? 0;
+      const runtimeResult = stepCnsStateRuntime(
+        {
+          ...state,
+          players: [
+            {
+              ...state.players[0],
+              stateNo: 40,
+              animNo: 40,
+              animTime: jumpStartupDuration,
+              stateTime: 0,
+              ctrl: false,
+            },
+            state.players[1],
+          ],
+        },
+        character!.cns,
+        {
+          p1Commands: new Set(['holdup', 'up']),
+          p2Commands: new Set(),
+          getAnimationDuration: (animNo) => getAnimationDuration(character!.air, animNo),
+        },
+      );
+
+      expect(runtimeResult.state.players[0]).toMatchObject({
+        stateNo: 50,
+        prevStateNo: 40,
+        ctrl: true,
+      });
+      expect(runtimeResult.state.players[0].vy).toBeLessThan(0);
     } finally {
       globalThis.fetch = originalFetch;
     }

@@ -162,7 +162,7 @@ function getStringSource(rawName: string): StringSource | null {
   }
 }
 
-function readNumberExpression(rawExpression: string, context: CnsRuntimeTriggerContext): number | null {
+export function readNumberExpression(rawExpression: string, context: CnsRuntimeTriggerContext): number | null {
   const expression = stripOuterParentheses(normalizeName(rawExpression));
   const numericLiteral = Number(expression);
   if (Number.isFinite(numericLiteral)) return numericLiteral;

@@ -476,6 +476,59 @@ anim = 20
     expect(result.traces[0].executedControllers).toEqual(['VarSet', 'VarAdd', 'ChangeState']);
   });
 
+  it('evaluates CNS expressions in VelSet params and direct sysvar VarSet assignments', () => {
+    const cns = parseCnsText(`
+[Statedef 40]
+type = S
+physics = S
+anim = 40
+ctrl = 0
+
+[State 40, Sys]
+type = VarSet
+trigger1 = 1
+sysvar(1) = 1
+
+[State 40, JumpVelocity]
+type = VelSet
+trigger1 = 1
+x = ifelse(sysvar(1)=0, const(velocity.jump.neu.x), const(velocity.jump.fwd.x))
+y = const(velocity.jump.y)
+
+[State 40, Rise]
+type = ChangeState
+trigger1 = 1
+value = 50
+ctrl = 1
+
+[Statedef 50]
+type = A
+physics = A
+anim = 50
+`);
+
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime(
+      {
+        ...state,
+        players: [{ ...state.players[0], stateNo: 40, animNo: 40, ctrl: false }, state.players[1]],
+      },
+      cns,
+    );
+
+    expect(result.state.players[0]).toMatchObject({
+      stateNo: 50,
+      prevStateNo: 40,
+      vx: 3.2,
+      vy: -8.4,
+      ctrl: true,
+      stateType: 'A',
+      physics: 'A',
+    });
+    expect((result.state.players[0] as { sysVars?: Record<number, number> }).sysVars?.[1]).toBe(1);
+    expect(result.traces[0].executedControllers).toEqual(['VarSet', 'VelSet', 'ChangeState']);
+  });
+
   it('recognizes WinMUGEN state controllers that have runtime shims', () => {
     const controllerBlocks = recognizedControllerFixtures
       .map(({ type, params }) => `
