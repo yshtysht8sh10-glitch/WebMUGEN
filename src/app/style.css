@@ -171,3 +171,19 @@ canvas {
   line-height: 1.7;
   margin-top: 16px;
 }
+
+.control-help-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.control-help-grid h2 {
+  color: #f8fafc;
+  font-size: 15px;
+  margin: 0 0 6px;
+}
+
+.control-help-grid p {
+  margin: 2px 0;
+}

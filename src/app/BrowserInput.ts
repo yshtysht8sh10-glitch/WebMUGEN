@@ -147,22 +147,22 @@ function addGamepadKeys(keys: Set<string>, gamepads: readonly (Gamepad | null)[]
     }
 
     if (isGamepadButtonPressed(gamepad, 0)) {
-      keys.add(mapping.a);
-    }
-    if (isGamepadButtonPressed(gamepad, 1)) {
-      keys.add(mapping.b);
-    }
-    if (isGamepadButtonPressed(gamepad, 4)) {
-      keys.add(mapping.c);
-    }
-    if (isGamepadButtonPressed(gamepad, 2)) {
       keys.add(mapping.x);
     }
-    if (isGamepadButtonPressed(gamepad, 3)) {
+    if (isGamepadButtonPressed(gamepad, 1)) {
       keys.add(mapping.y);
     }
-    if (isGamepadButtonPressed(gamepad, 5)) {
+    if (isGamepadButtonPressed(gamepad, 4)) {
       keys.add(mapping.z);
+    }
+    if (isGamepadButtonPressed(gamepad, 2)) {
+      keys.add(mapping.a);
+    }
+    if (isGamepadButtonPressed(gamepad, 3)) {
+      keys.add(mapping.b);
+    }
+    if (isGamepadButtonPressed(gamepad, 5)) {
+      keys.add(mapping.c);
     }
   }
 }

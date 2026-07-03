@@ -325,9 +325,20 @@ export function WebMugenApp() {
       </section>
 
       <section className="help-panel">
-        <p>P1 keys: arrows move, A/S/D = a/b/c, Q/W/E = x/y/z</p>
-        <p>P2 keys: J/L/I/K move, F/G/H = a/b/c, U/O/P = x/y/z</p>
-        <p>System: R ラウンド再開（KO/TIME OVER後）</p>
+        <div className="control-help-grid">
+          <div>
+            <h2>Keyboard</h2>
+            <p>P1: arrows move, A/S/D = a/b/c, Q/W/E = x/y/z</p>
+            <p>P2: J/L/I/K move, F/G/H = a/b/c, U/O/P = x/y/z</p>
+          </div>
+          <div>
+            <h2>Controller</h2>
+            <p>1st gamepad = P1, 2nd gamepad = P2</p>
+            <p>D-pad / left stick move</p>
+            <p>buttons 0/1/4 = x/y/z, buttons 2/3/5 = a/b/c</p>
+          </div>
+        </div>
+        <p>System: R restarts the round after KO or TIME OVER.</p>
         <p>Place character files under <code>public/chars/kfm/</code> to try DEF-based loading.</p>
       </section>
     </div>

@@ -63,12 +63,24 @@ describe('BrowserInput', () => {
     expect(p1Input.buttons).toEqual(['a', 'x']);
   });
 
+  it('swaps gamepad face button groups so 0/1/4 are x/y/z and 2/3/5 are a/b/c', () => {
+    const topButtons = new BrowserInput(createFakeWindow(), {
+      getGamepads: () => [createGamepad({ pressedButtons: [0, 1, 4] })],
+    });
+    const bottomButtons = new BrowserInput(createFakeWindow(), {
+      getGamepads: () => [createGamepad({ pressedButtons: [2, 3, 5] })],
+    });
+
+    expect(keysToP1Input(topButtons.getPressedKeys()).buttons).toEqual(['x', 'y', 'z']);
+    expect(keysToP1Input(bottomButtons.getPressedKeys()).buttons).toEqual(['a', 'b', 'c']);
+  });
+
   it('maps the second gamepad to P2 keyboard-equivalent input', () => {
     const input = new BrowserInput(createFakeWindow(), {
       getGamepads: () => [
         null,
         createGamepad({ pressedButtons: [0] }),
-        createGamepad({ pressedButtons: [0, 14] }),
+        createGamepad({ pressedButtons: [2, 14] }),
       ],
     });
 
@@ -89,7 +101,8 @@ describe('BrowserInput', () => {
 
     const keys = input.getPressedKeys();
     expect(keys.has('ArrowRight')).toBe(true);
-    expect(keys.has('KeyA')).toBe(true);
+    expect(keys.has('KeyQ')).toBe(true);
+    expect(keys.has('KeyA')).toBe(false);
     expect(keys.has('KeyL')).toBe(false);
     expect(keys.has('KeyF')).toBe(false);
   });
