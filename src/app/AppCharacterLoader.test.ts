@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { getAnimationDuration } from '../core/animation/AnimationDuration';
 import { stepCnsStateRuntime } from '../core/cns/CnsStateRuntime';
 import { createInitialGameState } from '../core/engine/GameState';
+import { formatScenarioFrame, holdP1Keys, neutral, simulateCnsInputScenario } from '../testing/CnsInputScenarioSimulator';
 import { createSampleCharacterAssets, loadAppCharacter } from './AppCharacterLoader';
 
 class FakeImageData {
@@ -169,33 +170,19 @@ describe('AppCharacterLoader', () => {
       const character = result.character;
       expect(character).not.toBeNull();
 
-      let state = createInitialGameState();
-      for (let frame = 0; frame < 8; frame += 1) {
-        const commands = frame === 0 ? new Set(['holdup', 'up']) : new Set<string>();
-        const runtimeResult = stepCnsStateRuntime(state, character!.cns, {
-          p1Commands: commands,
-          p2Commands: new Set(),
-          getAnimationDuration: (animNo) => getAnimationDuration(character!.air, animNo),
-        });
-        state = {
-          ...runtimeResult.state,
-          players: [
-            {
-              ...runtimeResult.state.players[0],
-              stateTime: runtimeResult.state.players[0].stateTime + 1,
-              animTime: runtimeResult.state.players[0].animTime + 1,
-            },
-            runtimeResult.state.players[1],
-          ],
-        };
-      }
+      const simulation = simulateCnsInputScenario(character!, [
+        holdP1Keys(['ArrowUp'], 1),
+        neutral(7),
+      ]);
+      const finalFrame = simulation.frames[simulation.frames.length - 1];
+      expect(finalFrame, simulation.frames.map(formatScenarioFrame).join('\n')).toBeDefined();
 
-      expect(state.players[0]).toMatchObject({
+      expect(finalFrame!.p1).toMatchObject({
         stateNo: 50,
         prevStateNo: 40,
         ctrl: true,
       });
-      expect(state.players[0].vy).toBeLessThan(0);
+      expect(finalFrame!.p1.vy).toBeLessThan(0);
     } finally {
       globalThis.fetch = originalFetch;
     }
