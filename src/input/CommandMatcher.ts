@@ -10,6 +10,7 @@ export type CommandStep = {
 };
 
 const DEFAULT_BUTTON_BUFFER_TIME = 3;
+const DEFAULT_DOUBLE_TAP_DIRECTION_BUFFER_TIME = 3;
 
 export function parseCommandTokens(command: string): CommandToken[] {
   return parseCommandSteps(command).flatMap((step) => step.tokens);
@@ -38,11 +39,25 @@ function defaultBufferTime(command: CmdCommand): number {
     return DEFAULT_BUTTON_BUFFER_TIME;
   }
 
+  if (isDoubleTapDirectionCommand(steps)) {
+    return DEFAULT_DOUBLE_TAP_DIRECTION_BUFFER_TIME;
+  }
+
   return 0;
 }
 
 function isSingleButtonCommand(steps: readonly CommandStep[]): boolean {
   return steps.length === 1 && steps[0].tokens.every((token) => token.kind === 'button');
+}
+
+function isDoubleTapDirectionCommand(steps: readonly CommandStep[]): boolean {
+  if (steps.length !== 2) {
+    return false;
+  }
+
+  const first = singleNonHoldDirection(steps[0]);
+  const second = singleNonHoldDirection(steps[1]);
+  return first !== null && first === second;
 }
 
 function matchesCommandAtOffset(command: CmdCommand, frames: readonly InputFrame[]): boolean {

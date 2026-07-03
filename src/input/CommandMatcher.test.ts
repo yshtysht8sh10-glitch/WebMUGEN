@@ -104,6 +104,16 @@ describe('CommandMatcher', () => {
     expect(matchesCommand({ name: 'holdfwd', command: '/F', time: 1 }, buffer.getFrames())).toBe(false);
   });
 
+  it('keeps double-tap direction commands briefly active by default', () => {
+    const buffer = new InputBuffer(10);
+    buffer.push({ left: false, right: true, up: false, down: false, attack: false });
+    buffer.push({ left: false, right: false, up: false, down: false, attack: false });
+    buffer.push({ left: false, right: true, up: false, down: false, attack: false });
+    buffer.push({ left: false, right: false, up: false, down: false, attack: false });
+
+    expect(matchesCommand({ name: 'FF', command: 'F, F', time: 10 }, buffer.getFrames())).toBe(true);
+  });
+
   it('matches simultaneous diagonal hold command', () => {
     const buffer = new InputBuffer();
     buffer.push({ left: false, right: true, up: true, down: false, attack: false });
