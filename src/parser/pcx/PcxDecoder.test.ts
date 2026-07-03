@@ -58,6 +58,10 @@ describe('PcxDecoder', () => {
     expect(Array.from(decodeRle(new Uint8Array([0xc3, 7, 8])))).toEqual([7, 7, 7, 8]);
   });
 
+  it('stops decoding RLE after the requested output length', () => {
+    expect(Array.from(decodeRle(new Uint8Array([0xc2, 7, 0xc0]), 2))).toEqual([7, 7]);
+  });
+
   it('parses 8bit PCX header', () => {
     const header = parsePcxHeader(createFake8BitPcx());
 
@@ -85,6 +89,19 @@ describe('PcxDecoder', () => {
     ]);
     expect(image.width).toBe(3);
     expect(image.height).toBe(2);
+  });
+
+  it('ignores trailing RLE bytes after the required image rows are decoded', () => {
+    const pcx = createFake8BitPcx(false);
+    const withTrailingJunk = new Uint8Array(pcx.length + 1);
+    withTrailingJunk.set(pcx);
+    withTrailingJunk[pcx.length] = 0xc0;
+
+    const image = decodePcx(withTrailingJunk, {
+      externalPalette: createPalette(),
+    });
+
+    expect(Array.from(image.indexedPixels)).toEqual([1, 2, 3, 4, 5, 6]);
   });
 
   it('decodes PCX without embedded palette by using external shared palette', () => {

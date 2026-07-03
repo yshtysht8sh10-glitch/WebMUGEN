@@ -180,4 +180,15 @@ describe('SffSpritePackConverter', () => {
     expect(sprite?.yAxis).toBe(80);
     expect(sprite?.imageData.width).toBe(2);
   });
+
+  it('skips sprites with undecodable PCX data and keeps readable sprites', () => {
+    const doc = createDocument();
+    const badSprite = doc.sprites[2];
+    doc.data[badSprite.dataOffset] = 0;
+
+    const pack = convertSffDocumentToImageDataSpritePack(doc);
+
+    expect(pack.sprites.get('200,2')).toBeDefined();
+    expect(pack.sprites.get('200,4')).toBeUndefined();
+  });
 });

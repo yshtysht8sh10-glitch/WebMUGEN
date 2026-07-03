@@ -35,11 +35,14 @@ export function convertSffDocumentToImageDataSpritePack(
       continue;
     }
 
-    const pcx = decodePcx(rawData, {
+    const pcx = tryDecodeSpritePcx(rawData, {
       externalPalette: sharedPalette ?? undefined,
       preferExternalPalette: options.preferExternalPalette,
       paletteIndexOrder: options.paletteIndexOrder,
     });
+    if (!pcx) {
+      continue;
+    }
 
     sprites.set(spriteKey(sprite.groupNo, sprite.imageNo), {
       groupNo: sprite.groupNo,
@@ -53,6 +56,17 @@ export function convertSffDocumentToImageDataSpritePack(
   return {
     sprites: sprites as ImageDataSpritePack['sprites'],
   };
+}
+
+function tryDecodeSpritePcx(
+  rawData: Uint8Array,
+  options: Parameters<typeof decodePcx>[1],
+): ReturnType<typeof decodePcx> | null {
+  try {
+    return decodePcx(rawData, options);
+  } catch {
+    return null;
+  }
 }
 
 export function resolveLinkedSprite(

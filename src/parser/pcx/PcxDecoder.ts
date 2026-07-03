@@ -28,7 +28,8 @@ export function decodePcx(buffer: Uint8Array | ArrayBuffer, options: DecodePcxOp
 
   const imageDataStart = PCX_HEADER_SIZE;
   const imageDataEnd = embeddedPalette ? bytes.length - 1 - VGA_PALETTE_SIZE : bytes.length;
-  const decoded = decodeRle(bytes.subarray(imageDataStart, imageDataEnd));
+  const requiredDecodedBytes = header.bytesPerLine * header.height;
+  const decoded = decodeRle(bytes.subarray(imageDataStart, imageDataEnd), requiredDecodedBytes);
   const indexedPixels = extractIndexedPixels(decoded, header);
   const rgbaPixels = indexedToRgba(indexedPixels, palette, options.paletteIndexOrder ?? 'normal');
 
@@ -72,10 +73,10 @@ export function parsePcxHeader(bytes: Uint8Array): PcxHeader {
   };
 }
 
-export function decodeRle(data: Uint8Array): Uint8Array {
+export function decodeRle(data: Uint8Array, maxOutputBytes = Number.POSITIVE_INFINITY): Uint8Array {
   const output: number[] = [];
 
-  for (let i = 0; i < data.length; i += 1) {
+  for (let i = 0; i < data.length && output.length < maxOutputBytes; i += 1) {
     const value = data[i];
 
     if ((value & 0xc0) === 0xc0) {
@@ -85,7 +86,7 @@ export function decodeRle(data: Uint8Array): Uint8Array {
         throw new Error('Invalid PCX RLE stream.');
       }
       const repeatedValue = data[i];
-      for (let j = 0; j < count; j += 1) {
+      for (let j = 0; j < count && output.length < maxOutputBytes; j += 1) {
         output.push(repeatedValue);
       }
       continue;
