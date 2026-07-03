@@ -147,6 +147,59 @@ describe('AppCharacterLoader', () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it('routes T-H-M-A jump from idle through state 40 into controllable air state 50', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (path: RequestInfo | URL) => {
+      const url = String(path);
+      if (url === '/chars/T-H-M-A.zip') {
+        return new Response(await readFile('public/chars/T-H-M-A.zip'), { status: 200 });
+      }
+      if (url === '/chars/common.cmd') {
+        return new Response(await readFile('public/chars/common.cmd', 'utf8'), { status: 200 });
+      }
+      if (url === '/chars/common1.cns') {
+        return new Response(await readFile('public/chars/common1.cns', 'utf8'), { status: 200 });
+      }
+      return new Response('missing', { status: 404 });
+    }) as typeof fetch;
+
+    try {
+      const result = await loadAppCharacter('/chars/T-H-M-A.zip');
+      const character = result.character;
+      expect(character).not.toBeNull();
+
+      let state = createInitialGameState();
+      for (let frame = 0; frame < 8; frame += 1) {
+        const commands = frame === 0 ? new Set(['holdup', 'up']) : new Set<string>();
+        const runtimeResult = stepCnsStateRuntime(state, character!.cns, {
+          p1Commands: commands,
+          p2Commands: new Set(),
+          getAnimationDuration: (animNo) => getAnimationDuration(character!.air, animNo),
+        });
+        state = {
+          ...runtimeResult.state,
+          players: [
+            {
+              ...runtimeResult.state.players[0],
+              stateTime: runtimeResult.state.players[0].stateTime + 1,
+              animTime: runtimeResult.state.players[0].animTime + 1,
+            },
+            runtimeResult.state.players[1],
+          ],
+        };
+      }
+
+      expect(state.players[0]).toMatchObject({
+        stateNo: 50,
+        prevStateNo: 40,
+        ctrl: true,
+      });
+      expect(state.players[0].vy).toBeLessThan(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {

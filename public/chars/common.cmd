@@ -54,43 +54,6 @@ trigger1 = statetype = S
 trigger1 = ctrl
 value = 40
 
-[State -1, Common Jump Vertical Velocity]
-type = VelSet
-triggerall = command = "holdup"
-triggerall = command != "holdfwd"
-triggerall = command != "holdback"
-triggerall = command != "holddown"
-trigger1 = stateno = 40
-trigger1 = time = 0
-x = 0
-y = -8.4
-
-[State -1, Common Jump Forward Velocity]
-type = VelSet
-triggerall = command = "holdup"
-triggerall = command = "holdfwd"
-triggerall = command != "holddown"
-trigger1 = stateno = 40
-trigger1 = time = 0
-x = 3.2
-y = -8.4
-
-[State -1, Common Jump Back Velocity]
-type = VelSet
-triggerall = command = "holdup"
-triggerall = command = "holdback"
-triggerall = command != "holddown"
-trigger1 = stateno = 40
-trigger1 = time = 0
-x = -3.2
-y = -8.4
-
-[State -1, Common Jump Rising]
-type = ChangeState
-triggerall = stateno = 40
-trigger1 = time > 0
-value = 50
-
 [State -1, Common Crouch Start]
 type = ChangeState
 triggerall = command = "holddown"
