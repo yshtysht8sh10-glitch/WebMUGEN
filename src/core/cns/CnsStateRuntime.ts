@@ -164,8 +164,8 @@ function stepPlayer(
     trace.debugLines.push(...result.debugLines);
     if (debugEnabled) appendDebug(trace, `leave S${negativeStateNo} state=${next.stateNo}`);
     if (next.stateNo !== originalStateNo) {
-      if (debugEnabled) appendDebug(trace, `negative exit original=${originalStateNo} current=${next.stateNo}`);
-      return finishTrace(next, trace);
+      if (debugEnabled) appendDebug(trace, `negative changed original=${originalStateNo} current=${next.stateNo}`);
+      break;
     }
   }
 

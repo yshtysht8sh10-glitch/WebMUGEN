@@ -71,6 +71,38 @@ juggle = 6
     expect(result.traces[0].executedControllers).toContain('ChangeState');
   });
 
+  it('executes target state time-zero controllers after a command ChangeState', () => {
+    const cns = parseCnsText(`
+[Statedef -1]
+
+[State -1, Crouch]
+type = ChangeState
+trigger1 = command = "crouch"
+value = 10
+
+[Statedef 10]
+type = C
+physics = C
+
+[State 10, StartupAnim]
+type = ChangeAnim
+trigger1 = time = 0
+value = 10
+`);
+
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime(state, cns, { p1Commands: new Set(['crouch']) });
+
+    expect(result.state.players[0]).toMatchObject({
+      stateNo: 10,
+      stateType: 'C',
+      physics: 'C',
+      animNo: 10,
+      animTime: 0,
+    });
+    expect(result.traces[0].executedControllers).toEqual(['ChangeState', 'ChangeAnim']);
+  });
+
   it('returns from state 200 when MUGEN AnimTime reaches 0', () => {
     const cns = parseCnsText(`
 [Statedef 200]

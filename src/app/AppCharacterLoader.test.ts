@@ -187,6 +187,50 @@ describe('AppCharacterLoader', () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it('routes T-H-M-A crouch from idle through states 10 and 11, then back to stand on release', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (path: RequestInfo | URL) => {
+      const url = String(path);
+      if (url === '/chars/T-H-M-A.zip') {
+        return new Response(await readFile('public/chars/T-H-M-A.zip'), { status: 200 });
+      }
+      if (url === '/chars/common.cmd') {
+        return new Response(await readFile('public/chars/common.cmd', 'utf8'), { status: 200 });
+      }
+      if (url === '/chars/common1.cns') {
+        return new Response(await readFile('public/chars/common1.cns', 'utf8'), { status: 200 });
+      }
+      return new Response('missing', { status: 404 });
+    }) as typeof fetch;
+
+    try {
+      const result = await loadAppCharacter('/chars/T-H-M-A.zip');
+      const character = result.character;
+      expect(character).not.toBeNull();
+
+      const simulation = simulateCnsInputScenario(character!, [
+        holdP1Keys(['ArrowDown'], 12),
+        neutral(12),
+      ]);
+      const history = simulation.frames.map(formatScenarioFrame).join('\n');
+
+      expect(simulation.frames.some((frame) => frame.p1.stateNo === 10 && frame.p1.animNo === 10), history).toBe(true);
+      expect(simulation.frames.some((frame) => frame.p1.stateNo === 11 && frame.p1.animNo === 11), history).toBe(true);
+      expect(simulation.frames.some((frame) => frame.p1.stateNo === 12 && frame.p1.animNo === 12), history).toBe(true);
+
+      const finalFrame = simulation.frames[simulation.frames.length - 1];
+      expect(finalFrame, history).toBeDefined();
+      expect(finalFrame!.p1).toMatchObject({
+        stateNo: 0,
+        stateType: 'S',
+        animNo: 0,
+        ctrl: true,
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {

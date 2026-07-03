@@ -143,7 +143,7 @@ describe('CharacterLoader common movement routes', () => {
     expect(result.traces[0].executedControllers).toContain('ChangeState');
   });
 
-  it('runs common holddown route into State 10 at runtime', async () => {
+  it('runs common holddown route through State 10 startup into crouching State 11 at runtime', async () => {
     const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createCommonRouteTestFetcher());
     const result = stepCnsStateRuntime(createInitialGameState(), character.cns, {
       p1Commands: new Set(['holddown', 'down']),
@@ -151,11 +151,11 @@ describe('CharacterLoader common movement routes', () => {
     });
 
     expect(result.state.players[0]).toMatchObject({
-      stateNo: 10,
-      animNo: 10,
+      stateNo: 11,
+      animNo: 11,
       stateType: 'C',
       physics: 'C',
-      ctrl: false,
+      ctrl: true,
     });
     expect(result.traces[0].executedControllers).toContain('ChangeState');
   });

@@ -92,7 +92,7 @@ export function neutral(frames: number): CnsInputScenarioStep {
 }
 
 export function formatScenarioFrame(frame: CnsInputScenarioFrame): string {
-  const p1Exec = frame.traces[0]?.executedControllers.join(',') || '-';
+  const p1Exec = frame.traces[0]?.executedControllers.filter((name) => !name.startsWith('dbg ')).join(',') || '-';
   return [
     `f=${frame.frame}`,
     `cmd=${frame.p1Commands.join(',') || '-'}`,
