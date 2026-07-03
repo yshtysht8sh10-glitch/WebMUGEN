@@ -231,4 +231,203 @@ anim = 40
     });
     expect(result.traces[0].executedControllers).toContain('ChangeState');
   });
+
+  it('keeps a simple attack command long enough to survive crouch startup routing', () => {
+    const cmd = parseCmdText(`
+[Command]
+name = "a"
+command = a
+time = 1
+
+[Command]
+name = "holddown"
+command = /$D
+time = 1
+`);
+    const cns = parseCnsText(`
+[Statedef -1]
+
+[State -1, Common Crouch Start]
+type = ChangeState
+triggerall = command = "holddown"
+trigger1 = statetype = S
+trigger1 = ctrl
+value = 10
+
+[State -1, Common Crouch Hold]
+type = ChangeState
+triggerall = command = "holddown"
+trigger1 = stateno = 10
+value = 11
+
+[State -1, Crouch Attack]
+type = ChangeState
+triggerall = command = "a"
+triggerall = command = "holddown"
+trigger1 = statetype = C
+trigger1 = ctrl
+value = 430
+
+[Statedef 0]
+type = S
+movetype = I
+physics = S
+ctrl = 1
+anim = 0
+
+[Statedef 10]
+type = C
+movetype = I
+physics = C
+ctrl = 0
+anim = 10
+
+[Statedef 11]
+type = C
+movetype = I
+physics = C
+ctrl = 1
+anim = 11
+
+[Statedef 430]
+type = C
+movetype = A
+physics = C
+ctrl = 0
+anim = 430
+`);
+
+    const buffer = new InputBuffer();
+    const firstInput = { left: false, right: false, up: false, down: true, attack: false, buttons: ['a'] };
+    buffer.push(firstInput);
+    const firstCommands = resolveCommands(cmd, firstInput, buffer).activeCommandNames;
+    const enteredCrouch = stepCnsStateRuntime(createInitialGameState(), cns, {
+      p1Commands: firstCommands,
+      p2Commands: new Set(),
+    });
+
+    const secondInput = { left: false, right: false, up: false, down: true, attack: false };
+    buffer.push(secondInput);
+    const secondCommands = resolveCommands(cmd, secondInput, buffer).activeCommandNames;
+    const attacked = stepCnsStateRuntime(enteredCrouch.state, cns, {
+      p1Commands: secondCommands,
+      p2Commands: new Set(),
+    });
+
+    expect(enteredCrouch.state.players[0].stateNo).toBe(430);
+    expect(secondCommands.has('a')).toBe(true);
+    expect(attacked.state.players[0]).toMatchObject({
+      stateNo: 430,
+      animNo: 430,
+      moveType: 'A',
+    });
+  });
+
+  it('keeps a jump attack button active until jump startup reaches air control', () => {
+    const cmd = parseCmdText(`
+[Command]
+name = "a"
+command = a
+time = 1
+
+[Command]
+name = "holdup"
+command = /$U
+time = 1
+`);
+    const cns = parseCnsText(`
+[Statedef -1]
+
+[State -1, Jump]
+type = ChangeState
+triggerall = command = "holdup"
+trigger1 = statetype = S
+trigger1 = ctrl
+value = 40
+
+[State -1, Jump Attack]
+type = ChangeState
+triggerall = command = "a"
+trigger1 = statetype = A
+trigger1 = ctrl
+value = 630
+
+[Statedef 0]
+type = S
+movetype = I
+physics = S
+ctrl = 1
+anim = 0
+
+[Statedef 40]
+type = S
+movetype = I
+physics = S
+ctrl = 0
+anim = 40
+
+[State 40, Rise]
+type = ChangeState
+trigger1 = time > 0
+value = 50
+ctrl = 1
+
+[Statedef 50]
+type = A
+movetype = I
+physics = A
+ctrl = 1
+anim = 50
+
+[Statedef 630]
+type = A
+movetype = A
+physics = A
+ctrl = 0
+anim = 630
+`);
+
+    const buffer = new InputBuffer();
+    const firstInput = { left: false, right: false, up: true, down: false, attack: false, buttons: ['a'] };
+    buffer.push(firstInput);
+    let state = stepCnsStateRuntime(createInitialGameState(), cns, {
+      p1Commands: resolveCommands(cmd, firstInput, buffer).activeCommandNames,
+      p2Commands: new Set(),
+    }).state;
+    state = {
+      ...state,
+      players: [{ ...state.players[0], stateTime: 1 }, state.players[1]],
+    };
+
+    const secondInput = { left: false, right: false, up: false, down: false, attack: false };
+    buffer.push(secondInput);
+    state = stepCnsStateRuntime(state, cns, {
+      p1Commands: resolveCommands(cmd, secondInput, buffer).activeCommandNames,
+      p2Commands: new Set(),
+    }).state;
+    state = {
+      ...state,
+      players: [{ ...state.players[0], stateTime: 1 }, state.players[1]],
+    };
+
+    const thirdInput = { left: false, right: false, up: false, down: false, attack: false };
+    buffer.push(thirdInput);
+    const thirdCommands = resolveCommands(cmd, thirdInput, buffer).activeCommandNames;
+    state = stepCnsStateRuntime(state, cns, {
+      p1Commands: thirdCommands,
+      p2Commands: new Set(),
+    }).state;
+
+    expect(thirdCommands.has('a')).toBe(true);
+    expect(state).toMatchObject({
+      players: [
+        expect.objectContaining({
+          stateNo: 630,
+          animNo: 630,
+          moveType: 'A',
+        }),
+        expect.anything(),
+      ],
+    });
+  });
 });

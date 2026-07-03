@@ -9,6 +9,8 @@ export type CommandStep = {
   tokens: CommandToken[];
 };
 
+const DEFAULT_BUTTON_BUFFER_TIME = 3;
+
 export function parseCommandTokens(command: string): CommandToken[] {
   return parseCommandSteps(command).flatMap((step) => step.tokens);
 }
@@ -22,12 +24,25 @@ export function parseCommandSteps(command: string): CommandStep[] {
 }
 
 export function matchesCommand(command: CmdCommand, frames: readonly InputFrame[]): boolean {
-  const bufferTime = Math.max(0, command.bufferTime ?? 0);
+  const bufferTime = Math.max(0, command.bufferTime ?? defaultBufferTime(command));
   for (let offset = 0; offset <= bufferTime; offset += 1) {
     if (matchesCommandAtOffset(command, frames.slice(offset))) return true;
   }
 
   return false;
+}
+
+function defaultBufferTime(command: CmdCommand): number {
+  const steps = parseCommandSteps(command.command);
+  if (isSingleButtonCommand(steps)) {
+    return DEFAULT_BUTTON_BUFFER_TIME;
+  }
+
+  return 0;
+}
+
+function isSingleButtonCommand(steps: readonly CommandStep[]): boolean {
+  return steps.length === 1 && steps[0].tokens.every((token) => token.kind === 'button');
 }
 
 function matchesCommandAtOffset(command: CmdCommand, frames: readonly InputFrame[]): boolean {

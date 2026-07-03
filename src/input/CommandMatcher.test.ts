@@ -87,6 +87,23 @@ describe('CommandMatcher', () => {
     expect(matchesCommand({ name: 'x', command: 'x', time: 1, bufferTime: 1 }, buffer.getFrames())).toBe(false);
   });
 
+  it('keeps simple button commands briefly active by default', () => {
+    const buffer = new InputBuffer(10);
+    buffer.push({ left: false, right: false, up: false, down: false, attack: false, buttons: ['x'] });
+    buffer.push({ left: false, right: false, up: false, down: false, attack: false });
+    buffer.push({ left: false, right: false, up: false, down: false, attack: false });
+
+    expect(matchesCommand({ name: 'x', command: 'x', time: 1 }, buffer.getFrames())).toBe(true);
+  });
+
+  it('does not apply the default button buffer to direction commands', () => {
+    const buffer = new InputBuffer(10);
+    buffer.push({ left: false, right: true, up: false, down: false, attack: false });
+    buffer.push({ left: false, right: false, up: false, down: false, attack: false });
+
+    expect(matchesCommand({ name: 'holdfwd', command: '/F', time: 1 }, buffer.getFrames())).toBe(false);
+  });
+
   it('matches simultaneous diagonal hold command', () => {
     const buffer = new InputBuffer();
     buffer.push({ left: false, right: true, up: true, down: false, attack: false });
