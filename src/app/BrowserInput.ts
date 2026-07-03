@@ -125,8 +125,10 @@ function keysToButtons(keys: ReadonlySet<string>, mapping: Readonly<Record<strin
 }
 
 function addGamepadKeys(keys: Set<string>, gamepads: readonly (Gamepad | null)[]): void {
+  const connectedGamepads = gamepads.filter((gamepad): gamepad is Gamepad => Boolean(gamepad));
+
   for (const [playerIndex, mapping] of GAMEPAD_KEY_MAPS.entries()) {
-    const gamepad = gamepads[playerIndex];
+    const gamepad = connectedGamepads[playerIndex];
     if (!gamepad) {
       continue;
     }

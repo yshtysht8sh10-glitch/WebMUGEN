@@ -65,7 +65,11 @@ describe('BrowserInput', () => {
 
   it('maps the second gamepad to P2 keyboard-equivalent input', () => {
     const input = new BrowserInput(createFakeWindow(), {
-      getGamepads: () => [null, createGamepad({ pressedButtons: [0, 14] })],
+      getGamepads: () => [
+        null,
+        createGamepad({ pressedButtons: [0] }),
+        createGamepad({ pressedButtons: [0, 14] }),
+      ],
     });
 
     const keys = input.getPressedKeys();
@@ -76,6 +80,18 @@ describe('BrowserInput', () => {
     expect(p2Input.left).toBe(true);
     expect(p2Input.attack).toBe(true);
     expect(p2Input.buttons).toEqual(['a']);
+  });
+
+  it('maps the first connected gamepad to P1 even when browser slots start with null', () => {
+    const input = new BrowserInput(createFakeWindow(), {
+      getGamepads: () => [null, createGamepad({ axes: [1, 0], pressedButtons: [0] })],
+    });
+
+    const keys = input.getPressedKeys();
+    expect(keys.has('ArrowRight')).toBe(true);
+    expect(keys.has('KeyA')).toBe(true);
+    expect(keys.has('KeyL')).toBe(false);
+    expect(keys.has('KeyF')).toBe(false);
   });
 });
 
