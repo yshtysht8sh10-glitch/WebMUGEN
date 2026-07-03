@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BrowserInput, keysToP1Input, keysToP2Input } from './BrowserInput';
+import { BrowserInput, DEFAULT_INPUT_CONFIG, keysToP1Input, keysToP2Input, type InputConfig } from './BrowserInput';
 
 describe('BrowserInput', () => {
   it('tracks pressed keys', () => {
@@ -47,6 +47,24 @@ describe('BrowserInput', () => {
     expect(input.buttons).toEqual(['a', 'x']);
   });
 
+  it('maps keyboard input through a custom config', () => {
+    const config: InputConfig = {
+      players: [
+        {
+          keyboard: { ...DEFAULT_INPUT_CONFIG.players[0].keyboard, right: 'KeyR', a: 'KeyM' },
+          gamepad: DEFAULT_INPUT_CONFIG.players[0].gamepad,
+        },
+        DEFAULT_INPUT_CONFIG.players[1],
+      ],
+    };
+
+    const input = keysToP1Input(new Set(['KeyR', 'KeyM']), config);
+
+    expect(input.right).toBe(true);
+    expect(input.attack).toBe(true);
+    expect(input.buttons).toEqual(['a']);
+  });
+
   it('maps the first gamepad to P1 keyboard-equivalent input', () => {
     const input = new BrowserInput(createFakeWindow(), {
       getGamepads: () => [createGamepad({ axes: [1, 0], pressedButtons: [0, 2] })],
@@ -73,6 +91,23 @@ describe('BrowserInput', () => {
 
     expect(keysToP1Input(topButtons.getPressedKeys()).buttons).toEqual(['x', 'y', 'z']);
     expect(keysToP1Input(bottomButtons.getPressedKeys()).buttons).toEqual(['a', 'b', 'c']);
+  });
+
+  it('maps gamepad buttons through a custom config', () => {
+    const config: InputConfig = {
+      players: [
+        {
+          keyboard: DEFAULT_INPUT_CONFIG.players[0].keyboard,
+          gamepad: { ...DEFAULT_INPUT_CONFIG.players[0].gamepad, a: 7 },
+        },
+        DEFAULT_INPUT_CONFIG.players[1],
+      ],
+    };
+    const input = new BrowserInput(createFakeWindow(), {
+      getGamepads: () => [createGamepad({ pressedButtons: [7] })],
+    });
+
+    expect(keysToP1Input(input.getPressedKeys(config), config).buttons).toEqual(['a']);
   });
 
   it('maps the second gamepad to P2 keyboard-equivalent input', () => {

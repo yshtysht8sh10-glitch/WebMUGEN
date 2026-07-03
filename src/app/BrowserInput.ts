@@ -3,6 +3,72 @@ import type { PlayerInput } from '../core/engine/types';
 type KeyboardEventTarget = Pick<Window, 'addEventListener' | 'removeEventListener'>;
 type GamepadReader = Pick<Navigator, 'getGamepads'>;
 
+export type PlayerKeyboardMapping = {
+  left: string;
+  right: string;
+  up: string;
+  down: string;
+  a: string;
+  b: string;
+  c: string;
+  x: string;
+  y: string;
+  z: string;
+};
+
+export type PlayerGamepadMapping = {
+  a: number;
+  b: number;
+  c: number;
+  x: number;
+  y: number;
+  z: number;
+};
+
+export type PlayerInputMapping = {
+  keyboard: PlayerKeyboardMapping;
+  gamepad: PlayerGamepadMapping;
+};
+
+export type InputConfig = {
+  players: readonly [PlayerInputMapping, PlayerInputMapping];
+};
+
+export const DEFAULT_INPUT_CONFIG: InputConfig = {
+  players: [
+    {
+      keyboard: {
+        left: 'ArrowLeft',
+        right: 'ArrowRight',
+        up: 'ArrowUp',
+        down: 'ArrowDown',
+        a: 'KeyA',
+        b: 'KeyS',
+        c: 'KeyD',
+        x: 'KeyQ',
+        y: 'KeyW',
+        z: 'KeyE',
+      },
+      gamepad: { x: 0, y: 1, z: 4, a: 2, b: 3, c: 5 },
+    },
+    {
+      keyboard: {
+        left: 'KeyJ',
+        right: 'KeyL',
+        up: 'KeyI',
+        down: 'KeyK',
+        a: 'KeyF',
+        b: 'KeyG',
+        c: 'KeyH',
+        x: 'KeyU',
+        y: 'KeyO',
+        z: 'KeyP',
+      },
+      gamepad: { x: 0, y: 1, z: 4, a: 2, b: 3, c: 5 },
+    },
+  ],
+};
+
 export class BrowserInput {
   private readonly pressedKeys = new Set<string>();
 
@@ -15,9 +81,9 @@ export class BrowserInput {
     this.target.addEventListener('blur', this.handleBlur);
   }
 
-  getPressedKeys(): ReadonlySet<string> {
+  getPressedKeys(config: InputConfig = DEFAULT_INPUT_CONFIG): ReadonlySet<string> {
     const keys = new Set(this.pressedKeys);
-    addGamepadKeys(keys, this.gamepads?.getGamepads() ?? []);
+    addGamepadKeys(keys, this.gamepads?.getGamepads() ?? [], config);
     return keys;
   }
 
@@ -47,122 +113,58 @@ export class BrowserInput {
   };
 }
 
-export function keysToP1Input(keys: ReadonlySet<string>): PlayerInput {
-  return {
-    left: keys.has('ArrowLeft'),
-    right: keys.has('ArrowRight'),
-    up: keys.has('ArrowUp'),
-    down: keys.has('ArrowDown'),
-    attack: keys.has('KeyA'),
-    buttons: keysToButtons(keys, P1_BUTTON_KEYS),
-  };
+export function keysToP1Input(keys: ReadonlySet<string>, config: InputConfig = DEFAULT_INPUT_CONFIG): PlayerInput {
+  return keysToPlayerInput(keys, config.players[0].keyboard);
 }
 
-export function keysToP2Input(keys: ReadonlySet<string>): PlayerInput {
-  return {
-    left: keys.has('KeyJ'),
-    right: keys.has('KeyL'),
-    up: keys.has('KeyI'),
-    down: keys.has('KeyK'),
-    attack: keys.has('KeyF'),
-    buttons: keysToButtons(keys, P2_BUTTON_KEYS),
-  };
+export function keysToP2Input(keys: ReadonlySet<string>, config: InputConfig = DEFAULT_INPUT_CONFIG): PlayerInput {
+  return keysToPlayerInput(keys, config.players[1].keyboard);
 }
 
-const P1_BUTTON_KEYS: Readonly<Record<string, string>> = {
-  KeyA: 'a',
-  KeyS: 'b',
-  KeyD: 'c',
-  KeyQ: 'x',
-  KeyW: 'y',
-  KeyE: 'z',
-};
-
-const P2_BUTTON_KEYS: Readonly<Record<string, string>> = {
-  KeyF: 'a',
-  KeyG: 'b',
-  KeyH: 'c',
-  KeyU: 'x',
-  KeyO: 'y',
-  KeyP: 'z',
-};
+function keysToPlayerInput(keys: ReadonlySet<string>, mapping: PlayerKeyboardMapping): PlayerInput {
+  return {
+    left: keys.has(mapping.left),
+    right: keys.has(mapping.right),
+    up: keys.has(mapping.up),
+    down: keys.has(mapping.down),
+    attack: keys.has(mapping.a),
+    buttons: keysToButtons(keys, mapping),
+  };
+}
 
 const GAMEPAD_AXIS_THRESHOLD = 0.45;
 const GAMEPAD_BUTTON_THRESHOLD = 0.5;
 
-const P1_GAMEPAD_KEYS = {
-  left: 'ArrowLeft',
-  right: 'ArrowRight',
-  up: 'ArrowUp',
-  down: 'ArrowDown',
-  a: 'KeyA',
-  b: 'KeyS',
-  c: 'KeyD',
-  x: 'KeyQ',
-  y: 'KeyW',
-  z: 'KeyE',
-} as const;
-
-const P2_GAMEPAD_KEYS = {
-  left: 'KeyJ',
-  right: 'KeyL',
-  up: 'KeyI',
-  down: 'KeyK',
-  a: 'KeyF',
-  b: 'KeyG',
-  c: 'KeyH',
-  x: 'KeyU',
-  y: 'KeyO',
-  z: 'KeyP',
-} as const;
-
-const GAMEPAD_KEY_MAPS = [P1_GAMEPAD_KEYS, P2_GAMEPAD_KEYS] as const;
-
-function keysToButtons(keys: ReadonlySet<string>, mapping: Readonly<Record<string, string>>): string[] {
-  return Object.entries(mapping)
-    .filter(([code]) => keys.has(code))
-    .map(([, button]) => button);
+function keysToButtons(keys: ReadonlySet<string>, mapping: PlayerKeyboardMapping): string[] {
+  return (['a', 'b', 'c', 'x', 'y', 'z'] as const).filter((button) => keys.has(mapping[button]));
 }
 
-function addGamepadKeys(keys: Set<string>, gamepads: readonly (Gamepad | null)[]): void {
+function addGamepadKeys(keys: Set<string>, gamepads: readonly (Gamepad | null)[], config: InputConfig): void {
   const connectedGamepads = gamepads.filter((gamepad): gamepad is Gamepad => Boolean(gamepad));
 
-  for (const [playerIndex, mapping] of GAMEPAD_KEY_MAPS.entries()) {
+  for (const [playerIndex, mapping] of config.players.entries()) {
     const gamepad = connectedGamepads[playerIndex];
     if (!gamepad) {
       continue;
     }
 
     if ((gamepad.axes[0] ?? 0) <= -GAMEPAD_AXIS_THRESHOLD || isGamepadButtonPressed(gamepad, 14)) {
-      keys.add(mapping.left);
+      keys.add(mapping.keyboard.left);
     }
     if ((gamepad.axes[0] ?? 0) >= GAMEPAD_AXIS_THRESHOLD || isGamepadButtonPressed(gamepad, 15)) {
-      keys.add(mapping.right);
+      keys.add(mapping.keyboard.right);
     }
     if ((gamepad.axes[1] ?? 0) <= -GAMEPAD_AXIS_THRESHOLD || isGamepadButtonPressed(gamepad, 12)) {
-      keys.add(mapping.up);
+      keys.add(mapping.keyboard.up);
     }
     if ((gamepad.axes[1] ?? 0) >= GAMEPAD_AXIS_THRESHOLD || isGamepadButtonPressed(gamepad, 13)) {
-      keys.add(mapping.down);
+      keys.add(mapping.keyboard.down);
     }
 
-    if (isGamepadButtonPressed(gamepad, 0)) {
-      keys.add(mapping.x);
-    }
-    if (isGamepadButtonPressed(gamepad, 1)) {
-      keys.add(mapping.y);
-    }
-    if (isGamepadButtonPressed(gamepad, 4)) {
-      keys.add(mapping.z);
-    }
-    if (isGamepadButtonPressed(gamepad, 2)) {
-      keys.add(mapping.a);
-    }
-    if (isGamepadButtonPressed(gamepad, 3)) {
-      keys.add(mapping.b);
-    }
-    if (isGamepadButtonPressed(gamepad, 5)) {
-      keys.add(mapping.c);
+    for (const button of ['a', 'b', 'c', 'x', 'y', 'z'] as const) {
+      if (isGamepadButtonPressed(gamepad, mapping.gamepad[button])) {
+        keys.add(mapping.keyboard[button]);
+      }
     }
   }
 }

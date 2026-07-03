@@ -187,3 +187,89 @@ canvas {
 .control-help-grid p {
   margin: 2px 0;
 }
+
+.input-config-panel {
+  border: 1px solid #334155;
+  background: #0f172a;
+  margin-top: 16px;
+  padding: 16px;
+}
+
+.input-config-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.input-config-header h2,
+.input-config-card h3 {
+  color: #f8fafc;
+  margin: 0;
+}
+
+.input-config-header h2 {
+  font-size: 16px;
+}
+
+.input-config-header button,
+.input-config-row button {
+  background: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  color: #f8fafc;
+  cursor: pointer;
+  padding: 7px 10px;
+}
+
+.input-config-header button:hover,
+.input-config-row button:hover,
+.input-config-row button.active {
+  background: #334155;
+}
+
+.input-config-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+}
+
+.input-config-card {
+  border: 1px solid #334155;
+  background: #020617;
+  padding: 12px;
+}
+
+.input-config-card h3 {
+  font-size: 15px;
+  margin-bottom: 10px;
+}
+
+.input-config-rows {
+  display: grid;
+  gap: 6px;
+}
+
+.input-config-row {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 42px minmax(96px, 1fr) 96px;
+}
+
+.input-config-row span,
+.input-config-row label {
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.input-config-row input {
+  background: #0f172a;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  color: #f8fafc;
+  margin-left: 6px;
+  padding: 6px;
+  width: 44px;
+}

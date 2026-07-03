@@ -3,7 +3,14 @@ import { CanvasRenderer } from '../renderer/canvas2d/CanvasRenderer';
 import { createInitialGameState } from '../core/engine/GameState';
 import type { GameState } from '../core/engine/types';
 import { createSampleCharacterAssets, loadAppCharacter } from './AppCharacterLoader';
-import { BrowserInput, keysToP1Input, keysToP2Input } from './BrowserInput';
+import {
+  BrowserInput,
+  DEFAULT_INPUT_CONFIG,
+  keysToP1Input,
+  keysToP2Input,
+  type InputConfig,
+  type PlayerInputMapping,
+} from './BrowserInput';
 import { createInputDebugSnapshot } from '../input/InputDebugInfo';
 import { formatInputDebugOverlay } from './InputDebugOverlay';
 import { applyFallbackControls } from '../core/engine/FallbackControls';
@@ -50,6 +57,7 @@ import { formatCmdControlHelp } from './CmdControlHelp';
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/T-H-M-A.zip';
 const ENABLE_RUNTIME_FALLBACKS = false;
 const RUNTIME_HISTORY_LIMIT = 500;
+const INPUT_CONFIG_STORAGE_KEY = 'webmugen.inputConfig.v1';
 
 type DebugTab = 'static' | 'runtime' | 'ideas';
 
@@ -80,6 +88,7 @@ export function WebMugenApp() {
   const p2CommandBufferRef = useRef(new InputBuffer(60));
   const restartPressedRef = useRef(false);
   const inputRef = useRef<BrowserInput | null>(null);
+  const inputConfigRef = useRef<InputConfig>(loadInputConfig());
   const frameNoRef = useRef(0);
   const runtimeHistoryRef = useRef<string[]>([]);
   const lastRuntimeSignatureRef = useRef('');
@@ -96,6 +105,7 @@ export function WebMugenApp() {
   const [runtimeHistoryLines, setRuntimeHistoryLines] = useState<string[]>(['操作すると、ここにタイムスタンプ付きで内部処理ログが残ります。']);
   const [activeDebugTab, setActiveDebugTab] = useState<DebugTab>('static');
   const [copyStatus, setCopyStatus] = useState('');
+  const [inputConfig, setInputConfigState] = useState<InputConfig>(inputConfigRef.current);
 
   useEffect(() => {
     let disposed = false;
@@ -136,10 +146,11 @@ export function WebMugenApp() {
       const tick = () => {
         frameNoRef.current += 1;
         const input = inputRef.current;
-        const pressedKeys = input?.getPressedKeys() ?? new Set<string>();
+        const config = inputConfigRef.current;
+        const pressedKeys = input?.getPressedKeys(config) ?? new Set<string>();
         const inputSnapshot = createInputDebugSnapshot(pressedKeys);
-        const p1Input = keysToP1Input(pressedKeys);
-        const p2Input = keysToP2Input(pressedKeys);
+        const p1Input = keysToP1Input(pressedKeys, config);
+        const p2Input = keysToP2Input(pressedKeys, config);
         p1CommandBufferRef.current.push(p1Input);
         p2CommandBufferRef.current.push(p2Input);
         const p1Commands = normalizeResolvedCommands(resolveCommands(character.cmd, p1Input, p1CommandBufferRef.current).activeCommandNames);
@@ -281,6 +292,14 @@ export function WebMugenApp() {
     }
   };
 
+  const setInputConfig = (nextConfig: InputConfig) => {
+    inputConfigRef.current = nextConfig;
+    setInputConfigState(nextConfig);
+    saveInputConfig(nextConfig);
+    p1CommandBufferRef.current.clear();
+    p2CommandBufferRef.current.clear();
+  };
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -328,21 +347,250 @@ export function WebMugenApp() {
         <div className="control-help-grid">
           <div>
             <h2>Keyboard</h2>
-            <p>P1: arrows move, A/S/D = a/b/c, Q/W/E = x/y/z</p>
-            <p>P2: J/L/I/K move, F/G/H = a/b/c, U/O/P = x/y/z</p>
+            <p>P1: {formatKeyboardMapping(inputConfig.players[0])}</p>
+            <p>P2: {formatKeyboardMapping(inputConfig.players[1])}</p>
           </div>
           <div>
             <h2>Controller</h2>
             <p>1st gamepad = P1, 2nd gamepad = P2</p>
             <p>D-pad / left stick move</p>
-            <p>buttons 0/1/4 = x/y/z, buttons 2/3/5 = a/b/c</p>
+            <p>P1: {formatGamepadMapping(inputConfig.players[0])}</p>
+            <p>P2: {formatGamepadMapping(inputConfig.players[1])}</p>
           </div>
         </div>
         <p>System: R restarts the round after KO or TIME OVER.</p>
         <p>Place character files under <code>public/chars/kfm/</code> to try DEF-based loading.</p>
       </section>
+
+      <InputConfigPanel
+        config={inputConfig}
+        onChange={setInputConfig}
+      />
     </div>
   );
+}
+
+const INPUT_ACTIONS = [
+  { key: 'left', label: 'Left' },
+  { key: 'right', label: 'Right' },
+  { key: 'up', label: 'Up' },
+  { key: 'down', label: 'Down' },
+  { key: 'a', label: 'a' },
+  { key: 'b', label: 'b' },
+  { key: 'c', label: 'c' },
+  { key: 'x', label: 'x' },
+  { key: 'y', label: 'y' },
+  { key: 'z', label: 'z' },
+] as const;
+
+type InputAction = typeof INPUT_ACTIONS[number]['key'];
+
+function InputConfigPanel({
+  config,
+  onChange,
+}: {
+  config: InputConfig;
+  onChange: (config: InputConfig) => void;
+}) {
+  return (
+    <section className="input-config-panel">
+      <div className="input-config-header">
+        <h2>Input Config</h2>
+        <button type="button" onClick={() => onChange(cloneInputConfig(DEFAULT_INPUT_CONFIG))}>
+          Reset
+        </button>
+      </div>
+      <div className="input-config-grid">
+        {config.players.map((player, playerIndex) => (
+          <PlayerInputConfig
+            key={playerIndex}
+            player={player}
+            playerIndex={playerIndex}
+            onChange={(nextPlayer) => onChange(replacePlayerInputConfig(config, playerIndex, nextPlayer))}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PlayerInputConfig({
+  player,
+  playerIndex,
+  onChange,
+}: {
+  player: PlayerInputMapping;
+  playerIndex: number;
+  onChange: (player: PlayerInputMapping) => void;
+}) {
+  return (
+    <section className="input-config-card">
+      <h3>P{playerIndex + 1}</h3>
+      <div className="input-config-rows">
+        {INPUT_ACTIONS.map((action) => (
+          <div className="input-config-row" key={action.key}>
+            <span>{action.label}</span>
+            <KeyCaptureButton
+              value={player.keyboard[action.key]}
+              onChange={(code) => onChange({
+                ...player,
+                keyboard: { ...player.keyboard, [action.key]: code },
+              })}
+            />
+            <label>
+              Pad
+              <input
+                min={0}
+                max={31}
+                type="number"
+                value={player.gamepad[action.key]}
+                onChange={(event) => onChange({
+                  ...player,
+                  gamepad: {
+                    ...player.gamepad,
+                    [action.key]: clampGamepadButton(Number(event.currentTarget.value)),
+                  },
+                })}
+              />
+            </label>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function KeyCaptureButton({ value, onChange }: { value: string; onChange: (code: string) => void }) {
+  const [capturing, setCapturing] = useState(false);
+  return (
+    <button
+      className={capturing ? 'capture active' : 'capture'}
+      onBlur={() => setCapturing(false)}
+      onClick={() => setCapturing(true)}
+      onKeyDown={(event) => {
+        if (!capturing) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.code === 'Escape') {
+          setCapturing(false);
+          return;
+        }
+        onChange(event.code);
+        setCapturing(false);
+      }}
+      type="button"
+    >
+      {capturing ? 'Press key...' : formatKeyCode(value)}
+    </button>
+  );
+}
+
+function replacePlayerInputConfig(config: InputConfig, playerIndex: number, player: PlayerInputMapping): InputConfig {
+  return {
+    players: playerIndex === 0
+      ? [player, config.players[1]]
+      : [config.players[0], player],
+  };
+}
+
+function cloneInputConfig(config: InputConfig): InputConfig {
+  return {
+    players: [
+      {
+        keyboard: { ...config.players[0].keyboard },
+        gamepad: { ...config.players[0].gamepad },
+      },
+      {
+        keyboard: { ...config.players[1].keyboard },
+        gamepad: { ...config.players[1].gamepad },
+      },
+    ],
+  };
+}
+
+function loadInputConfig(): InputConfig {
+  if (typeof localStorage === 'undefined') return cloneInputConfig(DEFAULT_INPUT_CONFIG);
+  try {
+    const raw = localStorage.getItem(INPUT_CONFIG_STORAGE_KEY);
+    if (!raw) return cloneInputConfig(DEFAULT_INPUT_CONFIG);
+    return normalizeInputConfig(JSON.parse(raw));
+  } catch {
+    return cloneInputConfig(DEFAULT_INPUT_CONFIG);
+  }
+}
+
+function saveInputConfig(config: InputConfig): void {
+  if (typeof localStorage === 'undefined') return;
+  localStorage.setItem(INPUT_CONFIG_STORAGE_KEY, JSON.stringify(config));
+}
+
+function normalizeInputConfig(value: unknown): InputConfig {
+  const fallback = cloneInputConfig(DEFAULT_INPUT_CONFIG);
+  if (!value || typeof value !== 'object' || !Array.isArray((value as { players?: unknown }).players)) {
+    return fallback;
+  }
+
+  const players = (value as { players: unknown[] }).players;
+  return {
+    players: [
+      normalizePlayerInputConfig(players[0], fallback.players[0]),
+      normalizePlayerInputConfig(players[1], fallback.players[1]),
+    ],
+  };
+}
+
+function normalizePlayerInputConfig(value: unknown, fallback: PlayerInputMapping): PlayerInputMapping {
+  const source = value && typeof value === 'object' ? value as Partial<PlayerInputMapping> : {};
+  const keyboard = source.keyboard && typeof source.keyboard === 'object' ? source.keyboard as Partial<Record<InputAction, unknown>> : {};
+  const gamepad = source.gamepad && typeof source.gamepad === 'object' ? source.gamepad as Partial<Record<InputAction, unknown>> : {};
+  const next = clonePlayerInputConfig(fallback);
+
+  for (const action of INPUT_ACTIONS) {
+    const keyValue = keyboard[action.key];
+    if (typeof keyValue === 'string' && keyValue.length > 0) {
+      next.keyboard[action.key] = keyValue;
+    }
+    const buttonValue = Number(gamepad[action.key]);
+    if (Number.isFinite(buttonValue)) {
+      next.gamepad[action.key] = clampGamepadButton(buttonValue);
+    }
+  }
+
+  return next;
+}
+
+function clonePlayerInputConfig(config: PlayerInputMapping): PlayerInputMapping {
+  return {
+    keyboard: { ...config.keyboard },
+    gamepad: { ...config.gamepad },
+  };
+}
+
+function clampGamepadButton(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(31, Math.trunc(value)));
+}
+
+function formatKeyCode(code: string): string {
+  return code
+    .replace(/^Key/, '')
+    .replace(/^Arrow/, '')
+    .replace(/^Digit/, '');
+}
+
+function formatKeyboardMapping(player: PlayerInputMapping): string {
+  return [
+    `${formatKeyCode(player.keyboard.left)}/${formatKeyCode(player.keyboard.right)}/${formatKeyCode(player.keyboard.up)}/${formatKeyCode(player.keyboard.down)} move`,
+    `${formatKeyCode(player.keyboard.a)}/${formatKeyCode(player.keyboard.b)}/${formatKeyCode(player.keyboard.c)} = a/b/c`,
+    `${formatKeyCode(player.keyboard.x)}/${formatKeyCode(player.keyboard.y)}/${formatKeyCode(player.keyboard.z)} = x/y/z`,
+  ].join(', ');
+}
+
+function formatGamepadMapping(player: PlayerInputMapping): string {
+  return [
+    `${player.gamepad.x}/${player.gamepad.y}/${player.gamepad.z} = x/y/z`,
+    `${player.gamepad.a}/${player.gamepad.b}/${player.gamepad.c} = a/b/c`,
+  ].join(', ');
 }
 
 function DebugTabs({ activeTab, onChange }: { activeTab: DebugTab; onChange: (tab: DebugTab) => void }) {
