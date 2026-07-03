@@ -16,6 +16,7 @@ export type CharacterDefFiles = {
   cmd?: string;
   cns?: string;
   st?: string[];
+  stcommon?: string;
   sprite?: string;
   anim?: string;
   sound?: string;

@@ -42,6 +42,21 @@ describe('CharacterLoader', () => {
     expect(character.cns.states.find((state) => state.stateNo === 0)?.initialAnim).toBe(0);
   });
 
+  it('loads extra st CNS files and character stcommon files from DEF', async () => {
+    const textAssets = new Map<string, string>([
+      ['/chars/demo/demo.def', '[Files]\ncmd = demo.cmd\ncns = base.cns\nst = base.cns\nst1 = attacks.cns\nstcommon = demo-common.cns\nanim = demo.air\n'],
+      ['/chars/demo/base.cns', '[StateDef 0]\ntype = S\nmovetype = I\nphysics = S\nanim = 0\nctrl = 1\n'],
+      ['/chars/demo/attacks.cns', '[StateDef 200]\ntype = S\nmovetype = A\nphysics = S\nanim = 200\nctrl = 0\n'],
+      ['/chars/demo/demo-common.cns', '[StateDef 40]\ntype = A\nmovetype = I\nphysics = A\nanim = 40\nctrl = 0\n'],
+      ['/chars/demo/demo.air', 'Begin Action 0\n0,0, 0,0, 5\n'],
+      ['/chars/demo/demo.cmd', '[Command]\nname = "a"\ncommand = a\ntime = 1\n'],
+    ]);
+
+    const character = await loadCharacterFromDef('/chars/demo/demo.def', createTextOnlyFetcher(textAssets));
+
+    expect(character.cns.states.map((state) => state.stateNo)).toEqual([0, 200, -1, 40]);
+  });
+
   it('merges common1 command state controllers into character command state', async () => {
     const textAssets = new Map<string, string>([
       ['/chars/kfm/kfm.def', '[Files]\ncmd = kfm.cmd\ncns = kfm.cns\nanim = kfm.air\n'],

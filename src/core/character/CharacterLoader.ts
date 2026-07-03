@@ -117,10 +117,14 @@ export async function loadCharacterFromDef(
   if (!files.anim) throw new Error('[Files] anim is missing.');
   if (!files.cmd) throw new Error('[Files] cmd is missing.');
 
-  const [cnsText, airText, cmdText, commonCnsText, fetchedCommonCmdTexts, palettes] = await Promise.all([
+  const extraCnsPaths = uniqueExtraCnsPaths(files.cns, files.st);
+
+  const [cnsText, extraCnsTexts, airText, cmdText, characterCommonCnsText, commonCnsText, fetchedCommonCmdTexts, palettes] = await Promise.all([
     fetcher.text(resolveAssetPath(basePath, files.cns)),
+    loadOptionalTexts(extraCnsPaths.map((path) => resolveAssetPath(basePath, path)), fetcher),
     fetcher.text(resolveAssetPath(basePath, files.anim)),
     fetcher.text(resolveAssetPath(basePath, files.cmd)),
+    files.stcommon ? loadOptionalText(resolveAssetPath(basePath, files.stcommon), fetcher) : Promise.resolve(null),
     loadOptionalText(COMMON_CNS_PATH, fetcher),
     loadOptionalTexts(COMMON_CMD_PATHS, fetcher),
     loadCharacterPalettes(basePath, files.palettes ?? [], fetcher),
@@ -136,13 +140,14 @@ export async function loadCharacterFromDef(
     : null;
 
   const commonCmdTexts = fetchedCommonCmdTexts.length > 0 ? fetchedCommonCmdTexts : [BASELINE_COMMON_CMD_TEXT];
-  const commonCnsTexts = commonCnsText ? [commonCnsText] : [];
+  const commonCnsTexts = [characterCommonCnsText, commonCnsText].filter((text): text is string => text !== null);
   const characterCmd = parseCmdText(cmdText);
   const commonCmdDocuments = commonCmdTexts.map(parseCmdText);
   const commonCmdCnsDocuments = commonCmdTexts.map(parseCnsText);
+  const characterCnsText = [cnsText, ...extraCnsTexts].join('\n\n');
   const characterCns = commonCmdCnsDocuments.reduce(
     (merged, commonCmdCns) => mergeMissingCnsStates(merged, commonCmdCns),
-    mergeCnsDocuments(parseCnsText(cnsText), parseCnsText(cmdText)),
+    mergeCnsDocuments(parseCnsText(characterCnsText), parseCnsText(cmdText)),
   );
   const cns = commonCnsTexts.reduce(
     (merged, commonCns) => mergeMissingCnsStates(merged, parseCnsText(commonCns)),
@@ -320,4 +325,22 @@ function getBasePath(path: string): string {
   const normalized = path.replace(/\\/g, '/');
   const slashIndex = normalized.lastIndexOf('/');
   return slashIndex >= 0 ? normalized.slice(0, slashIndex) : '';
+}
+
+function uniqueExtraCnsPaths(primaryCns: string, paths: readonly string[]): string[] {
+  const seen = new Set([normalizeRelativePath(primaryCns)]);
+  const result: string[] = [];
+
+  for (const path of paths) {
+    const normalized = normalizeRelativePath(path);
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    result.push(path);
+  }
+
+  return result;
+}
+
+function normalizeRelativePath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase();
 }

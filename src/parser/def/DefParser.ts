@@ -70,6 +70,7 @@ export function getCharacterDefFiles(document: DefDocument): CharacterDefFiles {
     cmd: files.values.get('cmd'),
     cns: files.values.get('cns'),
     st,
+    stcommon: files.values.get('stcommon'),
     sprite: files.values.get('sprite'),
     anim: files.values.get('anim'),
     sound: files.values.get('sound'),

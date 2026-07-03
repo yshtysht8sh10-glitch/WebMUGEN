@@ -47,7 +47,7 @@ import { InputBuffer } from '../input/InputBuffer';
 import { resolveCommands } from '../input/CommandResolver';
 import { formatCmdControlHelp } from './CmdControlHelp';
 
-const DEFAULT_CHARACTER_DEF_PATH = '/chars/kfm/kfm.def';
+const DEFAULT_CHARACTER_DEF_PATH = '/chars/T-H-M-A.zip';
 const ENABLE_RUNTIME_FALLBACKS = false;
 const RUNTIME_HISTORY_LIMIT = 500;
 
