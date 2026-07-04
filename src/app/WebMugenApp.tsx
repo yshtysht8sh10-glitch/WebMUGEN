@@ -52,7 +52,8 @@ import { formatCnsCoverageDebugOverlay } from './CnsCoverageDebugOverlay';
 import { formatPhysicsDebugOverlay } from './PhysicsDebugOverlay';
 import { InputBuffer } from '../input/InputBuffer';
 import { resolveCommands } from '../input/CommandResolver';
-import type { CnsStateDefinition } from '../mugen/common/cnsTypes';
+import { evaluateCnsRuntimeTrigger } from '../core/cns/CnsRuntimeTrigger';
+import type { CnsDocument, CnsStateController, CnsStateDefinition, CnsTrigger } from '../mugen/common/cnsTypes';
 
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/T-H-M-A.zip';
 const ENABLE_RUNTIME_FALLBACKS = false;
@@ -292,9 +293,10 @@ export function WebMugenApp() {
           setHistoryLines: setRuntimeHistoryLines,
         });
         appendReadableRuntimeHistoryIfNeeded({
+          cns: character.cns,
+          commands: p1Commands,
           frameNo: frameNoRef.current,
           state: nextState,
-          traces: nextCnsTraces,
           pressedKeys,
           historyRef: readableRuntimeHistoryRef,
           lastSignatureRef: lastReadableRuntimeSignatureRef,
@@ -1148,31 +1150,31 @@ export function appendRuntimeHistoryIfNeeded({
 }
 
 function appendReadableRuntimeHistoryIfNeeded({
+  cns,
+  commands,
   frameNo,
   state,
-  traces,
   pressedKeys,
   historyRef,
   lastSignatureRef,
   setHistoryLines,
 }: {
+  cns: CnsDocument;
+  commands: ReadonlySet<string>;
   frameNo: number;
   state: GameState;
-  traces: CnsRuntimeTrace[];
   pressedKeys: ReadonlySet<string>;
   historyRef: MutableRefObject<string[]>;
   lastSignatureRef: MutableRefObject<string>;
   setHistoryLines: (lines: string[]) => void;
 }) {
-  const [p1, p2] = state.players;
-  const triggerSummary = formatSatisfiedTriggerSummary(traces);
+  const [p1] = state.players;
+  const triggerSummary = formatP1ChangeStateTriggerSummary(cns, state, commands);
   const damageSummary = formatHitEventSummary(state);
   const keySummary = formatPressedKeys(pressedKeys);
   const signature = [
     p1.stateNo,
     p1.animNo,
-    p2.stateNo,
-    p2.animNo,
     triggerSummary,
     damageSummary,
     keySummary,
@@ -1184,9 +1186,9 @@ function appendReadableRuntimeHistoryIfNeeded({
   const entry = [
     `---- ${timestamp} frame=${frameNo} ----`,
     `P1 StateNo=${p1.stateNo} Time=${p1.stateTime} AnimNo=${p1.animNo}`,
-    `P2 StateNo=${p2.stateNo} Time=${p2.stateTime} AnimNo=${p2.animNo}`,
     keySummary,
-    `成立Trigger=${triggerSummary}`,
+    `ChangeState候補Trigger:`,
+    ...triggerSummary.split('\n').map((line) => `  ${line}`),
     `Damage=${damageSummary}`,
     '',
   ];
@@ -1222,6 +1224,69 @@ function formatRuntimeHistorySignature({
   ].join('|');
 }
 
+function formatP1ChangeStateTriggerSummary(
+  cns: CnsDocument,
+  state: GameState,
+  commands: ReadonlySet<string>,
+): string {
+  const [p1, p2] = state.players;
+  const stateNos = [-3, -2, -1, p1.stateNo];
+  const candidates = stateNos.flatMap((stateNo) =>
+    cns.states
+      .filter((stateDef) => stateDef.stateNo === stateNo)
+      .flatMap((stateDef) =>
+        stateDef.controllers
+          .filter((controller) => controller.type.toLowerCase() === 'changestate')
+          .map((controller, index) => formatChangeStateCandidate(stateDef, controller, index, p1, p2, commands)),
+      ),
+  );
+
+  return candidates.length > 0 ? candidates.join('\n') : '-';
+}
+
+function formatChangeStateCandidate(
+  stateDef: CnsStateDefinition,
+  controller: CnsStateController,
+  index: number,
+  player: GameState['players'][0],
+  opponent: GameState['players'][1],
+  commands: ReadonlySet<string>,
+): string {
+  const value = readParamNumber(controller, 'value') ?? '?';
+  const context = { player, opponent, commands, animTime: player.animTime };
+  const triggerAll = controller.triggers.filter((trigger) => /^triggerall$/i.test(trigger.name));
+  const groups = collectTriggerGroupsForDisplay(controller.triggers);
+  const allPassed = triggerAll.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context));
+  const groupSummaries = groups.map(([groupNo, triggers]) => {
+    const passed = triggers.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context));
+    const details = triggers.map((trigger) => formatTriggerEval(trigger, context)).join(' & ');
+    return `trigger${groupNo}:${passed ? 'T' : 'F'}[${details}]`;
+  });
+  const finalPassed = allPassed && (groups.length === 0 ? triggerAll.length > 0 : groups.some(([, triggers]) => triggers.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context))));
+  const allDetails = triggerAll.map((trigger) => formatTriggerEval(trigger, context)).join(' & ') || '-';
+  return `S${stateDef.stateNo}#${index} -> ${value} ${finalPassed ? 'OK' : 'NG'} triggerall:${allPassed ? 'T' : 'F'}[${allDetails}] ${groupSummaries.join(' ') || 'groups=-'}`;
+}
+
+function collectTriggerGroupsForDisplay(triggers: readonly CnsTrigger[]): Array<[number, CnsTrigger[]]> {
+  const groups = new Map<number, CnsTrigger[]>();
+  for (const trigger of triggers) {
+    if (/^triggerall$/i.test(trigger.name)) continue;
+    const match = trigger.name.match(/^trigger(\d+)$/i);
+    const groupNo = match ? Number(match[1]) : 1;
+    const group = groups.get(groupNo) ?? [];
+    group.push(trigger);
+    groups.set(groupNo, group);
+  }
+  return Array.from(groups.entries()).sort(([left], [right]) => left - right);
+}
+
+function formatTriggerEval(
+  trigger: CnsTrigger,
+  context: Parameters<typeof evaluateCnsRuntimeTrigger>[1],
+): string {
+  return `${trigger.name}:${trigger.expression}=${evaluateCnsRuntimeTrigger(trigger.expression, context) ? 'T' : 'F'}`;
+}
+
 function formatCodexTraceDetailLines(traces: readonly CnsRuntimeTrace[]): string[] {
   if (traces.length === 0) return ['trace=-'];
   return traces.flatMap((trace) => [
@@ -1231,25 +1296,14 @@ function formatCodexTraceDetailLines(traces: readonly CnsRuntimeTrace[]): string
   ]);
 }
 
-function formatSatisfiedTriggerSummary(traces: readonly CnsRuntimeTrace[]): string {
-  const executed = traces
-    .flatMap((trace) => trace.executedControllers)
-    .filter((line) => !line.startsWith('dbg '))
-    .slice(-12);
-  const triggerDebug = traces
-    .flatMap((trace) => trace.debugLines)
-    .filter((line) => /\bOK\b|result=T|final=T|executed=1/.test(line))
-    .slice(-6);
-  return [...executed, ...triggerDebug].join(' ; ') || '-';
-}
-
 function formatExecutedControllers(trace: CnsRuntimeTrace): string {
   return trace.executedControllers.length > 0 ? trace.executedControllers.join(',') : '-';
 }
 
 function formatHitEventSummary(state: GameState): string {
-  if (state.hitEvents.length === 0) return '-';
-  return state.hitEvents.map((event) => `P${event.attackerId}->P${event.defenderId}:${event.damage}`).join(',');
+  const p1Hits = state.hitEvents.filter((event) => event.attackerId === 1);
+  if (p1Hits.length === 0) return '-';
+  return p1Hits.map((event) => `P1->P${event.defenderId}:${event.damage}`).join(',');
 }
 
 function freezeHistoryLines(lines: Iterable<unknown>): string[] {
