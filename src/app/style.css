@@ -121,7 +121,7 @@ canvas {
 
 .debug-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -149,7 +149,18 @@ canvas {
 }
 
 .statedef-list {
+  grid-column: span 3;
   min-width: 0;
+}
+
+@media (max-width: 980px) {
+  .debug-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .statedef-list {
+    grid-column: span 1;
+  }
 }
 
 .statedef-count {

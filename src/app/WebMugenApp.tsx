@@ -743,9 +743,9 @@ function StaticDebugPanel({
   return (
     <div className="debug-grid">
       <DebugBlock title="Character / DEF 読込結果" lines={[loadMessage, ...staticDebugInfo.characterRows]} />
-      <StateDefListPanel rows={staticDebugInfo.stateRows} />
       <DebugBlock title="CMD コマンド一覧" lines={staticDebugInfo.commandRows} />
       <DebugBlock title="CNS対応状況" lines={coverageDebugLines} />
+      <StateDefListPanel rows={staticDebugInfo.stateRows} />
     </div>
   );
 }
