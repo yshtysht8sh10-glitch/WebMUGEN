@@ -100,7 +100,9 @@ export function WebMugenApp() {
   const inputConfigRef = useRef<InputConfig>(loadInputConfig());
   const frameNoRef = useRef(0);
   const runtimeHistoryRef = useRef<string[]>([]);
+  const readableRuntimeHistoryRef = useRef<string[]>([]);
   const lastRuntimeSignatureRef = useRef('');
+  const lastReadableRuntimeSignatureRef = useRef('');
   const stateTransitionHistoryRef = useRef<string[]>([]);
   const inputHistoryRef = useRef<string[]>([]);
   const damageHistoryRef = useRef<string[]>([]);
@@ -116,6 +118,7 @@ export function WebMugenApp() {
   const [coverageDebugLines, setCoverageDebugLines] = useState<string[]>(['coverage=-']);
   const [staticDebugInfo, setStaticDebugInfo] = useState<StaticDebugInfo>(EMPTY_STATIC_DEBUG_INFO);
   const [runtimeHistoryLines, setRuntimeHistoryLines] = useState<string[]>(['操作すると、ここにタイムスタンプ付きで内部処理ログが残ります。']);
+  const [readableRuntimeHistoryLines, setReadableRuntimeHistoryLines] = useState<string[]>(['人間用の短い実行履歴がここに残ります。']);
   const [stageDebugLines, setStageDebugLines] = useState<string[]>(['State: -']);
   const [activeDebugTab, setActiveDebugTab] = useState<DebugTab>('static');
   const [copyStatus, setCopyStatus] = useState('');
@@ -136,10 +139,12 @@ export function WebMugenApp() {
       roundScoreRef.current = createInitialRoundScore();
       cnsTraceRef.current = [];
       runtimeHistoryRef.current = [];
+      readableRuntimeHistoryRef.current = [];
       stateTransitionHistoryRef.current = [];
       inputHistoryRef.current = [];
       damageHistoryRef.current = [];
       lastRuntimeSignatureRef.current = '';
+      lastReadableRuntimeSignatureRef.current = '';
       lastStageKeySignatureRef.current = '';
       lastStateNosRef.current = [0, 0];
       p1CommandBufferRef.current.clear();
@@ -286,6 +291,15 @@ export function WebMugenApp() {
           lastSignatureRef: lastRuntimeSignatureRef,
           setHistoryLines: setRuntimeHistoryLines,
         });
+        appendReadableRuntimeHistoryIfNeeded({
+          frameNo: frameNoRef.current,
+          state: nextState,
+          traces: nextCnsTraces,
+          pressedKeys,
+          historyRef: readableRuntimeHistoryRef,
+          lastSignatureRef: lastReadableRuntimeSignatureRef,
+          setHistoryLines: setReadableRuntimeHistoryLines,
+        });
 
         rendererRef.current?.render(nextState, nextFeedback, nextRoundState, nextScore);
 
@@ -378,7 +392,10 @@ export function WebMugenApp() {
           />
         )}
         {activeDebugTab === 'runtime' && (
-          <RuntimeHistoryPanel runtimeHistoryLines={runtimeHistoryLines} />
+          <RuntimeHistoryPanel
+            readableRuntimeHistoryLines={readableRuntimeHistoryLines}
+            runtimeHistoryLines={runtimeHistoryLines}
+          />
         )}
         {activeDebugTab === 'ideas' && <IdeasPanel />}
         {activeDebugTab === 'manual' && <ManualPanel />}
@@ -803,13 +820,29 @@ function StateDefListPanel({ rows }: { rows: StateDebugRow[] }) {
   );
 }
 
-function RuntimeHistoryPanel({ runtimeHistoryLines }: { runtimeHistoryLines: string[] }) {
+function RuntimeHistoryPanel({
+  readableRuntimeHistoryLines,
+  runtimeHistoryLines,
+}: {
+  readableRuntimeHistoryLines: string[];
+  runtimeHistoryLines: string[];
+}) {
   return (
-    <div>
-      <p className="debug-note">
-        入力、Command、State、Controller、Physics の変化をタイムスタンプ付きで蓄積します。操作を止めても消えません。
-      </p>
-      <pre className="debug-pre history-pre">{runtimeHistoryLines.join('\n')}</pre>
+    <div className="runtime-history-grid">
+      <section>
+        <h2>Codex用 詳細ログ</h2>
+        <p className="debug-note">
+          入力、Command、State、Controller、Physics、成立情報を多めに蓄積します。ログコピーの対象です。
+        </p>
+        <pre className="debug-pre history-pre codex-history-pre">{runtimeHistoryLines.join('\n')}</pre>
+      </section>
+      <section>
+        <h2>人間用 実行履歴</h2>
+        <p className="debug-note">
+          タイムスタンプ、StateNo、AnimNo、成立Triggerを短く表示します。
+        </p>
+        <pre className="debug-pre history-pre readable-history-pre">{readableRuntimeHistoryLines.join('\n')}</pre>
+      </section>
     </div>
   );
 }
@@ -1085,6 +1118,7 @@ export function appendRuntimeHistoryIfNeeded({
     roundLine,
     scoreLine,
     ...cnsLines,
+    ...formatCodexTraceDetailLines(traces),
   ]);
   const signature = snapshot.join('|');
   if (signature === lastSignatureRef.current) return;
@@ -1098,6 +1132,78 @@ export function appendRuntimeHistoryIfNeeded({
   const nextHistory = freezeHistoryLines([...historyRef.current, ...entry]).slice(-RUNTIME_HISTORY_LIMIT);
   historyRef.current = nextHistory.slice();
   setHistoryLines(nextHistory.slice());
+}
+
+function appendReadableRuntimeHistoryIfNeeded({
+  frameNo,
+  state,
+  traces,
+  pressedKeys,
+  historyRef,
+  lastSignatureRef,
+  setHistoryLines,
+}: {
+  frameNo: number;
+  state: GameState;
+  traces: CnsRuntimeTrace[];
+  pressedKeys: ReadonlySet<string>;
+  historyRef: MutableRefObject<string[]>;
+  lastSignatureRef: MutableRefObject<string>;
+  setHistoryLines: (lines: string[]) => void;
+}) {
+  const [p1, p2] = state.players;
+  const triggerSummary = formatSatisfiedTriggerSummary(traces);
+  const damageSummary = formatHitEventSummary(state);
+  const keySummary = formatPressedKeys(pressedKeys);
+  const signature = [
+    p1.stateNo,
+    p1.stateTime,
+    p1.animNo,
+    p2.stateNo,
+    p2.stateTime,
+    p2.animNo,
+    triggerSummary,
+    damageSummary,
+    keySummary,
+  ].join('|');
+  if (signature === lastSignatureRef.current) return;
+
+  lastSignatureRef.current = signature;
+  const timestamp = new Date().toLocaleTimeString('ja-JP', { hour12: false });
+  const line = `${timestamp} f=${frameNo} P1 StateNo=${p1.stateNo} Time=${p1.stateTime} AnimNo=${p1.animNo} | P2 StateNo=${p2.stateNo} Time=${p2.stateTime} AnimNo=${p2.animNo} | ${keySummary} | 成立Trigger=${triggerSummary} | Damage=${damageSummary}`;
+  const nextHistory = freezeHistoryLines([...historyRef.current, line]).slice(-160);
+  historyRef.current = nextHistory.slice();
+  setHistoryLines(nextHistory.slice());
+}
+
+function formatCodexTraceDetailLines(traces: readonly CnsRuntimeTrace[]): string[] {
+  if (traces.length === 0) return ['trace=-'];
+  return traces.flatMap((trace) => [
+    `trace p${trace.playerId} StateNo=${trace.stateNo}->${trace.afterStateNo} StateTime=${trace.stateTime}->${trace.afterStateTime} AnimNo=${trace.animNo}->${trace.afterAnimNo} MugenAnimTime=${trace.mugenAnimTime} found=${trace.stateFound ? 1 : 0}`,
+    `trace p${trace.playerId} executed=${formatExecutedControllers(trace)}`,
+    ...trace.debugLines.map((line) => `trace p${trace.playerId} debug ${line}`),
+  ]);
+}
+
+function formatSatisfiedTriggerSummary(traces: readonly CnsRuntimeTrace[]): string {
+  const executed = traces
+    .flatMap((trace) => trace.executedControllers)
+    .filter((line) => !line.startsWith('dbg '))
+    .slice(-12);
+  const triggerDebug = traces
+    .flatMap((trace) => trace.debugLines)
+    .filter((line) => /\bOK\b|result=T|final=T|executed=1/.test(line))
+    .slice(-6);
+  return [...executed, ...triggerDebug].join(' ; ') || '-';
+}
+
+function formatExecutedControllers(trace: CnsRuntimeTrace): string {
+  return trace.executedControllers.length > 0 ? trace.executedControllers.join(',') : '-';
+}
+
+function formatHitEventSummary(state: GameState): string {
+  if (state.hitEvents.length === 0) return '-';
+  return state.hitEvents.map((event) => `P${event.attackerId}->P${event.defenderId}:${event.damage}`).join(',');
 }
 
 function freezeHistoryLines(lines: Iterable<unknown>): string[] {
