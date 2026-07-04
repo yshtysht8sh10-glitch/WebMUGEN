@@ -287,18 +287,6 @@ export function WebMugenApp() {
     ...cnsDebugLines,
   ];
   const staticTabLines = formatStaticTabLines(loadMessage, staticDebugInfo, coverageDebugLines, controlHelpLines);
-  const ideasTabLines = formatIdeasLines();
-  const manualTabLines = formatManualLines();
-  const settingsTabLines = formatSettingsLines(inputConfig, characterPath);
-  const activeTabText = formatActiveTabText(activeDebugTab, staticTabLines, runtimeHistoryLines, ideasTabLines, manualTabLines, settingsTabLines);
-  const fullDebugText = formatFullDebugText({
-    liveDebugLines,
-    staticTabLines,
-    runtimeHistoryLines,
-    ideasTabLines,
-    manualTabLines,
-    settingsTabLines,
-  });
 
   const handleCopy = async (label: string, text: string) => {
     try {
@@ -345,9 +333,7 @@ export function WebMugenApp() {
       <DebugTabs activeTab={activeDebugTab} onChange={setActiveDebugTab} />
       <CopyToolbar
         activeTab={activeDebugTab}
-        liveText={liveDebugLines.join('\n')}
-        activeTabText={activeTabText}
-        fullText={fullDebugText}
+        runtimeLogText={runtimeHistoryLines.join('\n')}
         copyStatus={copyStatus}
         onCopy={handleCopy}
       />
@@ -720,33 +706,22 @@ function DebugTabs({ activeTab, onChange }: { activeTab: DebugTab; onChange: (ta
 
 function CopyToolbar({
   activeTab,
-  liveText,
-  activeTabText,
-  fullText,
+  runtimeLogText,
   copyStatus,
   onCopy,
 }: {
   activeTab: DebugTab;
-  liveText: string;
-  activeTabText: string;
-  fullText: string;
+  runtimeLogText: string;
   copyStatus: string;
   onCopy: (label: string, text: string) => void;
 }) {
-  const activeLabel = activeTab === 'static' ? '現在のタブ' : activeTab === 'runtime' ? '現在のタブ' : '現在のタブ';
+  if (activeTab !== 'runtime') return null;
+
   return (
     <div className="copy-toolbar">
-      <div className="copy-buttons">
-        <button type="button" onClick={() => onCopy('画面内リアルタイム表示', liveText)}>
-          画面情報をコピー
-        </button>
-        <button type="button" onClick={() => onCopy(activeLabel, activeTabText)}>
-          現在タブをコピー
-        </button>
-        <button type="button" onClick={() => onCopy('全ログ', fullText)}>
-          全コピー
-        </button>
-      </div>
+      <button type="button" onClick={() => onCopy('実行履歴ログ', runtimeLogText)}>
+        ログをコピー
+      </button>
       {copyStatus && <span className="copy-status">{copyStatus}</span>}
     </div>
   );
@@ -919,95 +894,6 @@ function formatStaticTabLines(
     '=== 操作ヘルプ ===',
     ...controlHelpLines,
   ];
-}
-
-function formatIdeasLines(): string[] {
-  return [
-    '=== 次に作ると便利な表示 ===',
-    '1. State遷移グラフ: State 0 → -1 → 10 → 11 のように矢印で表示',
-    '2. Controller 実行表: ChangeState / VelSet / ChangeAnim が OK/NG どちらだったかを行単位で表示',
-    '3. Trigger 詳細: expected / actual / result を分けて表示',
-    '4. Collision / HitDef タブ: Clsn と HitDef の当たり判定を可視化',
-    '5. 差分比較: WinMUGEN期待値とWebMUGEN実測値を横並び表示',
-    '',
-    '=== 現在の調査メモ ===',
-    'State10問題では、入力とCommand認識は確認済み。',
-    '次は「StateDefにどのControllerが入っているか」と「どのControllerが実行されたか」をGUIで追う。',
-    '長い1行ログではなく、タブ内で静的情報と実行履歴を分離して見る。',
-  ];
-}
-
-function formatManualLines(): string[] {
-  return [
-    '=== Manual ===',
-    'System: R restarts the round after KO or TIME OVER.',
-  ];
-}
-
-function formatSettingsLines(config: InputConfig, characterPath: string): string[] {
-  return [
-    '=== Settings ===',
-    `Character: ${characterPath}`,
-    'Place character files under public/chars/, then select or enter the DEF/ZIP path in Settings.',
-    `P1 keyboard: ${formatKeyboardMapping(config.players[0])}`,
-    `P1 controller: ${formatGamepadMapping(config.players[0])}`,
-    `P2 keyboard: ${formatKeyboardMapping(config.players[1])}`,
-    `P2 controller: ${formatGamepadMapping(config.players[1])}`,
-  ];
-}
-
-function formatActiveTabText(
-  activeTab: DebugTab,
-  staticTabLines: string[],
-  runtimeHistoryLines: string[],
-  ideasTabLines: string[],
-  manualTabLines: string[],
-  settingsTabLines: string[],
-): string {
-  if (activeTab === 'static') return staticTabLines.join('\n');
-  if (activeTab === 'runtime') return runtimeHistoryLines.join('\n');
-  if (activeTab === 'manual') return manualTabLines.join('\n');
-  if (activeTab === 'settings') return settingsTabLines.join('\n');
-  return ideasTabLines.join('\n');
-}
-
-function formatFullDebugText({
-  liveDebugLines,
-  staticTabLines,
-  runtimeHistoryLines,
-  ideasTabLines,
-  manualTabLines,
-  settingsTabLines,
-}: {
-  liveDebugLines: string[];
-  staticTabLines: string[];
-  runtimeHistoryLines: string[];
-  ideasTabLines: string[];
-  manualTabLines: string[];
-  settingsTabLines: string[];
-}): string {
-  return [
-    '=== WebMUGEN Debug Dump ===',
-    `copiedAt=${new Date().toLocaleString('ja-JP', { hour12: false })}`,
-    '',
-    '=== 画面内リアルタイム表示 ===',
-    ...liveDebugLines,
-    '',
-    '=== タブ1 静的情報 ===',
-    ...staticTabLines,
-    '',
-    '=== タブ2 実行履歴 ===',
-    ...runtimeHistoryLines,
-    '',
-    '=== タブ3 調査メモ ===',
-    ...ideasTabLines,
-    '',
-    '=== Manual ===',
-    ...manualTabLines,
-    '',
-    '=== Settings ===',
-    ...settingsTabLines,
-  ].join('\n');
 }
 
 async function copyTextToClipboard(text: string): Promise<void> {

@@ -93,13 +93,7 @@ canvas {
   padding: 10px 12px;
 }
 
-.copy-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.copy-buttons button {
+.copy-toolbar button {
   background: #2563eb;
   border: 1px solid #60a5fa;
   border-radius: 6px;
@@ -109,7 +103,7 @@ canvas {
   padding: 8px 12px;
 }
 
-.copy-buttons button:hover {
+.copy-toolbar button:hover {
   background: #1d4ed8;
 }
 
