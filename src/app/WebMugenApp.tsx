@@ -147,8 +147,8 @@ export function WebMugenApp() {
       setStaticDebugInfo(createStaticDebugInfo(character, loadResult.source, spriteCount));
       setLoadMessage(
         loadResult.source === 'def'
-          ? `Loaded character: ${characterPath} sprites=${spriteCount} cnsStates=${character.cns.states.length} fallback=${ENABLE_RUNTIME_FALLBACKS ? 'on' : 'off'}`
-          : `Sample character fallback: ${loadResult.errorMessage ?? 'unknown reason'} cnsStates=${character.cns.states.length} runtimeFallback=${ENABLE_RUNTIME_FALLBACKS ? 'on' : 'off'}`,
+          ? `Loaded character: ${characterPath}`
+          : `Sample character fallback: ${loadResult.errorMessage ?? 'unknown reason'}`,
       );
 
       rendererRef.current = new CanvasRenderer(canvas, character.air, null, character.sprites);
@@ -806,13 +806,15 @@ function DebugBlock({ title, lines }: { title: string; lines: string[] }) {
 
 function createStaticDebugInfo(character: any, source: string, spriteCount: number): StaticDebugInfo {
   const infoRows = [
-    `source=${source}`,
-    `name=${readDefValue(character.def, 'Info', 'name') ?? '-'}`,
-    `displayname=${readDefValue(character.def, 'Info', 'displayname') ?? '-'}`,
-    `author=${readDefValue(character.def, 'Info', 'author') ?? '-'}`,
-    `sprites=${spriteCount}`,
-    `cnsStates=${character.cns.states.length}`,
-    `cmdCommands=${character.cmd.commands.length}`,
+    '',
+    `source: ${source}`,
+    `name: ${readDefValue(character.def, 'Info', 'name') ?? '-'}`,
+    `displayname: ${readDefValue(character.def, 'Info', 'displayname') ?? '-'}`,
+    `author: ${readDefValue(character.def, 'Info', 'author') ?? '-'}`,
+    `sprites: ${spriteCount}`,
+    `cns states: ${character.cns.states.length}`,
+    `cmd commands: ${character.cmd.commands.length}`,
+    `runtime fallback: ${ENABLE_RUNTIME_FALLBACKS ? 'on' : 'off'}`,
   ];
 
   const commandRoutes = character.cns.states
