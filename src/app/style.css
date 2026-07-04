@@ -39,18 +39,26 @@ canvas {
   image-rendering: pixelated;
 }
 
-.live-debug-strip {
-  margin-top: 12px;
-  max-height: 160px;
-  overflow: auto;
-  border: 1px solid #334155;
-  background: #020617;
+.stage-viewport {
+  position: relative;
+}
+
+.stage-debug-overlay {
+  background: rgba(2, 6, 23, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 6px;
+  bottom: 18px;
   color: #e5e7eb;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 12px;
-  line-height: 1.35;
-  padding: 10px;
-  white-space: pre-wrap;
+  font-size: 11px;
+  left: 18px;
+  line-height: 1.4;
+  max-width: calc(100% - 36px);
+  padding: 8px 10px;
+  pointer-events: none;
+  position: absolute;
+  text-shadow: 0 1px 1px #000000;
+  white-space: normal;
 }
 
 .debug-tabs {

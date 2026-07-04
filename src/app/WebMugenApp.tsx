@@ -101,6 +101,11 @@ export function WebMugenApp() {
   const frameNoRef = useRef(0);
   const runtimeHistoryRef = useRef<string[]>([]);
   const lastRuntimeSignatureRef = useRef('');
+  const stateTransitionHistoryRef = useRef<string[]>([]);
+  const inputHistoryRef = useRef<string[]>([]);
+  const damageHistoryRef = useRef<string[]>([]);
+  const lastStageKeySignatureRef = useRef('');
+  const lastStateNosRef = useRef<[number, number]>([0, 0]);
   const [loadMessage, setLoadMessage] = useState('Loading character...');
   const [inputDebugLines, setInputDebugLines] = useState<string[]>(['keys=-']);
   const [roundDebugLine, setRoundDebugLine] = useState(formatRoundState(createInitialRoundState()));
@@ -111,6 +116,7 @@ export function WebMugenApp() {
   const [coverageDebugLines, setCoverageDebugLines] = useState<string[]>(['coverage=-']);
   const [staticDebugInfo, setStaticDebugInfo] = useState<StaticDebugInfo>(EMPTY_STATIC_DEBUG_INFO);
   const [runtimeHistoryLines, setRuntimeHistoryLines] = useState<string[]>(['操作すると、ここにタイムスタンプ付きで内部処理ログが残ります。']);
+  const [stageDebugLines, setStageDebugLines] = useState<string[]>(['State: -']);
   const [activeDebugTab, setActiveDebugTab] = useState<DebugTab>('static');
   const [copyStatus, setCopyStatus] = useState('');
   const [inputConfig, setInputConfigState] = useState<InputConfig>(inputConfigRef.current);
@@ -130,7 +136,12 @@ export function WebMugenApp() {
       roundScoreRef.current = createInitialRoundScore();
       cnsTraceRef.current = [];
       runtimeHistoryRef.current = [];
+      stateTransitionHistoryRef.current = [];
+      inputHistoryRef.current = [];
+      damageHistoryRef.current = [];
       lastRuntimeSignatureRef.current = '';
+      lastStageKeySignatureRef.current = '';
+      lastStateNosRef.current = [0, 0];
       p1CommandBufferRef.current.clear();
       p2CommandBufferRef.current.clear();
 
@@ -240,6 +251,17 @@ export function WebMugenApp() {
         roundStateRef.current = nextRoundState;
         roundScoreRef.current = nextScore;
         cnsTraceRef.current = nextCnsTraces;
+        updateStageDebugOverlay({
+          state: nextState,
+          pressedKeys,
+          frameNo: frameNoRef.current,
+          stateTransitionHistoryRef,
+          inputHistoryRef,
+          damageHistoryRef,
+          lastKeySignatureRef: lastStageKeySignatureRef,
+          lastStateNosRef,
+          setStageDebugLines,
+        });
 
         const nextRoundDebugLine = formatRoundState(nextRoundState);
         const nextScoreDebugLine = formatRoundScore(nextScore);
@@ -325,13 +347,17 @@ export function WebMugenApp() {
       </header>
 
       <section className="stage-panel">
-        <canvas
-          ref={canvasRef}
-          width={960}
-          height={540}
-        />
-        <div className="live-debug-strip" aria-label="live runtime debug">
-          {liveDebugLines.join('\n')}
+        <div className="stage-viewport">
+          <canvas
+            ref={canvasRef}
+            width={960}
+            height={540}
+          />
+          <div className="stage-debug-overlay" aria-label="stage debug overlay">
+            {stageDebugLines.map((line, index) => (
+              <div key={`${line}-${index}`}>{line}</div>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -786,6 +812,64 @@ function RuntimeHistoryPanel({ runtimeHistoryLines }: { runtimeHistoryLines: str
       <pre className="debug-pre history-pre">{runtimeHistoryLines.join('\n')}</pre>
     </div>
   );
+}
+
+function updateStageDebugOverlay({
+  state,
+  pressedKeys,
+  frameNo,
+  stateTransitionHistoryRef,
+  inputHistoryRef,
+  damageHistoryRef,
+  lastKeySignatureRef,
+  lastStateNosRef,
+  setStageDebugLines,
+}: {
+  state: GameState;
+  pressedKeys: ReadonlySet<string>;
+  frameNo: number;
+  stateTransitionHistoryRef: MutableRefObject<string[]>;
+  inputHistoryRef: MutableRefObject<string[]>;
+  damageHistoryRef: MutableRefObject<string[]>;
+  lastKeySignatureRef: MutableRefObject<string>;
+  lastStateNosRef: MutableRefObject<[number, number]>;
+  setStageDebugLines: (lines: string[]) => void;
+}) {
+  const [p1, p2] = state.players;
+  const currentStateNos: [number, number] = [p1.stateNo, p2.stateNo];
+  const previousStateNos = lastStateNosRef.current;
+
+  const transitions: string[] = [];
+  if (previousStateNos[0] !== currentStateNos[0]) transitions.push(`P1 ${previousStateNos[0]}->${currentStateNos[0]}`);
+  if (previousStateNos[1] !== currentStateNos[1]) transitions.push(`P2 ${previousStateNos[1]}->${currentStateNos[1]}`);
+  if (transitions.length > 0) {
+    stateTransitionHistoryRef.current = [...stateTransitionHistoryRef.current, `f${frameNo} ${transitions.join(' ')}`].slice(-5);
+    lastStateNosRef.current = currentStateNos;
+  }
+
+  const keySignature = formatPressedKeys(pressedKeys);
+  if (keySignature !== lastKeySignatureRef.current) {
+    inputHistoryRef.current = [...inputHistoryRef.current, `f${frameNo} ${keySignature}`].slice(-5);
+    lastKeySignatureRef.current = keySignature;
+  }
+
+  if (state.hitEvents.length > 0) {
+    const damageLines = state.hitEvents.map((event) => `f${frameNo} P${event.attackerId}->P${event.defenderId} dmg=${event.damage}`);
+    damageHistoryRef.current = [...damageHistoryRef.current, ...damageLines].slice(-5);
+  }
+
+  setStageDebugLines([
+    `P1 State ${p1.stateNo} time=${p1.stateTime} anim=${p1.animNo}`,
+    `P2 State ${p2.stateNo} time=${p2.stateTime} anim=${p2.animNo}`,
+    `State履歴: ${stateTransitionHistoryRef.current.join(' | ') || '-'}`,
+    `入力履歴: ${inputHistoryRef.current.join(' | ') || '-'}`,
+    `Damage: ${damageHistoryRef.current.join(' | ') || '-'}`,
+  ]);
+}
+
+function formatPressedKeys(pressedKeys: ReadonlySet<string>): string {
+  if (pressedKeys.size === 0) return 'keys=-';
+  return `keys=${Array.from(pressedKeys).sort().map(formatKeyCode).join('+')}`;
 }
 
 function IdeasPanel() {
