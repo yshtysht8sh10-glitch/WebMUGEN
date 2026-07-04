@@ -58,8 +58,10 @@ const DEFAULT_CHARACTER_DEF_PATH = '/chars/T-H-M-A.zip';
 const ENABLE_RUNTIME_FALLBACKS = false;
 const RUNTIME_HISTORY_LIMIT = 500;
 const INPUT_CONFIG_STORAGE_KEY = 'webmugen.inputConfig.v1';
+const CHARACTER_PATH_STORAGE_KEY = 'webmugen.characterPath.v1';
+const CHARACTER_PATH_OPTIONS = ['/chars/T-H-M-A.zip', '/chars/kfm/kfm.def'] as const;
 
-type DebugTab = 'static' | 'runtime' | 'ideas' | 'settings';
+type DebugTab = 'static' | 'runtime' | 'ideas' | 'manual' | 'settings';
 
 type StaticDebugInfo = {
   characterRows: string[];
@@ -106,6 +108,7 @@ export function WebMugenApp() {
   const [activeDebugTab, setActiveDebugTab] = useState<DebugTab>('static');
   const [copyStatus, setCopyStatus] = useState('');
   const [inputConfig, setInputConfigState] = useState<InputConfig>(inputConfigRef.current);
+  const [characterPath, setCharacterPathState] = useState(loadCharacterPath());
 
   useEffect(() => {
     let disposed = false;
@@ -115,7 +118,17 @@ export function WebMugenApp() {
       const canvas = canvasRef.current;
       if (!canvas) return;
 
-      const loadResult = await loadAppCharacter(DEFAULT_CHARACTER_DEF_PATH);
+      gameStateRef.current = createInitialGameState();
+      hitFeedbackRef.current = createInitialHitFeedbackState();
+      roundStateRef.current = createInitialRoundState();
+      roundScoreRef.current = createInitialRoundScore();
+      cnsTraceRef.current = [];
+      runtimeHistoryRef.current = [];
+      lastRuntimeSignatureRef.current = '';
+      p1CommandBufferRef.current.clear();
+      p2CommandBufferRef.current.clear();
+
+      const loadResult = await loadAppCharacter(characterPath);
       if (disposed) return;
 
       const loadedCharacter = loadResult.character ?? createSampleCharacterAssets();
@@ -134,7 +147,7 @@ export function WebMugenApp() {
       setStaticDebugInfo(createStaticDebugInfo(character, loadResult.source, spriteCount));
       setLoadMessage(
         loadResult.source === 'def'
-          ? `Loaded character: ${DEFAULT_CHARACTER_DEF_PATH} sprites=${spriteCount} cnsStates=${character.cns.states.length} fallback=${ENABLE_RUNTIME_FALLBACKS ? 'on' : 'off'}`
+          ? `Loaded character: ${characterPath} sprites=${spriteCount} cnsStates=${character.cns.states.length} fallback=${ENABLE_RUNTIME_FALLBACKS ? 'on' : 'off'}`
           : `Sample character fallback: ${loadResult.errorMessage ?? 'unknown reason'} cnsStates=${character.cns.states.length} runtimeFallback=${ENABLE_RUNTIME_FALLBACKS ? 'on' : 'off'}`,
       );
 
@@ -263,7 +276,7 @@ export function WebMugenApp() {
       inputRef.current?.dispose();
       inputRef.current = null;
     };
-  }, []);
+  }, [characterPath]);
 
   const liveDebugLines = [
     ...inputDebugLines,
@@ -275,13 +288,15 @@ export function WebMugenApp() {
   ];
   const staticTabLines = formatStaticTabLines(loadMessage, staticDebugInfo, coverageDebugLines, controlHelpLines);
   const ideasTabLines = formatIdeasLines();
-  const settingsTabLines = formatInputConfigLines(inputConfig);
-  const activeTabText = formatActiveTabText(activeDebugTab, staticTabLines, runtimeHistoryLines, ideasTabLines, settingsTabLines);
+  const manualTabLines = formatManualLines();
+  const settingsTabLines = formatSettingsLines(inputConfig, characterPath);
+  const activeTabText = formatActiveTabText(activeDebugTab, staticTabLines, runtimeHistoryLines, ideasTabLines, manualTabLines, settingsTabLines);
   const fullDebugText = formatFullDebugText({
     liveDebugLines,
     staticTabLines,
     runtimeHistoryLines,
     ideasTabLines,
+    manualTabLines,
     settingsTabLines,
   });
 
@@ -300,6 +315,13 @@ export function WebMugenApp() {
     saveInputConfig(nextConfig);
     p1CommandBufferRef.current.clear();
     p2CommandBufferRef.current.clear();
+  };
+
+  const setCharacterPath = (nextPath: string) => {
+    const trimmed = nextPath.trim();
+    if (!trimmed || trimmed === characterPath) return;
+    saveCharacterPath(trimmed);
+    setCharacterPathState(trimmed);
   };
 
   return (
@@ -343,31 +365,15 @@ export function WebMugenApp() {
           <RuntimeHistoryPanel runtimeHistoryLines={runtimeHistoryLines} />
         )}
         {activeDebugTab === 'ideas' && <IdeasPanel />}
+        {activeDebugTab === 'manual' && <ManualPanel />}
         {activeDebugTab === 'settings' && (
-          <InputConfigPanel
-            config={inputConfig}
-            onChange={setInputConfig}
+          <SettingsPanel
+            characterPath={characterPath}
+            inputConfig={inputConfig}
+            onCharacterPathChange={setCharacterPath}
+            onInputConfigChange={setInputConfig}
           />
         )}
-      </section>
-
-      <section className="help-panel">
-        <div className="control-help-grid">
-          <div>
-            <h2>Keyboard</h2>
-            <p>P1: {formatKeyboardMapping(inputConfig.players[0])}</p>
-            <p>P2: {formatKeyboardMapping(inputConfig.players[1])}</p>
-          </div>
-          <div>
-            <h2>Controller</h2>
-            <p>1st gamepad = P1, 2nd gamepad = P2</p>
-            <p>D-pad / left stick move</p>
-            <p>P1: {formatGamepadMapping(inputConfig.players[0])}</p>
-            <p>P2: {formatGamepadMapping(inputConfig.players[1])}</p>
-          </div>
-        </div>
-        <p>System: R restarts the round after KO or TIME OVER.</p>
-        <p>Place character files under <code>public/chars/kfm/</code> to try DEF-based loading.</p>
       </section>
     </div>
   );
@@ -387,6 +393,90 @@ const INPUT_ACTIONS = [
 ] as const;
 
 type InputAction = typeof INPUT_ACTIONS[number]['key'];
+
+function SettingsPanel({
+  characterPath,
+  inputConfig,
+  onCharacterPathChange,
+  onInputConfigChange,
+}: {
+  characterPath: string;
+  inputConfig: InputConfig;
+  onCharacterPathChange: (path: string) => void;
+  onInputConfigChange: (config: InputConfig) => void;
+}) {
+  return (
+    <div className="settings-stack">
+      <CharacterConfigPanel characterPath={characterPath} onChange={onCharacterPathChange} />
+      <section className="settings-section">
+        <h2>Control Summary</h2>
+        <div className="control-help-grid">
+          <div>
+            <h3>Keyboard</h3>
+            <p>P1: {formatKeyboardMapping(inputConfig.players[0])}</p>
+            <p>P2: {formatKeyboardMapping(inputConfig.players[1])}</p>
+          </div>
+          <div>
+            <h3>Controller</h3>
+            <p>1st gamepad = P1, 2nd gamepad = P2</p>
+            <p>D-pad / left stick move</p>
+            <p>P1: {formatGamepadMapping(inputConfig.players[0])}</p>
+            <p>P2: {formatGamepadMapping(inputConfig.players[1])}</p>
+          </div>
+        </div>
+      </section>
+      <InputConfigPanel
+        config={inputConfig}
+        onChange={onInputConfigChange}
+      />
+    </div>
+  );
+}
+
+function CharacterConfigPanel({
+  characterPath,
+  onChange,
+}: {
+  characterPath: string;
+  onChange: (path: string) => void;
+}) {
+  const [draft, setDraft] = useState(characterPath);
+
+  useEffect(() => {
+    setDraft(characterPath);
+  }, [characterPath]);
+
+  return (
+    <section className="settings-section">
+      <h2>Character</h2>
+      <p>Place character files under <code>public/chars/</code>, then select or enter the DEF/ZIP path here.</p>
+      <div className="character-picker">
+        <select value={characterPath} onChange={(event) => onChange(event.currentTarget.value)}>
+          {CHARACTER_PATH_OPTIONS.map((path) => (
+            <option key={path} value={path}>{path}</option>
+          ))}
+          {!CHARACTER_PATH_OPTIONS.includes(characterPath as typeof CHARACTER_PATH_OPTIONS[number]) && (
+            <option value={characterPath}>{characterPath}</option>
+          )}
+        </select>
+        <input
+          list="character-path-options"
+          onChange={(event) => setDraft(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') onChange(draft);
+          }}
+          value={draft}
+        />
+        <datalist id="character-path-options">
+          {CHARACTER_PATH_OPTIONS.map((path) => (
+            <option key={path} value={path} />
+          ))}
+        </datalist>
+        <button type="button" onClick={() => onChange(draft)}>Load</button>
+      </div>
+    </section>
+  );
+}
 
 function InputConfigPanel({
   config,
@@ -527,6 +617,16 @@ function saveInputConfig(config: InputConfig): void {
   localStorage.setItem(INPUT_CONFIG_STORAGE_KEY, JSON.stringify(config));
 }
 
+function loadCharacterPath(): string {
+  if (typeof localStorage === 'undefined') return DEFAULT_CHARACTER_DEF_PATH;
+  return localStorage.getItem(CHARACTER_PATH_STORAGE_KEY) || DEFAULT_CHARACTER_DEF_PATH;
+}
+
+function saveCharacterPath(path: string): void {
+  if (typeof localStorage === 'undefined') return;
+  localStorage.setItem(CHARACTER_PATH_STORAGE_KEY, path);
+}
+
 function normalizeInputConfig(value: unknown): InputConfig {
   const fallback = cloneInputConfig(DEFAULT_INPUT_CONFIG);
   if (!value || typeof value !== 'object' || !Array.isArray((value as { players?: unknown }).players)) {
@@ -607,6 +707,9 @@ function DebugTabs({ activeTab, onChange }: { activeTab: DebugTab; onChange: (ta
       </button>
       <button className={activeTab === 'ideas' ? 'active' : ''} onClick={() => onChange('ideas')} type="button">
         タブ3 調査メモ
+      </button>
+      <button className={activeTab === 'manual' ? 'active' : ''} onClick={() => onChange('manual')} type="button">
+        Manual
       </button>
       <button className={activeTab === 'settings' ? 'active' : ''} onClick={() => onChange('settings')} type="button">
         Settings
@@ -705,6 +808,15 @@ function IdeasPanel() {
         ]}
       />
     </div>
+  );
+}
+
+function ManualPanel() {
+  return (
+    <section className="settings-section">
+      <h2>Manual</h2>
+      <p>System: R restarts the round after KO or TIME OVER.</p>
+    </section>
   );
 }
 
@@ -825,9 +937,18 @@ function formatIdeasLines(): string[] {
   ];
 }
 
-function formatInputConfigLines(config: InputConfig): string[] {
+function formatManualLines(): string[] {
   return [
-    '=== Input Config ===',
+    '=== Manual ===',
+    'System: R restarts the round after KO or TIME OVER.',
+  ];
+}
+
+function formatSettingsLines(config: InputConfig, characterPath: string): string[] {
+  return [
+    '=== Settings ===',
+    `Character: ${characterPath}`,
+    'Place character files under public/chars/, then select or enter the DEF/ZIP path in Settings.',
     `P1 keyboard: ${formatKeyboardMapping(config.players[0])}`,
     `P1 controller: ${formatGamepadMapping(config.players[0])}`,
     `P2 keyboard: ${formatKeyboardMapping(config.players[1])}`,
@@ -840,10 +961,12 @@ function formatActiveTabText(
   staticTabLines: string[],
   runtimeHistoryLines: string[],
   ideasTabLines: string[],
+  manualTabLines: string[],
   settingsTabLines: string[],
 ): string {
   if (activeTab === 'static') return staticTabLines.join('\n');
   if (activeTab === 'runtime') return runtimeHistoryLines.join('\n');
+  if (activeTab === 'manual') return manualTabLines.join('\n');
   if (activeTab === 'settings') return settingsTabLines.join('\n');
   return ideasTabLines.join('\n');
 }
@@ -853,12 +976,14 @@ function formatFullDebugText({
   staticTabLines,
   runtimeHistoryLines,
   ideasTabLines,
+  manualTabLines,
   settingsTabLines,
 }: {
   liveDebugLines: string[];
   staticTabLines: string[];
   runtimeHistoryLines: string[];
   ideasTabLines: string[];
+  manualTabLines: string[];
   settingsTabLines: string[];
 }): string {
   return [
@@ -876,6 +1001,9 @@ function formatFullDebugText({
     '',
     '=== タブ3 調査メモ ===',
     ...ideasTabLines,
+    '',
+    '=== Manual ===',
+    ...manualTabLines,
     '',
     '=== Settings ===',
     ...settingsTabLines,

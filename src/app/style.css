@@ -166,16 +166,39 @@ canvas {
   color: #cbd5e1;
 }
 
-.help-panel {
-  color: #d1d5db;
-  line-height: 1.7;
-  margin-top: 16px;
-}
-
 .control-help-grid {
   display: grid;
   gap: 16px;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.settings-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.settings-section {
+  border: 1px solid #334155;
+  background: #020617;
+  padding: 12px;
+}
+
+.settings-section h2 {
+  color: #f8fafc;
+  font-size: 16px;
+  margin: 0 0 10px;
+}
+
+.settings-section h3 {
+  color: #f8fafc;
+  font-size: 15px;
+  margin: 0 0 6px;
+}
+
+.settings-section p {
+  color: #d1d5db;
+  line-height: 1.6;
+  margin: 4px 0;
 }
 
 .control-help-grid h2 {
@@ -186,6 +209,42 @@ canvas {
 
 .control-help-grid p {
   margin: 2px 0;
+}
+
+.character-picker {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.character-picker select,
+.character-picker input {
+  background: #0f172a;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  color: #f8fafc;
+  min-height: 34px;
+  padding: 6px 8px;
+}
+
+.character-picker input {
+  flex: 1;
+  min-width: min(100%, 360px);
+}
+
+.character-picker button {
+  background: #2563eb;
+  border: 1px solid #60a5fa;
+  border-radius: 6px;
+  color: #f8fafc;
+  cursor: pointer;
+  min-height: 34px;
+  padding: 6px 12px;
+}
+
+.character-picker button:hover {
+  background: #1d4ed8;
 }
 
 .input-config-panel {
