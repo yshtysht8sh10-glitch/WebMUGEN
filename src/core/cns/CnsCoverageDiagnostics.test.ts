@@ -65,8 +65,12 @@ value = 0, 0
 
     const lines = formatCnsCoverageDiagnostics(analyzeCnsCoverage(cns));
 
-    expect(lines[0]).toBe('coverage states=1 controllers=1 triggers=1');
-    expect(lines[1]).toBe('coverage unsupported controllers=playsnd(1)');
-    expect(lines[2]).toBe('coverage unsupported triggers=unknowntrigger(1)');
+    expect(lines).toEqual([
+      'summary: states=1 controllers=1 triggers=1',
+      'unsupported controllers:',
+      '  playsnd: 1',
+      'unsupported triggers:',
+      '  unknowntrigger: 1',
+    ]);
   });
 });

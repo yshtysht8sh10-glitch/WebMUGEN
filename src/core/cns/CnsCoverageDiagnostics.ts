@@ -109,14 +109,18 @@ export function analyzeCnsCoverage(cnsDocument: CnsDocument): CnsCoverageDiagnos
 }
 
 export function formatCnsCoverageDiagnostics(diagnostics: CnsCoverageDiagnostics): string[] {
-  const unsupportedControllerSummary = diagnostics.unsupportedControllers.slice(0, 6).map((item) => `${item.name}(${item.count})`).join(',');
-  const unsupportedTriggerSummary = diagnostics.unsupportedTriggers.slice(0, 6).map((item) => `${item.name}(${item.count})`).join(',');
-
   return [
-    `coverage states=${diagnostics.stateCount} controllers=${diagnostics.controllerCount} triggers=${diagnostics.triggerCount}`,
-    `coverage unsupported controllers=${unsupportedControllerSummary || '-'}`,
-    `coverage unsupported triggers=${unsupportedTriggerSummary || '-'}`,
+    `summary: states=${diagnostics.stateCount} controllers=${diagnostics.controllerCount} triggers=${diagnostics.triggerCount}`,
+    'unsupported controllers:',
+    ...formatCoverageItems(diagnostics.unsupportedControllers),
+    'unsupported triggers:',
+    ...formatCoverageItems(diagnostics.unsupportedTriggers),
   ];
+}
+
+function formatCoverageItems(items: ReadonlyArray<{ name: string; count: number }>): string[] {
+  if (items.length === 0) return ['  -'];
+  return items.map((item) => `  ${item.name}: ${item.count}`);
 }
 
 function normalizeControllerName(controller: CnsStateController): string {

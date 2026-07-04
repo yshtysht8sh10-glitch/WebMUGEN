@@ -18,9 +18,11 @@ describe('CnsCoverageDebugOverlay', () => {
         unsupportedTriggers: [{ name: 'animelem', count: 1, status: 'unsupported', examples: ['AnimElem = 2'] }],
       }),
     ).toEqual([
-      'coverage states=2 controllers=3 triggers=4',
-      'coverage unsupported controllers=playsnd(2)',
-      'coverage unsupported triggers=animelem(1)',
+      'summary: states=2 controllers=3 triggers=4',
+      'unsupported controllers:',
+      '  playsnd: 2',
+      'unsupported triggers:',
+      '  animelem: 1',
     ]);
   });
 });

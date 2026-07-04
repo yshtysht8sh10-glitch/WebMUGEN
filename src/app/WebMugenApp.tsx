@@ -747,7 +747,7 @@ function StaticDebugPanel({
       <DebugBlock title="Command → State 期待遷移" lines={staticDebugInfo.commandRoutes} />
       <StateDefListPanel rows={staticDebugInfo.stateRows} />
       <DebugBlock title="CMD コマンド一覧" lines={staticDebugInfo.commandRows} />
-      <DebugBlock title="互換カバレッジ" lines={coverageDebugLines} />
+      <DebugBlock title="CNS対応状況" lines={coverageDebugLines} />
     </div>
   );
 }
@@ -941,7 +941,7 @@ function formatStaticTabLines(
     '=== CMD コマンド一覧 ===',
     ...staticDebugInfo.commandRows,
     '',
-    '=== 互換カバレッジ ===',
+    '=== CNS対応状況 ===',
     ...coverageDebugLines,
   ];
 }
