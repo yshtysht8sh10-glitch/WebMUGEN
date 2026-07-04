@@ -120,7 +120,7 @@ export function WebMugenApp() {
   const [runtimeHistoryLines, setRuntimeHistoryLines] = useState<string[]>(['操作すると、ここにタイムスタンプ付きで内部処理ログが残ります。']);
   const [readableRuntimeHistoryLines, setReadableRuntimeHistoryLines] = useState<string[]>(['人間用の短い実行履歴がここに残ります。']);
   const [stageDebugLines, setStageDebugLines] = useState<string[]>(['State: -']);
-  const [activeDebugTab, setActiveDebugTab] = useState<DebugTab>('static');
+  const [activeDebugTab, setActiveDebugTab] = useState<DebugTab>('runtime');
   const [copyStatus, setCopyStatus] = useState('');
   const [inputConfig, setInputConfigState] = useState<InputConfig>(inputConfigRef.current);
   const [characterPath, setCharacterPathState] = useState(loadCharacterPath());
@@ -378,7 +378,8 @@ export function WebMugenApp() {
       <DebugTabs activeTab={activeDebugTab} onChange={setActiveDebugTab} />
       <CopyToolbar
         activeTab={activeDebugTab}
-        runtimeLogText={runtimeHistoryLines.join('\n')}
+        aiLogText={runtimeHistoryLines.join('\n')}
+        humanLogText={readableRuntimeHistoryLines.join('\n')}
         copyStatus={copyStatus}
         onCopy={handleCopy}
       />
@@ -732,11 +733,11 @@ function formatGamepadMapping(player: PlayerInputMapping): string {
 function DebugTabs({ activeTab, onChange }: { activeTab: DebugTab; onChange: (tab: DebugTab) => void }) {
   return (
     <nav className="debug-tabs" aria-label="debug tabs">
-      <button className={activeTab === 'static' ? 'active' : ''} onClick={() => onChange('static')} type="button">
-        タブ1 静的情報
-      </button>
       <button className={activeTab === 'runtime' ? 'active' : ''} onClick={() => onChange('runtime')} type="button">
-        タブ2 実行履歴
+        タブ1 実行履歴
+      </button>
+      <button className={activeTab === 'static' ? 'active' : ''} onClick={() => onChange('static')} type="button">
+        タブ2 静的情報
       </button>
       <button className={activeTab === 'ideas' ? 'active' : ''} onClick={() => onChange('ideas')} type="button">
         タブ3 調査メモ
@@ -753,12 +754,14 @@ function DebugTabs({ activeTab, onChange }: { activeTab: DebugTab; onChange: (ta
 
 function CopyToolbar({
   activeTab,
-  runtimeLogText,
+  aiLogText,
+  humanLogText,
   copyStatus,
   onCopy,
 }: {
   activeTab: DebugTab;
-  runtimeLogText: string;
+  aiLogText: string;
+  humanLogText: string;
   copyStatus: string;
   onCopy: (label: string, text: string) => void;
 }) {
@@ -766,9 +769,14 @@ function CopyToolbar({
 
   return (
     <div className="copy-toolbar">
-      <button type="button" onClick={() => onCopy('実行履歴ログ', runtimeLogText)}>
-        ログをコピー
-      </button>
+      <div className="copy-toolbar-buttons">
+        <button type="button" onClick={() => onCopy('人間用実行履歴ログ', humanLogText)}>
+          人間用ログをコピー
+        </button>
+        <button type="button" onClick={() => onCopy('AI用詳細ログ', aiLogText)}>
+          AI用ログをコピー
+        </button>
+      </div>
       {copyStatus && <span className="copy-status">{copyStatus}</span>}
     </div>
   );
@@ -830,18 +838,18 @@ function RuntimeHistoryPanel({
   return (
     <div className="runtime-history-grid">
       <section>
-        <h2>Codex用 詳細ログ</h2>
-        <p className="debug-note">
-          入力、Command、State、Controller、Physics、成立情報を多めに蓄積します。ログコピーの対象です。
-        </p>
-        <pre className="debug-pre history-pre codex-history-pre">{runtimeHistoryLines.join('\n')}</pre>
-      </section>
-      <section>
         <h2>人間用 実行履歴</h2>
         <p className="debug-note">
-          タイムスタンプ、StateNo、AnimNo、成立Triggerを短く表示します。
+          タイムスタンプ、StateNo、AnimNo、成立Triggerを短く表示します。Timeだけの変化では増えません。
         </p>
         <pre className="debug-pre history-pre readable-history-pre">{readableRuntimeHistoryLines.join('\n')}</pre>
+      </section>
+      <section>
+        <h2>AI用 詳細ログ</h2>
+        <p className="debug-note">
+          入力、Command、State、Controller、Physics、成立情報を多めに蓄積します。Timeだけの変化では増えません。
+        </p>
+        <pre className="debug-pre history-pre codex-history-pre">{runtimeHistoryLines.join('\n')}</pre>
       </section>
     </div>
   );
@@ -1120,7 +1128,12 @@ export function appendRuntimeHistoryIfNeeded({
     ...cnsLines,
     ...formatCodexTraceDetailLines(traces),
   ]);
-  const signature = snapshot.join('|');
+  const signature = formatRuntimeHistorySignature({
+    commandLines,
+    inputLines,
+    pressedKeys,
+    traces,
+  });
   if (signature === lastSignatureRef.current) return;
 
   lastSignatureRef.current = signature;
@@ -1157,10 +1170,8 @@ function appendReadableRuntimeHistoryIfNeeded({
   const keySummary = formatPressedKeys(pressedKeys);
   const signature = [
     p1.stateNo,
-    p1.stateTime,
     p1.animNo,
     p2.stateNo,
-    p2.stateTime,
     p2.animNo,
     triggerSummary,
     damageSummary,
@@ -1170,10 +1181,45 @@ function appendReadableRuntimeHistoryIfNeeded({
 
   lastSignatureRef.current = signature;
   const timestamp = new Date().toLocaleTimeString('ja-JP', { hour12: false });
-  const line = `${timestamp} f=${frameNo} P1 StateNo=${p1.stateNo} Time=${p1.stateTime} AnimNo=${p1.animNo} | P2 StateNo=${p2.stateNo} Time=${p2.stateTime} AnimNo=${p2.animNo} | ${keySummary} | 成立Trigger=${triggerSummary} | Damage=${damageSummary}`;
-  const nextHistory = freezeHistoryLines([...historyRef.current, line]).slice(-160);
+  const entry = [
+    `---- ${timestamp} frame=${frameNo} ----`,
+    `P1 StateNo=${p1.stateNo} Time=${p1.stateTime} AnimNo=${p1.animNo}`,
+    `P2 StateNo=${p2.stateNo} Time=${p2.stateTime} AnimNo=${p2.animNo}`,
+    keySummary,
+    `成立Trigger=${triggerSummary}`,
+    `Damage=${damageSummary}`,
+    '',
+  ];
+  const nextHistory = freezeHistoryLines([...historyRef.current, ...entry]).slice(-320);
   historyRef.current = nextHistory.slice();
   setHistoryLines(nextHistory.slice());
+}
+
+function formatRuntimeHistorySignature({
+  commandLines,
+  inputLines,
+  pressedKeys,
+  traces,
+}: {
+  commandLines: string[];
+  inputLines: string[];
+  pressedKeys: ReadonlySet<string>;
+  traces: CnsRuntimeTrace[];
+}): string {
+  return [
+    formatPressedKeys(pressedKeys),
+    ...inputLines.filter((line) => !/^keys=/.test(line)),
+    ...commandLines,
+    ...traces.map((trace) => [
+      trace.playerId,
+      trace.stateNo,
+      trace.afterStateNo,
+      trace.animNo,
+      trace.afterAnimNo,
+      formatExecutedControllers(trace),
+      trace.debugLines.filter((line) => !/\btime=|StateTime=|animtime=|MugenAnimTime=/.test(line)).join(','),
+    ].join(':')),
+  ].join('|');
 }
 
 function formatCodexTraceDetailLines(traces: readonly CnsRuntimeTrace[]): string[] {
