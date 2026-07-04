@@ -65,7 +65,6 @@ type DebugTab = 'static' | 'runtime' | 'ideas' | 'manual' | 'settings';
 
 type StaticDebugInfo = {
   characterRows: string[];
-  commandRoutes: string[];
   stateRows: StateDebugRow[];
   commandRows: string[];
 };
@@ -76,11 +75,11 @@ type StateDebugRow = {
   originLabel: string;
   sourceDetail: string;
   summary: string;
+  routes: string[];
 };
 
 const EMPTY_STATIC_DEBUG_INFO: StaticDebugInfo = {
   characterRows: ['character=-'],
-  commandRoutes: ['routes=-'],
   stateRows: [],
   commandRows: ['commands=-'],
 };
@@ -744,7 +743,6 @@ function StaticDebugPanel({
   return (
     <div className="debug-grid">
       <DebugBlock title="Character / DEF 読込結果" lines={[loadMessage, ...staticDebugInfo.characterRows]} />
-      <DebugBlock title="Command → State 期待遷移" lines={staticDebugInfo.commandRoutes} />
       <StateDefListPanel rows={staticDebugInfo.stateRows} />
       <DebugBlock title="CMD コマンド一覧" lines={staticDebugInfo.commandRows} />
       <DebugBlock title="CNS対応状況" lines={coverageDebugLines} />
@@ -764,7 +762,14 @@ function StateDefListPanel({ rows }: { rows: StateDebugRow[] }) {
           <div className={`statedef-row ${row.origin}`} key={`${row.stateNo}-${row.originLabel}-${index}`}>
             <span className="statedef-no">S{row.stateNo}</span>
             <span className="statedef-origin">{row.originLabel}</span>
-            <span className="statedef-summary">{row.summary}</span>
+            <span className="statedef-summary">
+              {row.summary}
+              <span className="statedef-routes">
+                {row.routes.length === 0 ? 'routes=-' : row.routes.map((route, routeIndex) => (
+                  <span className="statedef-route" key={`${route}-${routeIndex}`}>{route}</span>
+                ))}
+              </span>
+            </span>
           </div>
         ))}
       </div>
@@ -839,12 +844,6 @@ function createStaticDebugInfo(character: any, source: string, spriteCount: numb
     `runtime fallback: ${ENABLE_RUNTIME_FALLBACKS ? 'on' : 'off'}`,
   ];
 
-  const commandRoutes = character.cns.states
-    .filter((state: any) => state.stateNo === -1 || state.stateNo === -2 || state.stateNo === -3)
-    .flatMap((state: any) => state.controllers.map((controller: any) => formatExpectedRoute(state.stateNo, controller)))
-    .filter(Boolean)
-    .slice(0, 80);
-
   const stateRows = character.cns.states
     .slice()
     .sort((left: CnsStateDefinition, right: CnsStateDefinition) => left.stateNo - right.stateNo)
@@ -856,7 +855,6 @@ function createStaticDebugInfo(character: any, source: string, spriteCount: numb
 
   return {
     characterRows: infoRows,
-    commandRoutes: commandRoutes.length > 0 ? commandRoutes : ['ChangeState routes=-'],
     stateRows,
     commandRows,
   };
@@ -875,7 +873,7 @@ function formatExpectedRoute(stateNo: number, controller: any): string | null {
     .map((trigger: any) => `${trigger.name}:${trigger.expression}`)
     .join(' | ');
 
-  return `S${stateNo} ${commandTriggers.join(' | ') || 'auto'} -> ChangeState ${value ?? '?'}${otherTriggers ? ` if ${otherTriggers}` : ''}`;
+  return `${commandTriggers.join(' | ') || 'auto'} -> ChangeState ${value ?? '?'}${otherTriggers ? ` if ${otherTriggers}` : ''}`;
 }
 
 function readDefValue(def: any, sectionName: string, key: string): string | null {
@@ -908,6 +906,9 @@ function formatStateDebugRow(state: CnsStateDefinition): StateDebugRow {
       `anim=${state.initialAnim ?? '-'}`,
       `controllers=${state.controllers.length}`,
     ].join(' '),
+    routes: state.controllers
+      .map((controller: any) => formatExpectedRoute(state.stateNo, controller))
+      .filter((route): route is string => route !== null),
   };
 }
 
@@ -919,7 +920,7 @@ function formatStateOriginLabel(origin: StateDebugRow['origin']): string {
 }
 
 function formatStateDebugLine(row: StateDebugRow): string {
-  return `S${row.stateNo} [${row.originLabel}:${row.sourceDetail}] ${row.summary}`;
+  return `S${row.stateNo} [${row.originLabel}:${row.sourceDetail}] ${row.summary} routes=${row.routes.join('; ') || '-'}`;
 }
 
 function formatStaticTabLines(
@@ -931,9 +932,6 @@ function formatStaticTabLines(
     '=== Character / DEF 読込結果 ===',
     loadMessage,
     ...staticDebugInfo.characterRows,
-    '',
-    '=== Command → State 期待遷移 ===',
-    ...staticDebugInfo.commandRoutes,
     '',
     '=== StateDef 一覧 ===',
     ...staticDebugInfo.stateRows.map(formatStateDebugLine),

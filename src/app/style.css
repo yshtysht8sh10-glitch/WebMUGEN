@@ -167,13 +167,13 @@ canvas {
 }
 
 .statedef-row {
-  align-items: center;
+  align-items: start;
   border-left: 4px solid #64748b;
   border-radius: 4px;
   display: grid;
   gap: 8px;
-  grid-template-columns: 76px 104px minmax(0, 1fr);
-  padding: 6px 8px;
+  grid-template-columns: 76px 84px minmax(0, 1fr);
+  padding: 8px;
 }
 
 .statedef-row.character {
@@ -231,6 +231,20 @@ canvas {
   line-height: 1.45;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.statedef-routes {
+  display: grid;
+  gap: 3px;
+  margin-top: 5px;
+}
+
+.statedef-route {
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 4px;
+  color: #f8fafc;
+  padding: 3px 5px;
 }
 
 .history-pre {
