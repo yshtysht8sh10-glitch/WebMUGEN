@@ -66,11 +66,26 @@ value = 0, 0
     const lines = formatCnsCoverageDiagnostics(analyzeCnsCoverage(cns));
 
     expect(lines).toEqual([
-      'summary: states=1 controllers=1 triggers=1',
-      'unsupported controllers:',
-      '  playsnd: 1',
-      'unsupported triggers:',
-      '  unknowntrigger: 1',
+      'CNS機能の対応状況です。数字は、このキャラのCNS内で出てきた回数です。',
+      'StateDef: 1',
+      'Controller使用回数: 1 / 種類: 1',
+      'Trigger使用回数: 1 / 種類: 1',
+      '',
+      'Controllers:',
+      '  対応済み: 0種類',
+      '  -',
+      '  一部対応: 0種類',
+      '  -',
+      '  未対応: 1種類',
+      '    playsnd: 1',
+      '',
+      'Triggers:',
+      '  対応済み: 0種類',
+      '  -',
+      '  一部対応: 0種類',
+      '  -',
+      '  未対応: 1種類',
+      '    unknowntrigger: 1',
     ]);
   });
 });
