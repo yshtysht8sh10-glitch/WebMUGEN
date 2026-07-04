@@ -75,6 +75,7 @@ type StateDebugRow = {
   stateNo: number;
   origin: 'character' | 'common' | 'mixed' | 'unknown';
   originLabel: string;
+  sourceDetail: string;
   summary: string;
 };
 
@@ -899,12 +900,14 @@ function readParamNumber(controller: any, key: string): number | null {
 
 function formatStateDebugRow(state: CnsStateDefinition): StateDebugRow {
   const origin = state.source ?? 'unknown';
-  const originLabel = state.sourceLabel ?? origin;
+  const sourceDetail = state.sourceLabel ?? origin;
   return {
     stateNo: state.stateNo,
     origin,
-    originLabel,
+    originLabel: formatStateOriginLabel(origin),
+    sourceDetail,
     summary: [
+      `source=${sourceDetail}`,
       `type=${state.stateType ?? '-'}`,
       `movetype=${state.moveType ?? '-'}`,
       `physics=${state.physics ?? '-'}`,
@@ -915,8 +918,15 @@ function formatStateDebugRow(state: CnsStateDefinition): StateDebugRow {
   };
 }
 
+function formatStateOriginLabel(origin: StateDebugRow['origin']): string {
+  if (origin === 'character') return 'Char';
+  if (origin === 'common') return 'Common';
+  if (origin === 'mixed') return 'Mixed';
+  return 'Unknown';
+}
+
 function formatStateDebugLine(row: StateDebugRow): string {
-  return `S${row.stateNo} [${row.originLabel}] ${row.summary}`;
+  return `S${row.stateNo} [${row.originLabel}:${row.sourceDetail}] ${row.summary}`;
 }
 
 function formatStaticTabLines(
