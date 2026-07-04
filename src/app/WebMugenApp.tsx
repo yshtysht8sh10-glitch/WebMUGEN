@@ -53,6 +53,7 @@ import { formatPhysicsDebugOverlay } from './PhysicsDebugOverlay';
 import { InputBuffer } from '../input/InputBuffer';
 import { resolveCommands } from '../input/CommandResolver';
 import { formatCmdControlHelp } from './CmdControlHelp';
+import type { CnsStateDefinition } from '../mugen/common/cnsTypes';
 
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/T-H-M-A.zip';
 const ENABLE_RUNTIME_FALLBACKS = false;
@@ -66,14 +67,21 @@ type DebugTab = 'static' | 'runtime' | 'ideas' | 'manual' | 'settings';
 type StaticDebugInfo = {
   characterRows: string[];
   commandRoutes: string[];
-  stateRows: string[];
+  stateRows: StateDebugRow[];
   commandRows: string[];
+};
+
+type StateDebugRow = {
+  stateNo: number;
+  origin: 'character' | 'common' | 'mixed' | 'unknown';
+  originLabel: string;
+  summary: string;
 };
 
 const EMPTY_STATIC_DEBUG_INFO: StaticDebugInfo = {
   characterRows: ['character=-'],
   commandRoutes: ['routes=-'],
-  stateRows: ['states=-'],
+  stateRows: [],
   commandRows: ['commands=-'],
 };
 
@@ -742,11 +750,31 @@ function StaticDebugPanel({
     <div className="debug-grid">
       <DebugBlock title="Character / DEF 読込結果" lines={[loadMessage, ...staticDebugInfo.characterRows]} />
       <DebugBlock title="Command → State 期待遷移" lines={staticDebugInfo.commandRoutes} />
-      <DebugBlock title="StateDef 一覧" lines={staticDebugInfo.stateRows} />
+      <StateDefListPanel rows={staticDebugInfo.stateRows} />
       <DebugBlock title="CMD コマンド一覧" lines={staticDebugInfo.commandRows} />
       <DebugBlock title="互換カバレッジ" lines={coverageDebugLines} />
       <DebugBlock title="操作ヘルプ" lines={controlHelpLines} />
     </div>
+  );
+}
+
+function StateDefListPanel({ rows }: { rows: StateDebugRow[] }) {
+  return (
+    <section className="debug-block statedef-list">
+      <h2>StateDef 一覧</h2>
+      <div className="statedef-count">loaded StateDefs: {rows.length}</div>
+      <div className="statedef-scroll">
+        {rows.length === 0 ? (
+          <div className="statedef-empty">states=-</div>
+        ) : rows.map((row, index) => (
+          <div className={`statedef-row ${row.origin}`} key={`${row.stateNo}-${row.originLabel}-${index}`}>
+            <span className="statedef-no">S{row.stateNo}</span>
+            <span className="statedef-origin">{row.originLabel}</span>
+            <span className="statedef-summary">{row.summary}</span>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -825,9 +853,8 @@ function createStaticDebugInfo(character: any, source: string, spriteCount: numb
 
   const stateRows = character.cns.states
     .slice()
-    .sort((left: any, right: any) => left.stateNo - right.stateNo)
-    .map((state: any) => `S${state.stateNo} type=${state.stateType ?? '-'} phys=${state.physics ?? '-'} ctrl=${state.ctrl === undefined ? '-' : Number(state.ctrl)} anim=${state.initialAnim ?? '-'} controllers=${state.controllers.length}`)
-    .slice(0, 120);
+    .sort((left: CnsStateDefinition, right: CnsStateDefinition) => left.stateNo - right.stateNo)
+    .map(formatStateDebugRow);
 
   const commandRows = character.cmd.commands
     .map((command: any) => `${command.name}: ${command.command}${command.time ? ` time=${command.time}` : ''}`)
@@ -870,6 +897,28 @@ function readParamNumber(controller: any, key: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function formatStateDebugRow(state: CnsStateDefinition): StateDebugRow {
+  const origin = state.source ?? 'unknown';
+  const originLabel = state.sourceLabel ?? origin;
+  return {
+    stateNo: state.stateNo,
+    origin,
+    originLabel,
+    summary: [
+      `type=${state.stateType ?? '-'}`,
+      `movetype=${state.moveType ?? '-'}`,
+      `physics=${state.physics ?? '-'}`,
+      `ctrl=${state.ctrl === undefined ? '-' : Number(state.ctrl)}`,
+      `anim=${state.initialAnim ?? '-'}`,
+      `controllers=${state.controllers.length}`,
+    ].join(' '),
+  };
+}
+
+function formatStateDebugLine(row: StateDebugRow): string {
+  return `S${row.stateNo} [${row.originLabel}] ${row.summary}`;
+}
+
 function formatStaticTabLines(
   loadMessage: string,
   staticDebugInfo: StaticDebugInfo,
@@ -885,7 +934,7 @@ function formatStaticTabLines(
     ...staticDebugInfo.commandRoutes,
     '',
     '=== StateDef 一覧 ===',
-    ...staticDebugInfo.stateRows,
+    ...staticDebugInfo.stateRows.map(formatStateDebugLine),
     '',
     '=== CMD コマンド一覧 ===',
     ...staticDebugInfo.commandRows,

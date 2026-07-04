@@ -40,6 +40,8 @@ describe('CharacterLoader', () => {
     expect(character.cns.states.map((state) => state.stateNo)).toEqual([200, -1, 0]);
     expect(character.cns.states.find((state) => state.stateNo === 200)?.initialAnim).toBe(200);
     expect(character.cns.states.find((state) => state.stateNo === 0)?.initialAnim).toBe(0);
+    expect(character.cns.states.find((state) => state.stateNo === 200)?.sourceLabel).toBe('character');
+    expect(character.cns.states.find((state) => state.stateNo === 0)?.sourceLabel).toBe('common1.cns');
   });
 
   it('loads extra st CNS files and character stcommon files from DEF', async () => {
@@ -55,6 +57,7 @@ describe('CharacterLoader', () => {
     const character = await loadCharacterFromDef('/chars/demo/demo.def', createTextOnlyFetcher(textAssets));
 
     expect(character.cns.states.map((state) => state.stateNo)).toEqual([0, 200, -1, 40]);
+    expect(character.cns.states.find((state) => state.stateNo === 40)?.sourceLabel).toBe('stcommon');
   });
 
   it('merges common1 command state controllers into character command state', async () => {

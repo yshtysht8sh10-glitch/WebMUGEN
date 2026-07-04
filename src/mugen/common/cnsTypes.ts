@@ -13,6 +13,8 @@ export type CnsStateController = {
 
 export type CnsStateDefinition = {
   stateNo: number;
+  source?: 'character' | 'common' | 'mixed';
+  sourceLabel?: string;
   stateType?: string;
   moveType?: string;
   physics?: string;

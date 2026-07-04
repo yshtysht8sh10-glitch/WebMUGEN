@@ -140,19 +140,20 @@ export async function loadCharacterFromDef(
     : null;
 
   const commonCmdTexts = fetchedCommonCmdTexts.length > 0 ? fetchedCommonCmdTexts : [BASELINE_COMMON_CMD_TEXT];
-  const commonCnsTexts = [characterCommonCnsText, commonCnsText].filter((text): text is string => text !== null);
   const characterCmd = parseCmdText(cmdText);
   const commonCmdDocuments = commonCmdTexts.map(parseCmdText);
-  const commonCmdCnsDocuments = commonCmdTexts.map(parseCnsText);
+  const commonCmdCnsDocuments = commonCmdTexts.map((text) => annotateCnsDocument(parseCnsText(text), 'common', 'common cmd'));
   const characterCnsText = [cnsText, ...extraCnsTexts].join('\n\n');
   const characterCns = commonCmdCnsDocuments.reduce(
     (merged, commonCmdCns) => mergeMissingCnsStates(merged, commonCmdCns),
-    mergeCnsDocuments(parseCnsText(characterCnsText), parseCnsText(cmdText)),
+    annotateCnsDocument(mergeCnsDocuments(parseCnsText(characterCnsText), parseCnsText(cmdText)), 'character', 'character'),
   );
-  const cns = commonCnsTexts.reduce(
-    (merged, commonCns) => mergeMissingCnsStates(merged, parseCnsText(commonCns)),
-    characterCns,
-  );
+  const withCharacterCommonCns = characterCommonCnsText
+    ? mergeMissingCnsStates(characterCns, annotateCnsDocument(parseCnsText(characterCommonCnsText), 'character', 'stcommon'))
+    : characterCns;
+  const cns = commonCnsText
+    ? mergeMissingCnsStates(withCharacterCommonCns, annotateCnsDocument(parseCnsText(commonCnsText), 'common', 'common1.cns'))
+    : withCharacterCommonCns;
 
   return {
     def,
@@ -192,6 +193,17 @@ export function mergeCnsDocuments(base: CnsDocument, extra: CnsDocument): CnsDoc
   };
 }
 
+function annotateCnsDocument(document: CnsDocument, source: CnsStateDefinition['source'], sourceLabel: string): CnsDocument {
+  return {
+    states: document.states.map((state) => ({
+      ...state,
+      source: state.source ?? source,
+      sourceLabel: state.sourceLabel ?? sourceLabel,
+    })),
+    metadataSections: document.metadataSections,
+  };
+}
+
 export function mergeMissingCnsStates(base: CnsDocument, common: CnsDocument): CnsDocument {
   const existingStateNos = new Set(base.states.map((state) => state.stateNo));
   const commonCommandState = common.states.find((state) => state.stateNo === -1);
@@ -207,6 +219,8 @@ export function mergeMissingCnsStates(base: CnsDocument, common: CnsDocument): C
 
     return {
       ...state,
+      source: state.source === 'common' ? 'common' : 'mixed',
+      sourceLabel: `${state.sourceLabel ?? 'character'}+${commonCommandState.sourceLabel ?? 'common'}`,
       controllers: [
         ...baselineMovementControllers,
         ...state.controllers,
