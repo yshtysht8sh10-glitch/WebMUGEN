@@ -52,7 +52,6 @@ import { formatCnsCoverageDebugOverlay } from './CnsCoverageDebugOverlay';
 import { formatPhysicsDebugOverlay } from './PhysicsDebugOverlay';
 import { InputBuffer } from '../input/InputBuffer';
 import { resolveCommands } from '../input/CommandResolver';
-import { formatCmdControlHelp } from './CmdControlHelp';
 import type { CnsStateDefinition } from '../mugen/common/cnsTypes';
 
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/T-H-M-A.zip';
@@ -111,7 +110,6 @@ export function WebMugenApp() {
   const [commandDebugLines, setCommandDebugLines] = useState<string[]>(['cmd p1=-', 'cmd p2=-']);
   const [physicsDebugLines, setPhysicsDebugLines] = useState<string[]>(['phys p1=-', 'phys p2=-']);
   const [coverageDebugLines, setCoverageDebugLines] = useState<string[]>(['coverage=-']);
-  const [controlHelpLines, setControlHelpLines] = useState<string[]>(['CMD: -']);
   const [staticDebugInfo, setStaticDebugInfo] = useState<StaticDebugInfo>(EMPTY_STATIC_DEBUG_INFO);
   const [runtimeHistoryLines, setRuntimeHistoryLines] = useState<string[]>(['操作すると、ここにタイムスタンプ付きで内部処理ログが残ります。']);
   const [activeDebugTab, setActiveDebugTab] = useState<DebugTab>('static');
@@ -149,7 +147,6 @@ export function WebMugenApp() {
       };
       cnsCoverageRef.current = analyzeCnsCoverage(character.cns);
       setCoverageDebugLines(formatCnsCoverageDebugOverlay(cnsCoverageRef.current));
-      setControlHelpLines(formatCmdControlHelp(character.cmd));
 
       const spriteCount = character.sprites?.sprites.size ?? 0;
 
@@ -295,7 +292,7 @@ export function WebMugenApp() {
     scoreDebugLine,
     ...cnsDebugLines,
   ];
-  const staticTabLines = formatStaticTabLines(loadMessage, staticDebugInfo, coverageDebugLines, controlHelpLines);
+  const staticTabLines = formatStaticTabLines(loadMessage, staticDebugInfo, coverageDebugLines);
 
   const handleCopy = async (label: string, text: string) => {
     try {
@@ -353,7 +350,6 @@ export function WebMugenApp() {
             loadMessage={loadMessage}
             staticDebugInfo={staticDebugInfo}
             coverageDebugLines={coverageDebugLines}
-            controlHelpLines={controlHelpLines}
           />
         )}
         {activeDebugTab === 'runtime' && (
@@ -740,12 +736,10 @@ function StaticDebugPanel({
   loadMessage,
   staticDebugInfo,
   coverageDebugLines,
-  controlHelpLines,
 }: {
   loadMessage: string;
   staticDebugInfo: StaticDebugInfo;
   coverageDebugLines: string[];
-  controlHelpLines: string[];
 }) {
   return (
     <div className="debug-grid">
@@ -754,7 +748,6 @@ function StaticDebugPanel({
       <StateDefListPanel rows={staticDebugInfo.stateRows} />
       <DebugBlock title="CMD コマンド一覧" lines={staticDebugInfo.commandRows} />
       <DebugBlock title="互換カバレッジ" lines={coverageDebugLines} />
-      <DebugBlock title="操作ヘルプ" lines={controlHelpLines} />
     </div>
   );
 }
@@ -933,7 +926,6 @@ function formatStaticTabLines(
   loadMessage: string,
   staticDebugInfo: StaticDebugInfo,
   coverageDebugLines: string[],
-  controlHelpLines: string[],
 ): string[] {
   return [
     '=== Character / DEF 読込結果 ===',
@@ -951,9 +943,6 @@ function formatStaticTabLines(
     '',
     '=== 互換カバレッジ ===',
     ...coverageDebugLines,
-    '',
-    '=== 操作ヘルプ ===',
-    ...controlHelpLines,
   ];
 }
 
