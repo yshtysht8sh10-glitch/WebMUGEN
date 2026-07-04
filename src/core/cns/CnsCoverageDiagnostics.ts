@@ -117,19 +117,19 @@ export function formatCnsCoverageDiagnostics(diagnostics: CnsCoverageDiagnostics
     '',
     'Controllers:',
     `  対応済み: ${countByStatus(diagnostics.controllers, 'supported')}種類`,
-    ...formatCoverageItems(diagnostics.controllers.filter((item) => item.status === 'supported'), 8),
+    ...formatCoverageItems(diagnostics.controllers.filter((item) => item.status === 'supported')),
     `  一部対応: ${countByStatus(diagnostics.controllers, 'partial')}種類`,
-    ...formatCoverageItems(diagnostics.controllers.filter((item) => item.status === 'partial'), 8),
+    ...formatCoverageItems(diagnostics.controllers.filter((item) => item.status === 'partial')),
     `  未対応: ${countByStatus(diagnostics.controllers, 'unsupported')}種類`,
-    ...formatCoverageItems(diagnostics.unsupportedControllers, 12),
+    ...formatCoverageItems(diagnostics.unsupportedControllers),
     '',
     'Triggers:',
     `  対応済み: ${countByStatus(diagnostics.triggers, 'supported')}種類`,
-    ...formatCoverageItems(diagnostics.triggers.filter((item) => item.status === 'supported'), 8),
+    ...formatCoverageItems(diagnostics.triggers.filter((item) => item.status === 'supported')),
     `  一部対応: ${countByStatus(diagnostics.triggers, 'partial')}種類`,
-    ...formatCoverageItems(diagnostics.triggers.filter((item) => item.status === 'partial'), 8),
+    ...formatCoverageItems(diagnostics.triggers.filter((item) => item.status === 'partial')),
     `  未対応: ${countByStatus(diagnostics.triggers, 'unsupported')}種類`,
-    ...formatCoverageItems(diagnostics.unsupportedTriggers, 16),
+    ...formatCoverageItems(diagnostics.unsupportedTriggers),
   ];
 }
 
@@ -137,12 +137,12 @@ function countByStatus(items: ReadonlyArray<{ status: CnsCoverageStatus }>, stat
   return items.filter((item) => item.status === status).length;
 }
 
-function formatCoverageItems(items: ReadonlyArray<{ name: string; count: number }>, limit: number): string[] {
+function formatCoverageItems(items: ReadonlyArray<{ name: string; count: number }>): string[] {
   if (items.length === 0) return ['  -'];
-  const visibleItems = items.slice().sort((left, right) => right.count - left.count || left.name.localeCompare(right.name)).slice(0, limit);
-  const lines = visibleItems.map((item) => `    ${item.name}: ${item.count}`);
-  const hiddenCount = items.length - visibleItems.length;
-  return hiddenCount > 0 ? [...lines, `    ...ほか${hiddenCount}種類`] : lines;
+  return items
+    .slice()
+    .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name))
+    .map((item) => `    ${item.name}: ${item.count}`);
 }
 
 function normalizeControllerName(controller: CnsStateController): string {
