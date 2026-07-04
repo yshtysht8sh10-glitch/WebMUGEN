@@ -191,7 +191,7 @@ canvas {
 .input-config-panel {
   border: 1px solid #334155;
   background: #0f172a;
-  margin-top: 16px;
+  margin: 0;
   padding: 16px;
 }
 

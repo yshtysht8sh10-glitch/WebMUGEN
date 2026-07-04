@@ -59,7 +59,7 @@ const ENABLE_RUNTIME_FALLBACKS = false;
 const RUNTIME_HISTORY_LIMIT = 500;
 const INPUT_CONFIG_STORAGE_KEY = 'webmugen.inputConfig.v1';
 
-type DebugTab = 'static' | 'runtime' | 'ideas';
+type DebugTab = 'static' | 'runtime' | 'ideas' | 'settings';
 
 type StaticDebugInfo = {
   characterRows: string[];
@@ -275,12 +275,14 @@ export function WebMugenApp() {
   ];
   const staticTabLines = formatStaticTabLines(loadMessage, staticDebugInfo, coverageDebugLines, controlHelpLines);
   const ideasTabLines = formatIdeasLines();
-  const activeTabText = formatActiveTabText(activeDebugTab, staticTabLines, runtimeHistoryLines, ideasTabLines);
+  const settingsTabLines = formatInputConfigLines(inputConfig);
+  const activeTabText = formatActiveTabText(activeDebugTab, staticTabLines, runtimeHistoryLines, ideasTabLines, settingsTabLines);
   const fullDebugText = formatFullDebugText({
     liveDebugLines,
     staticTabLines,
     runtimeHistoryLines,
     ideasTabLines,
+    settingsTabLines,
   });
 
   const handleCopy = async (label: string, text: string) => {
@@ -341,6 +343,12 @@ export function WebMugenApp() {
           <RuntimeHistoryPanel runtimeHistoryLines={runtimeHistoryLines} />
         )}
         {activeDebugTab === 'ideas' && <IdeasPanel />}
+        {activeDebugTab === 'settings' && (
+          <InputConfigPanel
+            config={inputConfig}
+            onChange={setInputConfig}
+          />
+        )}
       </section>
 
       <section className="help-panel">
@@ -361,11 +369,6 @@ export function WebMugenApp() {
         <p>System: R restarts the round after KO or TIME OVER.</p>
         <p>Place character files under <code>public/chars/kfm/</code> to try DEF-based loading.</p>
       </section>
-
-      <InputConfigPanel
-        config={inputConfig}
-        onChange={setInputConfig}
-      />
     </div>
   );
 }
@@ -605,6 +608,9 @@ function DebugTabs({ activeTab, onChange }: { activeTab: DebugTab; onChange: (ta
       <button className={activeTab === 'ideas' ? 'active' : ''} onClick={() => onChange('ideas')} type="button">
         タブ3 調査メモ
       </button>
+      <button className={activeTab === 'settings' ? 'active' : ''} onClick={() => onChange('settings')} type="button">
+        Settings
+      </button>
     </nav>
   );
 }
@@ -819,14 +825,26 @@ function formatIdeasLines(): string[] {
   ];
 }
 
+function formatInputConfigLines(config: InputConfig): string[] {
+  return [
+    '=== Input Config ===',
+    `P1 keyboard: ${formatKeyboardMapping(config.players[0])}`,
+    `P1 controller: ${formatGamepadMapping(config.players[0])}`,
+    `P2 keyboard: ${formatKeyboardMapping(config.players[1])}`,
+    `P2 controller: ${formatGamepadMapping(config.players[1])}`,
+  ];
+}
+
 function formatActiveTabText(
   activeTab: DebugTab,
   staticTabLines: string[],
   runtimeHistoryLines: string[],
   ideasTabLines: string[],
+  settingsTabLines: string[],
 ): string {
   if (activeTab === 'static') return staticTabLines.join('\n');
   if (activeTab === 'runtime') return runtimeHistoryLines.join('\n');
+  if (activeTab === 'settings') return settingsTabLines.join('\n');
   return ideasTabLines.join('\n');
 }
 
@@ -835,11 +853,13 @@ function formatFullDebugText({
   staticTabLines,
   runtimeHistoryLines,
   ideasTabLines,
+  settingsTabLines,
 }: {
   liveDebugLines: string[];
   staticTabLines: string[];
   runtimeHistoryLines: string[];
   ideasTabLines: string[];
+  settingsTabLines: string[];
 }): string {
   return [
     '=== WebMUGEN Debug Dump ===',
@@ -856,6 +876,9 @@ function formatFullDebugText({
     '',
     '=== タブ3 調査メモ ===',
     ...ideasTabLines,
+    '',
+    '=== Settings ===',
+    ...settingsTabLines,
   ].join('\n');
 }
 
