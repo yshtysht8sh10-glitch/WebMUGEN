@@ -1,10 +1,12 @@
 # WebMUGEN Testing Policy
 
-Updated: 2026-06-28
+Updated: 2026-07-06
 
 ## Purpose
 
 WebMUGEN prioritizes WinMUGEN compatibility. Manual confirmation in the game screen is useful, but it must not be the only way to decide whether a movement or state transition works.
+
+This policy is a companion to `docs/webmugen/development-policy.md`. The development policy defines the project rules; this document defines how compatibility work should be verified.
 
 For every basic movement, command route, trigger, and controller implementation, add focused tests that confirm the expected state transition and expose enough diagnostics to identify where the route failed.
 
@@ -45,7 +47,11 @@ The goal is that a failing test log can answer where the route broke:
 
 ## Compatibility matrix rule
 
-`docs/webmugen/winmugen-compatibility-matrix.md` and `.html` remain the source of truth for compatibility status.
+`docs/webmugen/winmugen-compatibility-matrix.html` is the canonical compatibility checklist.
+
+`docs/webmugen/winmugen-compatibility-matrix.md` is the human-readable mirror with more detailed notes.
+
+Update both files when implementation or tests change.
 
 A row should be promoted to **Complete** only when at least one of the following is true:
 
@@ -54,6 +60,8 @@ A row should be promoted to **Complete** only when at least one of the following
 - the item is intentionally a no-op and the no-op behavior is tested or explicitly documented.
 
 When a behavior is implemented but not yet covered by tests or runtime verification, keep it **Partial**.
+
+Safe defaults, placeholder values, compatibility shims, and recognized no-ops are **Partial** unless the no-op itself is the intended behavior and is covered by tests or documentation.
 
 ## Manual game-screen verification
 
