@@ -25,6 +25,19 @@ Begin Action 0
     expect(getCurrentAnimationElement(air, 0, 191)?.element.imageNo).toBe(0);
   });
 
+  it('keeps the last element at the exact terminal frame before default looping', () => {
+    const air = parseAirText(`
+Begin Action 210
+210,0, 0,0, 5
+210,1, 0,0, 5
+`);
+
+    expect(getAnimationLength(air, 210)).toBe(10);
+    expect(getCurrentAnimationElement(air, 210, 9)?.element.imageNo).toBe(1);
+    expect(getCurrentAnimationElement(air, 210, 10)?.element.imageNo).toBe(1);
+    expect(getCurrentAnimationElement(air, 210, 11)?.element.imageNo).toBe(0);
+  });
+
   it('supports LoopStart', () => {
     const air = parseAirText(`
 Begin Action 10

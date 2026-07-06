@@ -1,0 +1,3626 @@
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;========================================================================
+;高速移動
+;========================================================================
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;高速移動 始まり
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Statedef 5999]
+type = S
+physics = S
+anim = 5999
+sprpriority = -1
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 702, pause]
+type = pause
+trigger1 = !time
+trigger1 = prevstateno = 902
+time = 5
+movetime = 5
+
+[State 5999, Explod]
+type = Explod
+trigger1 = Time = 0
+anim = 15300
+pos = 0, 0
+postype = p1
+scale = 1, 1
+sprpriority = -3
+ownpal = 1
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+
+[State 5999, Shake]
+type = EnvShake
+Trigger1 = animelem = 1
+time = 10
+ampl = -3
+freq = 80
+phase = 1
+
+[State 5999, PlaySnd]
+type = PlaySnd
+trigger1 = animelem = 1
+value = s5999,0
+
+[State 5999, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 5999, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 59991
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;高速移動 中
+[Statedef 59991]
+type = S
+physics = S
+anim = 59991
+sprpriority = -1
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 59991, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AP
+
+[State 59991, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 59992
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;高速移動 終わり
+[Statedef 59992]
+type = S
+physics = S
+anim = 59992+(IfElse(fvar(12) < 5,0,1))
+sprpriority = -1
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = time <= 2
+trigger1 = var(14) = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+[State 3310, afterimage]
+type = varset
+trigger1 = time >= 3
+var(14) = 0
+
+[State 59992,Turn]
+type = Turn
+trigger1 = P2Dist X < -5
+
+[State 59992, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+;ブロッキング立ち
+[State -1, hitoverride]
+type = hitoverride
+TriggerAll = Var(33) = 0
+triggerall = statetype = S
+triggerall = command = "fwd" && command != "back" && command != "up" && command != "down"
+triggerall = movetype != A
+trigger1 = movetype != H
+trigger1 = fvar(12) < 5
+attr = SA,AA,AP
+stateno = 902
+slot = 0
+time = ifelse((stateno=[150,153]),6,8)
+
+[state 3010,bgpalfx]  
+type = palfx
+trigger1 = fvar(12) >= 5
+trigger1 = time < 10
+time = 2
+add = 40,-30,-80
+supermovetime = 99999
+pausemovetime = 99999
+ignorehitpause = 1
+
+[State 59992, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 0
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;高速移動（前方）始まり
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Statedef 6000]
+type = S
+physics = S
+anim = 6000
+sprpriority = -1
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 702, pause]
+type = pause
+trigger1 = !time
+trigger1 = prevstateno = 902
+time = 5
+movetime = 5
+
+[State 6000, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6000, PlaySnd]
+type = PlaySnd
+trigger1 = animelem = 1
+value = s5999,0
+
+[State 6000, Explod]
+type = Explod
+trigger1 = Time = 0
+anim = 15000
+pos = -28, 5
+postype = p1
+scale = 0.5, 0.5
+sprpriority = 3
+ontop = 1
+ownpal = 1
+
+[State 6000, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+[State 6000, EnvShake]
+type = EnvShake
+Trigger1 = animelem = 1
+time = 10
+ampl = -3
+freq = 80
+phase = 1
+
+[State 6001, AfterImage];残像
+type = null;AfterImage
+trigger1 = Time = 0
+time = 3
+TimeGap  = 1
+FrameGap = 2
+length = 40
+PalBright   = 0,0,0
+PalContrast = 255,255,255
+PalMul      = .88,.88,.88
+
+[State 6000, Change]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 60001
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;高速移動（前方）中
+[Statedef 60001]
+type = S
+physics = S
+anim = 59991
+sprpriority = -1
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AP
+
+[State 60001, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 60001, velset]
+type = velset
+trigger1 = var(19) = 0
+trigger1 = animelem = 1
+x = 40
+
+[State 60001, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 60002
+ctrl = 1
+;━━━━━━━━━━━━━━━━━━━━━高速移動 (強化) 
+[State 60001, vel]
+type = velset
+trigger1 = var(19) = 1
+trigger1 = animelem = 1
+x = 60
+;━━━━━━━━━━━━━━━━━━━━━
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;高速移動（前方）終わり
+[Statedef 60002]
+type = S
+physics = S
+anim = 60002+(IfElse(fvar(12) < 5,0,1))
+sprpriority = -1
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = time <= 2
+trigger1 = var(14) = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+[State 3310, afterimage]
+type = varset
+trigger1 = time >= 3
+var(14) = 0
+
+[State 60002,Turn]
+type = Turn
+trigger1 = P2Dist X < -5
+
+[State 60002, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+;ブロッキング立ち
+[State -1, hitoverride]
+type = hitoverride
+TriggerAll = Var(33) = 0
+triggerall = statetype = S
+triggerall = command = "fwd" && command != "back" && command != "up" && command != "down"
+triggerall = movetype != A
+trigger1 = movetype != H
+trigger1 = fvar(12) < 5
+attr = SA,AA,AP
+stateno = 902
+slot = 0
+time = ifelse((stateno=[150,153]),6,8)
+
+[state 3010,bgpalfx]  
+type = palfx
+trigger1 = fvar(12) >= 5
+trigger1 = time < 10
+time = 2
+add = 40,-30,-80
+supermovetime = 99999
+pausemovetime = 99999
+ignorehitpause = 1
+
+[State 60002, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 0
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;高速移動（後方）始まり
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Statedef 6001]
+type = S
+physics = S
+anim = 6001
+sprpriority = -1
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 702, pause]
+type = pause
+trigger1 = !time
+trigger1 = prevstateno = 902
+time = 5
+movetime = 5
+
+[State 6001, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6001, PlaySnd]
+type = PlaySnd
+trigger1 = animelem = 1
+value = s5999,0
+
+[State 6001, Explod]
+type = Explod
+trigger1 = Time = 0
+anim = 15000
+pos = 28, 5
+postype = p1
+scale = 0.5, 0.5
+sprpriority = 3
+ontop = 1
+ownpal = 1
+facing = -1
+
+[State 6001, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+[State 6001, EnvShake]
+type = EnvShake
+Trigger1 = animelem = 1
+time = 10
+ampl = -3
+freq = 80
+phase = 1
+
+[State 6001, AfterImage];残像
+type =null; AfterImage
+trigger1 = Time = 0
+time = 3
+TimeGap  = 1
+FrameGap = 2
+length = 40
+PalBright   = 0,0,0
+PalContrast = 255,255,255
+PalMul      = .88,.88,.88
+
+[State 6001, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 60011
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;高速移動（後方）中
+[Statedef 60011]
+type = S
+physics = S
+anim = 59991
+sprpriority = -1
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AP
+
+[State 60011, velset]
+type = velset
+trigger1 = var(19) = 0
+trigger1 = animelem = 1
+x = -40
+
+[State 60011, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 60011, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 60012
+ctrl = 1
+;━━━━━━━━━━━━━━━━━━━━━高速移動 (強化) 
+[State 60011, velset]
+type = velset
+trigger1 = var(19) = 1
+trigger1 = animelem = 1
+x = -60
+;━━━━━━━━━━━━━━━━━━━━━
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;高速移動（後方）終わり
+[Statedef 60012]
+type = S
+physics = S
+anim = 60012+(IfElse(fvar(12) < 5,0,1))
+sprpriority = -1
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = time <= 2
+trigger1 = var(14) = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+[State 3310, afterimage]
+type = varset
+trigger1 = time >= 3
+var(14) = 0
+
+[State 702, pause]
+type = pause
+trigger1 = !time
+trigger1 = prevstateno = 902
+time = 5
+movetime = 5
+
+[State 60012,Turn]
+type = Turn
+trigger1 = P2Dist X < -5
+
+[State 60012, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+;ブロッキング立ち
+[State -1, hitoverride]
+type = hitoverride
+TriggerAll = Var(33) = 0
+triggerall = statetype = S
+triggerall = command = "fwd" && command != "back" && command != "up" && command != "down"
+triggerall = movetype != A
+trigger1 = movetype != H
+trigger1 = fvar(12) < 5
+attr = SA,AA,AP
+stateno = 902
+slot = 0
+time = ifelse((stateno=[150,153]),6,8)
+
+[state 3010,bgpalfx]  
+type = palfx
+trigger1 = fvar(12) >= 5
+trigger1 = time < 10
+time = 2
+add = 40,-30,-80
+supermovetime = 99999
+pausemovetime = 99999
+ignorehitpause = 1
+
+[State 60012, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 0
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;高速移動（上方）始まり
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Statedef 6060]
+type = S
+physics = S
+anim = 6060
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 702, pause]
+type = pause
+trigger1 = !time
+trigger1 = prevstateno = 902
+time = 5
+movetime = 5
+
+[State 6060, Explod]
+type = Explod
+trigger1 = Time = 0
+anim = 15300
+pos = 0, 0
+postype = p1
+scale = 1, 1
+sprpriority = -3
+ownpal = 1
+
+[State 6060, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6060, AfterImage];残像
+type = null;AfterImage
+trigger1 = Time = 0
+time = 3
+TimeGap  = 1
+FrameGap = 2
+length = 60
+PalBright   = 0,0,0
+PalContrast = 255,255,255
+PalMul      = .88,.88,.88
+
+[State 6060, PlaySnd]
+type = PlaySnd
+trigger1 = animelem = 1
+value = s5999,0
+
+[State 6060, EnvShake]
+type = EnvShake
+Trigger1 = animelem = 1
+time = 10
+ampl = -3
+freq = 80
+phase = 1
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+[State 6060, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 6061
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;高速移動（上方）中
+[Statedef 6061]
+type = A
+physics = N
+anim = 6161
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AP
+
+[State 6061, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6061, posadd]
+type = velset
+trigger1 = var(19) = 0
+trigger1 = animelem = 1
+y = -12
+
+[State 6061, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 6062
+ctrl = 1
+;━━━━━━━━━━━━━━━━━━━━━高速移動 (強化) 
+[State 6061, posadd]
+type = velset
+trigger1 = var(19) = 1
+trigger1 = animelem = 1
+y = -18
+;━━━━━━━━━━━━━━━━━━━━━
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;高速移動（上方）終わり
+[Statedef 6062]
+type = A
+physics = N
+anim = 6062+(IfElse(fvar(12) < 5,0,1))
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = time <= 2
+trigger1 = var(14) = 1
+value = SCA,AA
+
+[State 3310, afterimage]
+type = varset
+trigger1 = time >= 3
+var(14) = 0
+
+[State 6062,Turn]
+type = Turn
+trigger1 = P2Dist X < -5
+
+[State 6062, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+;ブロッキング立ち
+[State -1, hitoverride]
+type = hitoverride
+TriggerAll = Var(33) = 0
+triggerall = statetype = S
+triggerall = command = "fwd" && command != "back" && command != "up" && command != "down"
+triggerall = movetype != A
+trigger1 = movetype != H
+trigger1 = fvar(12) < 5
+attr = SA,AA,AP
+stateno = 902
+slot = 0
+time = ifelse((stateno=[150,153]),6,8)
+
+[state 3010,bgpalfx]  
+type = palfx
+trigger1 = fvar(12) >= 5
+trigger1 = time < 10
+time = 2
+add = 40,-30,-80
+supermovetime = 99999
+pausemovetime = 99999
+ignorehitpause = 1
+
+[State 6062, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 50
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;高速移動（後上方）始まり
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Statedef 6050]
+type = S
+physics = S
+anim = 6050
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 702, pause]
+type = pause
+trigger1 = !time
+trigger1 = prevstateno = 902
+time = 5
+movetime = 5
+
+[State 6050, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6050, Explod]
+type = Explod
+trigger1 = Time = 0
+anim = 15000
+pos = 28, 5
+postype = p1
+scale = 0.5, 0.5
+sprpriority = 3
+ontop = 1
+ownpal = 1
+facing = -1
+
+[State 6050, AfterImage];残像
+type = null;AfterImage
+trigger1 = Time = 0
+time = 3
+TimeGap  = 1
+FrameGap = 2
+length = 40
+PalBright   = 0,0,0
+PalContrast = 255,255,255
+PalMul      = .88,.88,.88
+
+[State 6050, PlaySnd]
+type = PlaySnd
+trigger1 = animelem = 1
+value = s5999,0
+
+[State 6050, EnvShake]
+type = EnvShake
+Trigger1 = animelem = 1
+time = 10
+ampl = -3
+freq = 80
+phase = 1
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+[State 6050, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 6051
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;高速移動（後上方）中
+[Statedef 6051]
+type = A
+physics = N
+anim = 6151
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AP
+
+[State 6051, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6051, posadd]
+type = velset
+trigger1 = var(19) = 0
+trigger1 = animelem = 1
+x = -8
+y = -8
+
+[State 6051, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 6052
+ctrl = 1
+;━━━━━━━━━━━━━━━━━━━━━高速移動 (強化) 
+[State 6051, posadd]
+type = velset
+trigger1 = var(19) = 1
+trigger1 = animelem = 1
+x = -12
+
+[State 6061, posadd]
+type = velset
+trigger1 = var(19) = 1
+trigger1 = animelem = 1
+y = -12
+
+
+;━━━━━━━━━━━━━━━━━━━━━
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;高速移動（後上方）終わり
+[Statedef 6052]
+type = A
+physics = N
+anim = 6052+(IfElse(fvar(12) < 5,0,1))
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = time <= 2
+trigger1 = var(14) = 1
+value = SCA,AA
+
+[State 3310, afterimage]
+type = varset
+trigger1 = time >= 3
+var(14) = 0
+
+[State 6052,Turn]
+type = Turn
+trigger1 = P2Dist X < -5
+
+[State 6052, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+;ブロッキング立ち
+[State -1, hitoverride]
+type = hitoverride
+TriggerAll = Var(33) = 0
+triggerall = statetype = S
+triggerall = command = "fwd" && command != "back" && command != "up" && command != "down"
+triggerall = movetype != A
+trigger1 = movetype != H
+trigger1 = fvar(12) < 5
+attr = SA,AA,AP
+stateno = 902
+slot = 0
+time = ifelse((stateno=[150,153]),6,8)
+
+[state 3010,bgpalfx]  
+type = palfx
+trigger1 = fvar(12) >= 5
+trigger1 = time < 10
+time = 2
+add = 40,-30,-80
+supermovetime = 99999
+pausemovetime = 99999
+ignorehitpause = 1
+
+[State 6052, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 50
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;高速移動（上前方）始まり
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Statedef 6070]
+type = S
+physics = S
+anim = 6070
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+[State 702, pause]
+type = pause
+trigger1 = !time
+trigger1 = prevstateno = 902
+time = 5
+movetime = 5
+
+[State 6070, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6070, Explod]
+type = Explod
+trigger1 = Time = 0
+anim = 15000
+pos = -28, 5
+postype = p1
+scale = 0.5, 0.5
+sprpriority = 3
+ontop = 1
+ownpal = 1
+
+[State 6070, AfterImage];残像
+type = null;AfterImage
+trigger1 = Time = 0
+time = 3
+TimeGap  = 1
+FrameGap = 2
+length = 40
+PalBright   = 0,0,0
+PalContrast = 255,255,255
+PalMul      = .88,.88,.88
+
+[State 6070, PlaySnd]
+type = PlaySnd
+trigger1 = animelem = 1
+value = s5999,0
+
+[State 6070, EnvShake]
+type = EnvShake
+Trigger1 = animelem = 1
+time = 10
+ampl = -3
+freq = 80
+phase = 1
+
+[State 6070, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 6071
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;高速移動（上前方）中
+[Statedef 6071]
+type = A
+physics = N
+anim = 6171
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AP
+
+[State 6071, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6071, posadd]
+type = velset
+trigger1 = var(19) = 0
+trigger1 = animelem = 1
+x = 8
+y = -8
+
+[State 6071, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 6072
+ctrl = 1
+;━━━━━━━━━━━━━━━━━━━━━高速移動 (強化) 
+[State 6071, posadd]
+type = velset
+trigger1 = var(19) = 1
+trigger1 = animelem = 1
+x = 12
+
+[State 6061, posadd]
+type = velset
+trigger1 = var(19) = 1
+trigger1 = animelem = 1
+y = -12
+
+
+;━━━━━━━━━━━━━━━━━━━━━
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;高速移動（上前方）終わり
+[Statedef 6072]
+type = A
+physics = N
+anim = 6072+(IfElse(fvar(12) < 5,0,1))
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = time <= 2
+trigger1 = var(14) = 1
+value = SCA,AA
+
+[State 3310, afterimage]
+type = varset
+trigger1 = time >= 3
+var(14) = 0
+
+[State 6072,Turn]
+type = Turn
+trigger1 = P2Dist X < -5
+
+[State 6072, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+;ブロッキング立ち
+[State -1, hitoverride]
+type = hitoverride
+TriggerAll = Var(33) = 0
+triggerall = statetype = S
+triggerall = command = "fwd" && command != "back" && command != "up" && command != "down"
+triggerall = movetype != A
+trigger1 = movetype != H
+trigger1 = fvar(12) < 5
+attr = SA,AA,AP
+stateno = 902
+slot = 0
+time = ifelse((stateno=[150,153]),6,8)
+
+[state 3010,bgpalfx]  
+type = palfx
+trigger1 = fvar(12) >= 5
+trigger1 = time < 10
+time = 2
+add = 40,-30,-80
+supermovetime = 99999
+pausemovetime = 99999
+ignorehitpause = 1
+
+[State 6072, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 50
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;========================================================================
+;空中高速移動
+;========================================================================
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動  始まり
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Statedef 6099]
+type = A
+physics = N
+anim = 6099
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+[State 702, pause]
+type = pause
+trigger1 = !time
+trigger1 = prevstateno = 904
+time = 5
+movetime = 5
+
+[State 6099, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6099, PlaySnd]
+type = PlaySnd
+trigger1 = animelem = 1
+value = s5999,0
+
+[State 6099, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 60991
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動  中
+[Statedef 60991]
+type = A
+physics = N
+anim = 60991
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AP
+
+[State 6151, posadd]
+type = Varadd
+trigger1 = time = 0
+trigger1 = var(19) = 0
+var(3) = 1
+
+[State 60991, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 60991, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 60992
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動  終わり
+[Statedef 60992]
+type = A
+physics = N
+anim = 60992+(IfElse(var(11) = 1 || fvar(12) < 5,0,1))
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = time <= 2
+trigger1 = var(14) = 1
+value = SCA,AA
+
+
+[State 3310, afterimage]
+type = varset
+trigger1 = time >= 3
+var(14) = 0
+
+[State 60992, Turn]
+type = Turn
+trigger1 = P2Dist X < -5
+
+[State 60992, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+;ブロッキング空中
+[State -1, hitoverride]
+type = hitoverride
+TriggerAll = Var(33) = 0
+triggerall = command = "fwd" && command != "back" && command != "up" && command != "down"
+triggerall = movetype != A
+trigger1 = statetype = A
+trigger1 = fvar(12) < 5
+attr = SA,AA,AP
+stateno = 904
+forceair = 1
+slot = 0
+time = ifelse((stateno=[154,155]),6,8)
+
+[state 3010,bgpalfx]  
+type = palfx
+trigger1 = var(11) != 1 && fvar(12) >= 5
+trigger1 = time < 10
+time = 2
+add = 40,-30,-80
+supermovetime = 99999
+pausemovetime = 99999
+ignorehitpause = 1
+
+[State 60992, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 50
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動（前方）始まり
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Statedef 6100]
+type = A
+physics = N
+anim = 6100
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 702, pause]
+type = pause
+trigger1 = !time
+trigger1 = prevstateno = 904
+time = 5
+movetime = 5
+
+[State 6100, AfterImage];残像
+type = null;AfterImage
+trigger1 = Time = 0
+time = 3
+TimeGap  = 1
+FrameGap = 2
+length = 40
+PalBright   = 0,0,0
+PalContrast = 255,255,255
+PalMul      = .88,.88,.88
+
+[State 6100, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6100, PlaySnd]
+type = PlaySnd
+trigger1 = animelem = 1
+value = s5999,0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+[State 6100, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 6101
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動（前方）  中
+[Statedef 6101]
+type = A
+physics = N
+anim = 60991
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AP
+
+[State 6151, posadd]
+type = Varadd
+trigger1 = time = 0
+trigger1 = var(19) = 0
+var(3) = 1
+
+[State 6101, posadd]
+type = velset
+trigger1 = var(19) = 0
+trigger1 = animelem = 1
+x = 15
+
+[State 6101, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6101, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 6102
+ctrl = 1
+;━━━━━━━━━━━━━━━━━━━━━高速移動 (強化) 
+[State 6101, posadd]
+type = velset
+trigger1 = var(19) = 1
+trigger1 = animelem = 1
+x = 22.5
+;━━━━━━━━━━━━━━━━━━━━━
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動（前方）  終わり
+[Statedef 6102]
+type = A
+physics = N
+anim = 6102+(IfElse(var(11) = 1 || fvar(12) < 5,0,1))
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = time <= 2
+trigger1 = var(14) = 1
+value = SCA,AA
+
+[State 3310, afterimage]
+type = varset
+trigger1 = time >= 3
+var(14) = 0
+
+[State 6102, Turn]
+type = Turn
+trigger1 = P2Dist X < -5
+
+[State 6102, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+;ブロッキング空中
+[State -1, hitoverride]
+type = hitoverride
+TriggerAll = Var(33) = 0
+triggerall = command = "fwd" && command != "back" && command != "up" && command != "down"
+triggerall = movetype != A
+trigger1 = statetype = A
+trigger1 = fvar(12) < 5
+attr = SA,AA,AP
+stateno = 904
+forceair = 1
+slot = 0
+time = ifelse((stateno=[154,155]),6,8)
+
+[state 3010,bgpalfx]  
+type = palfx
+trigger1 = var(11) != 1 && fvar(12) >= 5
+trigger1 = time < 10
+time = 2
+add = 40,-30,-80
+supermovetime = 99999
+pausemovetime = 99999
+ignorehitpause = 1
+
+[State 6102, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 50
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動（下方）始まり
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Statedef 6120]
+type = A
+physics = N
+anim = 6120
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 702, pause]
+type = pause
+trigger1 = !time
+trigger1 = prevstateno = 904
+time = 5
+movetime = 5
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+[State 6120, AfterImage];残像
+type = null;AfterImage
+trigger1 = Time = 0
+time = 3
+TimeGap  = 1
+FrameGap = 2
+length = 40
+PalBright   = 0,0,0
+PalContrast = 255,255,255
+PalMul      = .88,.88,.88
+
+[State 6120, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6120, PlaySnd]
+type = PlaySnd
+trigger1 = animelem = 1
+value = s5999,0
+
+[State 6120, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 6121
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動（下方）  中
+[Statedef 6121]
+type = A
+physics = N
+anim = 6161
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AP
+
+[State 6151, posadd]
+type = Varadd
+trigger1 = time = 0
+trigger1 = var(19) = 0
+var(3) = 1
+
+[State 6121, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6121, posadd]
+type = velset
+trigger1 = var(19) = 0
+trigger1 = animelem = 1
+y = 15
+
+[State 6121, PosSet]
+type = PosSet
+trigger1 = Pos Y >= 2
+y = 0
+
+[State 6121, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 6122
+ctrl = 1
+;━━━━━━━━━━━━━━━━━━━━━高速移動 (強化) 
+[State 6121, posadd]
+type = velset
+trigger1 = var(19) = 1
+trigger1 = animelem = 1
+y = 22.5
+;━━━━━━━━━━━━━━━━━━━━━
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動（下方）  終わり
+[Statedef 6122]
+type = A
+physics = N
+anim = 6122+(IfElse(var(11) = 1 || fvar(12) < 5,0,2))
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = time <= 2
+trigger1 = var(14) = 1
+value = SCA,AA
+
+[State 3310, afterimage]
+type = varset
+trigger1 = time >= 3
+var(14) = 0
+
+[State 191, PlaySnd]
+type = PlaySnd
+trigger1 = AnimElem = 4
+trigger1 = Anim = 6123
+value = s47,0
+
+[State 100, Explod]
+type = Explod
+trigger1 = AnimElem = 4
+trigger1 = Anim = 6123
+anim = 15100
+pos = 0, 0
+postype = p1
+scale = 1, 1
+sprpriority = -3
+ownpal = 1
+
+[State 6122, Turn]
+type = Turn
+trigger1 = P2Dist X < -5
+
+[State 6122, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6122, PosSet]
+type = PosSet
+trigger1 = Pos Y >= 2
+y = 0
+
+[State 6122, PosSet]
+type = changeanim
+trigger1 = Time = 0
+trigger1 = Pos Y = 0
+value = 6123+(IfElse(var(11) = 1 || fvar(12) < 5,0,2))
+
+[State 6122, PosSet]
+type = StateTypeSet
+trigger1 = anim = 6123
+statetype = S
+
+;ブロッキング立ち
+[State -1, hitoverride]
+type = hitoverride
+TriggerAll = Var(33) = 0
+triggerall = statetype = S
+triggerall = command = "fwd" && command != "back" && command != "up" && command != "down"
+triggerall = movetype != A
+trigger1 = movetype != H
+trigger1 = fvar(12) < 5
+attr = SA,AA,AP
+stateno = 902
+slot = 0
+time = ifelse((stateno=[150,153]),6,8)
+
+;ブロッキング空中
+[State -1, hitoverride]
+type = hitoverride
+TriggerAll = Var(33) = 0
+triggerall = command = "fwd" && command != "back" && command != "up" && command != "down"
+triggerall = movetype != A
+trigger1 = statetype = A
+trigger1 = fvar(12) < 5
+attr = SA,AA,AP
+stateno = 904
+forceair = 1
+slot = 0
+time = ifelse((stateno=[154,155]),6,8)
+
+[state 3010,bgpalfx]  
+type = palfx
+trigger1 = var(11) != 1 && fvar(12) >= 5
+trigger1 = time < 10
+time = 2
+add = 40,-30,-80
+supermovetime = 99999
+pausemovetime = 99999
+ignorehitpause = 1
+
+[State 6122, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+trigger1 = Anim != 6122+(IfElse(var(11) = 1 || fvar(12) < 5,0,2))
+value = 0
+ctrl = 1
+
+[State 6122, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+trigger1 = Anim = 6122+(IfElse(var(11) = 1 || fvar(12) < 5,0,2))
+value = 50
+ctrl = 1
+
+
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動（後方）始まり
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Statedef 6140]
+type = A
+physics = N
+anim = 6140
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 702, pause]
+type = pause
+trigger1 = !time
+trigger1 = prevstateno = 904
+time = 5
+movetime = 5
+
+[State 6140, AfterImage];残像
+type = null;AfterImage
+trigger1 = Time = 0
+time = 3
+TimeGap  = 1
+FrameGap = 2
+length = 40
+PalBright   = 0,0,0
+PalContrast = 255,255,255
+PalMul      = .88,.88,.88
+
+[State 6140, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6140, PlaySnd]
+type = PlaySnd
+trigger1 = animelem = 1
+value = s5999,0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+[State 6140, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 6141
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動（後方） 中
+[Statedef 6141]
+type = A
+physics = N
+anim = 60991
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AP
+
+[State 6151, posadd]
+type = Varadd
+trigger1 = time = 0
+trigger1 = var(19) = 0
+var(3) = 1
+
+[State 6141, posadd]
+type = velset
+trigger1 = var(19) = 0
+trigger1 = animelem = 1
+x = -15
+
+[State 6141, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6141, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 6142
+ctrl = 1
+;━━━━━━━━━━━━━━━━━━━━━高速移動 (強化) 
+[State 6141, posadd]
+type = velset
+trigger1 = var(19) = 1
+trigger1 = animelem = 1
+x = -22.5
+;━━━━━━━━━━━━━━━━━━━━━
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動（後方）  終わり
+[Statedef 6142]
+type = A
+physics = N
+anim = 6142+(IfElse(var(11) = 1 || fvar(12) < 5,0,1))
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = time <= 2
+trigger1 = var(14) = 1
+value = SCA,AA
+
+[State 3310, afterimage]
+type = varset
+trigger1 = time >= 3
+var(14) = 0
+
+[State 6142, Turn]
+type = Turn
+trigger1 = P2Dist X < -5
+
+[State 6142, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+;ブロッキング空中
+[State -1, hitoverride]
+type = hitoverride
+TriggerAll = Var(33) = 0
+triggerall = command = "fwd" && command != "back" && command != "up" && command != "down"
+triggerall = movetype != A
+trigger1 = statetype = A
+trigger1 = fvar(12) < 5
+attr = SA,AA,AP
+stateno = 904
+forceair = 1
+slot = 0
+time = ifelse((stateno=[154,155]),6,8)
+
+[state 3010,bgpalfx]  
+type = palfx
+trigger1 = var(11) != 1 && fvar(12) >= 5
+trigger1 = time < 10
+time = 2
+add = 40,-30,-80
+supermovetime = 99999
+pausemovetime = 99999
+ignorehitpause = 1
+
+[State 6142, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 50
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動（上方）始まり
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Statedef 6160]
+type = A
+physics = N
+anim = 6160
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 702, pause]
+type = pause
+trigger1 = !time
+trigger1 = prevstateno = 904
+time = 5
+movetime = 5
+
+[State 6160, AfterImage];残像
+type = null;AfterImage
+trigger1 = Time = 0
+time = 3
+TimeGap  = 1
+FrameGap = 2
+length = 40
+PalBright   = 0,0,0
+PalContrast = 255,255,255
+PalMul      = .88,.88,.88
+
+[State 6160, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6160, PlaySnd]
+type = PlaySnd
+trigger1 = animelem = 1
+value = s5999,0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+[State 6160, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 6161
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動（上方）  中
+[Statedef 6161]
+type = A
+physics = N
+anim = 6161
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AP
+
+[State 6151, posadd]
+type = Varadd
+trigger1 = time = 0
+trigger1 = var(19) = 0
+var(3) = 1
+
+[State 6161, posadd]
+type = velset
+trigger1 = var(19) = 0
+trigger1 = animelem = 1
+y = -15
+
+[State 6161, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+
+
+[State 6161, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 6162
+ctrl = 1
+;━━━━━━━━━━━━━━━━━━━━━高速移動 (強化) 
+[State 6161, posadd]
+type = velset
+trigger1 = var(19) = 1
+trigger1 = animelem = 1
+y = -22.5
+;━━━━━━━━━━━━━━━━━━━━━
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動（上方）  終わり
+[Statedef 6162]
+type = A
+physics = N
+anim = 6162+(IfElse(var(11) = 1 || fvar(12) < 5,0,1))
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = time <= 2
+trigger1 = var(14) = 1
+value = SCA,AA
+
+[State 3310, afterimage]
+type = varset
+trigger1 = time >= 3
+var(14) = 0
+
+[State 6162, Turn]
+type = Turn
+trigger1 = P2Dist X < -5
+
+[State 6162, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+;ブロッキング空中
+[State -1, hitoverride]
+type = hitoverride
+TriggerAll = Var(33) = 0
+triggerall = command = "fwd" && command != "back" && command != "up" && command != "down"
+triggerall = movetype != A
+trigger1 = statetype = A
+trigger1 = fvar(12) < 5
+attr = SA,AA,AP
+stateno = 904
+forceair = 1
+slot = 0
+time = ifelse((stateno=[154,155]),6,8)
+
+[state 3010,bgpalfx]  
+type = palfx
+trigger1 = var(11) != 1 && fvar(12) >= 5
+trigger1 = time < 10
+time = 2
+add = 40,-30,-80
+supermovetime = 99999
+pausemovetime = 99999
+ignorehitpause = 1
+
+[State 6162, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 50
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動（下前方）始まり
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Statedef 6110]
+type = A
+physics = N
+anim = 6130
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 702, pause]
+type = pause
+trigger1 = !time
+trigger1 = prevstateno = 904
+time = 5
+movetime = 5
+
+[State 6110, AfterImage];残像
+type = null;AfterImage
+trigger1 = Time = 0
+time = 3
+TimeGap  = 1
+FrameGap = 2
+length = 40
+PalBright   = 0,0,0
+PalContrast = 255,255,255
+PalMul      = .88,.88,.88
+
+[State 6110, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6110, PlaySnd]
+type = PlaySnd
+trigger1 = animelem = 1
+value = s5999,0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+[State 6110, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 6111
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動（下前方）  中
+[Statedef 6111]
+type = A
+physics = N
+anim = 6151
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AP
+
+[State 6151, posadd]
+type = Varadd
+trigger1 = time = 0
+trigger1 = var(19) = 0
+var(3) = 1
+
+[State 6111, posadd]
+type = velset
+trigger1 = var(19) = 0
+trigger1 = animelem = 1
+x = 8
+y = 8
+
+[State 6111, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6111, PosSet]
+type = PosSet
+trigger1 = Pos Y >= 2
+y = 0
+
+[State 6111, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 6112
+ctrl = 1
+;━━━━━━━━━━━━━━━━━━━━━高速移動 (強化) 
+[State 6111, posadd]
+type = velset
+trigger1 = var(19) = 1
+trigger1 = animelem = 1
+x = 12
+y = 12
+;━━━━━━━━━━━━━━━━━━━━━
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動（下前方）  終わり
+[Statedef 6112]
+type = A
+physics = N
+anim = 6132+(IfElse(var(11) = 1 || fvar(12) < 5,0,2))
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = time <= 2
+trigger1 = var(14) = 1
+value = SCA,AA
+
+[State 3310, afterimage]
+type = varset
+trigger1 = time >= 3
+var(14) = 0
+
+[State 191, PlaySnd]
+type = PlaySnd
+trigger1 = AnimElem = 4
+trigger1 = Anim = 6133
+value = s47,0
+
+[State 100, Explod]
+type = Explod
+trigger1 = AnimElem = 4
+trigger1 = Anim = 6133
+anim = 15100
+pos = 0, 0
+postype = p1
+scale = 1, 1
+sprpriority = -3
+ownpal = 1
+
+[State 6122, PosSet]
+type = changeanim
+trigger1 = Time = 0
+trigger1 = Pos Y = 0
+value = 6133+(IfElse(var(11) = 1 || fvar(12) < 5,0,2))
+
+[State 6122, PosSet]
+type = StateTypeSet
+trigger1 = anim = 6133
+statetype = S
+
+[State 6112, Turn]
+type = Turn
+trigger1 = P2Dist X < -5
+
+[State 6112, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6112, PosSet]
+type = PosSet
+trigger1 = Pos Y >= 1
+y = 0
+
+;ブロッキング立ち
+[State -1, hitoverride]
+type = hitoverride
+TriggerAll = Var(33) = 0
+triggerall = statetype = S
+triggerall = command = "fwd" && command != "back" && command != "up" && command != "down"
+triggerall = movetype != A
+trigger1 = movetype != H
+trigger1 = fvar(12) < 5
+attr = SA,AA,AP
+stateno = 902
+slot = 0
+time = ifelse((stateno=[150,153]),6,8)
+
+;ブロッキング空中
+[State -1, hitoverride]
+type = hitoverride
+TriggerAll = Var(33) = 0
+triggerall = command = "fwd" && command != "back" && command != "up" && command != "down"
+triggerall = movetype != A
+trigger1 = statetype = A
+trigger1 = fvar(12) < 5
+attr = SA,AA,AP
+stateno = 904
+forceair = 1
+slot = 0
+time = ifelse((stateno=[154,155]),6,8)
+
+[state 3010,bgpalfx]  
+type = palfx
+trigger1 = var(11) != 1 && fvar(12) >= 5
+trigger1 = time < 10
+time = 2
+add = 40,-30,-80
+supermovetime = 99999
+pausemovetime = 99999
+ignorehitpause = 1
+
+[State 6122, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+trigger1 = Anim != 6132+(IfElse(var(11) = 1 || fvar(12) < 5,0,2))
+value = 0
+ctrl = 1
+
+[State 6122, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+trigger1 = Anim = 6132+(IfElse(var(11) = 1 || fvar(12) < 5,0,2))
+value = 50
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動（下後方）始まり
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Statedef 6130]
+type = A
+physics = N
+anim = 6110
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 702, pause]
+type = pause
+trigger1 = !time
+trigger1 = prevstateno = 904
+time = 5
+movetime = 5
+
+[State 6130, AfterImage];残像
+type = null;AfterImage
+trigger1 = Time = 0
+time = 3
+TimeGap  = 1
+FrameGap = 2
+length = 40
+PalBright   = 0,0,0
+PalContrast = 255,255,255
+PalMul      = .88,.88,.88
+
+[State 6130, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6130, PlaySnd]
+type = PlaySnd
+trigger1 = animelem = 1
+value = s5999,0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+[State 6130, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 6131
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動（下後方）  中
+[Statedef 6131]
+type = A
+physics = N
+anim = 6171
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AP
+
+[State 6151, posadd]
+type = Varadd
+trigger1 = time = 0
+trigger1 = var(19) = 0
+var(3) = 1
+
+[State 6131, posadd]
+type = velset
+trigger1 = var(19) = 0
+trigger1 = animelem = 1
+x = -8
+y = 8
+
+[State 6131, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6131, push]
+type = PosSet
+trigger1 = Pos Y >= 2
+y = 0
+
+[State 6131, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 6132
+ctrl = 1
+;━━━━━━━━━━━━━━━━━━━━━高速移動 (強化) 
+[State 6131, posadd]
+type = velset
+trigger1 = var(19) = 1
+trigger1 = animelem = 1
+x = -12
+y = 12
+;━━━━━━━━━━━━━━━━━━━━━
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動（下後方）  終わり
+[Statedef 6132]
+type = A
+physics = N
+anim = 6112+(IfElse(var(11) = 1 || fvar(12) < 5,0,2))
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = time <= 2
+trigger1 = var(14) = 1
+value = SCA,AA
+
+[State 3310, afterimage]
+type = varset
+trigger1 = time >= 3
+var(14) = 0
+
+[State 191, PlaySnd]
+type = PlaySnd
+trigger1 = AnimElem = 4
+trigger1 = Anim = 6113
+value = s47,0
+
+[State 100, Explod]
+type = Explod
+trigger1 = AnimElem = 4
+trigger1 = Anim = 6113
+anim = 15100
+pos = 0, 0
+postype = p1
+scale = 1, 1
+sprpriority = -3
+ownpal = 1
+
+[State 6122, PosSet]
+type = changeanim
+trigger1 = Time = 0
+trigger1 = Pos Y = 0
+value = 6113+(IfElse(var(11) = 1 || fvar(12) < 5,0,2))
+
+[State 6122, PosSet]
+type = StateTypeSet
+trigger1 = anim = 6113
+statetype = S
+
+[State 6132, Turn]
+type = Turn
+trigger1 = P2Dist X < -5
+
+[State 6132, PosSet]
+type = PosSet
+trigger1 = Pos Y >= 1
+y = 0
+
+[State 6132, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+;ブロッキング立ち
+[State -1, hitoverride]
+type = hitoverride
+TriggerAll = Var(33) = 0
+triggerall = statetype = S
+triggerall = command = "fwd" && command != "back" && command != "up" && command != "down"
+triggerall = movetype != A
+trigger1 = movetype != H
+trigger1 = fvar(12) < 5
+attr = SA,AA,AP
+stateno = 902
+slot = 0
+time = ifelse((stateno=[150,153]),6,8)
+
+;ブロッキング空中
+[State -1, hitoverride]
+type = hitoverride
+TriggerAll = Var(33) = 0
+triggerall = command = "fwd" && command != "back" && command != "up" && command != "down"
+triggerall = movetype != A
+trigger1 = statetype = A
+trigger1 = fvar(12) < 5
+attr = SA,AA,AP
+stateno = 904
+forceair = 1
+slot = 0
+time = ifelse((stateno=[154,155]),6,8)
+
+[state 3010,bgpalfx]  
+type = palfx
+trigger1 = var(11) != 1 && fvar(12) >= 5
+trigger1 = time < 10
+time = 2
+add = 40,-30,-80
+supermovetime = 99999
+pausemovetime = 99999
+ignorehitpause = 1
+
+[State 6122, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+trigger1 = Anim != 6112+(IfElse(var(11) = 1 || fvar(12) < 5,0,2))
+value = 0
+ctrl = 1
+
+[State 6122, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+trigger1 = Anim = 6112+(IfElse(var(11) = 1 || fvar(12) < 5,0,2))
+value = 50
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動（後上方）始まり
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Statedef 6150]
+type = A
+physics = N
+anim = 6150
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 702, pause]
+type = pause
+trigger1 = !time
+trigger1 = prevstateno = 904
+time = 5
+movetime = 5
+
+[State 6150, AfterImage];残像
+type = null;AfterImage
+trigger1 = Time = 0
+time = 3
+TimeGap  = 1
+FrameGap = 2
+length = 40
+PalBright   = 0,0,0
+PalContrast = 255,255,255
+PalMul      = .88,.88,.88
+
+[State 6150, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6150, PlaySnd]
+type = PlaySnd
+trigger1 = animelem = 1
+value = s5999,0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+[State 6150, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 6151
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動（後上方）  中
+[Statedef 6151]
+type = A
+physics = N
+anim = 6151
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AP
+
+[State 6151, posadd]
+type = Varadd
+trigger1 = time = 0
+trigger1 = var(19) = 0
+var(3) = 1
+
+[State 6151, posadd]
+type = velset
+trigger1 = var(19) = 0
+trigger1 = animelem = 1
+x = -8
+y = -8
+
+[State 6151, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6151, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 6152
+ctrl = 1
+;━━━━━━━━━━━━━━━━━━━━━高速移動 (強化) 
+[State 6151, posadd]
+type = velset
+trigger1 = var(19) = 1
+trigger1 = animelem = 1
+x = -12
+
+[State 6061, posadd]
+type = velset
+trigger1 = var(19) = 1
+trigger1 = animelem = 1
+y = -12
+
+;━━━━━━━━━━━━━━━━━━━━━
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動（後上方）  終わり
+[Statedef 6152]
+type = A
+physics = N
+anim = 6152+(IfElse(var(11) = 1 || fvar(12) < 5,0,1))
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = time <= 2
+trigger1 = var(14) = 1
+value = SCA,AA
+
+[State 3310, afterimage]
+type = varset
+trigger1 = time >= 3
+var(14) = 0
+
+[State 6152, Turn]
+type = Turn
+trigger1 = P2Dist X < -5
+
+[State 6152, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+;ブロッキング空中
+[State -1, hitoverride]
+type = hitoverride
+TriggerAll = Var(33) = 0
+triggerall = command = "fwd" && command != "back" && command != "up" && command != "down"
+triggerall = movetype != A
+trigger1 = statetype = A
+trigger1 = fvar(12) < 5
+attr = SA,AA,AP
+stateno = 904
+forceair = 1
+slot = 0
+time = ifelse((stateno=[154,155]),6,8)
+
+[state 3010,bgpalfx]  
+type = palfx
+trigger1 = var(11) != 1 && fvar(12) >= 5
+trigger1 = time < 10
+time = 2
+add = 40,-30,-80
+supermovetime = 99999
+pausemovetime = 99999
+ignorehitpause = 1
+
+[State 6152, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 50
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動（上前方）始まり
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Statedef 6170]
+type = A
+physics = N
+anim = 6170
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 702, pause]
+type = pause
+trigger1 = !time
+trigger1 = prevstateno = 904
+time = 5
+movetime = 5
+
+[State 6170, AfterImage];残像
+type = null;AfterImage
+trigger1 = Time = 0
+time = 3
+TimeGap  = 1
+FrameGap = 2
+length = 40
+PalBright   = 0,0,0
+PalContrast = 255,255,255
+PalMul      = .88,.88,.88
+
+[State 6170, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6170, PlaySnd]
+type = PlaySnd
+trigger1 = animelem = 1
+value = s5999,0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+[State 6170, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 6171
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動（上前方）  中
+[Statedef 6171]
+type = A
+physics = N
+anim = 6171
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AP
+
+[State 6151, posadd]
+type = Varadd
+trigger1 = time = 0
+trigger1 = var(19) = 0
+var(3) = 1
+
+[State 6171, posadd]
+type = velset
+trigger1 = var(19) = 0
+trigger1 = animelem = 1
+x = 8
+y = -8
+
+[State 6171, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6171, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 6172
+ctrl = 1
+;━━━━━━━━━━━━━━━━━━━━━高速移動 (強化) 
+[State 6171, posadd]
+type = velset
+trigger1 = var(19) = 1
+trigger1 = animelem = 1
+x = 12
+
+[State 6061, posadd]
+type = velset
+trigger1 = var(19) = 1
+trigger1 = animelem = 1
+y = -12
+
+;━━━━━━━━━━━━━━━━━━━━━
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;空中高速移動（上前方）  終わり
+[Statedef 6172]
+type = A
+physics = N
+anim = 6172+(IfElse(var(11) = 1 || fvar(12) < 5,0,1))
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = time <= 2
+trigger1 = var(14) = 1
+value = SCA,AA
+
+
+[State 3310, afterimage]
+type = varset
+trigger1 = time >= 3
+var(14) = 0
+
+[State 6172, Turn]
+type = Turn
+trigger1 = P2Dist X < -5
+
+[State 6172, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+;ブロッキング空中
+[State -1, hitoverride]
+type = hitoverride
+TriggerAll = Var(33) = 0
+triggerall = command = "fwd" && command != "back" && command != "up" && command != "down"
+triggerall = movetype != A
+trigger1 = statetype = A
+trigger1 = fvar(12) < 5
+attr = SA,AA,AP
+stateno = 904
+forceair = 1
+slot = 0
+time = ifelse((stateno=[154,155]),6,8)
+
+[state 3010,bgpalfx]  
+type = palfx
+trigger1 = var(11) != 1 && fvar(12) >= 5
+trigger1 = time < 10
+time = 2
+add = 40,-30,-80
+supermovetime = 99999
+pausemovetime = 99999
+ignorehitpause = 1
+
+[State 6172, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 50
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;========================================================================
+;しゃがみ高速移動（緊急回避）
+;========================================================================
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;しゃがみ高速移動 始まり
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Statedef 6999]
+type = C
+physics = S
+anim = 6999
+sprpriority = -1
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 702, pause]
+type = pause
+trigger1 = !time
+trigger1 = prevstateno = 903
+time = 5
+movetime = 5
+
+[State 6999, Explod]
+type = Explod
+trigger1 = Time = 0
+anim = 15300
+pos = 0, 0
+postype = p1
+scale = 1, 1
+sprpriority = -3
+ownpal = 1
+
+[State 6999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+[State 6999, EnvShake]
+type = EnvShake
+Trigger1 = animelem = 1
+time = 10
+ampl = -3
+freq = 80
+phase = 1
+
+[State 6999, PlaySnd]
+type = PlaySnd
+trigger1 = animelem = 1
+value = s5999,0
+
+[State 6999, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6999, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 69991
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;しゃがみ高速移動  中
+[Statedef 69991]
+type = C
+physics = S
+anim = 62001
+sprpriority = -1
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AP
+
+[State 69991, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 69991, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 69992
+ctrl = 1
+;━━━━━━━━━━━━━━━━━━━━━高速移動 (強化) 
+;━━━━━━━━━━━━━━━━━━━━━
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;しゃがみ高速移動  終わり
+[Statedef 69992]
+type = C
+physics = S
+anim = 69992+(IfElse(fvar(12) < 5,0,1))
+sprpriority = -1
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = time <= 2
+trigger1 = var(14) = 1
+value = SCA,AA
+
+[State 3310, afterimage]
+type = varset
+trigger1 = time >= 3
+var(14) = 0
+
+[State 69992, Turn]
+type = Turn
+trigger1 = P2Dist X < -5
+
+[State 69992, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+;ブロッキングしゃがみ
+[State -1, hitoverride]
+type = hitoverride
+TriggerAll = Var(33) = 0
+triggerall=(statetype=S&&command="down")||(statetype=C&&command="fwd")&&command!="back"&&command!="up"
+trigger1 = movetype != A
+trigger1 = fvar(12) < 5
+attr = C,AA,AP
+stateno = 903
+slot = 0
+time = ifelse((stateno=[150,153]),6,8)
+
+[state 3010,bgpalfx]  
+type = palfx
+trigger1 = fvar(12) >= 5
+trigger1 = time < 10
+time = 2
+add = 40,-30,-80
+supermovetime = 99999
+pausemovetime = 99999
+ignorehitpause = 1
+
+[State 69992, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 11
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;しゃがみ高速移動（前方） 始まり
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Statedef 6200]
+type = C
+physics = S
+anim = 6200
+sprpriority = -1
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 702, pause]
+type = pause
+trigger1 = !time
+trigger1 = prevstateno = 903
+time = 5
+movetime = 5
+
+[State 6200, Explod]
+type = Explod
+trigger1 = Time = 0
+anim = 15000
+pos = -28, 5
+postype = p1
+scale = 0.5, 0.5
+sprpriority = 3
+ontop = 1
+ownpal = 1
+
+[State 6200, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6200, PlaySnd]
+type = PlaySnd
+trigger1 = animelem = 1
+value = s5999,0
+
+[State 6200, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+[State 6200, EnvShake]
+type = EnvShake
+Trigger1 = animelem = 1
+time = 10
+ampl = -3
+freq = 80
+phase = 1
+
+[State 6200, AfterImage];残像
+type = null;AfterImage
+trigger1 = Time = 0
+time = 3
+TimeGap  = 1
+FrameGap = 2
+length = 40
+PalBright   = 0,0,0
+PalContrast = 255,255,255
+PalMul      = .88,.88,.88
+
+[State 6200, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 62001
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;しゃがみ高速移動（前方）  中
+[Statedef 62001]
+type = C
+physics = S
+anim = 62001
+sprpriority = -1
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AP
+
+[State 62001, velset]
+type = velset
+trigger1 = var(19) = 0
+trigger1 = animelem = 1
+x = 15
+
+[State 62001, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 62001, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 62002
+ctrl = 1
+;━━━━━━━━━━━━━━━━━━━━━高速移動 (強化) 
+[State 62001, velset]
+type = velset
+trigger1 = var(19) = 1
+trigger1 = animelem = 1
+x = 22.5
+;━━━━━━━━━━━━━━━━━━━━━
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;しゃがみ高速移動（前方）  終わり
+[Statedef 62002]
+type = C
+physics = S
+anim = 62002+(IfElse(fvar(12) < 5,0,1))
+sprpriority = -1
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = time <= 2
+trigger1 = var(14) = 1
+value = SCA,AA
+
+[State 3310, afterimage]
+type = varset
+trigger1 = time >= 3
+var(14) = 0
+
+[State 62002,Turn]
+type = Turn
+trigger1 = P2Dist X < -5
+
+[State 62002, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+;ブロッキングしゃがみ
+[State -1, hitoverride]
+type = hitoverride
+TriggerAll = Var(33) = 0
+triggerall=(statetype=S&&command="down")||(statetype=C&&command="fwd")&&command!="back"&&command!="up"
+trigger1 = movetype != A
+trigger1 = fvar(12) < 5
+attr = C,AA,AP
+stateno = 903
+slot = 0
+time = ifelse((stateno=[150,153]),6,8)
+
+[state 3010,bgpalfx]  
+type = palfx
+trigger1 = fvar(12) >= 5
+trigger1 = time < 10
+time = 2
+add = 40,-30,-80
+supermovetime = 99999
+pausemovetime = 99999
+ignorehitpause = 1
+
+[State 62002, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 11
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;しゃがみ高速移動（後方）始まり
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Statedef 6201]
+type = C
+physics = S
+anim = 6201
+sprpriority = -1
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 702, pause]
+type = pause
+trigger1 = !time
+trigger1 = prevstateno = 903
+time = 5
+movetime = 5
+
+[State 6201, Explod]
+type = Explod
+trigger1 = Time = 0
+anim = 15000
+pos = 28, 5
+postype = p1
+scale = 0.5, 0.5
+sprpriority = 3
+ontop = 1
+ownpal = 1
+facing = -1
+
+[State 6201, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6201, PlaySnd]
+type = PlaySnd
+trigger1 = animelem = 1
+value = s5999,0
+
+[State 6201, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+[State 6201, EnvShake]
+type = EnvShake
+Trigger1 = animelem = 1
+time = 10
+ampl = -3
+freq = 80
+phase = 1
+
+[State 6201, AfterImage];残像
+type = null;AfterImage
+trigger1 = Time = 0
+time = 3
+TimeGap  = 1
+FrameGap = 2
+length = 40
+PalBright   = 0,0,0
+PalContrast = 255,255,255
+PalMul      = .88,.88,.88
+
+[State 6201, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 62011
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;しゃがみ高速移動（後方）  中
+[Statedef 62011]
+type = C
+physics = S
+anim = 62001
+sprpriority = -1
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AP
+
+[State 62011, velset]
+type = velset
+trigger1 = var(19) = 0
+trigger1 = animelem = 1
+x = -15
+
+[State 62011, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 62011, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 62012
+ctrl = 1
+;━━━━━━━━━━━━━━━━━━━━━高速移動 (強化) 
+[State 62011, velset]
+type = velset
+trigger1 = var(19) = 1
+trigger1 = animelem = 1
+x = -22.5
+;━━━━━━━━━━━━━━━━━━━━━
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;しゃがみ高速移動（後方）  終わり
+[Statedef 62012]
+type = C
+physics = S
+anim = 62012+(IfElse(fvar(12) < 5,0,1))
+sprpriority = -1
+poweradd = 0
+velset = 0,0
+ctrl = 0
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = time <= 2
+trigger1 = var(14) = 1
+value = SCA,AA
+
+[State 3310, afterimage]
+type = varset
+trigger1 = time >= 3
+var(14) = 0
+
+[State 62012,Turn]
+type = Turn
+trigger1 = P2Dist X < -5
+
+[State 62012, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+;ブロッキングしゃがみ
+[State -1, hitoverride]
+type = hitoverride
+TriggerAll = Var(33) = 0
+triggerall=(statetype=S&&command="down")||(statetype=C&&command="fwd")&&command!="back"&&command!="up"
+trigger1 = movetype != A
+trigger1 = fvar(12) < 5
+attr = C,AA,AP
+stateno = 903
+slot = 0
+time = ifelse((stateno=[150,153]),6,8)
+
+[state 3010,bgpalfx]  
+type = palfx
+trigger1 = fvar(12) >= 5
+trigger1 = time < 10
+time = 2
+add = 40,-30,-80
+supermovetime = 99999
+pausemovetime = 99999
+ignorehitpause = 1
+
+[State 62012, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 11
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;========================================================================
+;展開高速移動
+;========================================================================
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;展開高速移動上 始まり
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Statedef 7000]
+type = S
+physics = S
+anim = 0
+sprpriority = -1
+poweradd = 0
+ctrl = 0
+
+[State 5999, Explod]
+type = Explod
+trigger1 = Time = 0
+anim = 15300
+pos = 0, 0
+postype = p1
+scale = 1, 1
+sprpriority = -3
+ownpal = 1
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+[State 5999, Shake]
+type = EnvShake
+Trigger1 = animelem = 1
+time = 10
+ampl = -3
+freq = 80
+phase = 1
+
+[State 5999, PlaySnd]
+type = PlaySnd
+trigger1 = animelem = 1
+value = s5999,0
+
+[State 5999, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 5999, ChangeState]
+type = ChangeState
+trigger1 = Time = 3
+value = 7001
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;展開高速移動上 中
+[Statedef 7001]
+type = A
+physics = N
+anim = 5999
+sprpriority = -1
+poweradd = 0
+ctrl = 0
+
+[State 3110, TargetState]
+type = ScreenBound
+trigger1 = 1
+value = 0
+movecamera = 1,0
+
+[State 6151, posadd]
+type = velset
+trigger1 = time = 1
+y = -18
+
+[State 59991, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 59991, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+[State 59991, ChangeState]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 7002
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;展開高速移動上 終わり
+[Statedef 7002]
+type = A
+physics = A
+anim = 41
+sprpriority = -1
+poweradd = 0
+ctrl = 0
+
+[State 59992,Turn]
+type = Turn
+trigger1 = P2Dist X < -5
+
+[State 59992, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+[State 59992, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 6151, posadd]
+type = veladd
+trigger1 = time = 0
+y = -5
+
+[State 59992, ChangeState]
+type = ctrlset
+trigger1 = Time >= 3
+value = 1
+
+[State 59992, ChangeState]
+type = ChangeState
+trigger1 = Time = 40
+value = 50
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;展開高速移動上 始まり
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Statedef 7010]
+type = A
+physics = N
+anim = 44
+sprpriority = -1
+poweradd = 0
+ctrl = 0
+
+
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+
+
+[State 5999, PlaySnd]
+type = PlaySnd
+trigger1 = animelem = 1
+value = s5999,0
+
+[State 5999, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 5999, ChangeState]
+type = ChangeState
+trigger1 = Time = 3
+value = 7011
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;展開高速移動下 中
+[Statedef 7011]
+type = A
+physics = N
+anim = 5999
+sprpriority = -1
+poweradd = 0
+ctrl = 0
+
+[State 3110, TargetState]
+type = ScreenBound
+trigger1 = 1
+value = 0
+movecamera = 1,0
+
+[State 6151, posadd]
+type = velset
+trigger1 = time = 1
+y = 15
+
+[State 6151, posadd]
+type = velset
+trigger1 = Pos Y >= 0
+y = 0
+
+[State 6151, posadd]
+type = posset
+trigger1 = Pos Y >= 0
+y = 0
+
+[State 59991, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 59991, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+[State 59991, ChangeState]
+type = ChangeState
+trigger1 = Pos Y >= 0
+value = 7012
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;展開高速移動下 終わり
+[Statedef 7012]
+type = S
+physics = S
+anim = 0
+sprpriority = -1
+poweradd = 0
+ctrl = 0
+
+[State 5999, Explod]
+type = Explod
+trigger1 = Time = 0
+anim = 15300
+pos = 0, 0
+postype = p1
+scale = 1, 1
+sprpriority = -3
+ownpal = 1
+
+[State 5999, Shake]
+type = EnvShake
+Trigger1 = animelem = 1
+time = 10
+ampl = -3
+freq = 80
+phase = 1
+
+[State 59992,Turn]
+type = Turn
+trigger1 = P2Dist X < -5
+
+[State 59992, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value = ,AA
+
+[State 5999, NotHitBy]
+type = NotHitBy
+trigger1 = 1
+value2 = ,AP
+
+[State 59992, PlayerPush]
+type = PlayerPush
+trigger1 = 1
+value = 0
+
+[State 59992, ChangeState]
+type = ChangeState
+trigger1 = Time = 3
+value = 0
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;前方空中ダッシュ 始まり
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Statedef 7020]
+type = A
+physics = N
+anim = 50
+sprpriority = -1
+poweradd = 0
+ctrl = 0
+
+[State 6151, posadd]
+type = velset
+trigger1 = time = 0
+x = 4
+y = -1
+
+[State 6151, varadd]
+type = VarAdd
+trigger1 = time = 0
+var(8) = 1
+
+[State 5999, ChangeState]
+type = ChangeState
+trigger1 = Time = 1
+value = 7021
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;前方空中ダッシュ 中
+[Statedef 7021]
+type = A
+physics = N
+anim = 50
+sprpriority = -1
+poweradd = 0
+ctrl = 1
+
+[State 6151, posadd]
+type = velset
+trigger1 = time = 0
+x = 11
+y = -0.3
+
+[State 59991, ChangeState]
+type = ChangeState
+trigger1 = time  = 7
+value = 7022
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;前方空中ダッシュ 終わり
+[Statedef 7022]
+type = A
+physics = N
+anim = 0
+sprpriority = -1
+poweradd = 0
+ctrl = 1
+
+[State 6151, posadd]
+type = velset
+trigger1 = time = 0
+x = 8
+y = 0
+
+[State 59992, ChangeState]
+type = ChangeState
+trigger1 = Time = 1
+value = 50
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;後方空中ダッシュ 始まり
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Statedef 7030]
+type = A
+physics = N
+anim = 50
+sprpriority = -1
+poweradd = 0
+ctrl = 0
+
+[State 6151, posadd]
+type = velset
+trigger1 = time = 0
+x = -4
+y = -1
+
+[State 6151, varadd]
+type = VarAdd
+trigger1 = time = 0
+var(9) = 1
+
+[State 5999, ChangeState]
+type = ChangeState
+trigger1 = Time = 1
+value = 7031
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;後方空中ダッシュ 中
+[Statedef 7031]
+type = A
+physics = N
+anim = 50
+sprpriority = -1
+poweradd = 0
+ctrl = 1
+
+[State 6151, posadd]
+type = velset
+trigger1 = time = 0
+x = -11
+y = -0.3
+
+[State 59991, ChangeState]
+type = ChangeState
+trigger1 = time  = 7
+value = 7032
+ctrl = 1
+
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;後方空中ダッシュ 終わり
+[Statedef 7032]
+type = A
+physics = N
+anim = 0
+sprpriority = -1
+poweradd = 0
+ctrl = 1
+
+[State 6151, posadd]
+type = velset
+trigger1 = time = 0
+x = -8
+y = 0
+
+[State 59992, ChangeState]
+type = ChangeState
+trigger1 = Time = 1
+value = 50
+ctrl = 1

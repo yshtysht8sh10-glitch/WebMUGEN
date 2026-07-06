@@ -79,6 +79,7 @@ const RECOGNIZED_NO_OP_CONTROLLERS = new Map<string, string>([
   ['envshake', 'EnvShake'],
   ['explod', 'Explod'],
   ['explodbindtime', 'ExplodBindTime'],
+  ['fallenvshake', 'FallEnvShake'],
   ['forcefeedback', 'ForceFeedback'],
   ['gamemakeanim', 'GameMakeAnim'],
   ['gravity', 'Gravity'],
@@ -158,7 +159,8 @@ function stepPlayer(
     }
     if (debugEnabled) appendDebug(trace, `enter S${negativeStateNo} state=${next.stateNo} controllers=${negativeState.controllers.length}`);
     if (debugEnabled) appendDebug(trace, formatStateDefOverview(negativeState));
-    const result = executeStateControllers(next, opponent, negativeState, cns, input, commands, debugEnabled);
+    const negativeStateEntry = next;
+    const result = executeStateControllers(next, opponent, negativeState, cns, input, commands, debugEnabled, negativeStateEntry);
     next = result.player;
     trace.executedControllers.push(...result.executedControllers);
     trace.debugLines.push(...result.debugLines);
@@ -181,6 +183,18 @@ function stepPlayer(
   next = result.player;
   trace.executedControllers.push(...result.executedControllers);
   trace.debugLines.push(...result.debugLines);
+  if (next.stateNo !== stateDef.stateNo && next.stateTime === 0) {
+    const enteredState = findState(cns, next.stateNo);
+    if (enteredState) {
+      if (debugEnabled) appendDebug(trace, `enter target S${enteredState.stateNo} state=${next.stateNo}`);
+      if (debugEnabled) appendDebug(trace, formatStateDefOverview(enteredState));
+      const enteredResult = executeStateControllers(next, opponent, enteredState, cns, input, commands, debugEnabled);
+      next = enteredResult.player;
+      trace.executedControllers.push(...enteredResult.executedControllers);
+      trace.debugLines.push(...enteredResult.debugLines);
+      if (debugEnabled) appendDebug(trace, `leave target S${enteredState.stateNo} state=${next.stateNo}`);
+    }
+  }
   if (debugEnabled) appendDebug(trace, `leave current S${stateDef.stateNo} state=${next.stateNo}`);
 
   return finishTrace(next, trace);
@@ -203,14 +217,19 @@ function executeStateControllers(
   input: CnsRuntimeInput,
   commands?: ReadonlySet<string>,
   debugEnabled = false,
+  negativeStateEntry?: PlayerState,
 ): ControllerExecutionResult {
   let next = player;
   const executedControllers: string[] = [];
   const debugLines: string[] = [];
 
   for (const controller of stateDef.controllers) {
-    const run = shouldRun(controller, next, input, commands);
-    const debugLine = debugControllerCheck(stateDef, controller, next, input, commands, run);
+    const type = controller.type.toLowerCase();
+    const triggerPlayer = negativeStateEntry && type !== 'changestate' && next.stateNo !== negativeStateEntry.stateNo
+      ? withTriggerStateSnapshot(next, negativeStateEntry)
+      : next;
+    const run = shouldRun(controller, triggerPlayer, input, commands);
+    const debugLine = debugControllerCheck(stateDef, controller, triggerPlayer, input, commands, run);
     if (debugEnabled && debugLine) {
       pushDebug(debugLines, executedControllers, debugLine);
       for (const line of formatState10Process(stateDef, controller, next, input, commands, run)) {
@@ -236,6 +255,20 @@ function executeStateControllers(
 
   if (debugEnabled) pushDebug(debugLines, executedControllers, `return S${stateDef.stateNo} state=${next.stateNo}`);
   return { player: next, executedControllers, debugLines };
+}
+
+function withTriggerStateSnapshot(player: PlayerState, snapshot: PlayerState): PlayerState {
+  return {
+    ...player,
+    stateNo: snapshot.stateNo,
+    stateTime: snapshot.stateTime,
+    stateType: snapshot.stateType,
+    moveType: snapshot.moveType,
+    physics: snapshot.physics,
+    ctrl: snapshot.ctrl,
+    animNo: snapshot.animNo,
+    animTime: snapshot.animTime,
+  };
 }
 
 function findState(cns: CnsDocument, stateNo: number): CnsStateDefinition | undefined {

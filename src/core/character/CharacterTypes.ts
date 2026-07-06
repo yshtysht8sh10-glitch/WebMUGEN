@@ -17,4 +17,12 @@ export type CharacterAssets = {
   cmd: CmdDocument;
   sprites: ImageDataSpritePack | null;
   palettes: CharacterPaletteAsset[];
+  cnsSourceFiles?: CharacterSourceFile[];
+};
+
+export type CharacterSourceFile = {
+  path: string;
+  label: string;
+  text: string;
+  kind?: 'def' | 'cns' | 'cmd' | 'air' | 'common';
 };

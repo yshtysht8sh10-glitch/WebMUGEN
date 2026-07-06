@@ -1,0 +1,949 @@
+;---------------------------------------------------------------------------
+; ここから下は-3のステートを書いてください、ここに書いたものはゲーム中
+; に条件が成立すればいつでも開始するステートです。
+;---------------------------------------------------------------------------
+[Statedef -3]
+
+;=============================ＡＩスイッチ========================================
+
+
+[State -3, AIスイッチ]
+type     = VarSet
+triggerall = var(33) = 0
+triggerall = RoundState = [1,2]
+trigger1 = (command="cpu1")||(command="cpu2")
+trigger2 = (command="cpu3")||(command="cpu4")
+trigger3 = (command="cpu5")||(command="cpu6")
+trigger4 = (command="cpu7")||(command="cpu8")
+trigger5 = (command="cpu9")||(command="cpu10")
+trigger6 = (command="cpu11")||(command="cpu12")
+trigger7 = (command="cpu13")||(command="cpu14")
+trigger8 = (command="cpu15")||(command="cpu16")
+trigger9 = (command="cpu17")||(command="cpu18")
+trigger10 = (command="cpu19")||(command="cpu20")
+trigger11 = (command="cpu21")||(command="cpu22")
+trigger12 = (command="cpu23")||(command="cpu24")
+trigger13 = (command="cpu25")||(command="cpu26")
+trigger14 = (command="cpu27")||(command="cpu28")
+trigger15 = (command="cpu29")||(command="cpu30")
+var(33) = 1
+
+[State -3, AI]　　　　　　　　　　
+Type = VarSet
+TriggerAll = Var(33) >= 1　　　　 
+Trigger1 = RoundState >= 3　
+var(33) = 0
+
+;---------------------------------------------------------------------------
+;無距離---------------------------------------------------------------------
+;---------------------------------------------------------------------------
+
+
+
+;追撃・相手の背後から蹴る・からの連係
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+TriggerAll = var(11) = 1 || fvar(12) < 5
+triggerAll = ctrl 
+TriggerAll = !(Win = 1) 
+triggerall = power >= 1000
+triggerall = !(NumHelper(3320) = 1)
+trigger1 = (p2stateno=5030)||(p2stateno=5050)
+trigger2 = (p2stateno=261)||(p2stateno=262)
+value = 3100 
+;↓
+;-------------
+;ダークネスフィンガー 撃ち付け（弱）
+[State -3,1]
+type = ChangeState
+TriggerAll = var(11) = 1 || fvar(12) < 5
+TriggerAll =var(33) = 1 
+triggerAll = ctrl 
+trigger1 = statetype = S 
+trigger1 = p2stateno=252
+trigger1 = p2bodydist X < 49 
+value = 3405
+;||
+;ダークネスフィンガー 撃ち付け（強）
+[State -3,1]
+type = ChangeState
+TriggerAll = var(11) = 1 || fvar(12) < 5
+TriggerAll =var(33) = 1 
+triggerAll = ctrl 
+trigger1 = statetype = S 
+trigger1 = p2stateno=252
+trigger1 = p2bodydist X > 50 
+value = 3400 
+;-------------
+;↓
+;高速移動（後上方）
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+triggerAll = ctrl 
+trigger1 = statetype = S 
+trigger1 = p2stateno = 3435
+value = 6050
+
+
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+TriggerAll = var(11) = 1 || fvar(12) < 5
+triggerAll = ctrl 
+trigger1 = statetype = A 
+trigger1 = p2statetype = L 
+trigger1 = p2bodydist X < 130 
+value = 1030
+
+;---------------------------------------------------------------------------
+;X > 130 -------------------------------------------------------------------
+;---------------------------------------------------------------------------
+
+;衝撃波「強」・からの連係------------------------------------------------10%
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+TriggerAll = var(11) = 1 || fvar(12) < 5
+trigger1 = statetype = S 
+trigger1 = ctrl 
+trigger1 = p2bodydist X > 130 
+Trigger1 = Random = [800,899]
+value = 1005 
+
+;相手の背後から蹴る・からの連係------------------------------------------30%
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+TriggerAll = var(11) = 1 || fvar(12) < 5
+trigger1 = statetype = S 
+trigger1 = ctrl 
+Trigger1 = P2MoveType = A 
+trigger1 = p2bodydist X > 130 
+triggerall = power >= 1000
+Trigger1 = Random = [500,799]
+value = 3100
+
+;高速移動（前方）・からの連係--------------------------------------------50%
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+trigger1 = statetype = S 
+trigger1 = ctrl 
+trigger1 = p2bodydist X > 130 
+Trigger1 = Random = [0,499]
+value = 6000
+
+;ラッシュ・からの連係----------------------------------------------------10%
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+TriggerAll = var(11) = 1 || fvar(12) < 5
+trigger1 = statetype = S 
+trigger1 = ctrl 
+trigger1 = p2bodydist X > 130 
+Trigger1 = Random = [900,999]
+value = 1010 
+;↓
+;ラッシュ突撃1
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+trigger1 = p2bodydist X < 130 
+triggerAll = stateno = 1010 
+trigger1 = time <=  49
+value = 1011
+;||
+;ラッシュ突撃2
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+triggerAll = stateno = 1010 
+trigger1 = p2bodydist X < 130 
+trigger1 = time >=  50 && time <=  99
+value = 1013
+;||
+;ラッシュ突撃3
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+triggerAll = stateno = 1010 
+trigger1 = p2bodydist X < 130 
+trigger1 = time >= 100
+value = 1015
+
+;---------------------------------------------------------------------------
+; X < 20 -------------------------------------------------------------------
+;---------------------------------------------------------------------------
+
+;追撃・屈み「弱」キック
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+trigger1 = statetype = S 
+trigger1 = p2statetype = L 
+trigger1 = ctrl 
+trigger1 = p2bodydist X < 20
+Trigger1 = Random = [300,599]
+value = 430 
+
+;回転（強）・からの連係-------------------------------------------------20%
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+TriggerAll = var(11) = 1 || fvar(12) < 5
+trigger1 = statetype != A
+trigger1 = p2statetype != L 
+trigger1 = ctrl 
+trigger1 = p2bodydist X < 20
+Trigger1 = Random = [800,999]
+value = 1055
+
+;回転（強）・からの連係-------------------------------------------------20%
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+TriggerAll = var(11) = 1 || fvar(12) < 5
+trigger1 = statetype = A
+trigger1 = p2statetype != L 
+trigger1 = ctrl 
+trigger1 = p2bodydist X < 20
+Trigger1 = Random = [800,999]
+value = 1061
+
+;近距離立ち「弱」キックの動作1・からの連係-------------------------------20%
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+trigger1 = statetype = S 
+trigger1 = p2statetype != L 
+trigger1 = ctrl 
+trigger1 = p2bodydist X < 20
+Trigger1 = Random = [600,799]
+value = 232
+;↓
+;近距離立ち「弱」キックの動作2
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+trigger1 = stateno = 232
+trigger1 = movecontact = 1 
+value = 233
+;↓
+;ロングジャンプ
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+trigger1 = stateno = 233
+trigger1 = hitcount = 3
+trigger1 = movecontact = 1 
+value = 40
+
+;屈み「強」パンチの動作 ・からの連係--------------------------------------30%
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+trigger1 = statetype = S 
+trigger1 = p2statetype != L 
+trigger1 = ctrl 
+trigger1 = p2bodydist X < 20
+Trigger1 = Random = [0,299]
+value = 410
+
+;屈み「弱」パンチの動作 ・からの連係--------------------------------------30%
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+trigger1 = statetype = S 
+trigger1 = p2statetype != L 
+trigger1 = ctrl 
+trigger1 = p2bodydist X < 20
+Trigger1 = Random = [300,599]
+value = 400 
+;↓
+;屈み「弱」キック
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+trigger1 = stateno = 400 
+trigger1 = movecontact = 1
+value = 430 
+;↓
+;-------------
+;連繋  発動---------------------------40%
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+TriggerAll = var(11) = 1 || fvar(12) < 5
+trigger1 = stateno = 430 
+trigger1 = movecontact = 1
+Trigger1 = Random = [0,399]
+triggerall = power >= 1000
+value = 3300
+;||
+;屈み「強」キック---------------------20%
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+trigger1 = stateno = 430 
+trigger1 = movecontact = 1
+Trigger1 = Random = [400,599]
+value = 440 
+;||
+;回転（弱）---------------------------40%
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+TriggerAll = var(11) = 1 || fvar(12) < 5
+trigger1 = stateno = 430 
+trigger1 = movecontact = 1
+Trigger1 = Random = [600,999]
+value = 1050
+;-------------
+
+;---------------------------------------------------------------------------
+; 30< X < 70 ---------------------------------------------------------------
+;---------------------------------------------------------------------------
+
+;空中高速移動（後方）
+[State -3]
+Type = ChangeState
+TriggerAll = Var(33) = 1
+TriggerAll = StateType = S
+trigger1 = p2statetype = L 
+Trigger1 = Ctrl
+trigger1 = p2bodydist X > 30 
+trigger1 = p2bodydist X < 70 
+Value = 6140
+
+;立ち「弱」キックの動作・からの連係-------------------------------------100%
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+trigger1 = statetype = S 
+trigger1 = p2statetype != L 
+trigger1 = ctrl 
+trigger1 = p2bodydist X > 30 
+trigger1 = p2bodydist X < 70 
+value = 230 
+;↓
+;立ち「強」キックの動作1 
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+trigger1 = statetype = S 
+trigger1 = stateno = 230 
+trigger1 = movecontact = 1 
+value = 240 
+;↓
+;-------------
+ダークネスフィンガー 撃ち付け（弱）----50%
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+TriggerAll = var(11) = 1 || fvar(12) < 5
+trigger1 = statetype = S 
+trigger1 = stateno = 240 
+Trigger1 = Random = [500,999]
+trigger1 = movecontact = 1
+value = 3405
+;||
+;立ち「強」キックの動作2---------------50%
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+trigger1 = statetype = S 
+trigger1 = stateno = 240 
+Trigger1 = Random = [0,499]
+trigger1 = movecontact = 1
+value = 241 
+;↓
+;衝撃波「弱」
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+TriggerAll = var(11) = 1 || fvar(12) < 5
+trigger1 = statetype = S 
+trigger1 = stateno = 241 
+trigger1 = movecontact = 1 
+trigger1 = ctrl 
+value = 1000 
+;-------------
+
+
+;---------------------------------------------------------------------------
+;  ---------------------------------------------------------------
+;---------------------------------------------------------------------------
+
+
+
+;回避 しゃがみ高速移動（前方）
+[State -3]
+Type = ChangeState
+Value = 6200
+TriggerAll = Var(33) = 1
+TriggerAll = StateType = C
+Trigger1 = Ctrl
+Trigger1 = P2MoveType = A 
+Trigger1 = P2BodyDist X = [0,80]
+;↓
+;屈み「弱」パンチ
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+trigger1 = stateno = 62002 
+value = 400 
+
+;空中「弱」キックからの連係
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+trigger1 = statetype = A
+trigger1 = ctrl 
+trigger1 = p2bodydist X < 30 
+trigger1 = p2bodydist Y < 70 
+Trigger1 = Random = [500,999]
+value = 630 
+
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+TriggerAll = var(11) = 1 || fvar(12) < 5
+trigger1 = statetype = A
+trigger1 = ctrl 
+trigger1 = p2bodydist X < 30 
+trigger1 = p2bodydist Y < 70 
+Trigger1 = Random = [0,499]
+value = 1045
+
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+trigger1 = statetype = A 
+trigger1 = stateno = 630 
+trigger1 = movecontact = 1
+Trigger1 = Random = [500,799]
+value = 640 
+
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+TriggerAll = var(11) = 1 || fvar(12) < 5
+trigger1 = statetype = A 
+trigger1 = stateno = 630 
+trigger1 = movecontact = 1
+Trigger1 = Random = [0,499]
+value = 1045
+
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+TriggerAll = var(11) = 1 || fvar(12) < 5
+trigger1 = statetype = A 
+trigger1 = stateno = 630 
+trigger1 = movecontact = 1
+Trigger1 = Random = [799,999]
+value = 1040
+
+
+
+
+
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+trigger1 = stateno = 3320
+trigger1 = movecontact = 1
+value = 6170
+
+
+
+
+;回避
+[State -3]
+Type = ChangeState
+Value = 6000
+TriggerAll = Var(33) = 1
+TriggerAll = StateType = S
+Trigger1 = Ctrl
+Trigger1 = P2MoveType = A 
+Trigger1 = P2BodyDist X = [0,80]
+
+[State -3]
+Type = ChangeState
+Value = 6070
+TriggerAll = Var(33) = 1
+TriggerAll = StateType = S
+Trigger1 = Random = [500,999]
+trigger1 = stateno = 60002
+
+[State -3]
+Type = ChangeState
+Value = 6050
+TriggerAll = Var(33) = 1
+TriggerAll = StateType = S
+Trigger1 = Random = [0,499]
+trigger1 = stateno = 60002
+
+
+;回避
+[State -3]
+Type = ChangeState
+Value = 6100
+TriggerAll = Var(33) = 1
+TriggerAll = StateType = A
+Trigger1 = Ctrl
+Trigger1 = P2MoveType = A 
+Trigger1 = P2BodyDist X = [0,80]
+Trigger1 = P2BodyDist Y = [0,80]
+;↓
+;-------------
+;落ち蹴り「強」
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+TriggerAll = var(11) = 1 || fvar(12) < 5
+Trigger1 = Random = [700,999]
+trigger1 = statetype = A 
+trigger1 = stateno = 6102
+value = 1030 
+;||
+;落ち蹴り「弱」
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+TriggerAll = var(11) = 1 || fvar(12) < 5
+Trigger1 = Random = [0,699]
+trigger1 = statetype = A 
+trigger1 = stateno = 6102
+value = 1020 
+;↓
+;落ち蹴り「強」
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+TriggerAll = var(11) = 1 || fvar(12) < 5
+Trigger1 = Random = [700,999]
+trigger1 = statetype = A 
+trigger1 = stateno = 1020
+trigger1 = movecontact = 1
+trigger1 = ctrl 
+value = 1030 
+;||
+;落ち蹴り「弱」
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+TriggerAll = var(11) = 1 || fvar(12) < 5
+Trigger1 = Random = [0,699]
+trigger1 = statetype = A 
+trigger1 = stateno = 1020
+trigger1 = movecontact = 1
+trigger1 = ctrl 
+value = 1020 
+;-------------
+
+
+;------------------------------------------------------------------------
+;受身
+;------------------------------------------------------------------------
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+trigger1 = Life >= 1
+trigger1 = (stateno=5030)||(stateno=5050) 
+trigger1 = canrecover = 1
+Trigger1 = Random = [0,499]
+value = 6120
+;||
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+trigger1 = Life >= 1
+trigger1 = (stateno=5030)||(stateno=5050) 
+trigger1 = canrecover = 1
+Trigger1 = Random = [500,999]
+value = 6160
+
+;------------------------------------------------------------------------
+;タメ やめる 
+;------------------------------------------------------------------------
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+trigger1 = statetype = S 
+trigger1 = stateno = 999 
+trigger1 = p2bodydist X < 150 
+value = 998 
+;↓
+;-------------
+;高速移動（前方）
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+trigger1 = stateno = 998 
+Trigger1 = Random = [0,499]
+value = 6000
+;||
+;高速移動（後方）
+[State -3,1]
+type = ChangeState
+TriggerAll =var(33) = 1 
+trigger1 = stateno = 998 
+Trigger1 = Random = [500,999]
+value = 6001
+
+;------------------------------------------------------------------------
+;ブロッキング
+;------------------------------------------------------------------------
+;ブロッキング立ち
+[State -3]
+Type = hitoverride
+TriggerAll = Var(33) = 1
+triggerAll = statetype = S
+triggerall = movetype != A
+triggerall = movetype != H
+Trigger1 = Ctrl
+Trigger1 = P2MoveType = A 
+trigger2 = stateno=[150,153]
+attr = SA,AA,AP
+stateno = 902
+slot = 0
+time = ifelse((stateno=[150,153]),6,8)
+;-----------------------
+;ブロッキングしゃがみ
+[State -3]
+Type = hitoverride
+TriggerAll = Var(33) = 1
+triggerAll = statetype = S
+triggerall = movetype != A
+Trigger1 = Ctrl || stateno=902 || stateno=903
+Trigger1 = P2MoveType = A 
+trigger2 = stateno=[150,153]
+attr = C,AA,AP
+stateno = 903
+slot = 0
+time = ifelse((stateno=[150,153]),6,8)
+;-----------------------
+;ブロッキング空中
+[State -3]
+Type = hitoverride
+TriggerAll = Var(33) = 1
+triggerall = movetype != A
+triggerall = statetype = A
+Trigger1 = Ctrl || stateno=904
+Trigger1 = P2MoveType = A 
+trigger2 = stateno=[150,153]
+attr = SA,AA,AP
+stateno = 904
+forceair = 1
+slot = 0
+time = ifelse((stateno=[150,153]),6,8)
+
+;------------------------------------------------------------------------
+;対飛び道具
+;------------------------------------------------------------------------
+;回避
+[State -3]
+Type = ChangeState
+Value = 6000
+TriggerAll = Var(33) = 1
+TriggerAll = StateType = S
+Trigger1 = Ctrl
+Trigger1 = P2MoveType = A 
+
+
+
+
+
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;リバサ
+;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+;高速移動 (超必)
+[State -1, Varset]
+type = Varset
+triggerall = var(16) = 0
+triggerAll = var(20) = 0
+trigger1 = command = "高速移動 (超必)"
+var(16) = 3200
+;両方 (強化)
+[State -1, Varset]
+type = Varset
+triggerall = var(16) = 0
+TriggerAll = Palno != 12
+trigger1 = command = "両方 (強化)"
+var(16) = 3540
+;高速移動 (強化)
+[State -1, Varset]
+type = Varset
+triggerall = var(16) = 0
+TriggerAll = Palno != 12
+trigger1 = command = "高速移動 (強化)"
+var(16) = 3500
+;攻撃力   (強化)
+[State -1, Varset]
+type = Varset
+triggerall = var(16) = 0
+TriggerAll = Palno != 12
+trigger1 = command = "攻撃力 (強化)"
+var(16) = 3520
+;天驚拳
+[State -1, Varset]
+type = Varset
+triggerall = var(16) = 0
+trigger1 = command = "天驚拳"
+var(16) = 3520
+;投げ技
+[State -1, Varset]
+type = Varset
+triggerall = var(16) = 0
+trigger1 = command = "投げ技" 
+var(16) = 3700
+;ダークネスフィンガー 真打
+[State -1, Varset]
+type = Varset
+triggerall = var(16) = 0
+trigger1 = command = "ダークネスフィンガー" 
+var(16) = 3900
+;挨拶（強）
+[State -1, Varset]
+type = Varset
+triggerall = var(16) = 0
+trigger1 = command = "挨拶y"
+var(16) = 3800
+;挨拶（弱）
+[State -1, Varset]
+type = Varset
+triggerall = var(16) = 0
+trigger1 = command = "挨拶x"
+var(16) = 3850
+;旧・相手の背後から蹴る（強）
+[State -1, Varset]
+type = Varset
+triggerall = var(16) = 0
+TriggerAll = var(19) = 1
+trigger1 = command = "相手の背後から蹴るb"
+var(16) = 3120
+;旧・相手の背後から蹴る（弱）
+[State -1, Varset]
+type = Varset
+triggerall = var(16) = 0
+TriggerAll = var(19) = 1
+trigger1 = command = "相手の背後から蹴るa"
+var(16) = 3110
+;新・相手の背後から蹴る（強）
+[State -1, Varset]
+type = Varset
+triggerall = var(16) = 0
+TriggerAll = var(19) = 0
+trigger1 = command = "相手の背後から蹴るb"
+var(16) = 3180
+;新・相手の背後から蹴る（弱）
+[State -1, Varset]
+type = Varset
+triggerall = var(16) = 0
+TriggerAll = var(19) = 0
+trigger1 = command = "相手の背後から蹴るa"
+var(16) = 3160
+;連繋（弱）
+[State -1, Varset]
+type = Varset
+triggerall = var(16) = 0
+trigger1 = command = "連繋a" 
+var(16) = 3300
+;連繋（強）
+[State -1, Varset]
+type = Varset
+triggerall = var(16) = 0
+trigger1 = command = "連繋b"
+var(16) = 3350
+;ダークネスフィンガー 撃ち付け（強）
+[State -1, Varset]
+type = Varset
+triggerall = var(16) = 0
+trigger1 =  command = "ダークネスフィンガー 撃ち付けy"
+var(16) = 3400
+;空中ダークネスフィンガー 撃ち付け（強）
+[State -1, Varset]
+type = Varset
+triggerall = var(17) = 0
+TriggerAll = Var(19) = 1
+trigger1 =  command = "ダークネスフィンガー 撃ち付けy"
+var(17) = 3401
+;ダークネスフィンガー 撃ち付け（弱）
+[State -1, Varset]
+type = Varset
+triggerall = var(16) = 0
+trigger1 =  command = "ダークネスフィンガー 撃ち付けx"
+var(16) = 3405
+;空中ダークネスフィンガー 撃ち付け（弱）
+[State -1, Varset]
+type = Varset
+triggerall = var(17) = 0
+TriggerAll = Var(19) = 1
+trigger1 =  command = "ダークネスフィンガー 撃ち付けx"
+var(17) = 3402
+;こぶしでの攻撃（強）
+[State -1, Varset]
+type = Varset
+triggerall = var(16) = 0
+trigger1 = command = "こぶしでの攻撃（強）"
+var(16) = 1078
+;こぶしでの攻撃（弱）
+[State -1, Varset]
+type = Varset
+triggerall = var(16) = 0
+trigger1 = command = "こぶしでの攻撃（弱）"
+var(16) = 1070
+;空中ラッシュ（強）
+[State -1, Varset]
+type = Varset
+triggerall = var(17) = 0
+trigger1 = command = "空中ラッシュ（強）"
+var(17) = 1045
+;空中ラッシュ（弱）
+[State -1, Varset]
+type = Varset
+triggerall = var(17) = 0
+trigger1 = command = "空中ラッシュ（弱）"
+var(17) = 1040
+;落ち蹴り（EX）
+[State -1, Varset]
+type = Varset
+triggerall = var(17) = 0
+trigger1 = command = "落ち蹴り（EX）"
+var(17) = 1035
+;落ち蹴り（強）
+[State -1, Varset]
+type = Varset
+triggerall = var(17) = 0
+trigger1 = command = "落ち蹴り（強）"
+var(17) = 1030
+;落ち蹴り（弱）
+[State -1, Varset]
+type = Varset
+triggerall = var(17) = 0
+trigger1 = command = "落ち蹴り（弱）"
+var(17) = 1020
+;ラッシュ（強）
+[State -1, Varset]
+type = Varset
+triggerall = var(16) = 0
+trigger1 = command = "落ち蹴り（強）"
+var(16) = 1018
+;ラッシュ（弱）
+[State -1, Varset]
+type = Varset
+triggerall = var(16) = 0
+trigger1 = command = "落ち蹴り（弱）"
+var(16) = 1010
+;回転（強）
+[State -1, Varset]
+type = Varset
+triggerall = var(16) = 0
+trigger1 = command = "回転（強）"
+var(16) = 1055
+;回転空中（強）
+[State -1, Varset]
+type = Varset
+triggerall = var(17) = 0
+trigger1 = command = "回転（強）"
+var(17) = 1061
+;回転（弱）
+[State -1, Varset]
+type = Varset
+triggerall = var(16) = 0
+trigger1 = command = "回転（弱）"
+var(16) = 1050
+;回転空中（弱）
+[State -1, Varset]
+type = Varset
+triggerall = var(17) = 0
+trigger1 = command = "回転（弱）"
+var(17) = 1065
+;衝撃波（強）
+[State -1, Varset]
+type = Varset
+triggerall = var(16) = 0
+trigger1 = command = "衝撃波（強）"
+var(16) = 1005
+;衝撃波（弱）
+[State -1, Varset]
+type = Varset
+triggerall = var(16) = 0
+trigger1 = command = "衝撃波（弱）"
+var(16) = 1000
+
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+;------------------------------------------------------------------------
+

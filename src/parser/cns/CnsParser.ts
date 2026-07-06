@@ -13,7 +13,11 @@ type CurrentSection =
   | { kind: 'metadata'; section: CnsMetadataSection }
   | null;
 
-export function parseCnsText(text: string): CnsDocument {
+export type CnsParseOptions = {
+  sourceFile?: string;
+};
+
+export function parseCnsText(text: string, options: CnsParseOptions = {}): CnsDocument {
   const states: CnsStateDefinition[] = [];
   const metadataSections: CnsMetadataSection[] = [];
   let currentState: CnsStateDefinition | null = null;
@@ -36,6 +40,8 @@ export function parseCnsText(text: string): CnsDocument {
       if (stateDefMatch) {
         currentState = {
           stateNo: Number(stateDefMatch[1]),
+          sourceFile: options.sourceFile,
+          sourceLine: lineIndex + 1,
           controllers: [],
         };
         states.push(currentState);
@@ -48,6 +54,8 @@ export function parseCnsText(text: string): CnsDocument {
         if (!currentState) {
           currentState = {
             stateNo: Number(controllerMatch[1]),
+            sourceFile: options.sourceFile,
+            sourceLine: lineIndex + 1,
             controllers: [],
           };
           states.push(currentState);
@@ -57,6 +65,8 @@ export function parseCnsText(text: string): CnsDocument {
           type: '',
           triggers: [],
           params: {},
+          sourceFile: options.sourceFile,
+          sourceLine: lineIndex + 1,
         };
         currentState.controllers.push(controller);
         current = { kind: 'controller', controller };

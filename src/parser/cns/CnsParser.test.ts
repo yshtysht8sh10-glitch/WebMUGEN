@@ -156,4 +156,18 @@ juggle = 6
 
     expect(doc.states[0].juggle).toBe(6);
   });
+
+  it('records source file and line numbers when provided', () => {
+    const doc = parseCnsText(`
+[StateDef 240]
+type = S
+
+[State 240, Follow]
+type = ChangeState
+value = 241
+`, { sourceFile: 'char.cns' });
+
+    expect(doc.states[0]).toMatchObject({ sourceFile: 'char.cns', sourceLine: 2 });
+    expect(doc.states[0].controllers[0]).toMatchObject({ sourceFile: 'char.cns', sourceLine: 5 });
+  });
 });

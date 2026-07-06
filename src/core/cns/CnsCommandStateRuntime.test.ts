@@ -323,6 +323,111 @@ anim = 430
     });
   });
 
+  it('does not reuse the entry button press for a State 240 follow-up command', () => {
+    const cmd = parseCmdText(`
+[Command]
+name = "b"
+command = b
+time = 1
+`);
+    const cns = parseCnsText(`
+[Statedef -1]
+[State -1, Start]
+type = ChangeState
+trigger1 = stateno = 0
+trigger1 = command = "b"
+value = 240
+
+[State 240, ResetFollowup]
+type = VarSet
+trigger1 = stateno != 240
+var(24) = 0
+
+[Statedef 0]
+type = S
+movetype = I
+physics = S
+ctrl = 1
+anim = 0
+
+[Statedef 240]
+type = S
+movetype = A
+physics = S
+ctrl = 0
+anim = 240
+
+[State 240, FollowupFlag]
+type = VarSet
+trigger1 = command = "b"
+trigger1 = time >= 2
+var(24) = 1
+
+[State 240, Followup]
+type = ChangeState
+triggerall = var(24) = 1
+trigger1 = time = 18
+value = 241
+
+[Statedef 241]
+type = S
+movetype = A
+physics = S
+ctrl = 0
+anim = 241
+`);
+
+    const buffer = new InputBuffer(30);
+    const firstInput = { left: false, right: false, up: false, down: false, attack: false, buttons: ['b'] };
+    buffer.push(firstInput);
+    let game = stepCnsStateRuntime(createInitialGameState(), cns, {
+      p1Commands: resolveCommands(cmd, firstInput, buffer).activeCommandNames,
+      p2Commands: new Set(),
+    }).state;
+
+    expect(game.players[0].stateNo).toBe(240);
+
+    for (let time = 1; time <= 18; time += 1) {
+      const heldInput = { left: false, right: false, up: false, down: false, attack: false, buttons: ['b'] };
+      buffer.push(heldInput);
+      game = {
+        ...game,
+        players: [{ ...game.players[0], stateTime: time }, game.players[1]],
+      };
+      game = stepCnsStateRuntime(game, cns, {
+        p1Commands: resolveCommands(cmd, heldInput, buffer).activeCommandNames,
+        p2Commands: new Set(),
+      }).state;
+    }
+
+    expect(game.players[0].stateNo).toBe(240);
+    expect((game.players[0] as { vars?: Record<number, number> }).vars?.[24]).toBe(0);
+
+    const releaseInput = { left: false, right: false, up: false, down: false, attack: false };
+    buffer.push(releaseInput);
+    game = {
+      ...game,
+      players: [{ ...game.players[0], stateTime: 17 }, game.players[1]],
+    };
+    game = stepCnsStateRuntime(game, cns, {
+      p1Commands: resolveCommands(cmd, releaseInput, buffer).activeCommandNames,
+      p2Commands: new Set(),
+    }).state;
+
+    const repressInput = { left: false, right: false, up: false, down: false, attack: false, buttons: ['b'] };
+    buffer.push(repressInput);
+    game = {
+      ...game,
+      players: [{ ...game.players[0], stateTime: 18 }, game.players[1]],
+    };
+    game = stepCnsStateRuntime(game, cns, {
+      p1Commands: resolveCommands(cmd, repressInput, buffer).activeCommandNames,
+      p2Commands: new Set(),
+    }).state;
+
+    expect(game.players[0].stateNo).toBe(241);
+  });
+
   it('keeps a jump attack button active until jump startup reaches air control', () => {
     const cmd = parseCmdText(`
 [Command]

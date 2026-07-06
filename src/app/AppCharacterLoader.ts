@@ -33,12 +33,17 @@ export async function loadAppCharacter(defPath: string): Promise<AppCharacterLoa
   }
 }
 
-export function createSampleCharacterAssets(): Pick<CharacterAssets, 'cns' | 'air' | 'cmd' | 'sprites'> {
+export function createSampleCharacterAssets(): Pick<CharacterAssets, 'cns' | 'air' | 'cmd' | 'sprites' | 'cnsSourceFiles'> {
   return {
-    cns: parseCnsText(sampleCharacterCns),
+    cns: parseCnsText(sampleCharacterCns, { sourceFile: 'sample.cns' }),
     air: parseAirText(sampleCharacterAir),
     cmd: parseCmdText(sampleCharacterCmd),
     sprites: null,
+    cnsSourceFiles: [
+      { path: 'sample.cns', label: 'sample.cns', text: sampleCharacterCns, kind: 'cns' },
+      { path: 'sample.air', label: 'sample.air', text: sampleCharacterAir, kind: 'air' },
+      { path: 'sample.cmd', label: 'sample.cmd', text: sampleCharacterCmd, kind: 'cmd' },
+    ],
   };
 }
 

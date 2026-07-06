@@ -15,11 +15,11 @@ export type RoundRuntimeState = {
   hitFeedbackState: HitFeedbackState;
 };
 
-export function restartRound(currentRoundNo: number): RoundRuntimeState {
+export function restartRound(currentRoundNo: number, timer?: number): RoundRuntimeState {
   return {
     gameState: createInitialGameState(),
     roundState: {
-      ...createInitialRoundState(),
+      ...createInitialRoundState(timer),
       roundNo: currentRoundNo + 1,
     },
     hitFeedbackState: createInitialHitFeedbackState(),

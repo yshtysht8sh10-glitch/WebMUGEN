@@ -105,8 +105,12 @@ function normalizeAnimationTime(action: AirAction, animTime: number): number {
     }
   }
 
+  if (safeTime === length) {
+    return length - 1;
+  }
+
   // Real-world AIR files often omit LoopStart for idle animations.
-  // Loop by default instead of returning null after the animation length.
+  // Loop by default after the terminal frame instead of returning null.
   return safeTime % Math.max(1, length);
 }
 

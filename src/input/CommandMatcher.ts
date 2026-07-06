@@ -9,8 +9,8 @@ export type CommandStep = {
   tokens: CommandToken[];
 };
 
-const DEFAULT_BUTTON_BUFFER_TIME = 3;
 const DEFAULT_DOUBLE_TAP_DIRECTION_BUFFER_TIME = 3;
+const DEFAULT_BUTTON_BUFFER_TIME = 3;
 
 export function parseCommandTokens(command: string): CommandToken[] {
   return parseCommandSteps(command).flatMap((step) => step.tokens);
@@ -25,6 +25,10 @@ export function parseCommandSteps(command: string): CommandStep[] {
 }
 
 export function matchesCommand(command: CmdCommand, frames: readonly InputFrame[]): boolean {
+  if (isHeldFinalButton(command, frames)) {
+    return false;
+  }
+
   const bufferTime = Math.max(0, command.bufferTime ?? defaultBufferTime(command));
   for (let offset = 0; offset <= bufferTime; offset += 1) {
     if (matchesCommandAtOffset(command, frames.slice(offset))) return true;
@@ -50,6 +54,19 @@ function isSingleButtonCommand(steps: readonly CommandStep[]): boolean {
   return steps.length === 1 && steps[0].tokens.every((token) => token.kind === 'button');
 }
 
+function isHeldFinalButton(command: CmdCommand, frames: readonly InputFrame[]): boolean {
+  const steps = parseCommandSteps(command.command);
+  if (!isSingleButtonCommand(steps)) return false;
+
+  const finalStep = steps[steps.length - 1];
+  if (!finalStep || frames.length < 2) return false;
+
+  const buttons = finalStep.tokens.filter((token) => token.kind === 'button' && !token.hold);
+  if (buttons.length === 0) return false;
+
+  return buttons.every((token) => frames[0].buttons.has(token.value) && frames[1].buttons.has(token.value));
+}
+
 function isDoubleTapDirectionCommand(steps: readonly CommandStep[]): boolean {
   if (steps.length !== 2) {
     return false;
@@ -67,7 +84,6 @@ function matchesCommandAtOffset(command: CmdCommand, frames: readonly InputFrame
   }
 
   const timeLimit = command.time ?? 15;
-  const searchFrames = frames.slice(0, timeLimit);
 
   let frameIndex = 0;
   let previousMatchedFrameIndex = -1;
@@ -78,7 +94,7 @@ function matchesCommandAtOffset(command: CmdCommand, frames: readonly InputFrame
     const allowSameFrame =
       previousMatchedFrameIndex >= 0 &&
       canShareFrame(step, steps[stepIndex + 1]) &&
-      stepMatchesFrame(step, searchFrames[previousMatchedFrameIndex]);
+      stepMatchesFrame(step, frames[previousMatchedFrameIndex]);
 
     if (allowSameFrame) {
       frameIndex = previousMatchedFrameIndex + 1;
@@ -87,9 +103,11 @@ function matchesCommandAtOffset(command: CmdCommand, frames: readonly InputFrame
 
     const foundIndex = findStep(
       step,
-      searchFrames,
+      frames,
       frameIndex,
+      timeLimit,
       shouldRequireFreshRepeatedDirection(step, steps[stepIndex + 1]),
+      shouldRequireFreshButton(step),
     );
 
     if (foundIndex < 0) {
@@ -129,10 +147,17 @@ function findStep(
   step: CommandStep,
   frames: readonly InputFrame[],
   startIndex: number,
+  timeLimit: number,
   requireFreshDirection: boolean,
+  requireFreshButton: boolean,
 ): number {
-  for (let index = startIndex; index < frames.length; index += 1) {
-    if (stepMatchesFrame(step, frames[index]) && (!requireFreshDirection || isFreshDirectionStep(step, frames, index))) {
+  const endIndex = Math.min(frames.length, timeLimit);
+  for (let index = startIndex; index < endIndex; index += 1) {
+    if (
+      stepMatchesFrame(step, frames[index]) &&
+      (!requireFreshDirection || isFreshDirectionStep(step, frames, index)) &&
+      (!requireFreshButton || isFreshButtonStep(step, frames, index))
+    ) {
       return index;
     }
 
@@ -179,12 +204,24 @@ function shouldRequireFreshRepeatedDirection(step: CommandStep, laterStep: Comma
   return direction !== null && direction === laterDirection;
 }
 
+function shouldRequireFreshButton(step: CommandStep): boolean {
+  return step.tokens.some((token) => token.kind === 'button' && !token.hold);
+}
+
 function isFreshDirectionStep(step: CommandStep, frames: readonly InputFrame[], index: number): boolean {
   const direction = singleNonHoldDirection(step);
   if (!direction) return true;
 
   const newerFrame = frames[index - 1];
   return !newerFrame || !directionContains(newerFrame.direction, direction);
+}
+
+function isFreshButtonStep(step: CommandStep, frames: readonly InputFrame[], index: number): boolean {
+  const buttons = step.tokens.filter((token) => token.kind === 'button' && !token.hold);
+  if (buttons.length === 0) return true;
+
+  const olderFrame = frames[index + 1];
+  return buttons.every((token) => !olderFrame?.buttons.has(token.value));
 }
 
 function singleNonHoldDirection(step: CommandStep): DirectionToken | null {

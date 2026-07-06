@@ -153,6 +153,72 @@ anim = 0
     });
   });
 
+  it('keeps finite ended animations eligible for AnimTime = 0 return controllers', () => {
+    const cns = parseCnsText(`
+[Statedef 400]
+type = C
+movetype = A
+physics = C
+ctrl = 0
+anim = 400
+
+[State 400, Return]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 11
+ctrl = 1
+
+[Statedef 11]
+type = C
+movetype = I
+physics = C
+ctrl = 1
+
+[State 11, CrouchAnim]
+type = ChangeAnim
+trigger1 = time = 0
+value = 11
+`);
+
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime(
+      {
+        ...state,
+        players: [
+          {
+            ...state.players[0],
+            stateNo: 400,
+            animNo: 400,
+            animTime: 14,
+            stateTime: 14,
+            stateType: 'C',
+            moveType: 'A',
+            physics: 'C',
+            ctrl: false,
+          },
+          state.players[1],
+        ],
+      },
+      cns,
+      {
+        getAnimationDuration: (animNo) => (animNo === 400 ? 10 : null),
+      },
+    );
+
+    expect(result.state.players[0]).toMatchObject({
+      stateNo: 11,
+      animNo: 11,
+      stateType: 'C',
+      moveType: 'I',
+      physics: 'C',
+      ctrl: true,
+    });
+    expect(result.traces[0]).toMatchObject({
+      mugenAnimTime: 0,
+      executedControllers: ['ChangeState', 'ChangeAnim'],
+    });
+  });
+
   it('does not return before MUGEN AnimTime reaches 0', () => {
     const cns = parseCnsText(`
 [Statedef 200]
@@ -187,7 +253,7 @@ anim = 0
     );
 
     expect(result.state.players[0].stateNo).toBe(200);
-    expect(result.traces[0].mugenAnimTime).toBe(1);
+    expect(result.traces[0].mugenAnimTime).toBe(-1);
   });
 
   it('re-enters state 0 with idle animation even when the target StateDef omits anim', () => {
@@ -506,6 +572,72 @@ anim = 20
     expect(result.state.players[0].stateNo).toBe(20);
     expect((result.state.players[0] as { vars?: Record<number, number> }).vars?.[0]).toBe(5);
     expect(result.traces[0].executedControllers).toEqual(['VarSet', 'VarAdd', 'ChangeState']);
+  });
+
+  it('evaluates negative-state reset controllers against the entry state after ChangeState', () => {
+    const cns = parseCnsText(`
+[Statedef -1]
+[State -1, Route]
+type = ChangeState
+trigger1 = command = "b"
+value = 240
+
+[State 240, ResetFollowup]
+type = VarSet
+trigger1 = stateno != 240
+var(24) = 0
+
+[Statedef 0]
+type = S
+movetype = I
+physics = S
+ctrl = 1
+anim = 0
+
+[Statedef 240]
+type = S
+movetype = A
+physics = S
+ctrl = 0
+anim = 240
+
+[State 240, FollowupFlag]
+type = VarSet
+trigger1 = command = "b"
+trigger1 = time >= 2
+var(24) = 1
+
+[State 240, Followup]
+type = ChangeState
+triggerall = var(24) = 1
+trigger1 = time = 18
+value = 241
+
+[Statedef 241]
+type = S
+movetype = A
+physics = S
+ctrl = 0
+anim = 241
+`);
+
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime({
+      ...state,
+      players: [
+        {
+          ...state.players[0],
+          vars: { 24: 1 },
+        } as typeof state.players[0],
+        state.players[1],
+      ],
+    }, cns, {
+      p1Commands: new Set(['b']),
+      p2Commands: new Set(),
+    });
+
+    expect(result.state.players[0].stateNo).toBe(240);
+    expect((result.state.players[0] as { vars?: Record<number, number> }).vars?.[24]).toBe(0);
   });
 
   it('evaluates CNS expressions in VelSet params and direct sysvar VarSet assignments', () => {

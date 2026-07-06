@@ -11,12 +11,13 @@ export type RoundState = {
 };
 
 const INTRO_FRAMES = 90;
+export const DEFAULT_ROUND_TIMER = 99;
 
-export function createInitialRoundState(): RoundState {
+export function createInitialRoundState(timer: number = DEFAULT_ROUND_TIMER): RoundState {
   return {
     phase: 'intro',
     roundNo: 1,
-    timer: 99,
+    timer,
     frameInPhase: 0,
     winner: null,
   };

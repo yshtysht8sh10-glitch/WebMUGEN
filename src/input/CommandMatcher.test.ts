@@ -87,13 +87,32 @@ describe('CommandMatcher', () => {
     expect(matchesCommand({ name: 'x', command: 'x', time: 1, bufferTime: 1 }, buffer.getFrames())).toBe(false);
   });
 
-  it('keeps simple button commands briefly active by default', () => {
+  it('keeps simple button commands briefly active by default after release', () => {
     const buffer = new InputBuffer(10);
     buffer.push({ left: false, right: false, up: false, down: false, attack: false, buttons: ['x'] });
     buffer.push({ left: false, right: false, up: false, down: false, attack: false });
     buffer.push({ left: false, right: false, up: false, down: false, attack: false });
 
     expect(matchesCommand({ name: 'x', command: 'x', time: 1 }, buffer.getFrames())).toBe(true);
+  });
+
+  it('does not retrigger a simple button command while the button is held', () => {
+    const buffer = new InputBuffer(10);
+    buffer.push({ left: false, right: false, up: false, down: false, attack: false, buttons: ['b'] });
+    buffer.push({ left: false, right: false, up: false, down: false, attack: false, buttons: ['b'] });
+    buffer.push({ left: false, right: false, up: false, down: false, attack: false, buttons: ['b'] });
+    buffer.push({ left: false, right: false, up: false, down: false, attack: false, buttons: ['b'] });
+
+    expect(matchesCommand({ name: 'b', command: 'b', time: 1 }, buffer.getFrames())).toBe(false);
+  });
+
+  it('matches a simple button command again after the button is released and pressed', () => {
+    const buffer = new InputBuffer(10);
+    buffer.push({ left: false, right: false, up: false, down: false, attack: false, buttons: ['b'] });
+    buffer.push({ left: false, right: false, up: false, down: false, attack: false });
+    buffer.push({ left: false, right: false, up: false, down: false, attack: false, buttons: ['b'] });
+
+    expect(matchesCommand({ name: 'b', command: 'b', time: 1 }, buffer.getFrames())).toBe(true);
   });
 
   it('does not apply the default button buffer to direction commands', () => {

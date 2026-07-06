@@ -3,6 +3,7 @@ import { zipSync, strToU8 } from 'fflate';
 import { readFile } from 'node:fs/promises';
 import { getAnimationDuration } from '../core/animation/AnimationDuration';
 import { stepCnsStateRuntime } from '../core/cns/CnsStateRuntime';
+import { analyzeCnsCoverage } from '../core/cns/CnsCoverageDiagnostics';
 import { createInitialGameState } from '../core/engine/GameState';
 import { formatScenarioFrame, holdP1Keys, neutral, simulateCnsInputScenario } from '../testing/CnsInputScenarioSimulator';
 import { createSampleCharacterAssets, loadAppCharacter } from './AppCharacterLoader';
@@ -58,6 +59,13 @@ describe('AppCharacterLoader', () => {
       expect(result.source).toBe('def');
       expect(result.character?.air.actions[0].actionNo).toBe(0);
       expect(result.character?.cmd.commands.map((command) => command.name)).toContain('a');
+      expect(result.character?.cnsSourceFiles?.map((file) => file.path)).toEqual(expect.arrayContaining([
+        'Demo/Demo.def',
+        'Demo/Demo.cns',
+        'Demo/Demo.cmd',
+        'Demo/Demo.air',
+        '/chars/common.cmd',
+      ]));
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -87,6 +95,34 @@ describe('AppCharacterLoader', () => {
       expect(result.character?.cns.states.length).toBeGreaterThan(9);
       expect(result.character?.cmd.commands.length).toBeGreaterThan(8);
       expect(result.character?.sprites?.sprites.size ?? 0).toBeGreaterThan(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('classifies bundled T-H-M-A CNS controllers and triggers without unsupported diagnostics', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (path: RequestInfo | URL) => {
+      const url = String(path);
+      if (url === '/chars/T-H-M-A.zip') {
+        return new Response(await readFile('public/chars/T-H-M-A.zip'), { status: 200 });
+      }
+      if (url === '/chars/common.cmd') {
+        return new Response(await readFile('public/chars/common.cmd', 'utf8'), { status: 200 });
+      }
+      if (url === '/chars/common1.cns') {
+        return new Response(await readFile('public/chars/common1.cns', 'utf8'), { status: 200 });
+      }
+      return new Response('missing', { status: 404 });
+    }) as typeof fetch;
+
+    try {
+      const result = await loadAppCharacter('/chars/T-H-M-A.zip');
+      expect(result.character).not.toBeNull();
+
+      const diagnostics = analyzeCnsCoverage(result.character!.cns);
+      expect(diagnostics.unsupportedControllers).toEqual([]);
+      expect(diagnostics.unsupportedTriggers).toEqual([]);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -183,6 +219,52 @@ describe('AppCharacterLoader', () => {
         ctrl: true,
       });
       expect(finalFrame!.p1.vy).toBeLessThan(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('returns T-H-M-A from jump landing to idle state 0', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (path: RequestInfo | URL) => {
+      const url = String(path);
+      if (url === '/chars/T-H-M-A.zip') {
+        return new Response(await readFile('public/chars/T-H-M-A.zip'), { status: 200 });
+      }
+      if (url === '/chars/common.cmd') {
+        return new Response(await readFile('public/chars/common.cmd', 'utf8'), { status: 200 });
+      }
+      if (url === '/chars/common1.cns') {
+        return new Response(await readFile('public/chars/common1.cns', 'utf8'), { status: 200 });
+      }
+      return new Response('missing', { status: 404 });
+    }) as typeof fetch;
+
+    try {
+      const result = await loadAppCharacter('/chars/T-H-M-A.zip');
+      const character = result.character;
+      expect(character).not.toBeNull();
+
+      const simulation = simulateCnsInputScenario(character!, [
+        holdP1Keys(['ArrowUp'], 1),
+        neutral(170),
+      ]);
+      const history = simulation.frames.map(formatScenarioFrame).join('\n');
+
+      expect(simulation.frames.some((frame) => frame.p1.stateNo === 50), history).toBe(true);
+      expect(simulation.frames.some((frame) => frame.p1.stateNo === 52), history).toBe(true);
+
+      const finalFrame = simulation.frames[simulation.frames.length - 1];
+      expect(finalFrame, history).toBeDefined();
+      expect(finalFrame!.p1).toMatchObject({
+        stateNo: 0,
+        stateType: 'S',
+        physics: 'S',
+        animNo: 0,
+        ctrl: true,
+        y: 285,
+        vy: 0,
+      });
     } finally {
       globalThis.fetch = originalFetch;
     }

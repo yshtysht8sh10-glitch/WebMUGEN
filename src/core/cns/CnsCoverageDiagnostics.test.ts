@@ -26,7 +26,7 @@ value = 0, 0
     expect(diagnostics.controllerCount).toBe(2);
     expect(diagnostics.triggerCount).toBe(2);
     expect(diagnostics.controllers.find((item) => item.name === 'velset')?.status).toBe('supported');
-    expect(diagnostics.controllers.find((item) => item.name === 'playsnd')?.status).toBe('unsupported');
+    expect(diagnostics.controllers.find((item) => item.name === 'playsnd')?.status).toBe('partial');
     expect(diagnostics.triggers.find((item) => item.name === 'time')?.status).toBe('supported');
     expect(diagnostics.triggers.find((item) => item.name === 'animtime')?.status).toBe('supported');
   });
@@ -74,10 +74,10 @@ value = 0, 0
       'Controllers:',
       '  対応済み: 0種類',
       '  -',
-      '  一部対応: 0種類',
-      '  -',
-      '  未対応: 1種類',
+      '  一部対応: 1種類',
       '    playsnd: 1',
+      '  未対応: 0種類',
+      '  -',
       '',
       'Triggers:',
       '  対応済み: 0種類',

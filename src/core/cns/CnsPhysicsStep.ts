@@ -1,21 +1,27 @@
 import type { GameState, PlayerState } from '../engine/types';
 import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
+import type { CnsDocument, CnsStateDefinition } from '../../mugen/common/cnsTypes';
 
 const AIR_GRAVITY = 0.6;
 const GROUND_FRICTION = 0.82;
+const COMMON_JUMP_LAND_STATE = 52;
 
-export function stepCnsPhysicsMotion(state: GameState): GameState {
+export function stepCnsPhysicsMotion(state: GameState, cns?: CnsDocument | null): GameState {
   const movedPlayers = [
     stepPlayerCnsPhysics(state.players[0]),
     stepPlayerCnsPhysics(state.players[1]),
+  ] as [PlayerState, PlayerState];
+  const clampedPlayers = [
+    clampPlayerAfterCnsPhysics(movedPlayers[0]),
+    clampPlayerAfterCnsPhysics(movedPlayers[1]),
   ] as [PlayerState, PlayerState];
 
   return {
     ...state,
     frame: state.frame + 1,
     players: [
-      clampPlayerAfterCnsPhysics(movedPlayers[0]),
-      clampPlayerAfterCnsPhysics(movedPlayers[1]),
+      applyCnsAirLandingState(clampedPlayers[0], clampedPlayers[1], cns),
+      applyCnsAirLandingState(clampedPlayers[1], clampedPlayers[0], cns),
     ],
   };
 }
@@ -53,4 +59,60 @@ function clampPlayerAfterCnsPhysics(player: PlayerState): PlayerState {
     y: DEFAULT_GROUND_Y,
     vy: player.physics === 'A' && player.vy > 0 ? 0 : player.vy,
   };
+}
+
+function applyCnsAirLandingState(player: PlayerState, opponent: PlayerState, cns?: CnsDocument | null): PlayerState {
+  if (!cns || player.stateNo === COMMON_JUMP_LAND_STATE || player.physics !== 'A' || player.stateType !== 'A') {
+    return player;
+  }
+
+  if (player.y < DEFAULT_GROUND_Y || player.vy < 0) {
+    return player;
+  }
+
+  const landingState = cns.states.find((state) => state.stateNo === COMMON_JUMP_LAND_STATE);
+  if (!landingState) {
+    return player;
+  }
+
+  return enterLandingState(player, opponent, landingState);
+}
+
+function enterLandingState(player: PlayerState, opponent: PlayerState, stateDef: CnsStateDefinition): PlayerState {
+  const stateType = toStateType(stateDef.stateType) ?? player.stateType;
+  const physics = toPhysics(stateDef.physics) ?? player.physics;
+  const animNo = stateDef.initialAnim ?? player.animNo;
+
+  return {
+    ...player,
+    prevStateNo: player.stateNo,
+    stateNo: stateDef.stateNo,
+    stateTime: 0,
+    stateType,
+    moveType: toMoveType(stateDef.moveType) ?? player.moveType,
+    physics,
+    ctrl: stateDef.ctrl ?? player.ctrl,
+    animNo,
+    animTime: player.animNo === animNo ? player.animTime : 0,
+    y: DEFAULT_GROUND_Y,
+    vy: 0,
+    activeHitDef: null,
+    hitDefUsed: false,
+    facing: player.x <= opponent.x ? 1 : -1,
+  } as PlayerState;
+}
+
+function toStateType(value: string | undefined): PlayerState['stateType'] | null {
+  const normalized = value?.trim().toUpperCase();
+  return normalized === 'S' || normalized === 'C' || normalized === 'A' || normalized === 'L' ? normalized : null;
+}
+
+function toMoveType(value: string | undefined): PlayerState['moveType'] | null {
+  const normalized = value?.trim().toUpperCase();
+  return normalized === 'I' || normalized === 'A' || normalized === 'H' ? normalized : null;
+}
+
+function toPhysics(value: string | undefined): PlayerState['physics'] | null {
+  const normalized = value?.trim().toUpperCase();
+  return normalized === 'S' || normalized === 'C' || normalized === 'A' || normalized === 'N' ? normalized : null;
 }

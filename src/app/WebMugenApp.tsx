@@ -3,6 +3,7 @@ import { CanvasRenderer } from '../renderer/canvas2d/CanvasRenderer';
 import { createInitialGameState } from '../core/engine/GameState';
 import type { GameState } from '../core/engine/types';
 import { createSampleCharacterAssets, loadAppCharacter } from './AppCharacterLoader';
+import type { CharacterSourceFile } from '../core/character/CharacterTypes';
 import {
   BrowserInput,
   DEFAULT_INPUT_CONFIG,
@@ -25,6 +26,7 @@ import {
 } from '../core/engine/HitFeedback';
 import {
   createInitialRoundState,
+  DEFAULT_ROUND_TIMER,
   formatRoundState,
   stepRoundState,
   type RoundState,
@@ -36,7 +38,7 @@ import {
   type RoundScore,
 } from '../core/engine/RoundScore';
 import { canRestartRound, restartRound } from '../core/engine/RoundRestart';
-import { getAnimationDuration } from '../core/animation/AnimationDuration';
+import { calculateMugenAnimTime, getMugenAnimEndTime } from '../core/animation/AnimationDuration';
 import { getCurrentAnimationElement } from '../core/animation/AnimationPlayer';
 import { attachFallbackAttackStates } from '../core/cns/CnsFallbackDocument';
 import { analyzeCnsCoverage } from '../core/cns/CnsCoverageDiagnostics';
@@ -52,17 +54,32 @@ import { formatCnsCoverageDebugOverlay } from './CnsCoverageDebugOverlay';
 import { formatPhysicsDebugOverlay } from './PhysicsDebugOverlay';
 import { InputBuffer } from '../input/InputBuffer';
 import { resolveCommands } from '../input/CommandResolver';
-import { evaluateCnsRuntimeTrigger } from '../core/cns/CnsRuntimeTrigger';
+import { evaluateCnsRuntimeTrigger, readNumberExpression, type CnsRuntimeTriggerContext } from '../core/cns/CnsRuntimeTrigger';
 import type { CnsDocument, CnsStateController, CnsStateDefinition, CnsTrigger } from '../mugen/common/cnsTypes';
 
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/T-H-M-A.zip';
 const ENABLE_RUNTIME_FALLBACKS = false;
 const RUNTIME_HISTORY_LIMIT = 500;
+const READABLE_RUNTIME_HISTORY_LIMIT = 4000;
 const INPUT_CONFIG_STORAGE_KEY = 'webmugen.inputConfig.v1';
 const CHARACTER_PATH_STORAGE_KEY = 'webmugen.characterPath.v1';
+const RUNTIME_SETTINGS_STORAGE_KEY = 'webmugen.runtimeSettings.v1';
 const CHARACTER_PATH_OPTIONS = ['/chars/T-H-M-A.zip', '/chars/kfm/kfm.def'] as const;
+const DEFAULT_FRAME_INTERVAL_MS = 1000 / 60;
+
+type RuntimeSettings = {
+  roundTime: number;
+  frameIntervalMs: number;
+};
+
+const DEFAULT_RUNTIME_SETTINGS: RuntimeSettings = {
+  roundTime: DEFAULT_ROUND_TIMER,
+  frameIntervalMs: DEFAULT_FRAME_INTERVAL_MS,
+};
 
 type DebugTab = 'static' | 'runtime' | 'ideas' | 'manual' | 'settings';
+type RuntimeLogTab = 'human' | 'ai';
+type CnsSourceSelection = { path: string; line: number } | null;
 
 type StaticDebugInfo = {
   characterRows: string[];
@@ -99,9 +116,12 @@ export function WebMugenApp() {
   const restartPressedRef = useRef(false);
   const inputRef = useRef<BrowserInput | null>(null);
   const inputConfigRef = useRef<InputConfig>(loadInputConfig());
+  const runtimeSettingsRef = useRef<RuntimeSettings>(loadRuntimeSettings());
+  const lastFrameTickTimeRef = useRef<number | null>(null);
   const frameNoRef = useRef(0);
   const runtimeHistoryRef = useRef<string[]>([]);
   const readableRuntimeHistoryRef = useRef<string[]>([]);
+  const stateTransitionLogRef = useRef<string[]>([]);
   const lastRuntimeSignatureRef = useRef('');
   const lastReadableRuntimeSignatureRef = useRef('');
   const stateTransitionHistoryRef = useRef<string[]>([]);
@@ -109,6 +129,7 @@ export function WebMugenApp() {
   const damageHistoryRef = useRef<string[]>([]);
   const lastStageKeySignatureRef = useRef('');
   const lastStateNosRef = useRef<[number, number]>([0, 0]);
+  const stateTransitionLogLastStateNosRef = useRef<[number, number]>([0, 0]);
   const [loadMessage, setLoadMessage] = useState('Loading character...');
   const [inputDebugLines, setInputDebugLines] = useState<string[]>(['keys=-']);
   const [roundDebugLine, setRoundDebugLine] = useState(formatRoundState(createInitialRoundState()));
@@ -120,11 +141,16 @@ export function WebMugenApp() {
   const [staticDebugInfo, setStaticDebugInfo] = useState<StaticDebugInfo>(EMPTY_STATIC_DEBUG_INFO);
   const [runtimeHistoryLines, setRuntimeHistoryLines] = useState<string[]>(['操作すると、ここにタイムスタンプ付きで内部処理ログが残ります。']);
   const [readableRuntimeHistoryLines, setReadableRuntimeHistoryLines] = useState<string[]>(['人間用の短い実行履歴がここに残ります。']);
+  const [stateTransitionLogLines, setStateTransitionLogLines] = useState<string[]>(['StateNoが変化すると、ここに遷移だけが残ります。']);
   const [stageDebugLines, setStageDebugLines] = useState<string[]>(['State: -']);
   const [activeDebugTab, setActiveDebugTab] = useState<DebugTab>('runtime');
+  const [activeRuntimeLogTab, setActiveRuntimeLogTab] = useState<RuntimeLogTab>('human');
   const [copyStatus, setCopyStatus] = useState('');
   const [inputConfig, setInputConfigState] = useState<InputConfig>(inputConfigRef.current);
+  const [runtimeSettings, setRuntimeSettingsState] = useState<RuntimeSettings>(runtimeSettingsRef.current);
   const [characterPath, setCharacterPathState] = useState(loadCharacterPath());
+  const [cnsSourceFiles, setCnsSourceFiles] = useState<CharacterSourceFile[]>([]);
+  const [selectedCnsSource, setSelectedCnsSource] = useState<CnsSourceSelection>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -136,11 +162,12 @@ export function WebMugenApp() {
 
       gameStateRef.current = createInitialGameState();
       hitFeedbackRef.current = createInitialHitFeedbackState();
-      roundStateRef.current = createInitialRoundState();
+      roundStateRef.current = createInitialRoundState(runtimeSettingsRef.current.roundTime);
       roundScoreRef.current = createInitialRoundScore();
       cnsTraceRef.current = [];
       runtimeHistoryRef.current = [];
       readableRuntimeHistoryRef.current = [];
+      stateTransitionLogRef.current = [];
       stateTransitionHistoryRef.current = [];
       inputHistoryRef.current = [];
       damageHistoryRef.current = [];
@@ -148,8 +175,12 @@ export function WebMugenApp() {
       lastReadableRuntimeSignatureRef.current = '';
       lastStageKeySignatureRef.current = '';
       lastStateNosRef.current = [0, 0];
+      stateTransitionLogLastStateNosRef.current = [0, 0];
+      lastFrameTickTimeRef.current = null;
       p1CommandBufferRef.current.clear();
       p2CommandBufferRef.current.clear();
+      setSelectedCnsSource(null);
+      setStateTransitionLogLines(['StateNoが変化すると、ここに遷移だけが残ります。']);
 
       const loadResult = await loadAppCharacter(characterPath);
       if (disposed) return;
@@ -161,6 +192,7 @@ export function WebMugenApp() {
           ? attachFallbackAttackStates(loadedCharacter.cns)
           : loadedCharacter.cns,
       };
+      setCnsSourceFiles(character.cnsSourceFiles ?? []);
       cnsCoverageRef.current = analyzeCnsCoverage(character.cns);
       setCoverageDebugLines(formatCnsCoverageDebugOverlay(cnsCoverageRef.current));
 
@@ -178,7 +210,14 @@ export function WebMugenApp() {
       p1CommandBufferRef.current = new InputBuffer(60);
       p2CommandBufferRef.current = new InputBuffer(60);
 
-      const tick = () => {
+      const tick = (timestamp: number) => {
+        const frameIntervalMs = runtimeSettingsRef.current.frameIntervalMs;
+        const lastTickTime = lastFrameTickTimeRef.current;
+        if (lastTickTime !== null && timestamp - lastTickTime < frameIntervalMs) {
+          frameId = requestAnimationFrame(tick);
+          return;
+        }
+        lastFrameTickTimeRef.current = timestamp;
         frameNoRef.current += 1;
         const input = inputRef.current;
         const config = inputConfigRef.current;
@@ -207,7 +246,7 @@ export function WebMugenApp() {
           !restartPressedRef.current &&
           canRestartRound(nextRoundState)
         ) {
-          const restarted = restartRound(nextRoundState.roundNo);
+          const restarted = restartRound(nextRoundState.roundNo, runtimeSettingsRef.current.roundTime);
           nextState = restarted.gameState;
           nextRoundState = restarted.roundState;
           nextFeedback = restarted.hitFeedbackState;
@@ -222,7 +261,7 @@ export function WebMugenApp() {
           const cnsResult = stepCnsStateRuntime(nextState, character.cns, {
             p1Commands,
             p2Commands,
-            getAnimationDuration: (animNo) => getAnimationDuration(character.air, animNo),
+            getAnimationDuration: (animNo) => getMugenAnimEndTime(character.air, animNo),
             getAnimationElementNo: (animNo, animTime) => {
               const element = getCurrentAnimationElement(character.air, animNo, animTime);
               return element ? element.elementIndex + 1 : null;
@@ -234,7 +273,7 @@ export function WebMugenApp() {
           if (ENABLE_RUNTIME_FALLBACKS) {
             nextState = stepFallbackMotion(nextState);
           } else {
-            nextState = stepCnsPhysicsMotion(nextState);
+            nextState = stepCnsPhysicsMotion(nextState, character.cns);
           }
 
           nextState = applyFallbackStageRules(nextState);
@@ -295,12 +334,21 @@ export function WebMugenApp() {
         appendReadableRuntimeHistoryIfNeeded({
           cns: character.cns,
           commands: p1Commands,
+          getAnimEndTime: (animNo) => getMugenAnimEndTime(character.air, animNo),
+          inputConfig: config,
           frameNo: frameNoRef.current,
           state: nextState,
           pressedKeys,
           historyRef: readableRuntimeHistoryRef,
           lastSignatureRef: lastReadableRuntimeSignatureRef,
           setHistoryLines: setReadableRuntimeHistoryLines,
+        });
+        appendStateTransitionLogIfNeeded({
+          frameNo: frameNoRef.current,
+          state: nextState,
+          historyRef: stateTransitionLogRef,
+          lastStateNosRef: stateTransitionLogLastStateNosRef,
+          setHistoryLines: setStateTransitionLogLines,
         });
 
         rendererRef.current?.render(nextState, nextFeedback, nextRoundState, nextScore);
@@ -348,6 +396,13 @@ export function WebMugenApp() {
     p2CommandBufferRef.current.clear();
   };
 
+  const setRuntimeSettings = (nextSettings: RuntimeSettings) => {
+    const normalized = normalizeRuntimeSettings(nextSettings);
+    runtimeSettingsRef.current = normalized;
+    setRuntimeSettingsState(normalized);
+    saveRuntimeSettings(normalized);
+  };
+
   const setCharacterPath = (nextPath: string) => {
     const trimmed = nextPath.trim();
     if (!trimmed || trimmed === characterPath) return;
@@ -381,7 +436,13 @@ export function WebMugenApp() {
       <CopyToolbar
         activeTab={activeDebugTab}
         aiLogText={runtimeHistoryLines.join('\n')}
-        humanLogText={readableRuntimeHistoryLines.join('\n')}
+        humanLogText={[
+          '=== 人間用 実行履歴 ===',
+          ...readableRuntimeHistoryLines,
+          '',
+          '=== StateNo 遷移 ===',
+          ...stateTransitionLogLines,
+        ].join('\n')}
         copyStatus={copyStatus}
         onCopy={handleCopy}
       />
@@ -392,12 +453,21 @@ export function WebMugenApp() {
             loadMessage={loadMessage}
             staticDebugInfo={staticDebugInfo}
             coverageDebugLines={coverageDebugLines}
+            sourceFiles={cnsSourceFiles}
+            selectedSource={selectedCnsSource}
+            onOpenSource={setSelectedCnsSource}
           />
         )}
         {activeDebugTab === 'runtime' && (
-          <RuntimeHistoryPanel
+          <ReadableRuntimePanel
+            activeTab={activeRuntimeLogTab}
+            onTabChange={setActiveRuntimeLogTab}
             readableRuntimeHistoryLines={readableRuntimeHistoryLines}
             runtimeHistoryLines={runtimeHistoryLines}
+            stateTransitionLogLines={stateTransitionLogLines}
+            cnsSourceFiles={cnsSourceFiles}
+            selectedCnsSource={selectedCnsSource}
+            onOpenCnsSource={setSelectedCnsSource}
           />
         )}
         {activeDebugTab === 'ideas' && <IdeasPanel />}
@@ -406,8 +476,10 @@ export function WebMugenApp() {
           <SettingsPanel
             characterPath={characterPath}
             inputConfig={inputConfig}
+            runtimeSettings={runtimeSettings}
             onCharacterPathChange={setCharacterPath}
             onInputConfigChange={setInputConfig}
+            onRuntimeSettingsChange={setRuntimeSettings}
           />
         )}
       </section>
@@ -433,17 +505,22 @@ type InputAction = typeof INPUT_ACTIONS[number]['key'];
 function SettingsPanel({
   characterPath,
   inputConfig,
+  runtimeSettings,
   onCharacterPathChange,
   onInputConfigChange,
+  onRuntimeSettingsChange,
 }: {
   characterPath: string;
   inputConfig: InputConfig;
+  runtimeSettings: RuntimeSettings;
   onCharacterPathChange: (path: string) => void;
   onInputConfigChange: (config: InputConfig) => void;
+  onRuntimeSettingsChange: (settings: RuntimeSettings) => void;
 }) {
   return (
     <div className="settings-stack">
       <CharacterConfigPanel characterPath={characterPath} onChange={onCharacterPathChange} />
+      <RuntimeSettingsPanel settings={runtimeSettings} onChange={onRuntimeSettingsChange} />
       <section className="settings-section">
         <h2>Control Summary</h2>
         <div className="control-help-grid">
@@ -529,6 +606,7 @@ function InputConfigPanel({
           Reset
         </button>
       </div>
+      <LiveInputMonitor />
       <div className="input-config-grid">
         {config.players.map((player, playerIndex) => (
           <PlayerInputConfig
@@ -541,6 +619,133 @@ function InputConfigPanel({
       </div>
     </section>
   );
+}
+
+function RuntimeSettingsPanel({
+  settings,
+  onChange,
+}: {
+  settings: RuntimeSettings;
+  onChange: (settings: RuntimeSettings) => void;
+}) {
+  return (
+    <section className="settings-section">
+      <h2>Runtime</h2>
+      <div className="runtime-settings-grid">
+        <label>
+          Game time
+          <input
+            min={0}
+            max={999}
+            type="number"
+            value={settings.roundTime}
+            onChange={(event) => onChange({ ...settings, roundTime: Number(event.currentTarget.value) })}
+          />
+        </label>
+        <label>
+          Frame ms
+          <input
+            min={1}
+            max={1000}
+            step={1}
+            type="number"
+            value={Math.round(settings.frameIntervalMs)}
+            onChange={(event) => onChange({ ...settings, frameIntervalMs: Number(event.currentTarget.value) })}
+          />
+        </label>
+        <button type="button" onClick={() => onChange(DEFAULT_RUNTIME_SETTINGS)}>
+          MUGEN default
+        </button>
+      </div>
+    </section>
+  );
+}
+
+type LiveInputMonitorState = {
+  keys: string[];
+  gamepads: Array<{
+    index: number;
+    id: string;
+    buttons: number[];
+    axes: Array<{ index: number; value: number }>;
+  }>;
+};
+
+function LiveInputMonitor() {
+  const [snapshot, setSnapshot] = useState<LiveInputMonitorState>({ keys: [], gamepads: [] });
+
+  useEffect(() => {
+    const pressedKeys = new Set<string>();
+    let frameId = 0;
+
+    const update = () => {
+      setSnapshot({
+        keys: Array.from(pressedKeys).sort().map(formatKeyCode),
+        gamepads: readLiveGamepadSnapshot(),
+      });
+      frameId = requestAnimationFrame(update);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => pressedKeys.add(event.code);
+    const handleKeyUp = (event: KeyboardEvent) => pressedKeys.delete(event.code);
+    const handleBlur = () => pressedKeys.clear();
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleBlur);
+    frameId = requestAnimationFrame(update);
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, []);
+
+  return (
+    <section className="live-input-monitor" aria-label="live input monitor">
+      <h3>Live Input Monitor</h3>
+      <div className="live-input-grid">
+        <div>
+          <h4>Keyboard</h4>
+          <div className="live-input-pills">
+            {snapshot.keys.length === 0 ? <span className="live-input-empty">-</span> : snapshot.keys.map((key) => (
+              <span className="live-input-pill" key={key}>{key}</span>
+            ))}
+          </div>
+        </div>
+        <div>
+          <h4>Controller</h4>
+          {snapshot.gamepads.length === 0 ? (
+            <div className="live-input-empty">not connected</div>
+          ) : snapshot.gamepads.map((gamepad) => (
+            <div className="live-gamepad-row" key={gamepad.index}>
+              <strong>Pad {gamepad.index + 1}</strong>
+              <span title={gamepad.id}>{gamepad.id || 'unknown'}</span>
+              <span>buttons: {gamepad.buttons.length === 0 ? '-' : gamepad.buttons.join(', ')}</span>
+              <span>axes: {gamepad.axes.length === 0 ? '-' : gamepad.axes.map((axis) => `${axis.index}:${axis.value.toFixed(2)}`).join(', ')}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function readLiveGamepadSnapshot(): LiveInputMonitorState['gamepads'] {
+  if (typeof navigator === 'undefined' || typeof navigator.getGamepads !== 'function') return [];
+  return Array.from(navigator.getGamepads())
+    .filter((gamepad): gamepad is Gamepad => Boolean(gamepad))
+    .map((gamepad) => ({
+      index: gamepad.index,
+      id: gamepad.id,
+      buttons: gamepad.buttons
+        .map((button, index) => (button.pressed || button.value >= 0.5 ? index : -1))
+        .filter((index) => index >= 0),
+      axes: gamepad.axes
+        .map((value, index) => ({ index, value }))
+        .filter((axis) => Math.abs(axis.value) >= 0.25),
+    }));
 }
 
 function PlayerInputConfig({
@@ -663,6 +868,30 @@ function saveCharacterPath(path: string): void {
   localStorage.setItem(CHARACTER_PATH_STORAGE_KEY, path);
 }
 
+function loadRuntimeSettings(): RuntimeSettings {
+  if (typeof localStorage === 'undefined') return { ...DEFAULT_RUNTIME_SETTINGS };
+  try {
+    const raw = localStorage.getItem(RUNTIME_SETTINGS_STORAGE_KEY);
+    if (!raw) return { ...DEFAULT_RUNTIME_SETTINGS };
+    return normalizeRuntimeSettings(JSON.parse(raw));
+  } catch {
+    return { ...DEFAULT_RUNTIME_SETTINGS };
+  }
+}
+
+function saveRuntimeSettings(settings: RuntimeSettings): void {
+  if (typeof localStorage === 'undefined') return;
+  localStorage.setItem(RUNTIME_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+}
+
+function normalizeRuntimeSettings(value: unknown): RuntimeSettings {
+  const source = value && typeof value === 'object' ? value as Partial<RuntimeSettings> : {};
+  return {
+    roundTime: clampInteger(source.roundTime, 0, 999, DEFAULT_RUNTIME_SETTINGS.roundTime),
+    frameIntervalMs: clampNumber(source.frameIntervalMs, 1, 1000, DEFAULT_RUNTIME_SETTINGS.frameIntervalMs),
+  };
+}
+
 function normalizeInputConfig(value: unknown): InputConfig {
   const fallback = cloneInputConfig(DEFAULT_INPUT_CONFIG);
   if (!value || typeof value !== 'object' || !Array.isArray((value as { players?: unknown }).players)) {
@@ -708,6 +937,18 @@ function clonePlayerInputConfig(config: PlayerInputMapping): PlayerInputMapping 
 function clampGamepadButton(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(31, Math.trunc(value)));
+}
+
+function clampInteger(value: unknown, min: number, max: number, fallback: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, Math.trunc(parsed)));
+}
+
+function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, parsed));
 }
 
 function formatKeyCode(code: string): string {
@@ -788,16 +1029,23 @@ function StaticDebugPanel({
   loadMessage,
   staticDebugInfo,
   coverageDebugLines,
+  sourceFiles,
+  selectedSource,
+  onOpenSource,
 }: {
   loadMessage: string;
   staticDebugInfo: StaticDebugInfo;
   coverageDebugLines: string[];
+  sourceFiles: CharacterSourceFile[];
+  selectedSource: CnsSourceSelection;
+  onOpenSource: (selection: CnsSourceSelection) => void;
 }) {
   return (
     <div className="debug-grid">
       <DebugBlock title="Character / DEF 読込結果" lines={[loadMessage, ...staticDebugInfo.characterRows]} />
       <DebugBlock title="CMD コマンド一覧" lines={staticDebugInfo.commandRows} />
       <DebugBlock title="CNS対応状況" lines={coverageDebugLines} />
+      <CharacterSourceFilesViewer files={sourceFiles} selection={selectedSource} onSelect={onOpenSource} />
       <StateDefListPanel rows={staticDebugInfo.stateRows} />
     </div>
   );
@@ -830,31 +1078,385 @@ function StateDefListPanel({ rows }: { rows: StateDebugRow[] }) {
   );
 }
 
-function RuntimeHistoryPanel({
+function ReadableRuntimePanel({
+  activeTab,
+  onTabChange,
   readableRuntimeHistoryLines,
   runtimeHistoryLines,
+  stateTransitionLogLines,
+  cnsSourceFiles,
+  selectedCnsSource,
+  onOpenCnsSource,
 }: {
+  activeTab: RuntimeLogTab;
+  onTabChange: (tab: RuntimeLogTab) => void;
   readableRuntimeHistoryLines: string[];
   runtimeHistoryLines: string[];
+  stateTransitionLogLines: string[];
+  cnsSourceFiles: CharacterSourceFile[];
+  selectedCnsSource: CnsSourceSelection;
+  onOpenCnsSource: (selection: CnsSourceSelection) => void;
 }) {
   return (
-    <div className="runtime-history-grid">
-      <section>
-        <h2>人間用 実行履歴</h2>
-        <p className="debug-note">
-          タイムスタンプ、StateNo、AnimNo、成立Triggerを短く表示します。Timeだけの変化では増えません。
-        </p>
-        <pre className="debug-pre history-pre readable-history-pre">{readableRuntimeHistoryLines.join('\n')}</pre>
-      </section>
-      <section>
-        <h2>AI用 詳細ログ</h2>
-        <p className="debug-note">
-          入力、Command、State、Controller、Physics、成立情報を多めに蓄積します。Timeだけの変化では増えません。
-        </p>
-        <pre className="debug-pre history-pre codex-history-pre">{runtimeHistoryLines.join('\n')}</pre>
-      </section>
+    <section className="runtime-history-panel">
+      <nav className="runtime-subtabs" aria-label="runtime log tabs">
+        <button className={activeTab === 'human' ? 'active' : ''} type="button" onClick={() => onTabChange('human')}>
+          人間用 実行履歴
+        </button>
+        <button className={activeTab === 'ai' ? 'active' : ''} type="button" onClick={() => onTabChange('ai')}>
+          AI用 詳細ログ
+        </button>
+      </nav>
+      {activeTab === 'human' ? (
+        <div className="runtime-human-grid">
+          <section>
+            <h2>人間用 実行履歴</h2>
+            <p className="debug-note">
+              タイムスタンプ、StateNo、AnimNo、State状況を短く表示します。Timeだけの変化では増えません。
+            </p>
+            <ReadableRuntimeHistoryMarkup lines={readableRuntimeHistoryLines} onOpenCnsSource={onOpenCnsSource} />
+          </section>
+          <section>
+            <h2>StateNo 遷移</h2>
+            <p className="debug-note">StateNoが変わった瞬間だけを短く表示します。f=を押すと左の該当フレームへ移動します。</p>
+            <StateTransitionLogMarkup lines={stateTransitionLogLines} />
+          </section>
+        </div>
+      ) : (
+        <section>
+          <h2>AI用 詳細ログ</h2>
+          <p className="debug-note">
+            入力、Command、State、Controller、Physics、成立情報を多めに蓄積します。Timeだけの変化では増えません。
+          </p>
+          <pre className="debug-pre history-pre codex-history-pre">{runtimeHistoryLines.join('\n')}</pre>
+        </section>
+      )}
+      {selectedCnsSource ? (
+        <CharacterSourceFilesViewer files={cnsSourceFiles} selection={selectedCnsSource} onSelect={onOpenCnsSource} />
+      ) : null}
+    </section>
+  );
+}
+
+function ReadableRuntimeHistoryMarkup({
+  lines,
+  onOpenCnsSource,
+}: {
+  lines: string[];
+  onOpenCnsSource: (selection: CnsSourceSelection) => void;
+}) {
+  return (
+    <div className="history-pre readable-history-view">
+      {lines.map((line, index) => (
+        <ReadableRuntimeHistoryLine key={`${index}-${line}`} line={line} onOpenCnsSource={onOpenCnsSource} />
+      ))}
     </div>
   );
+}
+
+function ReadableRuntimeHistoryLine({
+  line,
+  onOpenCnsSource,
+}: {
+  line: string;
+  onOpenCnsSource: (selection: CnsSourceSelection) => void;
+}) {
+  const trimmed = line.trim();
+  if (!trimmed) return <div className="readable-history-spacer" aria-hidden="true" />;
+
+  const controllerMatch = trimmed.match(/^\*\*(.+)\*\*\s+\|\s+(.+)$/);
+  if (controllerMatch) {
+    const passed = controllerMatch[2].includes('OK');
+    const source = parseControllerSourceRef(controllerMatch[2]);
+    return (
+      <div className={`readable-history-controller ${passed ? 'passed' : 'failed'}`}>
+        {source ? (
+          <button
+            className="readable-controller-link"
+            type="button"
+            onClick={() => onOpenCnsSource(source)}
+            title={`${source.path}:${source.line}`}
+          >
+            {controllerMatch[1]}
+          </button>
+        ) : (
+          <strong>{controllerMatch[1]}</strong>
+        )}
+        <span>{passed ? '成立' : '不成立'}</span>
+      </div>
+    );
+  }
+
+  const triggerMatch = trimmed.match(/^(OK|NG)\s+`(.+)`$/);
+  if (triggerMatch) {
+    const passed = triggerMatch[1] === 'OK';
+    const [expressionText, valueText] = splitTriggerValueText(triggerMatch[2]);
+    return (
+      <div className={`readable-history-trigger ${passed ? 'passed' : 'failed'}`}>
+        <span className="readable-history-status">{passed ? 'OK' : 'NG'}</span>
+        <code>{expressionText}</code>
+        {valueText ? <span className="readable-history-values">{valueText}</span> : null}
+      </div>
+    );
+  }
+
+  if (trimmed.startsWith('----')) {
+    const frameMatch = trimmed.match(/\bframe=(\d+)\b/);
+    const frameId = frameMatch ? runtimeFrameElementId(Number(frameMatch[1])) : undefined;
+    return <div className="readable-history-entry" id={frameId}>{trimmed.replace(/^-+\s*|\s*-+$/g, '')}</div>;
+  }
+  if (trimmed === 'State状況:' || (trimmed.startsWith('State') && !trimmed.startsWith('StateNo='))) {
+    return <div className="readable-history-section">State状況</div>;
+  }
+  if (trimmed.startsWith('P1 StateNo=')) return <ReadableRuntimeHistoryMeta line={trimmed} />;
+  if (trimmed.startsWith('keys=')) return <div className="readable-history-keys">{trimmed}</div>;
+  if (trimmed.startsWith('Damage=')) return <div className="readable-history-damage">{trimmed}</div>;
+  return <div className="readable-history-line">{trimmed}</div>;
+}
+
+function splitTriggerValueText(text: string): [string, string] {
+  const marker = ' || values: ';
+  const index = text.indexOf(marker);
+  if (index < 0) return [text, ''];
+  return [text.slice(0, index), text.slice(index + marker.length)];
+}
+
+function parseControllerSourceRef(text: string): Exclude<CnsSourceSelection, null> | null {
+  const match = text.match(/\s@\s*(.+):(\d+)\s*$/);
+  if (!match) return null;
+  return { path: match[1], line: Number(match[2]) };
+}
+
+function ReadableRuntimeHistoryMeta({ line }: { line: string }) {
+  const match = line.match(/^P1 StateNo=(\d+)\s+(.*)$/);
+  if (!match) return <div className="readable-history-meta">{line}</div>;
+  return (
+    <div className="readable-history-meta">
+      <span>P1 </span>
+      <span className="readable-state-badge">StateNo={match[1]}</span>
+      <span> {match[2]}</span>
+    </div>
+  );
+}
+
+function StateTransitionLogMarkup({ lines }: { lines: string[] }) {
+  return (
+    <div className="debug-pre history-pre state-transition-pre">
+      {lines.map((line, index) => {
+        const frameMatch = line.match(/\bf=(\d+)\b/);
+        if (!frameMatch || frameMatch.index === undefined) return <div key={`${index}-${line}`}>{line}</div>;
+        const frameNo = Number(frameMatch[1]);
+        return (
+          <div className="state-transition-line" key={`${index}-${line}`}>
+            <span>{line.slice(0, frameMatch.index)}</span>
+            <button type="button" onClick={() => scrollToRuntimeFrame(frameNo)}>{frameMatch[0]}</button>
+            <span>{line.slice(frameMatch.index + frameMatch[0].length)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function scrollToRuntimeFrame(frameNo: number): void {
+  const element = document.getElementById(runtimeFrameElementId(frameNo));
+  if (!element) return;
+  element.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  element.classList.remove('jump-highlight');
+  window.setTimeout(() => element.classList.add('jump-highlight'), 0);
+}
+
+function runtimeFrameElementId(frameNo: number): string {
+  return `runtime-frame-${frameNo}`;
+}
+
+function CharacterSourceFilesViewer({
+  files,
+  selection,
+  onSelect,
+}: {
+  files: CharacterSourceFile[];
+  selection: CnsSourceSelection;
+  onSelect: (selection: CnsSourceSelection) => void;
+}) {
+  const fallbackSelection = files[0] ? { path: files[0].path, line: 1 } : null;
+  const effectiveSelection = selection && files.some((file) => file.path === selection.path) ? selection : fallbackSelection;
+  const selectedFile = effectiveSelection ? files.find((file) => file.path === effectiveSelection.path) : null;
+  const selectedLineId = effectiveSelection ? cnsSourceLineId(effectiveSelection.path, effectiveSelection.line) : null;
+
+  useEffect(() => {
+    if (!selectedLineId) return;
+    requestAnimationFrame(() => {
+      document.getElementById(selectedLineId)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+  }, [selectedLineId]);
+
+  if (files.length === 0) {
+    return (
+      <section className="cns-source-viewer character-source-viewer">
+        <h2>Character Files</h2>
+        <p className="debug-note">No text source files are loaded.</p>
+      </section>
+    );
+  }
+
+  if (!selectedFile) {
+    return (
+      <section className="cns-source-viewer character-source-viewer">
+        <h2>Character Files</h2>
+        <p className="debug-note">Source not found: {effectiveSelection?.path}:{effectiveSelection?.line}</p>
+      </section>
+    );
+  }
+
+  const lines = selectedFile.text.split(/\r?\n/);
+  return (
+    <section className="cns-source-viewer character-source-viewer">
+      <h2>Character Files</h2>
+      <div className="character-source-layout">
+        <div className="character-source-file-list" aria-label="loaded character files">
+          {files.map((file) => (
+            <button
+              className={file.path === selectedFile.path ? 'active' : ''}
+              key={file.path}
+              onClick={() => onSelect({ path: file.path, line: 1 })}
+              title={file.path}
+              type="button"
+            >
+              <span className="character-source-kind">{formatSourceKind(file)}</span>
+              <span>{file.label}</span>
+            </button>
+          ))}
+        </div>
+        <div className="character-source-content">
+          <div className="cns-source-title">
+            <strong>{selectedFile.label}</strong>
+            <span>{selectedFile.path}:{effectiveSelection?.line ?? 1}</span>
+          </div>
+          <div className="cns-source-code">
+            {lines.map((line, index) => {
+              const lineNo = index + 1;
+              const selected = lineNo === effectiveSelection?.line;
+              return (
+                <div
+                  className={`cns-source-line ${selected ? 'selected' : ''}`}
+                  id={cnsSourceLineId(selectedFile.path, lineNo)}
+                  key={`${selectedFile.path}-${lineNo}`}
+                >
+                  <span className="cns-source-line-no">{lineNo}</span>
+                  <code>{line || ' '}</code>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function formatSourceKind(file: CharacterSourceFile): string {
+  const kind = file.kind ?? file.path.split('.').pop() ?? 'txt';
+  return kind.toUpperCase();
+}
+
+function cnsSourceLineId(path: string, line: number): string {
+  return `cns-source-${path.replace(/[^a-z0-9_-]+/gi, '-')}-${line}`;
+}
+
+function RuntimeHistoryPanel({
+  activeTab,
+  onTabChange,
+  readableRuntimeHistoryLines,
+  runtimeHistoryLines,
+  stateTransitionLogLines,
+}: {
+  activeTab: RuntimeLogTab;
+  onTabChange: (tab: RuntimeLogTab) => void;
+  readableRuntimeHistoryLines: string[];
+  runtimeHistoryLines: string[];
+  stateTransitionLogLines: string[];
+}) {
+  return (
+    <section className="runtime-history-panel">
+      <nav className="runtime-subtabs" aria-label="runtime log tabs">
+        <button className={activeTab === 'human' ? 'active' : ''} type="button" onClick={() => onTabChange('human')}>
+          人間用 実行履歴
+        </button>
+        <button className={activeTab === 'ai' ? 'active' : ''} type="button" onClick={() => onTabChange('ai')}>
+          AI用 詳細ログ
+        </button>
+      </nav>
+      {activeTab === 'human' ? (
+        <div className="runtime-human-grid">
+          <section>
+            <h2>人間用 実行履歴</h2>
+            <p className="debug-note">
+              タイムスタンプ、StateNo、AnimNo、State状況を短く表示します。Timeだけの変化では増えません。
+            </p>
+            <ReadableRuntimeHistoryView lines={readableRuntimeHistoryLines} />
+          </section>
+          <section>
+            <h2>StateNo 遷移</h2>
+            <p className="debug-note">StateNoが変わった瞬間だけを短く表示します。</p>
+            <pre className="debug-pre history-pre state-transition-pre">{stateTransitionLogLines.join('\n')}</pre>
+          </section>
+        </div>
+      ) : (
+        <section>
+          <h2>AI用 詳細ログ</h2>
+          <p className="debug-note">
+            入力、Command、State、Controller、Physics、成立情報を多めに蓄積します。Timeだけの変化では増えません。
+          </p>
+          <pre className="debug-pre history-pre codex-history-pre">{runtimeHistoryLines.join('\n')}</pre>
+        </section>
+      )}
+    </section>
+  );
+}
+
+function ReadableRuntimeHistoryView({ lines }: { lines: string[] }) {
+  return (
+    <div className="history-pre readable-history-view">
+      {lines.map((line, index) => (
+        <ReadableHistoryLine key={`${index}-${line}`} line={line} />
+      ))}
+    </div>
+  );
+}
+
+function ReadableHistoryLine({ line }: { line: string }) {
+  const trimmed = line.trim();
+  if (!trimmed) return <div className="readable-history-spacer" aria-hidden="true" />;
+
+  const controllerMatch = trimmed.match(/^\*\*(.+)\*\*\s+\|\s+(.+)$/);
+  if (controllerMatch) {
+    const passed = controllerMatch[2].includes('成立') && !controllerMatch[2].includes('不成立');
+    return (
+      <div className={`readable-history-controller ${passed ? 'passed' : 'failed'}`}>
+        <strong>{controllerMatch[1]}</strong>
+        <span>{controllerMatch[2]}</span>
+      </div>
+    );
+  }
+
+  const triggerMatch = trimmed.match(/^([✅✗])\s+`(.+)`$/);
+  if (triggerMatch) {
+    const passed = triggerMatch[1] === '✅';
+    return (
+      <div className={`readable-history-trigger ${passed ? 'passed' : 'failed'}`}>
+        <span className="readable-history-status">{passed ? 'OK' : 'NG'}</span>
+        <code>{triggerMatch[2]}</code>
+      </div>
+    );
+  }
+
+  if (trimmed.startsWith('----')) return <div className="readable-history-entry">{trimmed.replace(/^-+\s*|\s*-+$/g, '')}</div>;
+  if (trimmed === 'State状況:') return <div className="readable-history-section">State状況</div>;
+  if (trimmed.startsWith('P1 StateNo=')) return <div className="readable-history-meta">{trimmed}</div>;
+  if (trimmed.startsWith('keys=')) return <div className="readable-history-keys">{trimmed}</div>;
+  if (trimmed.startsWith('Damage=')) return <div className="readable-history-damage">{trimmed}</div>;
+  return <div className="readable-history-line">{trimmed}</div>;
 }
 
 function updateStageDebugOverlay({
@@ -913,6 +1515,22 @@ function updateStageDebugOverlay({
 function formatPressedKeys(pressedKeys: ReadonlySet<string>): string {
   if (pressedKeys.size === 0) return 'keys=-';
   return `keys=${Array.from(pressedKeys).sort().map(formatKeyCode).join('+')}`;
+}
+
+function formatMugenPressedKeys(pressedKeys: ReadonlySet<string>, player: PlayerInputMapping): string {
+  const mapping = player.keyboard;
+  const buttons: string[] = [];
+  if (pressedKeys.has(mapping.x)) buttons.push('X');
+  if (pressedKeys.has(mapping.y)) buttons.push('Y');
+  if (pressedKeys.has(mapping.z)) buttons.push('Z');
+  if (pressedKeys.has(mapping.a)) buttons.push('A');
+  if (pressedKeys.has(mapping.b)) buttons.push('B');
+  if (pressedKeys.has(mapping.c)) buttons.push('C');
+  if (pressedKeys.has(mapping.left)) buttons.push('←');
+  if (pressedKeys.has(mapping.right)) buttons.push('→');
+  if (pressedKeys.has(mapping.up)) buttons.push('↑');
+  if (pressedKeys.has(mapping.down)) buttons.push('↓');
+  return `keys=${buttons.join('+') || '-'}`;
 }
 
 function IdeasPanel() {
@@ -1121,15 +1739,16 @@ export function appendRuntimeHistoryIfNeeded({
   const hasInput = pressedKeys.size > 0;
   if (!hasInput && !stateChanged && !controllerRan) return;
 
-  const snapshot = freezeHistoryLines([
-    ...inputLines,
-    ...commandLines,
-    ...physicsLines,
+  const snapshot = formatAiRuntimeSnapshot({
+    inputLines,
+    commandLines,
+    physicsLines,
     roundLine,
     scoreLine,
-    ...cnsLines,
-    ...formatCodexTraceDetailLines(traces),
-  ]);
+    cnsLines,
+    traces,
+    pressedKeys,
+  });
   const signature = formatRuntimeHistorySignature({
     commandLines,
     inputLines,
@@ -1141,17 +1760,79 @@ export function appendRuntimeHistoryIfNeeded({
   lastSignatureRef.current = signature;
   const timestamp = new Date().toLocaleTimeString('ja-JP', { hour12: false });
   const entry = freezeHistoryLines([
-    `---- ${timestamp} frame=${frameNo} ----`,
-    ...snapshot.map((line) => `  ${line}`),
+    `===== AI_RUNTIME frame=${frameNo} timestamp=${timestamp} =====`,
+    ...snapshot,
   ]);
-  const nextHistory = freezeHistoryLines([...historyRef.current, ...entry]).slice(-RUNTIME_HISTORY_LIMIT);
+  const nextHistory = freezeHistoryLines([...entry, ...historyRef.current]).slice(0, RUNTIME_HISTORY_LIMIT);
   historyRef.current = nextHistory.slice();
   setHistoryLines(nextHistory.slice());
+}
+
+function formatAiRuntimeSnapshot({
+  inputLines,
+  commandLines,
+  physicsLines,
+  roundLine,
+  scoreLine,
+  cnsLines,
+  traces,
+  pressedKeys,
+}: {
+  inputLines: string[];
+  commandLines: string[];
+  physicsLines: string[];
+  roundLine: string;
+  scoreLine: string;
+  cnsLines: string[];
+  traces: CnsRuntimeTrace[];
+  pressedKeys: ReadonlySet<string>;
+}): string[] {
+  return freezeHistoryLines([
+    'SECTION input',
+    `pressedKeys=${Array.from(pressedKeys).sort().join('+') || '-'}`,
+    ...inputLines.map((line) => `raw.${line}`),
+    'SECTION command',
+    ...commandLines.map((line) => `raw.${line}`),
+    'SECTION physics_after_step',
+    ...physicsLines.map((line) => `raw.${line}`),
+    'SECTION round_score',
+    `raw.${roundLine}`,
+    `raw.${scoreLine}`,
+    'SECTION cns_overlay',
+    ...cnsLines.map((line) => `raw.${line}`),
+    'SECTION cns_trace_summary',
+    ...formatCodexTraceSummaryLines(traces),
+    'SECTION cns_trace_detail',
+    ...formatCodexTraceDetailLines(traces),
+    'END AI_RUNTIME',
+  ]);
+}
+
+function formatCodexTraceSummaryLines(traces: readonly CnsRuntimeTrace[]): string[] {
+  if (traces.length === 0) return ['traceCount=0'];
+  return [
+    `traceCount=${traces.length}`,
+    ...traces.map((trace) => [
+      `trace p${trace.playerId}`,
+      `state=${trace.stateNo}->${trace.afterStateNo}`,
+      `stateChanged=${trace.stateNo === trace.afterStateNo ? 0 : 1}`,
+      `anim=${trace.animNo}->${trace.afterAnimNo}`,
+      `animChanged=${trace.animNo === trace.afterAnimNo ? 0 : 1}`,
+      `time=${trace.stateTime}->${trace.afterStateTime}`,
+      `mugenAnimTime=${trace.mugenAnimTime}`,
+      `stateFound=${trace.stateFound ? 1 : 0}`,
+      `execCount=${trace.executedControllers.length}`,
+      `exec=${formatExecutedControllers(trace)}`,
+      `debugCount=${trace.debugLines.length}`,
+    ].join(' ')),
+  ];
 }
 
 function appendReadableRuntimeHistoryIfNeeded({
   cns,
   commands,
+  getAnimEndTime,
+  inputConfig,
   frameNo,
   state,
   pressedKeys,
@@ -1161,6 +1842,8 @@ function appendReadableRuntimeHistoryIfNeeded({
 }: {
   cns: CnsDocument;
   commands: ReadonlySet<string>;
+  getAnimEndTime?: (animNo: number) => number | null;
+  inputConfig: InputConfig;
   frameNo: number;
   state: GameState;
   pressedKeys: ReadonlySet<string>;
@@ -1169,13 +1852,13 @@ function appendReadableRuntimeHistoryIfNeeded({
   setHistoryLines: (lines: string[]) => void;
 }) {
   const [p1] = state.players;
-  const triggerSummary = formatP1ChangeStateTriggerSummary(cns, state, commands);
+  const triggerSummary = formatP1SatisfiedStateDefTriggerSummary(cns, state, commands, getAnimEndTime);
   const damageSummary = formatHitEventSummary(state);
-  const keySummary = formatPressedKeys(pressedKeys);
+  const keySummary = formatMugenPressedKeys(pressedKeys, inputConfig.players[0]);
   const signature = [
     p1.stateNo,
     p1.animNo,
-    triggerSummary,
+    stripReadableRuntimeValueSummaries(triggerSummary),
     damageSummary,
     keySummary,
   ].join('|');
@@ -1187,12 +1870,40 @@ function appendReadableRuntimeHistoryIfNeeded({
     `---- ${timestamp} frame=${frameNo} ----`,
     `P1 StateNo=${p1.stateNo} Time=${p1.stateTime} AnimNo=${p1.animNo}`,
     keySummary,
-    `ChangeState候補Trigger:`,
+    `State状況:`,
     ...triggerSummary.split('\n').map((line) => `  ${line}`),
     `Damage=${damageSummary}`,
     '',
   ];
-  const nextHistory = freezeHistoryLines([...historyRef.current, ...entry]).slice(-320);
+  const nextHistory = freezeHistoryLines([...entry, ...historyRef.current]).slice(0, READABLE_RUNTIME_HISTORY_LIMIT);
+  historyRef.current = nextHistory.slice();
+  setHistoryLines(nextHistory.slice());
+}
+
+function appendStateTransitionLogIfNeeded({
+  frameNo,
+  state,
+  historyRef,
+  lastStateNosRef,
+  setHistoryLines,
+}: {
+  frameNo: number;
+  state: GameState;
+  historyRef: MutableRefObject<string[]>;
+  lastStateNosRef: MutableRefObject<[number, number]>;
+  setHistoryLines: (lines: string[]) => void;
+}) {
+  const [p1, p2] = state.players;
+  const previous = lastStateNosRef.current;
+  const current: [number, number] = [p1.stateNo, p2.stateNo];
+  const changes: string[] = [];
+  if (previous[0] !== current[0]) changes.push(`P1 ${previous[0]} -> ${current[0]}`);
+  if (previous[1] !== current[1]) changes.push(`P2 ${previous[1]} -> ${current[1]}`);
+  if (changes.length === 0) return;
+
+  lastStateNosRef.current = current;
+  const timestamp = new Date().toLocaleTimeString('ja-JP', { hour12: false });
+  const nextHistory = [`${timestamp} f=${frameNo} ${changes.join(' | ')}`, ...historyRef.current].slice(0, 160);
   historyRef.current = nextHistory.slice();
   setHistoryLines(nextHistory.slice());
 }
@@ -1224,50 +1935,176 @@ function formatRuntimeHistorySignature({
   ].join('|');
 }
 
-function formatP1ChangeStateTriggerSummary(
+function formatP1SatisfiedStateDefTriggerSummary(
   cns: CnsDocument,
   state: GameState,
   commands: ReadonlySet<string>,
+  getAnimEndTime?: (animNo: number) => number | null,
 ): string {
   const [p1, p2] = state.players;
-  const stateNos = [-3, -2, -1, p1.stateNo];
-  const candidates = stateNos.flatMap((stateNo) =>
-    cns.states
-      .filter((stateDef) => stateDef.stateNo === stateNo)
-      .flatMap((stateDef) =>
-        stateDef.controllers
-          .filter((controller) => controller.type.toLowerCase() === 'changestate')
-          .map((controller, index) => formatChangeStateCandidate(stateDef, controller, index, p1, p2, commands)),
-      ),
-  );
+  const mugenAnimTime = calculateMugenAnimTime(p1.animTime, getAnimEndTime?.(p1.animNo));
+  const context = { player: p1, opponent: p2, commands, animTime: mugenAnimTime };
+  const summaries = cns.states
+    .filter((stateDef) => stateDef.stateNo === p1.stateNo)
+    .flatMap((stateDef) => formatSatisfiedStateDefTriggers(stateDef, context));
 
-  return candidates.length > 0 ? candidates.join('\n') : '-';
+  return summaries.length > 0 ? summaries.join('\n') : '-';
 }
 
-function formatChangeStateCandidate(
+function formatSatisfiedStateDefTriggers(
   stateDef: CnsStateDefinition,
-  controller: CnsStateController,
-  index: number,
-  player: GameState['players'][0],
-  opponent: GameState['players'][1],
-  commands: ReadonlySet<string>,
-): string {
-  const value = readParamNumber(controller, 'value') ?? '?';
-  const context = { player, opponent, commands, animTime: player.animTime };
-  const triggerAll = controller.triggers.filter((trigger) => /^triggerall$/i.test(trigger.name));
-  const groups = collectTriggerGroupsForDisplay(controller.triggers);
-  const allPassed = triggerAll.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context));
-  const groupSummaries = groups.map(([groupNo, triggers]) => {
-    const passed = triggers.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context));
-    const details = triggers.map((trigger) => formatTriggerEval(trigger, context)).join(' & ');
-    return `trigger${groupNo}:${passed ? 'T' : 'F'}[${details}]`;
+  context: Parameters<typeof evaluateCnsRuntimeTrigger>[1],
+): string[] {
+  const lines: string[] = [];
+
+  stateDef.controllers.forEach((controller) => {
+    if (controller.triggers.length === 0) return;
+    if (!shouldShowReadableController(controller, context)) return;
+
+    const passed = evaluateReadableController(controller, context);
+    lines.push(formatReadableControllerHeaderOk(controller, passed));
+    lines.push(...controller.triggers.map((trigger) => `  ${formatReadableTriggerLineOk(trigger, context)}`));
   });
-  const finalPassed = allPassed && (groups.length === 0 ? triggerAll.length > 0 : groups.some(([, triggers]) => triggers.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context))));
-  const allDetails = triggerAll.map((trigger) => formatTriggerEval(trigger, context)).join(' & ') || '-';
-  return `S${stateDef.stateNo}#${index} -> ${value} ${finalPassed ? 'OK' : 'NG'} triggerall:${allPassed ? 'T' : 'F'}[${allDetails}] ${groupSummaries.join(' ') || 'groups=-'}`;
+
+  return lines;
 }
 
-function collectTriggerGroupsForDisplay(triggers: readonly CnsTrigger[]): Array<[number, CnsTrigger[]]> {
+function shouldShowReadableController(
+  controller: CnsStateController,
+  context: Parameters<typeof evaluateCnsRuntimeTrigger>[1],
+): boolean {
+  if (controller.type.toLowerCase() === 'changestate') return true;
+  return controller.triggers.some((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context));
+}
+
+function formatReadableControllerHeader(controller: CnsStateController, passed: boolean): string {
+  const value = controller.type.toLowerCase() === 'changestate'
+    ? ` -> ${readParamNumber(controller, 'value') ?? '?'}`
+    : '';
+  return `**${controller.type}${value}** | ${passed ? '✅ 成立' : '✗ 不成立'}`;
+}
+
+function formatReadableControllerHeaderOk(controller: CnsStateController, passed: boolean): string {
+  const value = controller.type.toLowerCase() === 'changestate'
+    ? ` -> ${readParamNumber(controller, 'value') ?? '?'}`
+    : '';
+  const source = controller.sourceFile && controller.sourceLine ? ` @ ${controller.sourceFile}:${controller.sourceLine}` : '';
+  return `**${controller.type}${value}** | ${passed ? 'OK' : 'NG'}${source}`;
+}
+
+function formatReadableTriggerLine(
+  trigger: CnsTrigger,
+  context: Parameters<typeof evaluateCnsRuntimeTrigger>[1],
+): string {
+  const passed = evaluateCnsRuntimeTrigger(trigger.expression, context);
+  return `${passed ? '✅' : '✗'} \`${trigger.name}=${trigger.expression}\``;
+}
+
+function formatReadableTriggerLineOk(
+  trigger: CnsTrigger,
+  context: Parameters<typeof evaluateCnsRuntimeTrigger>[1],
+): string {
+  const passed = evaluateCnsRuntimeTrigger(trigger.expression, context);
+  const values = formatTriggerValueSummary(trigger.expression, context);
+  return `${passed ? 'OK' : 'NG'} \`${trigger.name}=${trigger.expression}${values ? ` || values: ${values}` : ''}\``;
+}
+
+function formatTriggerValueSummary(
+  expression: string,
+  context: CnsRuntimeTriggerContext,
+): string {
+  const names = collectTriggerValueNames(expression);
+  const values: string[] = [];
+  const seen = new Set<string>();
+
+  for (const name of names) {
+    const normalized = normalizeDisplayExpressionName(name);
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    const value = readNumberExpression(normalized, context);
+    if (value !== null) values.push(`${normalized}=${formatRuntimeNumber(value)}`);
+  }
+
+  if (values.length === 0) {
+    values.push(
+      `time=${context.player.stateTime}`,
+      `anim=${context.player.animNo}`,
+      `vel=(${formatRuntimeNumber(context.player.vx)},${formatRuntimeNumber(context.player.vy)})`,
+    );
+  } else {
+    if (!seen.has('anim') && /\banim\b/i.test(expression)) values.push(`anim=${context.player.animNo}`);
+    if (!seen.has('time') && /\btime\b/i.test(expression)) values.push(`time=${context.player.stateTime}`);
+  }
+
+  return values.slice(0, 6).join('  ');
+}
+
+export function stripReadableRuntimeValueSummaries(summary: string): string {
+  return summary.replace(/\s+\|\| values: .+$/gm, '');
+}
+
+function collectTriggerValueNames(expression: string): string[] {
+  const names: string[] = [];
+  const lower = expression.toLowerCase();
+  const functionRefs = lower.match(/\b(?:var|fvar|sysvar|gethitvar|const)\([^)]*\)/g) ?? [];
+  names.push(...functionRefs);
+
+  const namedRefs = [
+    'vel x',
+    'vel y',
+    'hitvel x',
+    'hitvel y',
+    'pos x',
+    'pos y',
+    'animtime',
+    'animelemno',
+    'animelem',
+    'stateno',
+    'prevstateno',
+    'time',
+    'anim',
+    'power',
+    'life',
+    'ctrl',
+    'movehit',
+    'movecontact',
+    'moveguarded',
+    'hitcount',
+  ];
+
+  for (const name of namedRefs) {
+    const pattern = new RegExp(`(^|[^a-z0-9_])${escapeRegExp(name).replace(/\\ /g, '\\s+')}([^a-z0-9_]|$)`, 'i');
+    if (pattern.test(lower)) names.push(name);
+  }
+
+  return names;
+}
+
+function normalizeDisplayExpressionName(name: string): string {
+  return name.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function formatRuntimeNumber(value: number): string {
+  if (Number.isInteger(value)) return String(value);
+  return value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function evaluateReadableController(
+  controller: CnsStateController,
+  context: Parameters<typeof evaluateCnsRuntimeTrigger>[1],
+): boolean {
+  const triggerAll = controller.triggers.filter((trigger) => /^triggerall$/i.test(trigger.name));
+  const groups = collectReadableTriggerGroups(controller.triggers);
+  if (!triggerAll.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context))) return false;
+  if (groups.length === 0) return triggerAll.length > 0;
+  return groups.some(([, triggers]) => triggers.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context)));
+}
+
+function collectReadableTriggerGroups(triggers: readonly CnsTrigger[]): Array<[number, CnsTrigger[]]> {
   const groups = new Map<number, CnsTrigger[]>();
   for (const trigger of triggers) {
     if (/^triggerall$/i.test(trigger.name)) continue;
@@ -1278,13 +2115,6 @@ function collectTriggerGroupsForDisplay(triggers: readonly CnsTrigger[]): Array<
     groups.set(groupNo, group);
   }
   return Array.from(groups.entries()).sort(([left], [right]) => left - right);
-}
-
-function formatTriggerEval(
-  trigger: CnsTrigger,
-  context: Parameters<typeof evaluateCnsRuntimeTrigger>[1],
-): string {
-  return `${trigger.name}:${trigger.expression}=${evaluateCnsRuntimeTrigger(trigger.expression, context) ? 'T' : 'F'}`;
 }
 
 function formatCodexTraceDetailLines(traces: readonly CnsRuntimeTrace[]): string[] {

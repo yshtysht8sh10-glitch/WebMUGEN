@@ -32,7 +32,7 @@ describe('CnsFallbackAttackStates', () => {
     });
 
     expect(result.state.players[0].stateNo).toBe(200);
-    expect(result.traces[0].executedControllers).toEqual(['ChangeState']);
+    expect(result.traces[0].executedControllers).toEqual(['ChangeState', 'VelSet']);
   });
 
   it('applies attack statedef on next runtime step', () => {

@@ -1,0 +1,37 @@
+
+[Info]
+ name="T-H-M-A"                    ;キャラの名前
+ DisplayName="T-H-M-A"             ;キャラ選択時に表示されるキャラの名前
+ versiondate = 2007,2,8            ;製作を始めた日にち
+ mugenversion = 04,14,2002         ;対応しているMUGEN本体のバージョン (win版)
+ author = "Yes"                    ;製作者の名前
+ ;pal.defaults =                ;コンピューターが優先的に使うパレットの番号
+
+
+[Files]
+ cmd = T-H-M-A.cmd                 ;このキャラに使うCMDファイルのファイル名
+ cns = T-H-M-A.cns                 ;キャラの基本データの書かれたCNSのファイル名
+ st = T-H-M-A.cns                  ;このキャラに使うCNSファイルのファイル名・その一
+ st1 = T-H-M-Atokusyudousa.cns 
+ st2 = T-H-M-Akousokuidou.cns
+ st3 = T-H-M-Awaza.cns
+ st4 = T-H-M-Atyouhi.cns
+ st5 = T-H-M-A-2.cns
+ ;st6 = AI.cns
+
+ stcommon = T-H-M-Acommon1.cns          ;キャラの基礎的な記述を書かれたCNS(mugen本体の中)のファイル名
+ sprite = T-H-M-A.sff              ;このキャラに使うSFFファイルのファイル名
+ anim = T-H-M-A.air                ;このキャラに使うAIRファイルのファイル名
+ sound = T-H-M-A.snd               ;このキャラに使うSNDファイルのファイル名
+ pal1    = Act/t3.act
+ pal2    = Act/t5.act
+ pal3    = Act/t7.act
+ pal4    = Act/t2.act
+ pal5    = Act/t4.act
+ pal6    = Act/t6.act
+ pal7    = Act/t2.act
+ pal8    = Act/t2.act
+ pal9    = Act/t2.act
+ pal10   = Act/t2.act
+ pal11   = Act/t2.act
+ pal12   = Act/t2.act

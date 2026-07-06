@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MutableRefObject } from 'react';
 import type { CnsRuntimeTrace } from '../core/cns/CnsStateRuntime';
-import { appendRuntimeHistoryIfNeeded } from './WebMugenApp';
+import { appendRuntimeHistoryIfNeeded, stripReadableRuntimeValueSummaries } from './WebMugenApp';
 
 describe('WebMugenApp runtime history', () => {
   it('stores immutable line snapshots instead of live debug array references', () => {
@@ -87,6 +87,16 @@ describe('WebMugenApp runtime history', () => {
 
     expect(renderedHistory.join('\n')).toContain('frame=10');
     expect(renderedHistory.join('\n')).not.toContain('frame=11');
+  });
+
+  it('ignores readable trigger value summaries for history identity', () => {
+    expect(stripReadableRuntimeValueSummaries([
+      '**ChangeState -> 0** | NG @ char.cns:10',
+      'OK `trigger1=AnimTime = 0 || values: animtime=-4  time=20`',
+    ].join('\n'))).toBe([
+      '**ChangeState -> 0** | NG @ char.cns:10',
+      'OK `trigger1=AnimTime = 0',
+    ].join('\n'));
   });
 });
 

@@ -24,6 +24,13 @@ describe('CharacterLoader', () => {
     expect(character.cmd.commands.map((command) => command.name)).toContain('holddown');
     expect(character.sprites).toBeNull();
     expect(character.palettes).toEqual([]);
+    expect(character.cnsSourceFiles?.map((file) => file.path)).toEqual(expect.arrayContaining([
+      '/chars/kfm/kfm.def',
+      '/chars/kfm/kfm.cns',
+      '/chars/kfm/kfm.cmd',
+      '/chars/kfm/kfm.air',
+      'baseline-common.cmd',
+    ]));
   });
 
   it('loads common1 CNS states only when character CNS is missing them', async () => {

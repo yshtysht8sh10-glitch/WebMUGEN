@@ -5,7 +5,7 @@ import type { CmdDocument } from '../../parser/cmd/CmdTypes';
 import { parseCnsText } from '../../parser/cns/CnsParser';
 import { getCharacterDefFiles, parseDefText } from '../../parser/def/DefParser';
 import { convertSffV1ToImageDataSpritePack } from '../sprite/SffSpritePackConverter';
-import type { CharacterAssets, CharacterPaletteAsset } from './CharacterTypes';
+import type { CharacterAssets, CharacterPaletteAsset, CharacterSourceFile } from './CharacterTypes';
 
 const COMMON_CNS_PATH = '/chars/common1.cns';
 const COMMON_CMD_PATHS = ['/chars/common.cmd', '/chars/common1.cmd'];
@@ -117,16 +117,20 @@ export async function loadCharacterFromDef(
   if (!files.anim) throw new Error('[Files] anim is missing.');
   if (!files.cmd) throw new Error('[Files] cmd is missing.');
 
-  const extraCnsPaths = uniqueExtraCnsPaths(files.cns, files.st);
+  const primaryCnsPath = resolveAssetPath(basePath, files.cns);
+  const extraCnsPaths = uniqueExtraCnsPaths(files.cns, files.st ?? []).map((path) => resolveAssetPath(basePath, path));
+  const airPath = resolveAssetPath(basePath, files.anim);
+  const cmdPath = resolveAssetPath(basePath, files.cmd);
+  const characterCommonCnsPath = files.stcommon ? resolveAssetPath(basePath, files.stcommon) : null;
 
   const [cnsText, extraCnsTexts, airText, cmdText, characterCommonCnsText, commonCnsText, fetchedCommonCmdTexts, palettes] = await Promise.all([
-    fetcher.text(resolveAssetPath(basePath, files.cns)),
-    loadOptionalTexts(extraCnsPaths.map((path) => resolveAssetPath(basePath, path)), fetcher),
-    fetcher.text(resolveAssetPath(basePath, files.anim)),
-    fetcher.text(resolveAssetPath(basePath, files.cmd)),
-    files.stcommon ? loadOptionalText(resolveAssetPath(basePath, files.stcommon), fetcher) : Promise.resolve(null),
+    fetcher.text(primaryCnsPath),
+    loadOptionalTextEntries(extraCnsPaths, fetcher),
+    fetcher.text(airPath),
+    fetcher.text(cmdPath),
+    characterCommonCnsPath ? loadOptionalText(characterCommonCnsPath, fetcher) : Promise.resolve(null),
     loadOptionalText(COMMON_CNS_PATH, fetcher),
-    loadOptionalTexts(COMMON_CMD_PATHS, fetcher),
+    loadOptionalTextEntries(COMMON_CMD_PATHS, fetcher),
     loadCharacterPalettes(basePath, files.palettes ?? [], fetcher),
   ]);
 
@@ -139,21 +143,44 @@ export async function loadCharacterFromDef(
       })
     : null;
 
-  const commonCmdTexts = fetchedCommonCmdTexts.length > 0 ? fetchedCommonCmdTexts : [BASELINE_COMMON_CMD_TEXT];
+  const commonCmdTexts = fetchedCommonCmdTexts.length > 0
+    ? fetchedCommonCmdTexts
+    : [{ path: 'baseline-common.cmd', text: BASELINE_COMMON_CMD_TEXT }];
   const characterCmd = parseCmdText(cmdText);
-  const commonCmdDocuments = commonCmdTexts.map(parseCmdText);
-  const commonCmdCnsDocuments = commonCmdTexts.map((text) => annotateCnsDocument(parseCnsText(text), 'common', 'common cmd'));
-  const characterCnsText = [cnsText, ...extraCnsTexts].join('\n\n');
+  const commonCmdDocuments = commonCmdTexts.map((entry) => parseCmdText(entry.text));
+  const commonCmdCnsDocuments = commonCmdTexts.map((entry) =>
+    annotateCnsDocument(parseCnsText(entry.text, { sourceFile: entry.path }), 'common', shortSourceLabel(entry.path)));
+  const characterCnsDocuments = [
+    parseCnsText(cnsText, { sourceFile: primaryCnsPath }),
+    ...extraCnsTexts.map((entry) => parseCnsText(entry.text, { sourceFile: entry.path })),
+  ];
   const characterCns = commonCmdCnsDocuments.reduce(
     (merged, commonCmdCns) => mergeMissingCnsStates(merged, commonCmdCns),
-    annotateCnsDocument(mergeCnsDocuments(parseCnsText(characterCnsText), parseCnsText(cmdText)), 'character', 'character'),
+    annotateCnsDocument(
+      mergeCnsDocuments(
+        mergeManyCnsDocuments(characterCnsDocuments),
+        parseCnsText(cmdText, { sourceFile: cmdPath }),
+      ),
+      'character',
+      'character',
+    ),
   );
   const withCharacterCommonCns = characterCommonCnsText
-    ? mergeMissingCnsStates(characterCns, annotateCnsDocument(parseCnsText(characterCommonCnsText), 'character', 'stcommon'))
+    ? mergeMissingCnsStates(characterCns, annotateCnsDocument(parseCnsText(characterCommonCnsText, { sourceFile: characterCommonCnsPath ?? 'stcommon' }), 'character', 'stcommon'))
     : characterCns;
   const cns = commonCnsText
-    ? mergeMissingCnsStates(withCharacterCommonCns, annotateCnsDocument(parseCnsText(commonCnsText), 'common', 'common1.cns'))
+    ? mergeMissingCnsStates(withCharacterCommonCns, annotateCnsDocument(parseCnsText(commonCnsText, { sourceFile: COMMON_CNS_PATH }), 'common', 'common1.cns'))
     : withCharacterCommonCns;
+  const cnsSourceFiles: CharacterSourceFile[] = [
+    { path: defPath, label: shortSourceLabel(defPath), text: defText, kind: 'def' },
+    { path: primaryCnsPath, label: shortSourceLabel(primaryCnsPath), text: cnsText, kind: 'cns' },
+    ...extraCnsTexts.map((entry) => ({ path: entry.path, label: shortSourceLabel(entry.path), text: entry.text, kind: 'cns' as const })),
+    ...(characterCommonCnsText && characterCommonCnsPath ? [{ path: characterCommonCnsPath, label: shortSourceLabel(characterCommonCnsPath), text: characterCommonCnsText, kind: 'cns' as const }] : []),
+    { path: cmdPath, label: shortSourceLabel(cmdPath), text: cmdText, kind: 'cmd' },
+    { path: airPath, label: shortSourceLabel(airPath), text: airText, kind: 'air' },
+    ...(commonCnsText ? [{ path: COMMON_CNS_PATH, label: 'common1.cns', text: commonCnsText, kind: 'common' as const }] : []),
+    ...commonCmdTexts.map((entry) => ({ path: entry.path, label: shortSourceLabel(entry.path), text: entry.text, kind: 'common' as const })),
+  ];
 
   return {
     def,
@@ -162,6 +189,7 @@ export async function loadCharacterFromDef(
     cmd: mergeCmdDocuments(characterCmd, commonCmdDocuments),
     sprites,
     palettes,
+    cnsSourceFiles,
   };
 }
 
@@ -193,6 +221,10 @@ export function mergeCnsDocuments(base: CnsDocument, extra: CnsDocument): CnsDoc
   };
 }
 
+function mergeManyCnsDocuments(documents: readonly CnsDocument[]): CnsDocument {
+  return documents.reduce((merged, document) => mergeCnsDocuments(merged, document), { states: [], metadataSections: [] });
+}
+
 function annotateCnsDocument(document: CnsDocument, source: CnsStateDefinition['source'], sourceLabel: string): CnsDocument {
   return {
     states: document.states.map((state) => ({
@@ -219,7 +251,7 @@ export function mergeMissingCnsStates(base: CnsDocument, common: CnsDocument): C
 
     return {
       ...state,
-      source: state.source === 'common' ? 'common' : 'mixed',
+      source: state.source === 'common' ? 'common' : 'mixed' as CnsStateDefinition['source'],
       sourceLabel: `${state.sourceLabel ?? 'character'}+${commonCommandState.sourceLabel ?? 'common'}`,
       controllers: [
         ...baselineMovementControllers,
@@ -316,9 +348,9 @@ async function loadOptionalText(path: string, fetcher: CharacterAssetFetcher): P
   }
 }
 
-async function loadOptionalTexts(paths: readonly string[], fetcher: CharacterAssetFetcher): Promise<string[]> {
-  const texts = await Promise.all(paths.map((path) => loadOptionalText(path, fetcher)));
-  return texts.filter((text): text is string => text !== null);
+async function loadOptionalTextEntries(paths: readonly string[], fetcher: CharacterAssetFetcher): Promise<Array<{ path: string; text: string }>> {
+  const texts = await Promise.all(paths.map(async (path) => ({ path, text: await loadOptionalText(path, fetcher) })));
+  return texts.filter((entry): entry is { path: string; text: string } => entry.text !== null);
 }
 
 async function loadCharacterPalettes(
@@ -339,6 +371,10 @@ function getBasePath(path: string): string {
   const normalized = path.replace(/\\/g, '/');
   const slashIndex = normalized.lastIndexOf('/');
   return slashIndex >= 0 ? normalized.slice(0, slashIndex) : '';
+}
+
+function shortSourceLabel(path: string): string {
+  return path.replace(/\\/g, '/').split('/').pop() ?? path;
 }
 
 function uniqueExtraCnsPaths(primaryCns: string, paths: readonly string[]): string[] {

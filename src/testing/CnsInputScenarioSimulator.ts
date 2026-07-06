@@ -68,7 +68,7 @@ export function simulateCnsInputScenario(
         },
       });
 
-      state = stepCnsPhysicsMotion(cnsResult.state);
+      state = stepCnsPhysicsMotion(cnsResult.state, character.cns);
       frames.push({
         frame: frames.length,
         p1Commands,
