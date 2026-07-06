@@ -48,15 +48,28 @@ a{color:#2563eb}
 <section data-lang="en">
 
 <h1>WebMUGEN Documentation</h1>
-<p>WebMUGEN is a browser-based MUGEN-like fighting game engine prototype.</p>
+<p>WebMUGEN is a browser-based MUGEN-like fighting game engine prototype focused on WinMUGEN compatibility.</p>
+<h2>Core documents</h2>
+<ul>
+<li><a href="./development-policy.md">Development Policy</a></li>
+<li><a href="./testing-policy.md">Testing Policy</a></li>
+<li><a href="./winmugen-compatibility-matrix.html">WinMUGEN Compatibility Matrix</a></li>
+<li><a href="./documentation-audit.md">Documentation Audit</a></li>
+</ul>
+<h2>Compatibility topic notes</h2>
+<ul>
+<li><a href="./state-def-header-notes.md">StateDef Header Notes</a></li>
+<li><a href="./trigger-compatibility-notes.md">Trigger Compatibility Notes</a></li>
+<li><a href="./state-controller-compatibility-notes.md">State Controller Compatibility Notes</a></li>
+<li><a href="./cmd-compatibility-notes.md">CMD Compatibility Notes</a></li>
+</ul>
 <h2>Implemented phases</h2>
 <ul>
-<li>CNS parser and state machine</li>
+<li>CNS parser and state runtime</li>
 <li>AIR parser and animation player</li>
 <li>CMD parser and input buffer</li>
-<li>Clsn collision boxes</li>
-<li>HitDef and hit states</li>
-<li>Projectile controller</li>
+<li>Debug Overlay / runtime history for compatibility diagnosis</li>
+<li>Partial Clsn / HitDef / Projectile paths under matrix tracking</li>
 <li>SpritePack renderer prototype</li>
 </ul>
 
@@ -65,15 +78,28 @@ a{color:#2563eb}
 <section data-lang="ja">
 
 <h1>WebMUGEN Documentation</h1>
-<p>WebMUGENは、ブラウザで動作するMUGEN風格闘ゲームエンジンのプロトタイプです。</p>
+<p>WebMUGENは、WinMUGEN互換を重視するブラウザ動作のMUGEN風格闘ゲームエンジンのプロトタイプです。</p>
+<h2>主要ドキュメント</h2>
+<ul>
+<li><a href="./development-policy.md">Development Policy</a></li>
+<li><a href="./testing-policy.md">Testing Policy</a></li>
+<li><a href="./winmugen-compatibility-matrix.html">WinMUGEN Compatibility Matrix</a></li>
+<li><a href="./documentation-audit.md">Documentation Audit</a></li>
+</ul>
+<h2>互換性トピック別メモ</h2>
+<ul>
+<li><a href="./state-def-header-notes.md">StateDef Header Notes</a></li>
+<li><a href="./trigger-compatibility-notes.md">Trigger Compatibility Notes</a></li>
+<li><a href="./state-controller-compatibility-notes.md">State Controller Compatibility Notes</a></li>
+<li><a href="./cmd-compatibility-notes.md">CMD Compatibility Notes</a></li>
+</ul>
 <h2>実装済みフェーズ</h2>
 <ul>
-<li>CNSパーサとStateMachine</li>
-<li>AIRパーサとAnimationPlayer</li>
+<li>CNSパーサとState Runtime</li>
+<li>AIRパーサとAnimation Player</li>
 <li>CMDパーサとInputBuffer</li>
-<li>Clsn当たり判定</li>
-<li>HitDefと被弾状態</li>
-<li>Projectile Controller</li>
+<li>互換性調査用のDebug Overlay / Runtime History</li>
+<li>Clsn / HitDef / Projectile はmatrix管理下で部分対応</li>
 <li>SpritePack Renderer試作</li>
 </ul>
 
