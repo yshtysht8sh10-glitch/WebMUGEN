@@ -142,7 +142,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | BindToParent | Partial | Recognized safe no-op. Binding behavior not implemented. |
 | BindToRoot | Partial | Recognized safe no-op. Binding behavior not implemented. |
 | BindToTarget | Partial | Recognized safe no-op. Binding behavior not implemented. |
-| ChangeAnim | Complete | Basic implementation exists. |
+| ChangeAnim | Complete | Runtime value expressions are evaluated, including nested `ifelse`, velocity references, and `var()` arithmetic. |
 | ChangeAnim2 | Partial | Recognized safe no-op. Target/common animation behavior not implemented. |
 | ChangeState | Complete | Basic implementation exists and state entry is centralized. |
 | ClearClipboard | Partial | Recognized safe no-op. Debug clipboard not implemented. |

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MutableRefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { CanvasRenderer } from '../renderer/canvas2d/CanvasRenderer';
 import { createInitialGameState } from '../core/engine/GameState';
 import type { GameState } from '../core/engine/types';
@@ -56,11 +56,18 @@ import { InputBuffer } from '../input/InputBuffer';
 import { resolveCommands } from '../input/CommandResolver';
 import { evaluateCnsRuntimeTrigger, readNumberExpression, type CnsRuntimeTriggerContext } from '../core/cns/CnsRuntimeTrigger';
 import type { CnsDocument, CnsStateController, CnsStateDefinition, CnsTrigger } from '../mugen/common/cnsTypes';
+import {
+  RUNTIME_HISTORY_STORE_LIMIT,
+  limitRuntimeHistoryEntries,
+  selectVisibleRuntimeHistory,
+  type RuntimeHistoryWindow,
+  type VisibleRuntimeHistory,
+} from './RuntimeHistoryWindow';
 
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/T-H-M-A.zip';
 const ENABLE_RUNTIME_FALLBACKS = false;
-const RUNTIME_HISTORY_LIMIT = 500;
-const READABLE_RUNTIME_HISTORY_LIMIT = 4000;
+const READABLE_STATE_STATUS_ALWAYS_SHOW_TYPES = new Set(['changestate', 'changeanim']);
+const READABLE_STATE_STATUS_EXTRA_CONTROLLER_LIMIT = 10;
 const INPUT_CONFIG_STORAGE_KEY = 'webmugen.inputConfig.v1';
 const CHARACTER_PATH_STORAGE_KEY = 'webmugen.characterPath.v1';
 const RUNTIME_SETTINGS_STORAGE_KEY = 'webmugen.runtimeSettings.v1';
@@ -77,7 +84,7 @@ const DEFAULT_RUNTIME_SETTINGS: RuntimeSettings = {
   frameIntervalMs: DEFAULT_FRAME_INTERVAL_MS,
 };
 
-type DebugTab = 'static' | 'runtime' | 'ideas' | 'manual' | 'settings';
+type DebugTab = 'runtime-human' | 'runtime-ai' | 'static' | 'manual' | 'settings';
 type RuntimeLogTab = 'human' | 'ai';
 type CnsSourceSelection = { path: string; line: number } | null;
 
@@ -130,6 +137,7 @@ export function WebMugenApp() {
   const lastStageKeySignatureRef = useRef('');
   const lastStateNosRef = useRef<[number, number]>([0, 0]);
   const stateTransitionLogLastStateNosRef = useRef<[number, number]>([0, 0]);
+  const pendingRuntimeScrollFrameRef = useRef<number | null>(null);
   const [loadMessage, setLoadMessage] = useState('Loading character...');
   const [inputDebugLines, setInputDebugLines] = useState<string[]>(['keys=-']);
   const [roundDebugLine, setRoundDebugLine] = useState(formatRoundState(createInitialRoundState()));
@@ -143,14 +151,16 @@ export function WebMugenApp() {
   const [readableRuntimeHistoryLines, setReadableRuntimeHistoryLines] = useState<string[]>(['人間用の短い実行履歴がここに残ります。']);
   const [stateTransitionLogLines, setStateTransitionLogLines] = useState<string[]>(['StateNoが変化すると、ここに遷移だけが残ります。']);
   const [stageDebugLines, setStageDebugLines] = useState<string[]>(['State: -']);
-  const [activeDebugTab, setActiveDebugTab] = useState<DebugTab>('runtime');
-  const [activeRuntimeLogTab, setActiveRuntimeLogTab] = useState<RuntimeLogTab>('human');
+  const [activeDebugTab, setActiveDebugTab] = useState<DebugTab>('runtime-human');
+  const [humanHistoryWindow, setHumanHistoryWindow] = useState<RuntimeHistoryWindow>({ mode: 'latest' });
+  const [aiHistoryWindow, setAiHistoryWindow] = useState<RuntimeHistoryWindow>({ mode: 'latest' });
   const [copyStatus, setCopyStatus] = useState('');
   const [inputConfig, setInputConfigState] = useState<InputConfig>(inputConfigRef.current);
   const [runtimeSettings, setRuntimeSettingsState] = useState<RuntimeSettings>(runtimeSettingsRef.current);
   const [characterPath, setCharacterPathState] = useState(loadCharacterPath());
   const [cnsSourceFiles, setCnsSourceFiles] = useState<CharacterSourceFile[]>([]);
   const [selectedCnsSource, setSelectedCnsSource] = useState<CnsSourceSelection>(null);
+  const cnsSourceScrollPositionsRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
     let disposed = false;
@@ -236,6 +246,7 @@ export function WebMugenApp() {
         setCommandDebugLines(nextCommandDebugLines);
 
         let nextState = gameStateRef.current;
+        let nextReadableHistoryState = nextState;
         let nextRoundState = roundStateRef.current;
         let nextFeedback = hitFeedbackRef.current;
         let nextScore = roundScoreRef.current;
@@ -268,6 +279,7 @@ export function WebMugenApp() {
             },
           });
           nextState = cnsResult.state;
+          nextReadableHistoryState = cnsResult.state;
           nextCnsTraces = cnsResult.traces;
 
           if (ENABLE_RUNTIME_FALLBACKS) {
@@ -337,7 +349,7 @@ export function WebMugenApp() {
           getAnimEndTime: (animNo) => getMugenAnimEndTime(character.air, animNo),
           inputConfig: config,
           frameNo: frameNoRef.current,
-          state: nextState,
+          state: nextReadableHistoryState,
           pressedKeys,
           historyRef: readableRuntimeHistoryRef,
           lastSignatureRef: lastReadableRuntimeSignatureRef,
@@ -378,6 +390,25 @@ export function WebMugenApp() {
     ...cnsDebugLines,
   ];
   const staticTabLines = formatStaticTabLines(loadMessage, staticDebugInfo, coverageDebugLines);
+  const visibleHumanHistory = useMemo(
+    () => selectVisibleRuntimeHistory(readableRuntimeHistoryLines, 'human', humanHistoryWindow),
+    [humanHistoryWindow, readableRuntimeHistoryLines],
+  );
+  const visibleAiHistory = useMemo(
+    () => selectVisibleRuntimeHistory(runtimeHistoryLines, 'ai', aiHistoryWindow),
+    [aiHistoryWindow, runtimeHistoryLines],
+  );
+
+  useEffect(() => {
+    const frameNo = pendingRuntimeScrollFrameRef.current;
+    if (frameNo === null) return;
+    if (humanHistoryWindow.mode === 'aroundFrame' && humanHistoryWindow.targetFrame !== frameNo) return;
+    if (!visibleHumanHistory.lines.some((line) => line.includes(`frame=${frameNo}`))) return;
+    requestAnimationFrame(() => {
+      scrollToRuntimeFrame(frameNo);
+      pendingRuntimeScrollFrameRef.current = null;
+    });
+  }, [humanHistoryWindow, visibleHumanHistory.lines]);
 
   const handleCopy = async (label: string, text: string) => {
     try {
@@ -394,6 +425,18 @@ export function WebMugenApp() {
     saveInputConfig(nextConfig);
     p1CommandBufferRef.current.clear();
     p2CommandBufferRef.current.clear();
+  };
+
+  const handleJumpToRuntimeFrame = (frameNo: number) => {
+    pendingRuntimeScrollFrameRef.current = frameNo;
+    setHumanHistoryWindow({ mode: 'aroundFrame', targetFrame: frameNo });
+    setAiHistoryWindow({ mode: 'aroundFrame', targetFrame: frameNo });
+  };
+
+  const showLatestRuntimeHistory = () => {
+    pendingRuntimeScrollFrameRef.current = null;
+    setHumanHistoryWindow({ mode: 'latest' });
+    setAiHistoryWindow({ mode: 'latest' });
   };
 
   const setRuntimeSettings = (nextSettings: RuntimeSettings) => {
@@ -432,17 +475,21 @@ export function WebMugenApp() {
         </div>
       </section>
 
-      <DebugTabs activeTab={activeDebugTab} onChange={setActiveDebugTab} />
-      <CopyToolbar
+      <DebugTabsV2 activeTab={activeDebugTab} onChange={setActiveDebugTab} />
+      <CopyToolbarV2
         activeTab={activeDebugTab}
-        aiLogText={runtimeHistoryLines.join('\n')}
+        visibleAiLines={visibleAiHistory.lines}
+        allAiLines={runtimeHistoryLines}
         humanLogText={[
           '=== 人間用 実行履歴 ===',
-          ...readableRuntimeHistoryLines,
+          ...visibleHumanHistory.lines,
           '',
           '=== StateNo 遷移 ===',
           ...stateTransitionLogLines,
         ].join('\n')}
+        visibleHumanLines={visibleHumanHistory.lines}
+        allHumanLines={readableRuntimeHistoryLines}
+        stateTransitionLogLines={stateTransitionLogLines}
         copyStatus={copyStatus}
         onCopy={handleCopy}
       />
@@ -456,21 +503,29 @@ export function WebMugenApp() {
             sourceFiles={cnsSourceFiles}
             selectedSource={selectedCnsSource}
             onOpenSource={setSelectedCnsSource}
+            sourceScrollPositionsRef={cnsSourceScrollPositionsRef}
           />
         )}
-        {activeDebugTab === 'runtime' && (
-          <ReadableRuntimePanel
-            activeTab={activeRuntimeLogTab}
-            onTabChange={setActiveRuntimeLogTab}
-            readableRuntimeHistoryLines={readableRuntimeHistoryLines}
-            runtimeHistoryLines={runtimeHistoryLines}
+        {activeDebugTab === 'runtime-human' && (
+          <HumanRuntimePanel
+            visibleReadableRuntimeHistory={visibleHumanHistory}
             stateTransitionLogLines={stateTransitionLogLines}
+            historyWindow={humanHistoryWindow}
+            onJumpFrame={handleJumpToRuntimeFrame}
+            onShowLatest={showLatestRuntimeHistory}
             cnsSourceFiles={cnsSourceFiles}
             selectedCnsSource={selectedCnsSource}
             onOpenCnsSource={setSelectedCnsSource}
+            sourceScrollPositionsRef={cnsSourceScrollPositionsRef}
           />
         )}
-        {activeDebugTab === 'ideas' && <IdeasPanel />}
+        {activeDebugTab === 'runtime-ai' && (
+          <AiRuntimePanel
+            visibleRuntimeHistory={visibleAiHistory}
+            historyWindow={aiHistoryWindow}
+            onShowLatest={showLatestRuntimeHistory}
+          />
+        )}
         {activeDebugTab === 'manual' && <ManualPanel />}
         {activeDebugTab === 'settings' && (
           <SettingsPanel
@@ -973,7 +1028,35 @@ function formatGamepadMapping(player: PlayerInputMapping): string {
   ].join(', ');
 }
 
-function DebugTabs({ activeTab, onChange }: { activeTab: DebugTab; onChange: (tab: DebugTab) => void }) {
+function DebugTabsV2({ activeTab, onChange }: { activeTab: DebugTab; onChange: (tab: DebugTab) => void }) {
+  return (
+    <nav className="debug-tabs" aria-label="debug tabs">
+      <button className={activeTab === 'runtime-human' ? 'active' : ''} onClick={() => onChange('runtime-human')} type="button">
+        実行履歴人間用
+      </button>
+      <button className={activeTab === 'runtime-ai' ? 'active' : ''} onClick={() => onChange('runtime-ai')} type="button">
+        実行履歴AI用
+      </button>
+      <button className={activeTab === 'static' ? 'active' : ''} onClick={() => onChange('static')} type="button">
+        静的情報
+      </button>
+      <button className={activeTab === 'manual' ? 'active' : ''} onClick={() => onChange('manual')} type="button">
+        Manual
+      </button>
+      <button className={activeTab === 'settings' ? 'active' : ''} onClick={() => onChange('settings')} type="button">
+        Settings
+      </button>
+    </nav>
+  );
+}
+
+function LegacyDebugTabs({
+  activeTab,
+  onChange,
+}: {
+  activeTab: 'runtime' | 'static' | 'ideas' | 'manual' | 'settings';
+  onChange: (tab: 'runtime' | 'static' | 'ideas' | 'manual' | 'settings') => void;
+}) {
   return (
     <nav className="debug-tabs" aria-label="debug tabs">
       <button className={activeTab === 'runtime' ? 'active' : ''} onClick={() => onChange('runtime')} type="button">
@@ -995,6 +1078,66 @@ function DebugTabs({ activeTab, onChange }: { activeTab: DebugTab; onChange: (ta
   );
 }
 
+function CopyToolbarV2({
+  activeTab,
+  visibleAiLines,
+  allAiLines,
+  visibleHumanLines,
+  allHumanLines,
+  stateTransitionLogLines,
+  copyStatus,
+  onCopy,
+}: {
+  activeTab: DebugTab;
+  visibleAiLines: string[];
+  allAiLines: string[];
+  humanLogText?: string;
+  visibleHumanLines: string[];
+  allHumanLines: string[];
+  stateTransitionLogLines: string[];
+  copyStatus: string;
+  onCopy: (label: string, text: string) => void;
+}) {
+  if (activeTab !== 'runtime-human' && activeTab !== 'runtime-ai') return null;
+
+  return (
+    <div className="copy-toolbar">
+      <div className="copy-toolbar-buttons">
+        {activeTab === 'runtime-human' ? (
+          <>
+            <button type="button" onClick={() => onCopy('表示中の人間用ログ', formatHumanRuntimeCopyText(visibleHumanLines, stateTransitionLogLines))}>
+              表示中ログをコピー
+            </button>
+            <button type="button" onClick={() => onCopy('全人間用ログ', formatHumanRuntimeCopyText(allHumanLines, stateTransitionLogLines))}>
+              全ログをコピー
+            </button>
+          </>
+        ) : (
+          <>
+            <button type="button" onClick={() => onCopy('表示中のAI用ログ', visibleAiLines.join('\n'))}>
+              表示中ログをコピー
+            </button>
+            <button type="button" onClick={() => onCopy('全AI用ログ', allAiLines.join('\n'))}>
+              全ログをコピー
+            </button>
+          </>
+        )}
+      </div>
+      {copyStatus && <span className="copy-status">{copyStatus}</span>}
+    </div>
+  );
+}
+
+function formatHumanRuntimeCopyText(historyLines: string[], stateTransitionLogLines: string[]): string {
+  return [
+    '=== 人間用 実行履歴 ===',
+    ...historyLines,
+    '',
+    '=== StateNo 遷移 ===',
+    ...stateTransitionLogLines,
+  ].join('\n');
+}
+
 function CopyToolbar({
   activeTab,
   aiLogText,
@@ -1008,7 +1151,7 @@ function CopyToolbar({
   copyStatus: string;
   onCopy: (label: string, text: string) => void;
 }) {
-  if (activeTab !== 'runtime') return null;
+  if (activeTab !== 'runtime-human' && activeTab !== 'runtime-ai') return null;
 
   return (
     <div className="copy-toolbar">
@@ -1032,6 +1175,7 @@ function StaticDebugPanel({
   sourceFiles,
   selectedSource,
   onOpenSource,
+  sourceScrollPositionsRef,
 }: {
   loadMessage: string;
   staticDebugInfo: StaticDebugInfo;
@@ -1039,13 +1183,14 @@ function StaticDebugPanel({
   sourceFiles: CharacterSourceFile[];
   selectedSource: CnsSourceSelection;
   onOpenSource: (selection: CnsSourceSelection) => void;
+  sourceScrollPositionsRef: MutableRefObject<Record<string, number>>;
 }) {
   return (
     <div className="debug-grid">
       <DebugBlock title="Character / DEF 読込結果" lines={[loadMessage, ...staticDebugInfo.characterRows]} />
       <DebugBlock title="CMD コマンド一覧" lines={staticDebugInfo.commandRows} />
       <DebugBlock title="CNS対応状況" lines={coverageDebugLines} />
-      <CharacterSourceFilesViewer files={sourceFiles} selection={selectedSource} onSelect={onOpenSource} />
+      <CharacterSourceFilesViewer files={sourceFiles} selection={selectedSource} onSelect={onOpenSource} scrollPositionsRef={sourceScrollPositionsRef} />
       <StateDefListPanel rows={staticDebugInfo.stateRows} />
     </div>
   );
@@ -1074,6 +1219,75 @@ function StateDefListPanel({ rows }: { rows: StateDebugRow[] }) {
           </div>
         ))}
       </div>
+    </section>
+  );
+}
+
+function HumanRuntimePanel({
+  visibleReadableRuntimeHistory,
+  stateTransitionLogLines,
+  historyWindow,
+  onJumpFrame,
+  onShowLatest,
+  cnsSourceFiles,
+  selectedCnsSource,
+  onOpenCnsSource,
+  sourceScrollPositionsRef,
+}: {
+  visibleReadableRuntimeHistory: VisibleRuntimeHistory;
+  stateTransitionLogLines: string[];
+  historyWindow: RuntimeHistoryWindow;
+  onJumpFrame: (frameNo: number) => void;
+  onShowLatest: () => void;
+  cnsSourceFiles: CharacterSourceFile[];
+  selectedCnsSource: CnsSourceSelection;
+  onOpenCnsSource: (selection: CnsSourceSelection) => void;
+  sourceScrollPositionsRef: MutableRefObject<Record<string, number>>;
+}) {
+  return (
+    <section className="runtime-history-panel">
+      <div className="runtime-human-grid">
+        <section>
+          <h2>StateNo 遷移</h2>
+          <p className="debug-note">StateNoが変わった瞬間だけを短く表示します。f=を押すと右側の該当フレームへ移動します。</p>
+          <StateTransitionLogMarkup lines={stateTransitionLogLines} onJumpFrame={onJumpFrame} />
+        </section>
+        <section>
+          <h2>人間用 実行履歴</h2>
+          <p className="debug-note">タイムスタンプ、StateNo、AnimNo、State状況を短く表示します。Timeだけの変化では増えません。</p>
+          <HistoryWindowStatus visible={visibleReadableRuntimeHistory} window={historyWindow} onShowLatest={onShowLatest} />
+          <ReadableRuntimeHistoryMarkup lines={visibleReadableRuntimeHistory.lines} onOpenCnsSource={onOpenCnsSource} />
+        </section>
+      </div>
+      {selectedCnsSource ? (
+        <CharacterSourceFilesViewer
+          files={cnsSourceFiles}
+          selection={selectedCnsSource}
+          onSelect={onOpenCnsSource}
+          scrollPositionsRef={sourceScrollPositionsRef}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+function AiRuntimePanel({
+  visibleRuntimeHistory,
+  historyWindow,
+  onShowLatest,
+}: {
+  visibleRuntimeHistory: VisibleRuntimeHistory;
+  historyWindow: RuntimeHistoryWindow;
+  onShowLatest: () => void;
+}) {
+  return (
+    <section className="runtime-history-panel">
+      <h2>AI用 詳細ログ</h2>
+      <p className="debug-note">
+        入力、Command、State、Controller、Physics、成立情報を解析用に蓄積します。Timeだけの変化では増えません。
+      </p>
+      <HistoryWindowStatus visible={visibleRuntimeHistory} window={historyWindow} onShowLatest={onShowLatest} />
+      <pre className="debug-pre history-pre codex-history-pre">{visibleRuntimeHistory.lines.join('\n')}</pre>
     </section>
   );
 }
@@ -1150,6 +1364,34 @@ function ReadableRuntimeHistoryMarkup({
       {lines.map((line, index) => (
         <ReadableRuntimeHistoryLine key={`${index}-${line}`} line={line} onOpenCnsSource={onOpenCnsSource} />
       ))}
+    </div>
+  );
+}
+
+function HistoryWindowStatus({
+  visible,
+  window,
+  onShowLatest,
+}: {
+  visible: VisibleRuntimeHistory;
+  window: RuntimeHistoryWindow;
+  onShowLatest: () => void;
+}) {
+  const modeLabel = window.mode === 'latest'
+    ? '最新'
+    : `フレーム ${window.targetFrame} 周辺`;
+  const targetStatus = window.mode === 'aroundFrame' && !visible.targetFound
+    ? ' / 対象フレームは保持範囲外です'
+    : '';
+
+  return (
+    <div className="history-window-status">
+      <span>表示: {modeLabel}</span>
+      <span>範囲: {visible.rangeLabel}</span>
+      <span>件数: {visible.visibleEntries}/{visible.totalEntries}{targetStatus}</span>
+      {window.mode !== 'latest' ? (
+        <button type="button" onClick={onShowLatest}>最新へ戻る</button>
+      ) : null}
     </div>
   );
 }
@@ -1239,7 +1481,7 @@ function ReadableRuntimeHistoryMeta({ line }: { line: string }) {
   );
 }
 
-function StateTransitionLogMarkup({ lines }: { lines: string[] }) {
+function StateTransitionLogMarkup({ lines, onJumpFrame }: { lines: string[]; onJumpFrame?: (frameNo: number) => void }) {
   return (
     <div className="debug-pre history-pre state-transition-pre">
       {lines.map((line, index) => {
@@ -1249,7 +1491,7 @@ function StateTransitionLogMarkup({ lines }: { lines: string[] }) {
         return (
           <div className="state-transition-line" key={`${index}-${line}`}>
             <span>{line.slice(0, frameMatch.index)}</span>
-            <button type="button" onClick={() => scrollToRuntimeFrame(frameNo)}>{frameMatch[0]}</button>
+            <button type="button" onClick={() => (onJumpFrame ? onJumpFrame(frameNo) : scrollToRuntimeFrame(frameNo))}>{frameMatch[0]}</button>
             <span>{line.slice(frameMatch.index + frameMatch[0].length)}</span>
           </div>
         );
@@ -1274,22 +1516,39 @@ function CharacterSourceFilesViewer({
   files,
   selection,
   onSelect,
+  scrollPositionsRef,
 }: {
   files: CharacterSourceFile[];
   selection: CnsSourceSelection;
   onSelect: (selection: CnsSourceSelection) => void;
+  scrollPositionsRef?: MutableRefObject<Record<string, number>>;
 }) {
+  const localScrollPositionsRef = useRef<Record<string, number>>({});
+  const effectiveScrollPositionsRef = scrollPositionsRef ?? localScrollPositionsRef;
+  const codeRef = useRef<HTMLDivElement | null>(null);
   const fallbackSelection = files[0] ? { path: files[0].path, line: 1 } : null;
   const effectiveSelection = selection && files.some((file) => file.path === selection.path) ? selection : fallbackSelection;
   const selectedFile = effectiveSelection ? files.find((file) => file.path === effectiveSelection.path) : null;
   const selectedLineId = effectiveSelection ? cnsSourceLineId(effectiveSelection.path, effectiveSelection.line) : null;
+  const selectedPath = selectedFile?.path ?? '';
+  const selectedLine = effectiveSelection?.line ?? 1;
 
   useEffect(() => {
-    if (!selectedLineId) return;
+    const codeElement = codeRef.current;
+    if (!codeElement || !effectiveSelection) return;
     requestAnimationFrame(() => {
-      document.getElementById(selectedLineId)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      if (selectedLine > 1 && selectedLineId) {
+        document.getElementById(selectedLineId)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        return;
+      }
+      codeElement.scrollTop = effectiveScrollPositionsRef.current[selectedPath] ?? 0;
     });
-  }, [selectedLineId]);
+  }, [effectiveScrollPositionsRef, selectedLine, selectedLineId, selectedPath]);
+
+  const handleCodeScroll = () => {
+    if (!selectedPath || !codeRef.current) return;
+    effectiveScrollPositionsRef.current[selectedPath] = codeRef.current.scrollTop;
+  };
 
   if (files.length === 0) {
     return (
@@ -1333,7 +1592,7 @@ function CharacterSourceFilesViewer({
             <strong>{selectedFile.label}</strong>
             <span>{selectedFile.path}:{effectiveSelection?.line ?? 1}</span>
           </div>
-          <div className="cns-source-code">
+          <div className="cns-source-code" ref={codeRef} onScroll={handleCodeScroll}>
             {lines.map((line, index) => {
               const lineNo = index + 1;
               const selected = lineNo === effectiveSelection?.line;
@@ -1763,7 +2022,11 @@ export function appendRuntimeHistoryIfNeeded({
     `===== AI_RUNTIME frame=${frameNo} timestamp=${timestamp} =====`,
     ...snapshot,
   ]);
-  const nextHistory = freezeHistoryLines([...entry, ...historyRef.current]).slice(0, RUNTIME_HISTORY_LIMIT);
+  const nextHistory = limitRuntimeHistoryEntries(
+    freezeHistoryLines([...entry, ...historyRef.current]),
+    'ai',
+    RUNTIME_HISTORY_STORE_LIMIT,
+  );
   historyRef.current = nextHistory.slice();
   setHistoryLines(nextHistory.slice());
 }
@@ -1875,7 +2138,11 @@ function appendReadableRuntimeHistoryIfNeeded({
     `Damage=${damageSummary}`,
     '',
   ];
-  const nextHistory = freezeHistoryLines([...entry, ...historyRef.current]).slice(0, READABLE_RUNTIME_HISTORY_LIMIT);
+  const nextHistory = limitRuntimeHistoryEntries(
+    freezeHistoryLines([...entry, ...historyRef.current]),
+    'human',
+    RUNTIME_HISTORY_STORE_LIMIT,
+  );
   historyRef.current = nextHistory.slice();
   setHistoryLines(nextHistory.slice());
 }
@@ -1955,18 +2222,39 @@ function formatSatisfiedStateDefTriggers(
   stateDef: CnsStateDefinition,
   context: Parameters<typeof evaluateCnsRuntimeTrigger>[1],
 ): string[] {
+  const controllerSummaries = stateDef.controllers
+    .filter((controller) => controller.triggers.length > 0 && shouldShowReadableController(controller, context));
+  const prioritized = prioritizeReadableControllers(controllerSummaries);
   const lines: string[] = [];
 
-  stateDef.controllers.forEach((controller) => {
-    if (controller.triggers.length === 0) return;
-    if (!shouldShowReadableController(controller, context)) return;
-
+  prioritized.visible.forEach((controller) => {
     const passed = evaluateReadableController(controller, context);
     lines.push(formatReadableControllerHeaderOk(controller, passed));
     lines.push(...controller.triggers.map((trigger) => `  ${formatReadableTriggerLineOk(trigger, context)}`));
   });
 
+  if (prioritized.hiddenCount > 0) {
+    lines.push(`**...** | ${prioritized.hiddenCount} controllers hidden to keep history light`);
+  }
+
   return lines;
+}
+
+function prioritizeReadableControllers(controllers: CnsStateController[]): { visible: CnsStateController[]; hiddenCount: number } {
+  const visible: CnsStateController[] = [];
+  let extraCount = 0;
+  for (const controller of controllers) {
+    const type = controller.type.toLowerCase();
+    if (READABLE_STATE_STATUS_ALWAYS_SHOW_TYPES.has(type)) {
+      visible.push(controller);
+      continue;
+    }
+    if (extraCount < READABLE_STATE_STATUS_EXTRA_CONTROLLER_LIMIT) {
+      visible.push(controller);
+      extraCount += 1;
+    }
+  }
+  return { visible, hiddenCount: Math.max(0, controllers.length - visible.length) };
 }
 
 function shouldShowReadableController(

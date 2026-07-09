@@ -23,7 +23,7 @@ Recognized safe no-ops are normally **Partial**, not Complete.
 | Family | Examples | Current note |
 |---|---|---|
 | State transition | `ChangeState`, `SelfState` | `ChangeState` is basic Complete. `SelfState` is Partial because full custom-state ownership semantics are incomplete. |
-| Animation | `ChangeAnim`, `ChangeAnim2` | `ChangeAnim` is basic Complete. `ChangeAnim2` is a safe no-op/Partial until target/common animation behavior exists. |
+| Animation | `ChangeAnim`, `ChangeAnim2` | `ChangeAnim` is Complete for runtime animation selection and evaluates numeric `value` expressions with current player context. `ChangeAnim2` is a safe no-op/Partial until target/common animation behavior exists. |
 | Velocity/position | `VelSet`, `VelAdd`, `VelMul`, `PosSet`, `PosAdd` | Basic numeric behavior exists and is matrix-tracked. |
 | State flags | `CtrlSet`, `StateTypeSet`, `MoveTypeSet` | Basic behavior exists. |
 | Life/power | `LifeAdd`, `LifeSet`, `PowerAdd`, `PowerSet` | Basic behavior exists. Header `poweradd` is tracked separately as a StateDef header field. |

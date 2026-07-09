@@ -1,6 +1,6 @@
 # State Controller Executor
 
-Updated: 2026-07-06
+Updated: 2026-07-09
 
 This document describes how State Controllers are executed. For per-controller status, see `state-controller-compatibility-notes.md` and the compatibility matrix.
 
@@ -72,7 +72,7 @@ Examples:
 - `ChangeAnim`
 - `ChangeAnim2`
 
-`ChangeAnim` is basic runtime animation selection. `ChangeAnim2` depends on target/common animation ownership and remains Partial if only recognized.
+`ChangeAnim` is runtime animation selection. Its `value` parameter is evaluated through the CNS numeric expression evaluator, so expressions such as `ifelse((vel x)=0,44,45)+var(5)*4` can use the current player velocity and variables. `ChangeAnim2` depends on target/common animation ownership and remains Partial if only recognized.
 
 ### Hit and attack state
 

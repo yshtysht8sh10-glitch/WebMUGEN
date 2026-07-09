@@ -103,6 +103,114 @@ value = 10
     expect(result.traces[0].executedControllers).toEqual(['ChangeState', 'ChangeAnim']);
   });
 
+  it('runs Time = 0 controllers in an animless air state entered from jump start', () => {
+    const cns = parseCnsText(`
+[Statedef 40]
+type = S
+physics = S
+anim = 40
+
+[State 40, FinishStartup]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 50
+ctrl = 1
+
+[Statedef 50]
+type = A
+physics = A
+
+[State 50, InitialJumpVelocity]
+type = VelSet
+triggerall = PrevStateNo = 40
+trigger1 = Time = 0
+x = 3.4
+y = -6.4
+`);
+
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime(
+      {
+        ...state,
+        players: [
+          { ...state.players[0], stateNo: 40, animNo: 40, animTime: 5, stateTime: 5, ctrl: false },
+          state.players[1],
+        ],
+      },
+      cns,
+      {
+        getAnimationDuration: (animNo) => (animNo === 40 ? 5 : null),
+      },
+    );
+
+    expect(result.state.players[0]).toMatchObject({
+      prevStateNo: 40,
+      stateNo: 50,
+      stateTime: 0,
+      animNo: 40,
+      vx: 3.4,
+      vy: -6.4,
+      ctrl: true,
+    });
+    expect(result.traces[0].executedControllers).toEqual(['ChangeState', 'VelSet']);
+  });
+
+  it('evaluates ChangeAnim value expressions with velocity and vars on state entry', () => {
+    const cns = parseCnsText(`
+[Statedef 40]
+type = S
+physics = S
+anim = 40
+
+[State 40, FinishStartup]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 50
+ctrl = 1
+
+[Statedef 50]
+type = A
+physics = A
+
+[State 50, JumpAnim]
+type = ChangeAnim
+trigger1 = Time = 0
+trigger1 = var(6) = 0
+trigger1 = var(7) = 0
+value = ifelse((vel x)=0, 44, ifelse((vel x)>0, 45, 46))+var(5)*4
+`);
+
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime(
+      {
+        ...state,
+        players: [
+          {
+            ...state.players[0],
+            stateNo: 40,
+            animNo: 40,
+            animTime: 5,
+            stateTime: 5,
+            vx: -3,
+            vars: { 5: 1, 6: 0, 7: 0 },
+          } as typeof state.players[0],
+          state.players[1],
+        ],
+      },
+      cns,
+      {
+        getAnimationDuration: (animNo) => (animNo === 40 ? 5 : null),
+      },
+    );
+
+    expect(result.state.players[0]).toMatchObject({
+      stateNo: 50,
+      animNo: 50,
+      animTime: 0,
+    });
+    expect(result.traces[0].executedControllers).toEqual(['ChangeState', 'ChangeAnim']);
+  });
+
   it('returns from state 200 when MUGEN AnimTime reaches 0', () => {
     const cns = parseCnsText(`
 [Statedef 200]

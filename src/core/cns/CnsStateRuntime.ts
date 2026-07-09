@@ -528,7 +528,7 @@ function executeController(
 ): ControllerResult {
   const type = controller.type.toLowerCase();
   if (type === 'null') return withPlayer(player, true, 'Null');
-  if (type === 'changeanim') return changeAnim(player, controller);
+  if (type === 'changeanim') return changeAnim(player, opponent, controller, input, commands);
   if (type === 'velset') return withPlayer({ ...player, vx: num(controller, 'x', player, input, commands, opponent) ?? player.vx, vy: num(controller, 'y', player, input, commands, opponent) ?? player.vy }, hasNum(controller, 'x', player, input, commands, opponent) || hasNum(controller, 'y', player, input, commands, opponent), 'VelSet');
   if (type === 'veladd') return withPlayer({ ...player, vx: player.vx + (num(controller, 'x', player, input, commands, opponent) ?? 0), vy: player.vy + (num(controller, 'y', player, input, commands, opponent) ?? 0) }, hasNum(controller, 'x', player, input, commands, opponent) || hasNum(controller, 'y', player, input, commands, opponent), 'VelAdd');
   if (type === 'velmul') return velMul(player, controller);
@@ -583,8 +583,14 @@ function executeController(
   return withPlayer(player, false, controller.type);
 }
 
-function changeAnim(player: PlayerState, controller: CnsStateController): ControllerResult {
-  const value = num(controller, 'value');
+function changeAnim(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const value = num(controller, 'value', player, input, commands, opponent);
   if (value === null) return withPlayer(player, false, 'ChangeAnim');
   return withPlayer({ ...player, animNo: value, animTime: player.animNo === value ? player.animTime : 0 }, true, 'ChangeAnim');
 }

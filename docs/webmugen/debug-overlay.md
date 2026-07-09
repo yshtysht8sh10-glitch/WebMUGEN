@@ -1,6 +1,6 @@
 # Debug Overlay
 
-Updated: 2026-07-06
+Updated: 2026-07-09
 
 The Debug Overlay is part of the compatibility workflow. It is not only a UI convenience; it is how WebMUGEN identifies which runtime layer failed.
 
@@ -58,15 +58,24 @@ The static tab should show information that does not change frame-by-frame:
 
 If a route is missing from the static tab, suspect loader/parser/merge before runtime.
 
+`Character Files` shows loaded character text files and the applied common CNS. It should span the full static-info width so long CNS/AIR files remain readable. Source scrolling is remembered per file; changing tabs or switching files must not reuse another file's scroll position.
+
 ## Runtime history tab
 
 Runtime history records snapshots over time. It exists because live values disappear too quickly during movement and transitions.
 
 History entries should be snapshots, not references to mutable arrays or objects. Past entries must not change when the current frame changes.
 
+Runtime history is exposed as top-level tabs:
+
+- `実行履歴人間用`: compact StateNo / AnimNo / State状況 view plus the StateNo transition list.
+- `実行履歴AI用`: dense copyable diagnostics for Codex/debug work.
+
+The human view shows the CNS-post, pre-physics state so `Time = 0` controller routes are visible on the frame a StateDef is entered.
+
 ## Investigation tab / notes
 
-The notes tab can contain current debugging ideas, but it must not become the source of truth. Stable knowledge should move into docs or tests.
+Investigation notes should live in source docs or tests once they become stable knowledge. The old UI notes tab is no longer part of the main debug tab row.
 
 ## Adding diagnostics
 
@@ -92,13 +101,18 @@ Temporary debug logs are allowed during investigation, but long-term overlay out
 
 Keep logs when they help future compatibility work. Remove or narrow logs that only explain a solved one-off bug.
 
+For large characters, cap rendered history by both entry count and line count. Prefer retaining ChangeState and ChangeAnim candidates before less route-critical controller details.
+
+The runtime-history tabs render a visible window instead of the full retained history. The default window is the latest entries. Clicking a StateNo transition frame switches the window to that frame's surrounding entries before scrolling, so old retained frames can still be inspected without keeping the whole history in the DOM. The UI should show the current window mode, displayed range, visible count, retained count, and a `最新へ戻る` action when inspecting an older frame.
+
 ## Copy buttons
 
 Copy buttons should provide:
 
-- current live screen information;
-- current tab content;
-- full debug dump.
+- current visible runtime-history window;
+- full retained runtime-history log;
+- current live screen information when included in a dump;
+- static route lists when included in a dump.
 
 The copied text should be sufficient to diagnose the current issue without needing a screenshot.
 

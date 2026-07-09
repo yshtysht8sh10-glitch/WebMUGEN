@@ -1,6 +1,6 @@
 # Runtime History
 
-Updated: 2026-07-06
+Updated: 2026-07-09
 
 Runtime History is the persistent frame-by-frame diagnostic log shown in the Debug UI.
 
@@ -38,6 +38,15 @@ history entry = reference to current live debug array
 
 If old history changes when current input changes, the snapshot rule is broken.
 
+## Debug UI tabs
+
+Runtime history is split into two top-level tabs:
+
+- `実行履歴人間用`: a compact rendered view for following StateNo, AnimNo, key input, State状況, and recent damage.
+- `実行履歴AI用`: a dense copyable log intended for Codex/debug analysis.
+
+The old nested runtime-history subtabs were removed so runtime logs are available directly from the main debug tab row.
+
 ## When to append
 
 History should append when something useful happens, such as:
@@ -52,6 +61,8 @@ History should append when something useful happens, such as:
 
 Avoid recording completely idle duplicate frames forever.
 
+For the human-facing runtime history, capture the snapshot immediately after CNS execution and before physics increments `stateTime` / `animTime`. This keeps `Time = 0` routes visible when a StateDef is entered, while the stage overlay can still show the post-physics live state.
+
 ## Signature / deduplication
 
 A history signature can prevent identical repeated entries.
@@ -59,6 +70,24 @@ A history signature can prevent identical repeated entries.
 The signature should be based on the snapshot text, not mutable data references.
 
 If a line changes every frame due only to time counters, decide whether that is useful. During movement debugging, state time can be useful. During idle debugging, it may create noise.
+
+The human-facing history is capped by both entry count and rendered line count. Long State状況 sections keep ChangeState / ChangeAnim candidates visible first, then only a small number of additional controllers. This prevents large characters from making the browser heavy while preserving the most useful routing diagnostics.
+
+## Render window
+
+Runtime history storage and runtime history rendering use separate limits.
+
+- Stored history is capped by entry count so copy/debug data can remain available.
+- Rendered history is capped to the current visible window so the Debug UI does not create a huge DOM.
+
+The visible window has two modes:
+
+- `latest`: render only the newest runtime-history entries.
+- `aroundFrame`: render entries around a selected frame.
+
+When a StateNo transition link points at an old frame, the UI first switches the visible window to `aroundFrame` for that target frame, then scrolls the matching entry into view after React renders it. The Debug UI should show the current mode, entry range, visible entry count, total retained entry count, and whether the target frame was retained.
+
+Copy actions are split between visible logs and all retained logs. Visible-copy operations should stringify only the current rendered slice; all-log copy may stringify the full retained history on demand.
 
 ## Entry format
 
