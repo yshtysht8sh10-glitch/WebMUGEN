@@ -75,6 +75,11 @@ The loader may provide embedded baseline CMD routes when `/chars/common.cmd` is 
 
 These routes only work if the target states exist in character CNS or external `common1.cns`.
 
+Walk routes must not interrupt dash/run states. The common `holdfwd -> State 20`
+and `holdback -> State 21` routes explicitly skip states `100` through `107`,
+so character dash substates that use `AssertSpecial, flag = NoWalk` are not
+overwritten by the baseline walk route while the direction remains held.
+
 ## Command Route Priority
 
 Common movement should not be discarded merely because a character uses the same direction as a modifier.

@@ -42,6 +42,10 @@ It should contain visible baseline routes for common behavior such as:
 
 Do not move these rules into hidden TypeScript logic unless they are truly engine semantics.
 
+The walk-forward and walk-back routes intentionally skip dash/run states `100`
+through `107`. This keeps a held direction from converting a character dash
+substate such as `101` into State `20` through the common `Statedef -1` route.
+
 ## Debugging CMD routes
 
 For command routes, inspect the pipeline in this order:

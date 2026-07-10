@@ -42,8 +42,8 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | 10 | Crouch start | Complete | Common route integration is covered by runtime assertions for state, anim, type, physics, and ctrl. |
 | 11 | Crouching | Complete | Common crouch-hold route from State 10 is covered by CNS runtime assertions. |
 | 12 | Crouch end | Complete | Common crouch-release route from State 11 is covered by CNS runtime assertions. |
-| 20 | Walk forward | Complete | Common holdfwd route is covered by CNS runtime ChangeState assertions. |
-| 21 | Walk back | Complete | Common holdback route is covered by CNS runtime ChangeState assertions. |
+| 20 | Walk forward | Complete | Common holdfwd route is covered by CNS runtime ChangeState assertions. Walk route is blocked during dash states 100-107. |
+| 21 | Walk back | Complete | Common holdback route is covered by CNS runtime ChangeState assertions. Walk route is blocked during dash states 100-107. |
 | 40 | Jump start | Complete | Common holdup route into State 40 is covered by CNS command/runtime tests. |
 | 41 | Character-defined jump variant | Complete | Character-defined holdup override into State 41 is covered by CNS runtime assertions. |
 | 42 | Character-defined jump variant | Complete | Character-defined holdup route into State 42 is covered by CNS runtime assertions. |
@@ -51,12 +51,12 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | 50 | Jump up | Partial | Common baseline exists. Air physics incomplete. |
 | 51 | Jump down | Partial | Character-defined State 51 entry is covered; full common air-state sequencing is still incomplete. |
 | 52 | Jump land | Partial | Common baseline exists. Landing logic under active work. |
-| 100 | Run / dash forward | Partial | Common route added with PosAdd. Needs true velocity/friction behavior. |
-| 101 | Run / dash substate | Untested | Common implementations vary. |
+| 100 | Run / dash forward | Partial | Common route added with PosAdd. Common walk routes no longer interrupt dash states 100-107. Needs true velocity/friction behavior. |
+| 101 | Run / dash substate | Untested | Common walk routes no longer interrupt dash states 100-107. Common implementations vary. |
 | 102 | Run / dash substate | Untested | Common implementations vary. |
 | 103 | Run / dash substate | Untested | Common implementations vary. |
 | 104 | Run / dash substate | Untested | Common implementations vary. |
-| 105 | Hop back / back dash | Partial | Common route added with PosAdd. |
+| 105 | Hop back / back dash | Partial | Common route added with PosAdd. Common walk routes no longer interrupt dash states 100-107. |
 | 106 | Back dash substate | Untested | Common implementations vary. |
 | 107 | Back dash substate | Untested | Common implementations vary. |
 | 120 | Guard start | Unsupported | Required for basic defense. |

@@ -78,6 +78,14 @@ value = 12
 type = ChangeState
 triggerall = command = "holdfwd"
 triggerall = command != "holddown"
+triggerall = stateno != 100
+triggerall = stateno != 101
+triggerall = stateno != 102
+triggerall = stateno != 103
+triggerall = stateno != 104
+triggerall = stateno != 105
+triggerall = stateno != 106
+triggerall = stateno != 107
 trigger1 = statetype = S
 trigger1 = ctrl
 trigger1 = stateno != 20
@@ -102,6 +110,14 @@ value = 20
 type = ChangeState
 triggerall = command = "holdback"
 triggerall = command != "holddown"
+triggerall = stateno != 100
+triggerall = stateno != 101
+triggerall = stateno != 102
+triggerall = stateno != 103
+triggerall = stateno != 104
+triggerall = stateno != 105
+triggerall = stateno != 106
+triggerall = stateno != 107
 trigger1 = statetype = S
 trigger1 = ctrl
 trigger1 = stateno != 21

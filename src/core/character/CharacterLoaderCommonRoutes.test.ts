@@ -86,6 +86,14 @@ value = 10
 type = ChangeState
 triggerall = command = "holdfwd"
 triggerall = command != "holddown"
+triggerall = stateno != 100
+triggerall = stateno != 101
+triggerall = stateno != 102
+triggerall = stateno != 103
+triggerall = stateno != 104
+triggerall = stateno != 105
+triggerall = stateno != 106
+triggerall = stateno != 107
 trigger1 = statetype = S
 trigger1 = ctrl
 trigger1 = stateno != 20
@@ -95,6 +103,14 @@ value = 20
 type = ChangeState
 triggerall = command = "holdback"
 triggerall = command != "holddown"
+triggerall = stateno != 100
+triggerall = stateno != 101
+triggerall = stateno != 102
+triggerall = stateno != 103
+triggerall = stateno != 104
+triggerall = stateno != 105
+triggerall = stateno != 106
+triggerall = stateno != 107
 trigger1 = statetype = S
 trigger1 = ctrl
 value = 21
@@ -230,6 +246,50 @@ describe('CharacterLoader common movement routes', () => {
       ctrl: false,
     });
     expect(result.traces[0].executedControllers).toContain('ChangeState');
+  });
+
+  it('does not let common walk forward interrupt a held forward dash state', async () => {
+    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createCommonRouteTestFetcher());
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime(
+      {
+        ...state,
+        players: [
+          { ...state.players[0], stateNo: 101, animNo: 101, stateType: 'S', physics: 'N', ctrl: true },
+          state.players[1],
+        ],
+      },
+      character.cns,
+      {
+        p1Commands: new Set(['holdfwd']),
+        p2Commands: new Set(),
+      },
+    );
+
+    expect(result.state.players[0].stateNo).toBe(101);
+    expect(result.traces[0].executedControllers).not.toContain('ChangeState');
+  });
+
+  it('does not let common walk back interrupt a held back dash state', async () => {
+    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createCommonRouteTestFetcher());
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime(
+      {
+        ...state,
+        players: [
+          { ...state.players[0], stateNo: 105, animNo: 105, stateType: 'S', physics: 'N', ctrl: true },
+          state.players[1],
+        ],
+      },
+      character.cns,
+      {
+        p1Commands: new Set(['holdback']),
+        p2Commands: new Set(),
+      },
+    );
+
+    expect(result.state.players[0].stateNo).toBe(105);
+    expect(result.traces[0].executedControllers).not.toContain('ChangeState');
   });
 
   it('runs common crouch hold route from State 10 into State 11', async () => {
