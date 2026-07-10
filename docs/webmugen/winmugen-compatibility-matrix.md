@@ -401,8 +401,8 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | Button sequences | Partial | Basic support; simple button commands are kept briefly active so jump/crouch startup routes do not drop the input. |
 | Simultaneous buttons | Partial | Needs full syntax audit. |
 | Release commands | Untested | Check `~` syntax behavior. |
-| Buffer time | Partial | InputBuffer exists; simple button and double-tap direction commands have short default post-match buffering, but full WinMUGEN timing still needs audit. |
+| Buffer time | Partial | InputBuffer exists; simple button and double-tap direction commands have short default post-match buffering. Double-tap directions no longer retrigger while the second direction is held, but full WinMUGEN timing still needs audit. |
 | command.time | Untested | Parser/runtime status needs verification. |
-| command.buffer.time | Partial | Parser and command matcher honor explicit buffer.time as a post-match active window; default buffering now covers simple buttons and double-tap directions, but WinMUGEN timing audit still needed. |
+| command.buffer.time | Partial | Parser and command matcher honor explicit buffer.time as a post-match active window; default buffering covers simple buttons and double-tap directions after release, but WinMUGEN timing audit still needed. |
 | `$` direction match | Partial | KFM hold commands work; full syntax needs tests. |
 | `/` hold prefix | Partial | Used in common commands. Needs syntax coverage. |

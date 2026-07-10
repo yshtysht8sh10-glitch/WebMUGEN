@@ -133,6 +133,30 @@ describe('CommandMatcher', () => {
     expect(matchesCommand({ name: 'FF', command: 'F, F', time: 10 }, buffer.getFrames())).toBe(true);
   });
 
+  it('does not keep double-tap forward active for the whole hold', () => {
+    const buffer = new InputBuffer(20);
+    buffer.push({ left: false, right: true, up: false, down: false, attack: false });
+    buffer.push({ left: false, right: false, up: false, down: false, attack: false });
+    buffer.push({ left: false, right: true, up: false, down: false, attack: false });
+    buffer.push({ left: false, right: true, up: false, down: false, attack: false });
+    buffer.push({ left: false, right: true, up: false, down: false, attack: false });
+    buffer.push({ left: false, right: true, up: false, down: false, attack: false });
+
+    expect(matchesCommand({ name: 'FF', command: 'F, F', time: 10 }, buffer.getFrames())).toBe(false);
+  });
+
+  it('does not retrigger double-tap back while back is held', () => {
+    const buffer = new InputBuffer(20);
+    buffer.push({ left: true, right: false, up: false, down: false, attack: false });
+    buffer.push({ left: false, right: false, up: false, down: false, attack: false });
+    buffer.push({ left: true, right: false, up: false, down: false, attack: false });
+    buffer.push({ left: true, right: false, up: false, down: false, attack: false });
+    buffer.push({ left: true, right: false, up: false, down: false, attack: false });
+    buffer.push({ left: true, right: false, up: false, down: false, attack: false });
+
+    expect(matchesCommand({ name: 'BB', command: 'B, B', time: 10 }, buffer.getFrames())).toBe(false);
+  });
+
   it('matches simultaneous diagonal hold command', () => {
     const buffer = new InputBuffer();
     buffer.push({ left: false, right: true, up: true, down: false, attack: false });

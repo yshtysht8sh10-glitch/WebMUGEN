@@ -48,9 +48,9 @@ const cmdNotes={
   'Button sequences':'Basic support; simple button commands are kept briefly active so jump/crouch startup routes do not drop the input.',
   'Simultaneous buttons':'Needs full syntax audit.',
   'Release commands':'Needs verification.',
-  'Buffer time':'InputBuffer exists; simple button and double-tap direction commands have short default post-match buffering, but full WinMUGEN timing still needs audit.',
+  'Buffer time':'InputBuffer exists; simple button and double-tap direction commands have short default post-match buffering. Double-tap directions no longer retrigger while the second direction is held, but full WinMUGEN timing still needs audit.',
   'command.time':'Needs verification.',
-  'command.buffer.time':'Parser and command matcher honor explicit buffer.time as a post-match active window; default buffering now covers simple buttons and double-tap directions, but WinMUGEN timing audit still needed.',
+  'command.buffer.time':'Parser and command matcher honor explicit buffer.time as a post-match active window; default buffering covers simple buttons and double-tap directions after release, but WinMUGEN timing audit still needed.',
   '$ direction match':'KFM hold commands work; full syntax needs tests.',
   '/ hold prefix':'Used in common commands. Needs syntax coverage.',
   '+ simultaneous input':'Needs WinMUGEN timing/syntax audit.'

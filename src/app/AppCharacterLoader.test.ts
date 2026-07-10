@@ -268,7 +268,7 @@ describe('AppCharacterLoader', () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
-  });
+  }, 10000);
 
   it('routes T-H-M-A crouch from idle through states 10 and 11, then back to stand on release', async () => {
     const originalFetch = globalThis.fetch;

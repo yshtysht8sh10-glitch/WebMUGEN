@@ -30,8 +30,17 @@ export function matchesCommand(command: CmdCommand, frames: readonly InputFrame[
   }
 
   const bufferTime = Math.max(0, command.bufferTime ?? defaultBufferTime(command));
+  const doubleTapDirection = doubleTapDirectionCommandDirection(command);
   for (let offset = 0; offset <= bufferTime; offset += 1) {
-    if (matchesCommandAtOffset(command, frames.slice(offset))) return true;
+    if (
+      offset > 0 &&
+      doubleTapDirection &&
+      directionContains(frames[0]?.direction ?? 'N', doubleTapDirection)
+    ) {
+      continue;
+    }
+
+    if (matchesCommandAtOffset(command, frames.slice(offset), doubleTapDirection !== null)) return true;
   }
 
   return false;
@@ -68,16 +77,28 @@ function isHeldFinalButton(command: CmdCommand, frames: readonly InputFrame[]): 
 }
 
 function isDoubleTapDirectionCommand(steps: readonly CommandStep[]): boolean {
+  return doubleTapDirectionFromSteps(steps) !== null;
+}
+
+function doubleTapDirectionCommandDirection(command: CmdCommand): DirectionToken | null {
+  return doubleTapDirectionFromSteps(parseCommandSteps(command.command));
+}
+
+function doubleTapDirectionFromSteps(steps: readonly CommandStep[]): DirectionToken | null {
   if (steps.length !== 2) {
-    return false;
+    return null;
   }
 
   const first = singleNonHoldDirection(steps[0]);
   const second = singleNonHoldDirection(steps[1]);
-  return first !== null && first === second;
+  return first !== null && first === second ? first : null;
 }
 
-function matchesCommandAtOffset(command: CmdCommand, frames: readonly InputFrame[]): boolean {
+function matchesCommandAtOffset(
+  command: CmdCommand,
+  frames: readonly InputFrame[],
+  requireFinalStepAtStart = false,
+): boolean {
   const steps = parseCommandSteps(command.command);
   if (steps.length === 0) {
     return false;
@@ -106,11 +127,11 @@ function matchesCommandAtOffset(command: CmdCommand, frames: readonly InputFrame
       frames,
       frameIndex,
       timeLimit,
-      shouldRequireFreshRepeatedDirection(step, steps[stepIndex + 1]),
+      shouldRequireFreshDirection(step, steps[stepIndex + 1]),
       shouldRequireFreshButton(step),
     );
 
-    if (foundIndex < 0) {
+    if (foundIndex < 0 || (requireFinalStepAtStart && stepIndex === steps.length - 1 && foundIndex !== 0)) {
       return false;
     }
 
@@ -198,8 +219,9 @@ function canShareFrame(previousDirectionStep: CommandStep, laterStep: CommandSte
   return previousIsDirectionOnly && laterHasButton;
 }
 
-function shouldRequireFreshRepeatedDirection(step: CommandStep, laterStep: CommandStep | undefined): boolean {
+function shouldRequireFreshDirection(step: CommandStep, laterStep: CommandStep | undefined): boolean {
   const direction = singleNonHoldDirection(step);
+  if (direction !== null && !laterStep) return true;
   const laterDirection = laterStep ? singleNonHoldDirection(laterStep) : null;
   return direction !== null && direction === laterDirection;
 }
@@ -212,8 +234,8 @@ function isFreshDirectionStep(step: CommandStep, frames: readonly InputFrame[], 
   const direction = singleNonHoldDirection(step);
   if (!direction) return true;
 
-  const newerFrame = frames[index - 1];
-  return !newerFrame || !directionContains(newerFrame.direction, direction);
+  const olderFrame = frames[index + 1];
+  return !olderFrame || !directionContains(olderFrame.direction, direction);
 }
 
 function isFreshButtonStep(step: CommandStep, frames: readonly InputFrame[], index: number): boolean {

@@ -22,9 +22,9 @@ Follow `docs/webmugen/development-policy.md`: common movement routing belongs in
 | Button sequences | Partial | Basic support; simple button commands are kept briefly active. | Full sequence timing and cancel windows need audit. |
 | Simultaneous buttons | Partial | Basic syntax exists. | Full parsing/timing behavior needs audit. |
 | Release commands | Untested | `~` syntax needs verification. | Important for real character CMD compatibility. |
-| Buffer time | Partial | InputBuffer exists and default buffering covers simple buttons/double-tap directions. | Exact WinMUGEN timing still needs audit. |
+| Buffer time | Partial | InputBuffer exists and default buffering covers simple buttons/double-tap directions. Double-tap directions do not retrigger while the second direction is held. | Exact WinMUGEN timing still needs audit. |
 | `command.time` | Untested | Parser/runtime status needs verification. | Must be tested separately from buffer time. |
-| `command.buffer.time` | Partial | Parser and matcher honor explicit post-match active window. | Exact WinMUGEN behavior still needs audit. |
+| `command.buffer.time` | Partial | Parser and matcher honor explicit post-match active window; double-tap direction buffering applies after release, not during a held second tap. | Exact WinMUGEN behavior still needs audit. |
 | `$` direction match | Partial | KFM hold commands work. | Full syntax and facing-relative behavior need tests. |
 | `/` hold prefix | Partial | Used in common commands. | Syntax coverage is incomplete. |
 
