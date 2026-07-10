@@ -4,6 +4,9 @@ import { createInitialGameState } from '../core/engine/GameState';
 import type { GameState } from '../core/engine/types';
 import { createSampleCharacterAssets, loadAppCharacter } from './AppCharacterLoader';
 import type { CharacterSourceFile } from '../core/character/CharacterTypes';
+import type { AirAction, AirDocument, AirElement } from '../parser/air/AirTypes';
+import type { ImageDataSpritePack } from '../core/sprite/ImageDataSpriteTypes';
+import { spriteKey } from '../core/sprite/SpritePackLoader';
 import {
   BrowserInput,
   DEFAULT_INPUT_CONFIG,
@@ -65,6 +68,7 @@ import {
 } from './RuntimeHistoryWindow';
 import {
   appendReadableRuntimeEntry,
+  clearReadableRuntimeLogStores,
   createRuntimeLogIndexEntry,
   formatAllReadableRuntimeEntriesCopy,
   formatReadableRuntimeEntryCopy,
@@ -173,6 +177,8 @@ export function WebMugenApp() {
   const [runtimeSettings, setRuntimeSettingsState] = useState<RuntimeSettings>(runtimeSettingsRef.current);
   const [characterPath, setCharacterPathState] = useState(loadCharacterPath());
   const [cnsSourceFiles, setCnsSourceFiles] = useState<CharacterSourceFile[]>([]);
+  const [loadedAir, setLoadedAir] = useState<AirDocument | null>(null);
+  const [loadedSprites, setLoadedSprites] = useState<ImageDataSpritePack | null>(null);
   const [selectedCnsSource, setSelectedCnsSource] = useState<CnsSourceSelection>(null);
   const cnsSourceScrollPositionsRef = useRef<Record<string, number>>({});
 
@@ -228,6 +234,8 @@ export function WebMugenApp() {
       p1CommandBufferRef.current.clear();
       p2CommandBufferRef.current.clear();
       setSelectedCnsSource(null);
+      setLoadedAir(null);
+      setLoadedSprites(null);
       setStateTransitionLogLines(['StateNoが変化すると、ここに遷移だけが残ります。']);
 
       const loadResult = await loadAppCharacter(characterPath);
@@ -241,6 +249,8 @@ export function WebMugenApp() {
           : loadedCharacter.cns,
       };
       setCnsSourceFiles(character.cnsSourceFiles ?? []);
+      setLoadedAir(character.air);
+      setLoadedSprites(character.sprites);
       cnsCoverageRef.current = analyzeCnsCoverage(character.cns);
       setCoverageDebugLines(formatCnsCoverageDebugOverlay(cnsCoverageRef.current));
 
@@ -467,6 +477,22 @@ export function WebMugenApp() {
     setAiHistoryWindow({ mode: 'latest' });
   };
 
+  const clearRuntimeLogs = () => {
+    runtimeHistoryRef.current = [];
+    clearReadableRuntimeLogStores({
+      indexStore: readableIndexStoreRef.current,
+      entryStore: readableEntryStoreRef.current,
+    });
+    stateTransitionLogRef.current = [];
+    lastRuntimeSignatureRef.current = '';
+    lastReadableRuntimeSignatureRef.current = '';
+    nextRuntimeLogEntryIdRef.current = 1;
+    setRuntimeLogIndexEntries([]);
+    setSelectedReadableEntry(null);
+    setStateTransitionLogLines(['history cleared']);
+    invalidateRuntimeHistoryViews();
+  };
+
   const setRuntimeSettings = (nextSettings: RuntimeSettings) => {
     const normalized = normalizeRuntimeSettings(nextSettings);
     runtimeSettingsRef.current = normalized;
@@ -513,6 +539,7 @@ export function WebMugenApp() {
         readableEntryStoreRef={readableEntryStoreRef}
         copyStatus={copyStatus}
         onCopy={handleCopy}
+        onClearLogs={clearRuntimeLogs}
       />
 
       <section className="debug-panel">
@@ -525,6 +552,8 @@ export function WebMugenApp() {
             selectedSource={selectedCnsSource}
             onOpenSource={setSelectedCnsSource}
             sourceScrollPositionsRef={cnsSourceScrollPositionsRef}
+            air={loadedAir}
+            sprites={loadedSprites}
           />
         )}
         {activeDebugTab === 'runtime-human' && (
@@ -539,6 +568,8 @@ export function WebMugenApp() {
             selectedCnsSource={selectedCnsSource}
             onOpenCnsSource={setSelectedCnsSource}
             sourceScrollPositionsRef={cnsSourceScrollPositionsRef}
+            air={loadedAir}
+            sprites={loadedSprites}
           />
         )}
         {activeDebugTab === 'runtime-ai' && (
@@ -1109,6 +1140,7 @@ function CopyToolbarV2({
   readableEntryStoreRef,
   copyStatus,
   onCopy,
+  onClearLogs,
 }: {
   activeTab: DebugTab;
   visibleAiLines: string[];
@@ -1118,6 +1150,7 @@ function CopyToolbarV2({
   readableEntryStoreRef: MutableRefObject<Map<number, ReadableRuntimeEntry>>;
   copyStatus: string;
   onCopy: (label: string, text: string) => void;
+  onClearLogs: () => void;
 }) {
   if (activeTab !== 'runtime-human' && activeTab !== 'runtime-ai') return null;
   const visibleHumanLines = selectedReadableEntry?.lines ?? ['selected frame=-'];
@@ -1159,6 +1192,9 @@ function CopyToolbarV2({
             </button>
           </>
         )}
+        <button type="button" className="danger" onClick={onClearLogs}>
+          ログをクリア
+        </button>
       </div>
       {copyStatus && <span className="copy-status">{copyStatus}</span>}
     </div>
@@ -1240,6 +1276,8 @@ function StaticDebugPanel({
   selectedSource,
   onOpenSource,
   sourceScrollPositionsRef,
+  air,
+  sprites,
 }: {
   loadMessage: string;
   staticDebugInfo: StaticDebugInfo;
@@ -1248,13 +1286,15 @@ function StaticDebugPanel({
   selectedSource: CnsSourceSelection;
   onOpenSource: (selection: CnsSourceSelection) => void;
   sourceScrollPositionsRef: MutableRefObject<Record<string, number>>;
+  air: AirDocument | null;
+  sprites: ImageDataSpritePack | null;
 }) {
   return (
     <div className="debug-grid">
       <DebugBlock title="Character / DEF 読込結果" lines={[loadMessage, ...staticDebugInfo.characterRows]} />
       <DebugBlock title="CMD コマンド一覧" lines={staticDebugInfo.commandRows} />
       <DebugBlock title="CNS対応状況" lines={coverageDebugLines} />
-      <CharacterSourceFilesViewer files={sourceFiles} selection={selectedSource} onSelect={onOpenSource} scrollPositionsRef={sourceScrollPositionsRef} />
+      <CharacterSourceFilesViewer files={sourceFiles} selection={selectedSource} onSelect={onOpenSource} scrollPositionsRef={sourceScrollPositionsRef} air={air} sprites={sprites} />
       <StateDefListPanel rows={staticDebugInfo.stateRows} />
     </div>
   );
@@ -1329,8 +1369,8 @@ const RuntimeFrameIndexList = memo(function RuntimeFrameIndexList({
           >
             <span>{entry.timestamp}</span>
             <span>f={entry.frameNo}</span>
-            <span>P1 S={entry.p1StateNo} A={entry.p1AnimNo}</span>
-            <span>P2 S={entry.p2StateNo} A={entry.p2AnimNo}</span>
+            <span>P1 <b className="runtime-index-state">S={entry.p1StateNo}</b> <b className="runtime-index-anim">A={entry.p1AnimNo}</b></span>
+            <span>P2 <b className="runtime-index-state">S={entry.p2StateNo}</b> <b className="runtime-index-anim">A={entry.p2AnimNo}</b></span>
           </button>
         ))}
       </div>
@@ -1373,6 +1413,8 @@ function HumanRuntimePanel({
   selectedCnsSource,
   onOpenCnsSource,
   sourceScrollPositionsRef,
+  air,
+  sprites,
 }: {
   indexEntries: RuntimeLogIndexEntry[];
   selectedEntry: ReadableRuntimeEntry | null;
@@ -1384,6 +1426,8 @@ function HumanRuntimePanel({
   selectedCnsSource: CnsSourceSelection;
   onOpenCnsSource: (selection: CnsSourceSelection) => void;
   sourceScrollPositionsRef: MutableRefObject<Record<string, number>>;
+  air: AirDocument | null;
+  sprites: ImageDataSpritePack | null;
 }) {
   const stateTransitionLogLines: string[] = [];
   const onJumpFrame = onSelectFrame;
@@ -1424,6 +1468,8 @@ function HumanRuntimePanel({
           selection={selectedCnsSource}
           onSelect={onOpenCnsSource}
           scrollPositionsRef={sourceScrollPositionsRef}
+          air={air}
+          sprites={sprites}
         />
       ) : null}
     </section>
@@ -1636,6 +1682,7 @@ function ReadableRuntimeHistoryLine({
     return <div className="readable-history-section">State状況</div>;
   }
   if (trimmed.startsWith('P1 StateNo=')) return <ReadableRuntimeHistoryMeta line={trimmed} />;
+  if (trimmed.startsWith('StateDef ')) return <ReadableStateDefLink line={trimmed} onOpenCnsSource={onOpenCnsSource} />;
   if (trimmed.startsWith('keys=')) return <div className="readable-history-keys">{trimmed}</div>;
   if (trimmed.startsWith('Damage=')) return <div className="readable-history-damage">{trimmed}</div>;
   return <div className="readable-history-line">{trimmed}</div>;
@@ -1662,6 +1709,26 @@ function ReadableRuntimeHistoryMeta({ line }: { line: string }) {
       <span>P1 </span>
       <span className="readable-state-badge">StateNo={match[1]}</span>
       <span> {match[2]}</span>
+    </div>
+  );
+}
+
+function ReadableStateDefLink({
+  line,
+  onOpenCnsSource,
+}: {
+  line: string;
+  onOpenCnsSource: (selection: CnsSourceSelection) => void;
+}) {
+  const match = line.match(/^StateDef\s+(-?\d+)(?:\s+@\s+(.+):(\d+))?$/);
+  if (!match?.[2] || !match[3]) return <div className="readable-history-statedef">{line}</div>;
+  const selection = { path: match[2], line: Number(match[3]) };
+  return (
+    <div className="readable-history-statedef">
+      <button type="button" onClick={() => onOpenCnsSource(selection)}>
+        StateDef {match[1]}
+      </button>
+      <span>{selection.path}:{selection.line}</span>
     </div>
   );
 }
@@ -1702,21 +1769,34 @@ function CharacterSourceFilesViewer({
   selection,
   onSelect,
   scrollPositionsRef,
+  air,
+  sprites,
 }: {
   files: CharacterSourceFile[];
   selection: CnsSourceSelection;
   onSelect: (selection: CnsSourceSelection) => void;
   scrollPositionsRef?: MutableRefObject<Record<string, number>>;
+  air?: AirDocument | null;
+  sprites?: ImageDataSpritePack | null;
 }) {
   const localScrollPositionsRef = useRef<Record<string, number>>({});
   const effectiveScrollPositionsRef = scrollPositionsRef ?? localScrollPositionsRef;
   const codeRef = useRef<HTMLDivElement | null>(null);
+  const [selectedAirActionNo, setSelectedAirActionNo] = useState<number | null>(null);
   const fallbackSelection = files[0] ? { path: files[0].path, line: 1 } : null;
   const effectiveSelection = selection && files.some((file) => file.path === selection.path) ? selection : fallbackSelection;
   const selectedFile = effectiveSelection ? files.find((file) => file.path === effectiveSelection.path) : null;
   const selectedLineId = effectiveSelection ? cnsSourceLineId(effectiveSelection.path, effectiveSelection.line) : null;
   const selectedPath = selectedFile?.path ?? '';
   const selectedLine = effectiveSelection?.line ?? 1;
+  const sourceOutline = useMemo(
+    () => selectedFile ? createSourceOutline(selectedFile) : [],
+    [selectedFile],
+  );
+  const airActions = selectedFile?.kind === 'air' ? sourceOutline.filter((item) => item.kind === 'air-action') : [];
+  const effectiveAirActionNo = selectedFile?.kind === 'air'
+    ? selectedAirActionNo ?? (airActions[0] ? Number(airActions[0].value) : null)
+    : null;
 
   useEffect(() => {
     const codeElement = codeRef.current;
@@ -1730,9 +1810,25 @@ function CharacterSourceFilesViewer({
     });
   }, [effectiveScrollPositionsRef, selectedLine, selectedLineId, selectedPath]);
 
+  useEffect(() => {
+    if (selectedFile?.kind !== 'air') {
+      setSelectedAirActionNo(null);
+      return;
+    }
+    const currentAction = findAirActionForLine(sourceOutline, selectedLine);
+    if (currentAction !== null) setSelectedAirActionNo(currentAction);
+    else if (selectedAirActionNo === null && airActions[0]) setSelectedAirActionNo(Number(airActions[0].value));
+  }, [airActions, selectedAirActionNo, selectedFile?.kind, selectedLine, sourceOutline]);
+
   const handleCodeScroll = () => {
     if (!selectedPath || !codeRef.current) return;
     effectiveScrollPositionsRef.current[selectedPath] = codeRef.current.scrollTop;
+  };
+
+  const handleOutlineClick = (item: SourceOutlineItem) => {
+    if (!selectedFile) return;
+    if (item.kind === 'air-action') setSelectedAirActionNo(Number(item.value));
+    onSelect({ path: selectedFile.path, line: item.line });
   };
 
   if (files.length === 0) {
@@ -1772,6 +1868,35 @@ function CharacterSourceFilesViewer({
             </button>
           ))}
         </div>
+        <div className="character-source-detail">
+          <div className="character-source-summary">
+            <h3>Summary</h3>
+            {sourceOutline.length === 0 ? (
+              <div className="character-source-summary-empty">outline=-</div>
+            ) : (
+              <div className="character-source-summary-list">
+                {sourceOutline.map((item) => (
+                  <button
+                    key={`${item.kind}-${item.line}-${item.label}`}
+                    type="button"
+                    onClick={() => handleOutlineClick(item)}
+                    className={item.kind === 'air-action' && item.value === effectiveAirActionNo ? 'active' : ''}
+                    title={`line ${item.line}`}
+                  >
+                    <span>{item.label}</span>
+                    <small>:{item.line}</small>
+                  </button>
+                ))}
+              </div>
+            )}
+            {selectedFile.kind === 'air' ? (
+              <AirAnimationPreview
+                actionNo={effectiveAirActionNo}
+                air={air ?? null}
+                sprites={sprites ?? null}
+              />
+            ) : null}
+          </div>
         <div className="character-source-content">
           <div className="cns-source-title">
             <strong>{selectedFile.label}</strong>
@@ -1794,6 +1919,7 @@ function CharacterSourceFilesViewer({
             })}
           </div>
         </div>
+        </div>
       </div>
     </section>
   );
@@ -1806,6 +1932,200 @@ function formatSourceKind(file: CharacterSourceFile): string {
 
 function cnsSourceLineId(path: string, line: number): string {
   return `cns-source-${path.replace(/[^a-z0-9_-]+/gi, '-')}-${line}`;
+}
+
+type SourceOutlineItem = {
+  kind: 'air-action' | 'statedef' | 'command' | 'section';
+  label: string;
+  line: number;
+  value: number | string;
+};
+
+export function createSourceOutline(file: CharacterSourceFile): SourceOutlineItem[] {
+  const lines = file.text.split(/\r?\n/);
+  const items: SourceOutlineItem[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const lineNo = index + 1;
+    const line = lines[index].trim();
+    const airMatch = line.match(/^\[?\s*Begin\s+Action\s+(-?\d+)\s*\]?$/i);
+    if (airMatch) {
+      const actionNo = Number(airMatch[1]);
+      items.push({ kind: 'air-action', label: `Begin Action ${actionNo}`, line: lineNo, value: actionNo });
+      continue;
+    }
+    const stateMatch = line.match(/^\[\s*StateDef\s+(-?\d+)\s*\]$/i);
+    if (stateMatch) {
+      const stateNo = Number(stateMatch[1]);
+      items.push({ kind: 'statedef', label: `StateDef ${stateNo}`, line: lineNo, value: stateNo });
+      continue;
+    }
+    const commandSection = line.match(/^\[\s*Command\s*\]$/i);
+    if (commandSection) {
+      const commandName = findFollowingName(lines, index + 1);
+      items.push({ kind: 'command', label: commandName ? `Command ${commandName}` : 'Command', line: lineNo, value: commandName ?? lineNo });
+      continue;
+    }
+    const sectionMatch = line.match(/^\[\s*([^\]]+)\s*\]$/);
+    if (items.length < 120 && sectionMatch && file.kind === 'def') {
+      items.push({ kind: 'section', label: sectionMatch[1], line: lineNo, value: sectionMatch[1] });
+    }
+  }
+  return items.slice(0, 500);
+}
+
+function findFollowingName(lines: readonly string[], startIndex: number): string | null {
+  for (let index = startIndex; index < Math.min(lines.length, startIndex + 8); index += 1) {
+    const match = lines[index].match(/^\s*name\s*=\s*"?([^"]+?)"?\s*$/i);
+    if (match) return match[1].trim();
+    if (/^\s*\[/.test(lines[index])) return null;
+  }
+  return null;
+}
+
+export function findAirActionForLine(items: readonly SourceOutlineItem[], line: number): number | null {
+  let current: number | null = null;
+  for (const item of items) {
+    if (item.kind !== 'air-action') continue;
+    if (item.line > line) break;
+    current = Number(item.value);
+  }
+  return current;
+}
+
+function AirAnimationPreview({
+  actionNo,
+  air,
+  sprites,
+}: {
+  actionNo: number | null;
+  air: AirDocument | null;
+  sprites: ImageDataSpritePack | null;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const spriteCanvasCacheRef = useRef<Map<string, HTMLCanvasElement>>(new Map());
+  const [playing, setPlaying] = useState(true);
+  const [frameIndex, setFrameIndex] = useState(0);
+  const action = actionNo === null ? null : air?.actions.find((candidate) => candidate.actionNo === actionNo) ?? null;
+
+  useEffect(() => {
+    setFrameIndex(0);
+  }, [actionNo]);
+
+  useEffect(() => {
+    if (!action || !playing) return;
+    const interval = window.setInterval(() => {
+      setFrameIndex((index) => (action.elements.length === 0 ? 0 : (index + 1) % action.elements.length));
+    }, Math.max(50, getAirElementDurationMs(action.elements[frameIndex])));
+    return () => window.clearInterval(interval);
+  }, [action, frameIndex, playing]);
+
+  useEffect(() => {
+    drawAirPreview(canvasRef.current, action, frameIndex, sprites, spriteCanvasCacheRef.current);
+  }, [action, frameIndex, sprites]);
+
+  const element = action?.elements[frameIndex] ?? null;
+
+  return (
+    <div className="air-preview">
+      <div className="air-preview-header">
+        <strong>AIR Preview</strong>
+        <button type="button" onClick={() => setPlaying((value) => !value)}>
+          {playing ? 'Pause' : 'Play'}
+        </button>
+      </div>
+      <canvas ref={canvasRef} width={220} height={160} />
+      <div className="air-preview-meta">
+        {action ? (
+          <>
+            <span>Action {action.actionNo}</span>
+            <span>frame {action.elements.length === 0 ? '-' : frameIndex + 1}/{action.elements.length}</span>
+            <span>{element ? `sprite ${element.groupNo},${element.imageNo} time=${element.duration}` : 'sprite=-'}</span>
+          </>
+        ) : (
+          <span>Action not selected</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function getAirElementDurationMs(element: AirElement | undefined): number {
+  if (!element) return 120;
+  return Math.max(1, element.duration) * DEFAULT_FRAME_INTERVAL_MS;
+}
+
+function drawAirPreview(
+  canvas: HTMLCanvasElement | null,
+  action: AirAction | null,
+  frameIndex: number,
+  sprites: ImageDataSpritePack | null,
+  cache: Map<string, HTMLCanvasElement>,
+): void {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#020617';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = 'rgba(148, 163, 184, 0.35)';
+  ctx.strokeRect(0.5, 0.5, canvas.width - 1, canvas.height - 1);
+  ctx.strokeStyle = 'rgba(96, 165, 250, 0.45)';
+  ctx.beginPath();
+  ctx.moveTo(canvas.width / 2 - 28, canvas.height - 34);
+  ctx.lineTo(canvas.width / 2 + 28, canvas.height - 34);
+  ctx.moveTo(canvas.width / 2, canvas.height - 62);
+  ctx.lineTo(canvas.width / 2, canvas.height - 8);
+  ctx.stroke();
+
+  const element = action?.elements[frameIndex] ?? null;
+  if (!element) {
+    drawAirPreviewText(ctx, 'no frame');
+    return;
+  }
+
+  const spriteCanvas = getSpriteCanvas(sprites, element.groupNo, element.imageNo, cache);
+  if (!spriteCanvas) {
+    drawAirPreviewText(ctx, `missing ${element.groupNo},${element.imageNo}`);
+    return;
+  }
+
+  const flipX = element.flip?.toUpperCase().includes('H') ?? false;
+  ctx.save();
+  ctx.translate(canvas.width / 2, canvas.height - 34);
+  ctx.scale(flipX ? -1 : 1, 1);
+  const sprite = sprites?.sprites.get(spriteKey(element.groupNo, element.imageNo));
+  const xAxis = sprite?.xAxis ?? spriteCanvas.width / 2;
+  const yAxis = sprite?.yAxis ?? spriteCanvas.height;
+  ctx.drawImage(spriteCanvas, -xAxis + element.offsetX, -yAxis + element.offsetY);
+  ctx.restore();
+}
+
+function drawAirPreviewText(ctx: CanvasRenderingContext2D, text: string): void {
+  ctx.fillStyle = '#bfdbfe';
+  ctx.font = '12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(text, ctx.canvas.width / 2, ctx.canvas.height / 2);
+}
+
+function getSpriteCanvas(
+  sprites: ImageDataSpritePack | null,
+  groupNo: number,
+  imageNo: number,
+  cache: Map<string, HTMLCanvasElement>,
+): HTMLCanvasElement | null {
+  const key = spriteKey(groupNo, imageNo);
+  const cached = cache.get(key);
+  if (cached) return cached;
+  const sprite = sprites?.sprites.get(key);
+  if (!sprite) return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = sprite.imageData.width;
+  canvas.height = sprite.imageData.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.putImageData(sprite.imageData, 0, 0);
+  cache.set(key, canvas);
+  return canvas;
 }
 
 function RuntimeHistoryPanel({
@@ -2323,6 +2643,7 @@ function appendReadableRuntimeHistoryIfNeeded({
   const lines = freezeHistoryLines([
     `---- ${timestamp} frame=${frameNo} ----`,
     `P1 StateNo=${p1.stateNo} Time=${p1.stateTime} AnimNo=${p1.animNo}`,
+    formatReadableStateDefLine(cns, p1.stateNo),
     keySummary,
     `State状況:`,
     ...triggerSummary.split('\n').map((line) => `  ${line}`),
@@ -2336,6 +2657,15 @@ function appendReadableRuntimeHistoryIfNeeded({
     entry: { id, frameNo, lines },
   });
   setIndexEntries(visibleEntries);
+}
+
+function formatReadableStateDefLine(cns: CnsDocument, stateNo: number): string {
+  const stateDef = cns.states.find((state) => state.stateNo === stateNo);
+  if (!stateDef) return 'StateDef=-';
+  const source = stateDef.sourceFile && stateDef.sourceLine
+    ? ` @ ${stateDef.sourceFile}:${stateDef.sourceLine}`
+    : '';
+  return `StateDef ${stateNo}${source}`;
 }
 
 function appendStateTransitionLogIfNeeded({

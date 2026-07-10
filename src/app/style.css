@@ -121,6 +121,15 @@ canvas {
   background: #1d4ed8;
 }
 
+.copy-toolbar button.danger {
+  background: #7f1d1d;
+  border-color: #ef4444;
+}
+
+.copy-toolbar button.danger:hover {
+  background: #991b1b;
+}
+
 .copy-status {
   color: #a7f3d0;
   font-size: 13px;
@@ -384,6 +393,22 @@ canvas {
   color: #ffffff;
 }
 
+.runtime-index-state {
+  background: rgba(37, 99, 235, 0.26);
+  border: 1px solid rgba(96, 165, 250, 0.42);
+  border-radius: 4px;
+  color: #bfdbfe;
+  padding: 1px 4px;
+}
+
+.runtime-index-anim {
+  background: rgba(190, 18, 60, 0.24);
+  border: 1px solid rgba(251, 113, 133, 0.4);
+  border-radius: 4px;
+  color: #fecdd3;
+  padding: 1px 4px;
+}
+
 .history-latest-button {
   background: #1d4ed8;
   border: 1px solid #60a5fa;
@@ -476,11 +501,40 @@ canvas {
 }
 
 .readable-history-meta,
+.readable-history-statedef,
 .readable-history-keys,
 .readable-history-damage,
 .readable-history-line {
   color: #dbeafe;
   margin-top: 4px;
+}
+
+.readable-history-statedef {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.readable-history-statedef button {
+  background: rgba(37, 99, 235, 0.28);
+  border: 1px solid rgba(96, 165, 250, 0.55);
+  border-radius: 4px;
+  color: #bfdbfe;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+  padding: 2px 7px;
+}
+
+.readable-history-statedef button:hover {
+  background: rgba(37, 99, 235, 0.45);
+  color: #ffffff;
+}
+
+.readable-history-statedef span {
+  color: #93c5fd;
+  font-size: 11px;
 }
 
 .readable-state-badge {
@@ -657,14 +711,15 @@ canvas {
 .character-source-layout {
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(180px, 260px) minmax(0, 1fr);
+  grid-template-columns: 1fr;
 }
 
 .character-source-file-list {
   align-content: start;
   display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
-  max-height: 520px;
+  max-height: 220px;
   overflow: auto;
 }
 
@@ -704,6 +759,111 @@ canvas {
 
 .character-source-content {
   min-width: 0;
+}
+
+.character-source-detail {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  min-width: 0;
+}
+
+.character-source-summary {
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.5);
+  min-width: 0;
+  padding: 10px;
+}
+
+.character-source-summary h3 {
+  color: #e2e8f0;
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+
+.character-source-summary-list {
+  display: grid;
+  gap: 4px;
+  max-height: 280px;
+  overflow: auto;
+  padding-right: 3px;
+}
+
+.character-source-summary-list button {
+  align-items: center;
+  background: #0f172a;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  color: #dbeafe;
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  font-size: 12px;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 5px 7px;
+  text-align: left;
+}
+
+.character-source-summary-list button.active,
+.character-source-summary-list button:hover {
+  background: #1d4ed8;
+  border-color: #60a5fa;
+  color: #ffffff;
+}
+
+.character-source-summary-list button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.character-source-summary-list button small,
+.character-source-summary-empty {
+  color: #93c5fd;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+}
+
+.air-preview {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.air-preview-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.air-preview-header strong {
+  color: #f8fafc;
+  font-size: 13px;
+}
+
+.air-preview-header button {
+  background: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  color: #e2e8f0;
+  cursor: pointer;
+  font-weight: 800;
+  padding: 3px 8px;
+}
+
+.air-preview canvas {
+  background: #020617;
+  border: 1px solid #334155;
+  image-rendering: pixelated;
+  max-width: 100%;
+}
+
+.air-preview-meta {
+  color: #bfdbfe;
+  display: grid;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  gap: 2px;
 }
 
 .cns-source-title {
@@ -772,6 +932,11 @@ canvas {
   }
 
   .character-source-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .character-source-file-list,
+  .character-source-detail {
     grid-template-columns: 1fr;
   }
 

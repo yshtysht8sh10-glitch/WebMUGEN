@@ -60,6 +60,10 @@ If a route is missing from the static tab, suspect loader/parser/merge before ru
 
 `Character Files` shows loaded character text files and the applied common CNS. It should span the full static-info width so long CNS/AIR files remain readable. Source scrolling is remembered per file; changing tabs or switching files must not reuse another file's scroll position.
 
+The file list is shown as a compact multi-column list above the source reader. The source reader itself is on the next row with a summary pane on the left and text on the right. The summary pane should expose useful jump points such as AIR `Begin Action`, CNS `StateDef`, CMD `Command`, and DEF sections. Summary items jump the text reader to the corresponding source line.
+
+AIR files also include a small debug animation preview. The preview uses the loaded AIR action and sprite pack when sprites are available, and falls back to a missing-sprite label when an element cannot be drawn. This is a diagnostic aid for checking whether the AIR action and SFF sprite references line up.
+
 ## Runtime history tab
 
 Runtime history records snapshots over time. It exists because live values disappear too quickly during movement and transitions.
@@ -108,6 +112,10 @@ The runtime-history tabs render a visible window instead of the full retained hi
 Retained runtime-history lines should stay outside React render state. React should track only visible-window controls, lightweight index rows, selected detail entries, and invalidation counters; otherwise every appended log copies and reconciles thousands of retained lines even when the DOM window is capped.
 
 The human runtime-history view should use a frame index on the left and a selected one-frame detail pane on the right. The index is populated whenever a human detail log is generated, including frames where StateNo did not change. Clicking an index row loads that frame's retained detail from the non-rendering store. New log entries must not automatically replace the selected detail pane; use the latest-frame action for that.
+
+Human-readable detail entries include a `StateDef` source link. Clicking it should open `Character Files` at the StateDef header line so the active state can be inspected quickly.
+
+Runtime log tabs should provide a clear action that drops retained human and AI logs together. This is for long debugging sessions where retained history is no longer useful and memory/DOM pressure should be reset.
 
 Human-facing State status entries can be much larger than AI entries, so the rendered window needs a line-count cap in addition to the entry-count cap.
 

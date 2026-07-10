@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   appendReadableRuntimeEntry,
+  clearReadableRuntimeLogStores,
   formatAllReadableRuntimeEntriesCopy,
   getLatestReadableRuntimeEntry,
   getReadableRuntimeEntry,
@@ -101,5 +102,17 @@ describe('RuntimeLogIndex', () => {
 
     expect(formatAllReadableRuntimeEntriesCopy({ indexStore, entryStore })).toContain('detail 30');
     expect(formatAllReadableRuntimeEntriesCopy({ indexStore, entryStore })).toContain('detail 31');
+  });
+
+  it('clears readable index and retained detail stores together', () => {
+    const indexStore: RuntimeLogIndexEntry[] = [];
+    const entryStore = new Map<number, ReadableRuntimeEntry>();
+
+    appendReadableRuntimeEntry({ indexStore, entryStore, indexEntry: indexEntry(1, 40), entry: readableEntry(1, 40) });
+    const visible = clearReadableRuntimeLogStores({ indexStore, entryStore });
+
+    expect(visible).toEqual([]);
+    expect(indexStore).toEqual([]);
+    expect(entryStore.size).toBe(0);
   });
 });

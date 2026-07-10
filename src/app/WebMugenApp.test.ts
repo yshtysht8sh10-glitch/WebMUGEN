@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MutableRefObject } from 'react';
 import type { CnsRuntimeTrace } from '../core/cns/CnsStateRuntime';
-import { appendRuntimeHistoryIfNeeded, stripReadableRuntimeValueSummaries } from './WebMugenApp';
+import { appendRuntimeHistoryIfNeeded, createSourceOutline, findAirActionForLine, stripReadableRuntimeValueSummaries } from './WebMugenApp';
 
 describe('WebMugenApp runtime history', () => {
   it('stores immutable line snapshots instead of live debug array references', () => {
@@ -100,6 +100,48 @@ describe('WebMugenApp runtime history', () => {
       '**ChangeState -> 0** | NG @ char.cns:10',
       'OK `trigger1=AnimTime = 0',
     ].join('\n'));
+  });
+
+  it('builds source outlines for AIR, CNS, and CMD files', () => {
+    expect(createSourceOutline({
+      path: 'demo.air',
+      label: 'demo.air',
+      kind: 'air',
+      text: '[Begin Action 106]\n0,0,0,0,5\nBegin Action 107\n0,0,0,0,5',
+    }).map((item) => `${item.label}:${item.line}`)).toEqual([
+      'Begin Action 106:1',
+      'Begin Action 107:3',
+    ]);
+
+    expect(createSourceOutline({
+      path: 'demo.cns',
+      label: 'demo.cns',
+      kind: 'cns',
+      text: '[StateDef 50]\ntype = A\n[StateDef 52]\ntype = S',
+    }).map((item) => `${item.label}:${item.line}`)).toEqual([
+      'StateDef 50:1',
+      'StateDef 52:3',
+    ]);
+
+    expect(createSourceOutline({
+      path: 'demo.cmd',
+      label: 'demo.cmd',
+      kind: 'cmd',
+      text: '[Command]\nname = "FF"\ncommand = F, F',
+    }).map((item) => `${item.label}:${item.line}`)).toEqual(['Command FF:1']);
+  });
+
+  it('finds the active AIR action for a source line', () => {
+    const outline = createSourceOutline({
+      path: 'demo.air',
+      label: 'demo.air',
+      kind: 'air',
+      text: 'Begin Action 100\n0,0,0,0,5\nBegin Action 101\n0,0,0,0,5',
+    });
+
+    expect(findAirActionForLine(outline, 1)).toBe(100);
+    expect(findAirActionForLine(outline, 2)).toBe(100);
+    expect(findAirActionForLine(outline, 3)).toBe(101);
   });
 });
 

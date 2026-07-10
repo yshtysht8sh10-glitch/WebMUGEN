@@ -113,3 +113,15 @@ export function formatAllReadableRuntimeEntriesCopy({
     .map((entry) => entry.lines.join('\n'))
     .join('\n');
 }
+
+export function clearReadableRuntimeLogStores({
+  indexStore,
+  entryStore,
+}: {
+  indexStore: RuntimeLogIndexEntry[];
+  entryStore: Map<number, ReadableRuntimeEntry>;
+}): RuntimeLogIndexEntry[] {
+  indexStore.length = 0;
+  entryStore.clear();
+  return [];
+}

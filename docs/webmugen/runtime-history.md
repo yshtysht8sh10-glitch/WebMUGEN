@@ -86,6 +86,9 @@ The human-facing runtime history uses a lightweight frame index plus a selected 
 - `最新フレームを表示` loads the newest retained detail entry on demand.
 - The frame index can auto-scroll to the newest visible index row or stay in fully manual scrolling mode.
 - The visible index is capped separately from the retained store, so older retained frames can still be copied or loaded by frame when exposed through tooling.
+- Frame index rows visually distinguish state numbers and animation numbers so repeated-state failures can be scanned quickly.
+- Human detail entries include a `StateDef` source link that opens the matching source file and line in `Character Files`.
+- A runtime log clear action resets retained human entries, the lightweight frame index, AI history, and signatures together.
 
 This structure prevents thousands of retained detail rows from becoming DOM nodes. In normal use the right pane renders one frame's human detail log.
 
