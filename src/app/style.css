@@ -326,6 +326,56 @@ canvas {
   grid-template-columns: minmax(300px, 0.75fr) minmax(0, 1.35fr);
 }
 
+.runtime-frame-index {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  max-height: 620px;
+  overflow: auto;
+}
+
+.runtime-frame-index-row {
+  align-items: center;
+  background: rgba(15, 23, 42, 0.72);
+  border: 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  color: #dbeafe;
+  cursor: pointer;
+  display: grid;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  gap: 8px;
+  grid-template-columns: 64px 74px minmax(92px, 1fr) minmax(92px, 1fr);
+  line-height: 1.35;
+  padding: 7px 9px;
+  text-align: left;
+  width: 100%;
+}
+
+.runtime-frame-index-row:hover,
+.runtime-frame-index-row.selected {
+  background: rgba(37, 99, 235, 0.28);
+  color: #ffffff;
+}
+
+.history-latest-button {
+  background: #1d4ed8;
+  border: 1px solid #60a5fa;
+  border-radius: 4px;
+  color: #eff6ff;
+  cursor: pointer;
+  font-weight: 800;
+  margin: 0 0 8px;
+  padding: 5px 10px;
+}
+
+.history-selected-frame,
+.history-empty {
+  color: #bfdbfe;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  font-weight: 800;
+  margin: 0 0 8px;
+}
+
 .runtime-history-panel h2 {
   color: #e2e8f0;
   font-size: 15px;

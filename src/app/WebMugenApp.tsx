@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { CanvasRenderer } from '../renderer/canvas2d/CanvasRenderer';
 import { createInitialGameState } from '../core/engine/GameState';
 import type { GameState } from '../core/engine/types';
@@ -63,6 +63,16 @@ import {
   type RuntimeHistoryWindow,
   type VisibleRuntimeHistory,
 } from './RuntimeHistoryWindow';
+import {
+  appendReadableRuntimeEntry,
+  createRuntimeLogIndexEntry,
+  formatAllReadableRuntimeEntriesCopy,
+  formatReadableRuntimeEntryCopy,
+  getLatestReadableRuntimeEntry,
+  getReadableRuntimeEntry,
+  type ReadableRuntimeEntry,
+  type RuntimeLogIndexEntry,
+} from './RuntimeLogIndex';
 
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/T-H-M-A.zip';
 const ENABLE_RUNTIME_FALLBACKS = false;
@@ -128,7 +138,9 @@ export function WebMugenApp() {
   const lastFrameTickTimeRef = useRef<number | null>(null);
   const frameNoRef = useRef(0);
   const runtimeHistoryRef = useRef<string[]>([]);
-  const readableRuntimeHistoryRef = useRef<string[]>([]);
+  const readableEntryStoreRef = useRef<Map<number, ReadableRuntimeEntry>>(new Map());
+  const readableIndexStoreRef = useRef<RuntimeLogIndexEntry[]>([]);
+  const nextRuntimeLogEntryIdRef = useRef(1);
   const stateTransitionLogRef = useRef<string[]>([]);
   const lastRuntimeSignatureRef = useRef('');
   const lastReadableRuntimeSignatureRef = useRef('');
@@ -138,7 +150,6 @@ export function WebMugenApp() {
   const lastStageKeySignatureRef = useRef('');
   const lastStateNosRef = useRef<[number, number]>([0, 0]);
   const stateTransitionLogLastStateNosRef = useRef<[number, number]>([0, 0]);
-  const pendingRuntimeScrollFrameRef = useRef<number | null>(null);
   const runtimeHistoryRenderTimerRef = useRef<number | null>(null);
   const [loadMessage, setLoadMessage] = useState('Loading character...');
   const [inputDebugLines, setInputDebugLines] = useState<string[]>(['keys=-']);
@@ -150,11 +161,11 @@ export function WebMugenApp() {
   const [coverageDebugLines, setCoverageDebugLines] = useState<string[]>(['coverage=-']);
   const [staticDebugInfo, setStaticDebugInfo] = useState<StaticDebugInfo>(EMPTY_STATIC_DEBUG_INFO);
   const [runtimeHistoryVersion, setRuntimeHistoryVersion] = useState(0);
-  const [readableRuntimeHistoryVersion, setReadableRuntimeHistoryVersion] = useState(0);
+  const [runtimeLogIndexEntries, setRuntimeLogIndexEntries] = useState<RuntimeLogIndexEntry[]>([]);
+  const [selectedReadableEntry, setSelectedReadableEntry] = useState<ReadableRuntimeEntry | null>(null);
   const [stateTransitionLogLines, setStateTransitionLogLines] = useState<string[]>(['StateNoが変化すると、ここに遷移だけが残ります。']);
   const [stageDebugLines, setStageDebugLines] = useState<string[]>(['State: -']);
   const [activeDebugTab, setActiveDebugTab] = useState<DebugTab>('runtime-human');
-  const [humanHistoryWindow, setHumanHistoryWindow] = useState<RuntimeHistoryWindow>({ mode: 'latest' });
   const [aiHistoryWindow, setAiHistoryWindow] = useState<RuntimeHistoryWindow>({ mode: 'latest' });
   const [copyStatus, setCopyStatus] = useState('');
   const [inputConfig, setInputConfigState] = useState<InputConfig>(inputConfigRef.current);
@@ -173,7 +184,6 @@ export function WebMugenApp() {
   const invalidateRuntimeHistoryViews = () => {
     clearRuntimeHistoryRenderTimer();
     setRuntimeHistoryVersion((version) => version + 1);
-    setReadableRuntimeHistoryVersion((version) => version + 1);
   };
 
   const scheduleRuntimeHistoryRender = () => {
@@ -181,7 +191,6 @@ export function WebMugenApp() {
     runtimeHistoryRenderTimerRef.current = window.setTimeout(() => {
       runtimeHistoryRenderTimerRef.current = null;
       setRuntimeHistoryVersion((version) => version + 1);
-      setReadableRuntimeHistoryVersion((version) => version + 1);
     }, RUNTIME_HISTORY_RENDER_THROTTLE_MS);
   };
 
@@ -199,7 +208,9 @@ export function WebMugenApp() {
       roundScoreRef.current = createInitialRoundScore();
       cnsTraceRef.current = [];
       runtimeHistoryRef.current = [];
-      readableRuntimeHistoryRef.current = [];
+      readableEntryStoreRef.current = new Map();
+      readableIndexStoreRef.current = [];
+      nextRuntimeLogEntryIdRef.current = 1;
       stateTransitionLogRef.current = [];
       stateTransitionHistoryRef.current = [];
       inputHistoryRef.current = [];
@@ -211,6 +222,8 @@ export function WebMugenApp() {
       stateTransitionLogLastStateNosRef.current = [0, 0];
       lastFrameTickTimeRef.current = null;
       invalidateRuntimeHistoryViews();
+      setRuntimeLogIndexEntries([]);
+      setSelectedReadableEntry(null);
       p1CommandBufferRef.current.clear();
       p2CommandBufferRef.current.clear();
       setSelectedCnsSource(null);
@@ -375,9 +388,11 @@ export function WebMugenApp() {
           frameNo: frameNoRef.current,
           state: nextReadableHistoryState,
           pressedKeys,
-          historyRef: readableRuntimeHistoryRef,
+          entryStoreRef: readableEntryStoreRef,
+          indexStoreRef: readableIndexStoreRef,
+          nextEntryIdRef: nextRuntimeLogEntryIdRef,
           lastSignatureRef: lastReadableRuntimeSignatureRef,
-          setHistoryLines: scheduleRuntimeHistoryRender,
+          setIndexEntries: setRuntimeLogIndexEntries,
         });
         appendStateTransitionLogIfNeeded({
           frameNo: frameNoRef.current,
@@ -415,25 +430,12 @@ export function WebMugenApp() {
     ...cnsDebugLines,
   ];
   const staticTabLines = formatStaticTabLines(loadMessage, staticDebugInfo, coverageDebugLines);
-  const visibleHumanHistory = useMemo(
-    () => selectVisibleRuntimeHistory(readableRuntimeHistoryRef.current, 'human', humanHistoryWindow),
-    [humanHistoryWindow, readableRuntimeHistoryVersion],
-  );
   const visibleAiHistory = useMemo(
-    () => selectVisibleRuntimeHistory(runtimeHistoryRef.current, 'ai', aiHistoryWindow),
-    [aiHistoryWindow, runtimeHistoryVersion],
+    () => activeDebugTab === 'runtime-ai'
+      ? selectVisibleRuntimeHistory(runtimeHistoryRef.current, 'ai', aiHistoryWindow)
+      : createEmptyVisibleRuntimeHistory(),
+    [activeDebugTab, aiHistoryWindow, runtimeHistoryVersion],
   );
-
-  useEffect(() => {
-    const frameNo = pendingRuntimeScrollFrameRef.current;
-    if (frameNo === null) return;
-    if (humanHistoryWindow.mode === 'aroundFrame' && humanHistoryWindow.targetFrame !== frameNo) return;
-    if (!visibleHumanHistory.lines.some((line) => line.includes(`frame=${frameNo}`))) return;
-    requestAnimationFrame(() => {
-      scrollToRuntimeFrame(frameNo);
-      pendingRuntimeScrollFrameRef.current = null;
-    });
-  }, [humanHistoryWindow, visibleHumanHistory.lines]);
 
   const handleCopy = async (label: string, text: string) => {
     try {
@@ -452,17 +454,15 @@ export function WebMugenApp() {
     p2CommandBufferRef.current.clear();
   };
 
-  const handleJumpToRuntimeFrame = (frameNo: number) => {
-    pendingRuntimeScrollFrameRef.current = frameNo;
-    invalidateRuntimeHistoryViews();
-    setHumanHistoryWindow({ mode: 'aroundFrame', targetFrame: frameNo });
-    setAiHistoryWindow({ mode: 'aroundFrame', targetFrame: frameNo });
+  const handleSelectRuntimeFrame = (frameNo: number) => {
+    setSelectedReadableEntry(getReadableRuntimeEntry(readableEntryStoreRef.current, frameNo));
   };
 
   const showLatestRuntimeHistory = () => {
-    pendingRuntimeScrollFrameRef.current = null;
-    invalidateRuntimeHistoryViews();
-    setHumanHistoryWindow({ mode: 'latest' });
+    setSelectedReadableEntry(getLatestReadableRuntimeEntry({
+      indexStore: readableIndexStoreRef.current,
+      entryStore: readableEntryStoreRef.current,
+    }));
     setAiHistoryWindow({ mode: 'latest' });
   };
 
@@ -507,9 +507,9 @@ export function WebMugenApp() {
         activeTab={activeDebugTab}
         visibleAiLines={visibleAiHistory.lines}
         allAiLinesRef={runtimeHistoryRef}
-        visibleHumanLines={visibleHumanHistory.lines}
-        allHumanLinesRef={readableRuntimeHistoryRef}
-        stateTransitionLogLines={stateTransitionLogLines}
+        selectedReadableEntry={selectedReadableEntry}
+        readableIndexStoreRef={readableIndexStoreRef}
+        readableEntryStoreRef={readableEntryStoreRef}
         copyStatus={copyStatus}
         onCopy={handleCopy}
       />
@@ -528,10 +528,9 @@ export function WebMugenApp() {
         )}
         {activeDebugTab === 'runtime-human' && (
           <HumanRuntimePanel
-            visibleReadableRuntimeHistory={visibleHumanHistory}
-            stateTransitionLogLines={stateTransitionLogLines}
-            historyWindow={humanHistoryWindow}
-            onJumpFrame={handleJumpToRuntimeFrame}
+            indexEntries={runtimeLogIndexEntries}
+            selectedEntry={selectedReadableEntry}
+            onSelectFrame={handleSelectRuntimeFrame}
             onShowLatest={showLatestRuntimeHistory}
             cnsSourceFiles={cnsSourceFiles}
             selectedCnsSource={selectedCnsSource}
@@ -1102,22 +1101,65 @@ function CopyToolbarV2({
   activeTab,
   visibleAiLines,
   allAiLinesRef,
-  visibleHumanLines,
-  allHumanLinesRef,
-  stateTransitionLogLines,
+  selectedReadableEntry,
+  readableIndexStoreRef,
+  readableEntryStoreRef,
   copyStatus,
   onCopy,
 }: {
   activeTab: DebugTab;
   visibleAiLines: string[];
   allAiLinesRef: MutableRefObject<string[]>;
-  visibleHumanLines: string[];
-  allHumanLinesRef: MutableRefObject<string[]>;
-  stateTransitionLogLines: string[];
+  selectedReadableEntry: ReadableRuntimeEntry | null;
+  readableIndexStoreRef: MutableRefObject<RuntimeLogIndexEntry[]>;
+  readableEntryStoreRef: MutableRefObject<Map<number, ReadableRuntimeEntry>>;
   copyStatus: string;
   onCopy: (label: string, text: string) => void;
 }) {
   if (activeTab !== 'runtime-human' && activeTab !== 'runtime-ai') return null;
+  const visibleHumanLines = selectedReadableEntry?.lines ?? ['selected frame=-'];
+  const allHumanLinesRef = {
+    get current() {
+      return formatAllReadableRuntimeEntriesCopy({
+        indexStore: readableIndexStoreRef.current,
+        entryStore: readableEntryStoreRef.current,
+      }).split('\n');
+    },
+  };
+  const stateTransitionLogLines: string[] = [];
+
+  return (
+    <div className="copy-toolbar">
+      <div className="copy-toolbar-buttons">
+        {activeTab === 'runtime-human' ? (
+          <>
+            <button type="button" onClick={() => onCopy('選択中フレームの人間用ログ', formatReadableRuntimeEntryCopy(selectedReadableEntry))}>
+              選択中フレームをコピー
+            </button>
+            <button
+              type="button"
+              onClick={() => onCopy('全人間用ログ', formatAllReadableRuntimeEntriesCopy({
+                indexStore: readableIndexStoreRef.current,
+                entryStore: readableEntryStoreRef.current,
+              }))}
+            >
+              全人間用ログをコピー
+            </button>
+          </>
+        ) : (
+          <>
+            <button type="button" onClick={() => onCopy('表示中のAI用ログ', visibleAiLines.join('\n'))}>
+              表示中AIログをコピー
+            </button>
+            <button type="button" onClick={() => onCopy('全AI用ログ', allAiLinesRef.current.join('\n'))}>
+              全AIログをコピー
+            </button>
+          </>
+        )}
+      </div>
+      {copyStatus && <span className="copy-status">{copyStatus}</span>}
+    </div>
+  );
 
   return (
     <div className="copy-toolbar">
@@ -1242,27 +1284,117 @@ function StateDefListPanel({ rows }: { rows: StateDebugRow[] }) {
   );
 }
 
+const RuntimeFrameIndexList = memo(function RuntimeFrameIndexList({
+  entries,
+  selectedFrameNo,
+  onSelectFrame,
+}: {
+  entries: RuntimeLogIndexEntry[];
+  selectedFrameNo: number | null;
+  onSelectFrame: (frameNo: number) => void;
+}) {
+  return (
+    <div className="runtime-frame-index">
+      {entries.length === 0 ? (
+        <div className="history-empty">ログが生成されると、ここにフレーム索引が追加されます。</div>
+      ) : entries.map((entry) => (
+        <button
+          type="button"
+          className={`runtime-frame-index-row ${entry.frameNo === selectedFrameNo ? 'selected' : ''}`}
+          key={entry.id}
+          onClick={() => onSelectFrame(entry.frameNo)}
+        >
+          <span>{entry.timestamp}</span>
+          <span>f={entry.frameNo}</span>
+          <span>P1 S={entry.p1StateNo} A={entry.p1AnimNo}</span>
+          <span>P2 S={entry.p2StateNo} A={entry.p2AnimNo}</span>
+        </button>
+      ))}
+    </div>
+  );
+});
+
+function createSelectedReadableRuntimeHistory(entry: ReadableRuntimeEntry | null): VisibleRuntimeHistory {
+  return {
+    lines: entry?.lines ?? [],
+    mode: 'latest',
+    targetFrame: entry?.frameNo ?? null,
+    targetFound: Boolean(entry),
+    totalEntries: entry ? 1 : 0,
+    visibleEntries: entry ? 1 : 0,
+    rangeLabel: entry ? `frame=${entry.frameNo}` : '0/0',
+  };
+}
+
+function createEmptyVisibleRuntimeHistory(): VisibleRuntimeHistory {
+  return {
+    lines: [],
+    mode: 'latest',
+    targetFrame: null,
+    targetFound: true,
+    totalEntries: 0,
+    visibleEntries: 0,
+    rangeLabel: '0/0',
+  };
+}
+
 function HumanRuntimePanel({
-  visibleReadableRuntimeHistory,
-  stateTransitionLogLines,
-  historyWindow,
-  onJumpFrame,
+  indexEntries,
+  selectedEntry,
+  onSelectFrame,
   onShowLatest,
   cnsSourceFiles,
   selectedCnsSource,
   onOpenCnsSource,
   sourceScrollPositionsRef,
 }: {
-  visibleReadableRuntimeHistory: VisibleRuntimeHistory;
-  stateTransitionLogLines: string[];
-  historyWindow: RuntimeHistoryWindow;
-  onJumpFrame: (frameNo: number) => void;
+  indexEntries: RuntimeLogIndexEntry[];
+  selectedEntry: ReadableRuntimeEntry | null;
+  onSelectFrame: (frameNo: number) => void;
   onShowLatest: () => void;
   cnsSourceFiles: CharacterSourceFile[];
   selectedCnsSource: CnsSourceSelection;
   onOpenCnsSource: (selection: CnsSourceSelection) => void;
   sourceScrollPositionsRef: MutableRefObject<Record<string, number>>;
 }) {
+  const stateTransitionLogLines: string[] = [];
+  const onJumpFrame = onSelectFrame;
+  const visibleReadableRuntimeHistory = createSelectedReadableRuntimeHistory(selectedEntry);
+  const historyWindow: RuntimeHistoryWindow = { mode: 'latest' };
+
+  return (
+    <section className="runtime-history-panel">
+      <div className="runtime-human-grid">
+        <section>
+          <h2>実行フレーム一覧</h2>
+          <p className="debug-note">右側の詳細ログが存在するフレームだけを軽量に表示します。</p>
+          <RuntimeFrameIndexList entries={indexEntries} selectedFrameNo={selectedEntry?.frameNo ?? null} onSelectFrame={onSelectFrame} />
+        </section>
+        <section>
+          <h2>人間用 詳細ログ</h2>
+          <p className="debug-note">左のフレームを選ぶと、その1件だけを表示します。新ログ追加では自動更新しません。</p>
+          <button type="button" className="history-latest-button" onClick={onShowLatest}>最新フレームを表示</button>
+          {selectedEntry ? (
+            <>
+              <div className="history-selected-frame">選択 frame={selectedEntry.frameNo}</div>
+              <ReadableRuntimeHistoryMarkup lines={selectedEntry.lines} onOpenCnsSource={onOpenCnsSource} />
+            </>
+          ) : (
+            <div className="history-empty">左のフレームを選択してください。</div>
+          )}
+        </section>
+      </div>
+      {selectedCnsSource ? (
+        <CharacterSourceFilesViewer
+          files={cnsSourceFiles}
+          selection={selectedCnsSource}
+          onSelect={onOpenCnsSource}
+          scrollPositionsRef={sourceScrollPositionsRef}
+        />
+      ) : null}
+    </section>
+  );
+
   return (
     <section className="runtime-history-panel">
       <div className="runtime-human-grid">
@@ -2118,9 +2250,11 @@ function appendReadableRuntimeHistoryIfNeeded({
   frameNo,
   state,
   pressedKeys,
-  historyRef,
+  entryStoreRef,
+  indexStoreRef,
+  nextEntryIdRef,
   lastSignatureRef,
-  setHistoryLines,
+  setIndexEntries,
 }: {
   cns: CnsDocument;
   commands: ReadonlySet<string>;
@@ -2129,9 +2263,11 @@ function appendReadableRuntimeHistoryIfNeeded({
   frameNo: number;
   state: GameState;
   pressedKeys: ReadonlySet<string>;
-  historyRef: MutableRefObject<string[]>;
+  entryStoreRef: MutableRefObject<Map<number, ReadableRuntimeEntry>>;
+  indexStoreRef: MutableRefObject<RuntimeLogIndexEntry[]>;
+  nextEntryIdRef: MutableRefObject<number>;
   lastSignatureRef: MutableRefObject<string>;
-  setHistoryLines: () => void;
+  setIndexEntries: (entries: RuntimeLogIndexEntry[]) => void;
 }) {
   const [p1] = state.players;
   const triggerSummary = formatP1SatisfiedStateDefTriggerSummary(cns, state, commands, getAnimEndTime);
@@ -2148,7 +2284,9 @@ function appendReadableRuntimeHistoryIfNeeded({
 
   lastSignatureRef.current = signature;
   const timestamp = new Date().toLocaleTimeString('ja-JP', { hour12: false });
-  const entry = [
+  const id = nextEntryIdRef.current;
+  nextEntryIdRef.current += 1;
+  const lines = freezeHistoryLines([
     `---- ${timestamp} frame=${frameNo} ----`,
     `P1 StateNo=${p1.stateNo} Time=${p1.stateTime} AnimNo=${p1.animNo}`,
     keySummary,
@@ -2156,14 +2294,14 @@ function appendReadableRuntimeHistoryIfNeeded({
     ...triggerSummary.split('\n').map((line) => `  ${line}`),
     `Damage=${damageSummary}`,
     '',
-  ];
-  const nextHistory = limitRuntimeHistoryEntries(
-    freezeHistoryLines([...entry, ...historyRef.current]),
-    'human',
-    RUNTIME_HISTORY_STORE_LIMIT,
-  );
-  historyRef.current = nextHistory.slice();
-  setHistoryLines();
+  ]);
+  const visibleEntries = appendReadableRuntimeEntry({
+    indexStore: indexStoreRef.current,
+    entryStore: entryStoreRef.current,
+    indexEntry: createRuntimeLogIndexEntry({ id, frameNo, timestamp, state }),
+    entry: { id, frameNo, lines },
+  });
+  setIndexEntries(visibleEntries);
 }
 
 function appendStateTransitionLogIfNeeded({

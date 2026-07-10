@@ -73,16 +73,31 @@ If a line changes every frame due only to time counters, decide whether that is 
 
 The human-facing history is capped by both entry count and rendered line count. Long State状況 sections keep ChangeState / ChangeAnim candidates visible first, then only a small number of additional controllers. This prevents large characters from making the browser heavy while preserving the most useful routing diagnostics.
 
-## Render window
+## Human runtime index
 
-Runtime history storage and runtime history rendering use separate limits.
+The human-facing runtime history uses a lightweight frame index plus a selected detail entry.
 
-- Stored history is capped by entry count so copy/debug data can remain available.
-- Rendered history is capped to the current visible window so the Debug UI does not create a huge DOM.
+- Each generated human detail entry is stored in a retained `Map<frameNo, entry>` outside React render state.
+- React state holds only the visible frame index and the currently selected detail entry.
+- The frame index records `frameNo`, timestamp, P1 StateNo/AnimNo, and P2 StateNo/AnimNo.
+- A frame is indexed whenever a human detail log is generated, even if StateNo did not change.
+- Clicking an index row loads exactly that frame's detail entry into the right pane.
+- New logs append to the index but do not replace the selected detail pane.
+- `最新フレームを表示` loads the newest retained detail entry on demand.
+- The visible index is capped separately from the retained store, so older retained frames can still be copied or loaded by frame when exposed through tooling.
+
+This structure prevents thousands of retained detail rows from becoming DOM nodes. In normal use the right pane renders one frame's human detail log.
+
+## AI render window
+
+AI runtime history storage and rendering use separate limits.
+
+- Stored AI history is capped by entry count so copy/debug data can remain available.
+- Rendered AI history is capped to the current visible window so the Debug UI does not create a huge DOM.
 
 The visible window has two modes:
 
-- `latest`: render only the newest 50 runtime-history entries.
+- `latest`: render only the newest 50 AI runtime-history entries.
 - `aroundFrame`: render entries around a selected frame.
 
 When a StateNo transition link points at an old frame, the UI first switches the visible window to `aroundFrame` for that target frame, then scrolls the matching entry into view after React renders it. The Debug UI should show the current mode, entry range, visible entry count, total retained entry count, and whether the target frame was retained.
