@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  RUNTIME_HISTORY_VISIBLE_LINE_LIMIT,
   limitRuntimeHistoryEntries,
   selectVisibleRuntimeHistory,
 } from './RuntimeHistoryWindow';
@@ -66,5 +67,18 @@ describe('RuntimeHistoryWindow', () => {
     expect(limited.filter((line) => line.startsWith('===== AI_RUNTIME '))).toHaveLength(5);
     expect(limited[0]).toContain('frame=12');
     expect(limited.at(-3)).toContain('frame=8');
+  });
+
+  it('caps rendered latest lines separately from retained entries', () => {
+    const noisyEntry = [
+      '---- 12:00:00 frame=2 ----',
+      ...Array.from({ length: RUNTIME_HISTORY_VISIBLE_LINE_LIMIT + 20 }, (_, index) => `line ${index}`),
+    ];
+    const lines = [...noisyEntry, ...humanEntry(1)];
+    const visible = selectVisibleRuntimeHistory(lines, 'human', { mode: 'latest' });
+
+    expect(visible.visibleEntries).toBe(2);
+    expect(visible.lines).toHaveLength(RUNTIME_HISTORY_VISIBLE_LINE_LIMIT + 1);
+    expect(visible.lines.at(-1)).toContain('rendered lines hidden');
   });
 });

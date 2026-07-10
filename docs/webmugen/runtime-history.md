@@ -87,6 +87,10 @@ The visible window has two modes:
 
 When a StateNo transition link points at an old frame, the UI first switches the visible window to `aroundFrame` for that target frame, then scrolls the matching entry into view after React renders it. The Debug UI should show the current mode, entry range, visible entry count, total retained entry count, and whether the target frame was retained.
 
+The retained history lives outside React state. React state tracks only the current window mode and a small version counter, so appending a log does not copy thousands of retained lines through React. Latest-window selection also stops scanning once enough recent entries are known for large logs.
+
+Rendered output is capped by both entry count and line count. This matters for large characters where a single human-readable entry can contain many State status rows. When the latest window exceeds the rendered-line cap, the UI keeps the newest lines and adds a truncation marker; full retained logs remain available from the copy action.
+
 Copy actions are split between visible logs and all retained logs. Visible-copy operations should stringify only the current rendered slice; all-log copy may stringify the full retained history on demand.
 
 ## Entry format

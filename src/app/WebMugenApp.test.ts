@@ -12,7 +12,7 @@ describe('WebMugenApp runtime history', () => {
     const pressedKeys = new Set(['ArrowRight']);
     const historyRef: MutableRefObject<string[]> = { current: ['seed'] };
     const lastSignatureRef: MutableRefObject<string> = { current: '' };
-    let renderedHistory: string[] = [];
+    let renderInvalidations = 0;
 
     appendRuntimeHistoryIfNeeded({
       frameNo: 10,
@@ -26,10 +26,11 @@ describe('WebMugenApp runtime history', () => {
       pressedKeys,
       historyRef,
       lastSignatureRef,
-      setHistoryLines: (lines) => {
-        renderedHistory = lines;
+      setHistoryLines: () => {
+        renderInvalidations += 1;
       },
     });
+    const appendedSnapshot = historyRef.current.slice();
 
     inputLines[0] = 'keys=-';
     commandLines[0] = 'cmd p1=-';
@@ -38,18 +39,19 @@ describe('WebMugenApp runtime history', () => {
     pressedKeys.clear();
     historyRef.current[0] = 'mutated seed';
 
-    expect(renderedHistory.join('\n')).toContain('keys=ArrowRight');
-    expect(renderedHistory.join('\n')).toContain('cmd p1=holdfwd');
-    expect(renderedHistory.join('\n')).toContain('phys p1 state=20');
-    expect(renderedHistory.join('\n')).toContain('cns p1 state=0->20');
-    expect(renderedHistory.join('\n')).not.toContain('keys=-');
-    expect(renderedHistory.join('\n')).not.toContain('mutated seed');
+    expect(renderInvalidations).toBe(1);
+    expect(appendedSnapshot.join('\n')).toContain('keys=ArrowRight');
+    expect(appendedSnapshot.join('\n')).toContain('cmd p1=holdfwd');
+    expect(appendedSnapshot.join('\n')).toContain('phys p1 state=20');
+    expect(appendedSnapshot.join('\n')).toContain('cns p1 state=0->20');
+    expect(appendedSnapshot.join('\n')).not.toContain('keys=-');
+    expect(appendedSnapshot.join('\n')).not.toContain('mutated seed');
   });
 
   it('does not append when only time-like values changed', () => {
     const historyRef: MutableRefObject<string[]> = { current: [] };
     const lastSignatureRef: MutableRefObject<string> = { current: '' };
-    let renderedHistory: string[] = [];
+    let renderInvalidations = 0;
 
     appendRuntimeHistoryIfNeeded({
       frameNo: 10,
@@ -63,8 +65,8 @@ describe('WebMugenApp runtime history', () => {
       pressedKeys: new Set(['ArrowRight']),
       historyRef,
       lastSignatureRef,
-      setHistoryLines: (lines) => {
-        renderedHistory = lines;
+      setHistoryLines: () => {
+        renderInvalidations += 1;
       },
     });
 
@@ -80,13 +82,14 @@ describe('WebMugenApp runtime history', () => {
       pressedKeys: new Set(['ArrowRight']),
       historyRef,
       lastSignatureRef,
-      setHistoryLines: (lines) => {
-        renderedHistory = lines;
+      setHistoryLines: () => {
+        renderInvalidations += 1;
       },
     });
 
-    expect(renderedHistory.join('\n')).toContain('frame=10');
-    expect(renderedHistory.join('\n')).not.toContain('frame=11');
+    expect(renderInvalidations).toBe(1);
+    expect(historyRef.current.join('\n')).toContain('frame=10');
+    expect(historyRef.current.join('\n')).not.toContain('frame=11');
   });
 
   it('ignores readable trigger value summaries for history identity', () => {

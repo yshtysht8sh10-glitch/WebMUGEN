@@ -147,8 +147,8 @@ export function WebMugenApp() {
   const [physicsDebugLines, setPhysicsDebugLines] = useState<string[]>(['phys p1=-', 'phys p2=-']);
   const [coverageDebugLines, setCoverageDebugLines] = useState<string[]>(['coverage=-']);
   const [staticDebugInfo, setStaticDebugInfo] = useState<StaticDebugInfo>(EMPTY_STATIC_DEBUG_INFO);
-  const [runtimeHistoryLines, setRuntimeHistoryLines] = useState<string[]>(['操作すると、ここにタイムスタンプ付きで内部処理ログが残ります。']);
-  const [readableRuntimeHistoryLines, setReadableRuntimeHistoryLines] = useState<string[]>(['人間用の短い実行履歴がここに残ります。']);
+  const [runtimeHistoryVersion, setRuntimeHistoryVersion] = useState(0);
+  const [readableRuntimeHistoryVersion, setReadableRuntimeHistoryVersion] = useState(0);
   const [stateTransitionLogLines, setStateTransitionLogLines] = useState<string[]>(['StateNoが変化すると、ここに遷移だけが残ります。']);
   const [stageDebugLines, setStageDebugLines] = useState<string[]>(['State: -']);
   const [activeDebugTab, setActiveDebugTab] = useState<DebugTab>('runtime-human');
@@ -187,6 +187,8 @@ export function WebMugenApp() {
       lastStateNosRef.current = [0, 0];
       stateTransitionLogLastStateNosRef.current = [0, 0];
       lastFrameTickTimeRef.current = null;
+      setRuntimeHistoryVersion((version) => version + 1);
+      setReadableRuntimeHistoryVersion((version) => version + 1);
       p1CommandBufferRef.current.clear();
       p2CommandBufferRef.current.clear();
       setSelectedCnsSource(null);
@@ -341,7 +343,7 @@ export function WebMugenApp() {
           pressedKeys,
           historyRef: runtimeHistoryRef,
           lastSignatureRef: lastRuntimeSignatureRef,
-          setHistoryLines: setRuntimeHistoryLines,
+          setHistoryLines: () => setRuntimeHistoryVersion((version) => version + 1),
         });
         appendReadableRuntimeHistoryIfNeeded({
           cns: character.cns,
@@ -353,7 +355,7 @@ export function WebMugenApp() {
           pressedKeys,
           historyRef: readableRuntimeHistoryRef,
           lastSignatureRef: lastReadableRuntimeSignatureRef,
-          setHistoryLines: setReadableRuntimeHistoryLines,
+          setHistoryLines: () => setReadableRuntimeHistoryVersion((version) => version + 1),
         });
         appendStateTransitionLogIfNeeded({
           frameNo: frameNoRef.current,
@@ -391,12 +393,12 @@ export function WebMugenApp() {
   ];
   const staticTabLines = formatStaticTabLines(loadMessage, staticDebugInfo, coverageDebugLines);
   const visibleHumanHistory = useMemo(
-    () => selectVisibleRuntimeHistory(readableRuntimeHistoryLines, 'human', humanHistoryWindow),
-    [humanHistoryWindow, readableRuntimeHistoryLines],
+    () => selectVisibleRuntimeHistory(readableRuntimeHistoryRef.current, 'human', humanHistoryWindow),
+    [humanHistoryWindow, readableRuntimeHistoryVersion],
   );
   const visibleAiHistory = useMemo(
-    () => selectVisibleRuntimeHistory(runtimeHistoryLines, 'ai', aiHistoryWindow),
-    [aiHistoryWindow, runtimeHistoryLines],
+    () => selectVisibleRuntimeHistory(runtimeHistoryRef.current, 'ai', aiHistoryWindow),
+    [aiHistoryWindow, runtimeHistoryVersion],
   );
 
   useEffect(() => {
@@ -479,16 +481,9 @@ export function WebMugenApp() {
       <CopyToolbarV2
         activeTab={activeDebugTab}
         visibleAiLines={visibleAiHistory.lines}
-        allAiLines={runtimeHistoryLines}
-        humanLogText={[
-          '=== 人間用 実行履歴 ===',
-          ...visibleHumanHistory.lines,
-          '',
-          '=== StateNo 遷移 ===',
-          ...stateTransitionLogLines,
-        ].join('\n')}
+        allAiLinesRef={runtimeHistoryRef}
         visibleHumanLines={visibleHumanHistory.lines}
-        allHumanLines={readableRuntimeHistoryLines}
+        allHumanLinesRef={readableRuntimeHistoryRef}
         stateTransitionLogLines={stateTransitionLogLines}
         copyStatus={copyStatus}
         onCopy={handleCopy}
@@ -1081,19 +1076,18 @@ function LegacyDebugTabs({
 function CopyToolbarV2({
   activeTab,
   visibleAiLines,
-  allAiLines,
+  allAiLinesRef,
   visibleHumanLines,
-  allHumanLines,
+  allHumanLinesRef,
   stateTransitionLogLines,
   copyStatus,
   onCopy,
 }: {
   activeTab: DebugTab;
   visibleAiLines: string[];
-  allAiLines: string[];
-  humanLogText?: string;
+  allAiLinesRef: MutableRefObject<string[]>;
   visibleHumanLines: string[];
-  allHumanLines: string[];
+  allHumanLinesRef: MutableRefObject<string[]>;
   stateTransitionLogLines: string[];
   copyStatus: string;
   onCopy: (label: string, text: string) => void;
@@ -1108,7 +1102,7 @@ function CopyToolbarV2({
             <button type="button" onClick={() => onCopy('表示中の人間用ログ', formatHumanRuntimeCopyText(visibleHumanLines, stateTransitionLogLines))}>
               表示中ログをコピー
             </button>
-            <button type="button" onClick={() => onCopy('全人間用ログ', formatHumanRuntimeCopyText(allHumanLines, stateTransitionLogLines))}>
+            <button type="button" onClick={() => onCopy('全人間用ログ', formatHumanRuntimeCopyText(allHumanLinesRef.current, stateTransitionLogLines))}>
               全ログをコピー
             </button>
           </>
@@ -1117,7 +1111,7 @@ function CopyToolbarV2({
             <button type="button" onClick={() => onCopy('表示中のAI用ログ', visibleAiLines.join('\n'))}>
               表示中ログをコピー
             </button>
-            <button type="button" onClick={() => onCopy('全AI用ログ', allAiLines.join('\n'))}>
+            <button type="button" onClick={() => onCopy('全AI用ログ', allAiLinesRef.current.join('\n'))}>
               全ログをコピー
             </button>
           </>
@@ -1991,7 +1985,7 @@ export function appendRuntimeHistoryIfNeeded({
   pressedKeys: ReadonlySet<string>;
   historyRef: MutableRefObject<string[]>;
   lastSignatureRef: MutableRefObject<string>;
-  setHistoryLines: (lines: string[]) => void;
+  setHistoryLines: () => void;
 }) {
   const stateChanged = traces.some((trace) => trace.stateNo !== trace.afterStateNo || trace.animNo !== trace.afterAnimNo);
   const controllerRan = traces.some((trace) => trace.executedControllers.length > 0 || trace.debugLines.length > 0);
@@ -2028,7 +2022,7 @@ export function appendRuntimeHistoryIfNeeded({
     RUNTIME_HISTORY_STORE_LIMIT,
   );
   historyRef.current = nextHistory.slice();
-  setHistoryLines(nextHistory.slice());
+  setHistoryLines();
 }
 
 function formatAiRuntimeSnapshot({
@@ -2112,7 +2106,7 @@ function appendReadableRuntimeHistoryIfNeeded({
   pressedKeys: ReadonlySet<string>;
   historyRef: MutableRefObject<string[]>;
   lastSignatureRef: MutableRefObject<string>;
-  setHistoryLines: (lines: string[]) => void;
+  setHistoryLines: () => void;
 }) {
   const [p1] = state.players;
   const triggerSummary = formatP1SatisfiedStateDefTriggerSummary(cns, state, commands, getAnimEndTime);
@@ -2144,7 +2138,7 @@ function appendReadableRuntimeHistoryIfNeeded({
     RUNTIME_HISTORY_STORE_LIMIT,
   );
   historyRef.current = nextHistory.slice();
-  setHistoryLines(nextHistory.slice());
+  setHistoryLines();
 }
 
 function appendStateTransitionLogIfNeeded({

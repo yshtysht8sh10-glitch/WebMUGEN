@@ -105,6 +105,10 @@ For large characters, cap rendered history by both entry count and line count. P
 
 The runtime-history tabs render a visible window instead of the full retained history. The default window is the latest entries. Clicking a StateNo transition frame switches the window to that frame's surrounding entries before scrolling, so old retained frames can still be inspected without keeping the whole history in the DOM. The UI should show the current window mode, displayed range, visible count, retained count, and a `最新へ戻る` action when inspecting an older frame.
 
+Retained runtime-history lines should stay outside React render state. React should track only visible-window controls and lightweight invalidation counters; otherwise every appended log copies and reconciles thousands of retained lines even when the DOM window is capped.
+
+Human-facing State status entries can be much larger than AI entries, so the rendered window needs a line-count cap in addition to the entry-count cap.
+
 ## Copy buttons
 
 Copy buttons should provide:
