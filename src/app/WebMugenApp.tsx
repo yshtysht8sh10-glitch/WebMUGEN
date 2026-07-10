@@ -73,6 +73,7 @@ const CHARACTER_PATH_STORAGE_KEY = 'webmugen.characterPath.v1';
 const RUNTIME_SETTINGS_STORAGE_KEY = 'webmugen.runtimeSettings.v1';
 const CHARACTER_PATH_OPTIONS = ['/chars/T-H-M-A.zip', '/chars/kfm/kfm.def'] as const;
 const DEFAULT_FRAME_INTERVAL_MS = 1000 / 60;
+const RUNTIME_HISTORY_RENDER_THROTTLE_MS = 250;
 
 type RuntimeSettings = {
   roundTime: number;
@@ -138,6 +139,7 @@ export function WebMugenApp() {
   const lastStateNosRef = useRef<[number, number]>([0, 0]);
   const stateTransitionLogLastStateNosRef = useRef<[number, number]>([0, 0]);
   const pendingRuntimeScrollFrameRef = useRef<number | null>(null);
+  const runtimeHistoryRenderTimerRef = useRef<number | null>(null);
   const [loadMessage, setLoadMessage] = useState('Loading character...');
   const [inputDebugLines, setInputDebugLines] = useState<string[]>(['keys=-']);
   const [roundDebugLine, setRoundDebugLine] = useState(formatRoundState(createInitialRoundState()));
@@ -161,6 +163,27 @@ export function WebMugenApp() {
   const [cnsSourceFiles, setCnsSourceFiles] = useState<CharacterSourceFile[]>([]);
   const [selectedCnsSource, setSelectedCnsSource] = useState<CnsSourceSelection>(null);
   const cnsSourceScrollPositionsRef = useRef<Record<string, number>>({});
+
+  const clearRuntimeHistoryRenderTimer = () => {
+    if (runtimeHistoryRenderTimerRef.current === null) return;
+    window.clearTimeout(runtimeHistoryRenderTimerRef.current);
+    runtimeHistoryRenderTimerRef.current = null;
+  };
+
+  const invalidateRuntimeHistoryViews = () => {
+    clearRuntimeHistoryRenderTimer();
+    setRuntimeHistoryVersion((version) => version + 1);
+    setReadableRuntimeHistoryVersion((version) => version + 1);
+  };
+
+  const scheduleRuntimeHistoryRender = () => {
+    if (runtimeHistoryRenderTimerRef.current !== null) return;
+    runtimeHistoryRenderTimerRef.current = window.setTimeout(() => {
+      runtimeHistoryRenderTimerRef.current = null;
+      setRuntimeHistoryVersion((version) => version + 1);
+      setReadableRuntimeHistoryVersion((version) => version + 1);
+    }, RUNTIME_HISTORY_RENDER_THROTTLE_MS);
+  };
 
   useEffect(() => {
     let disposed = false;
@@ -187,8 +210,7 @@ export function WebMugenApp() {
       lastStateNosRef.current = [0, 0];
       stateTransitionLogLastStateNosRef.current = [0, 0];
       lastFrameTickTimeRef.current = null;
-      setRuntimeHistoryVersion((version) => version + 1);
-      setReadableRuntimeHistoryVersion((version) => version + 1);
+      invalidateRuntimeHistoryViews();
       p1CommandBufferRef.current.clear();
       p2CommandBufferRef.current.clear();
       setSelectedCnsSource(null);
@@ -343,7 +365,7 @@ export function WebMugenApp() {
           pressedKeys,
           historyRef: runtimeHistoryRef,
           lastSignatureRef: lastRuntimeSignatureRef,
-          setHistoryLines: () => setRuntimeHistoryVersion((version) => version + 1),
+          setHistoryLines: scheduleRuntimeHistoryRender,
         });
         appendReadableRuntimeHistoryIfNeeded({
           cns: character.cns,
@@ -355,7 +377,7 @@ export function WebMugenApp() {
           pressedKeys,
           historyRef: readableRuntimeHistoryRef,
           lastSignatureRef: lastReadableRuntimeSignatureRef,
-          setHistoryLines: () => setReadableRuntimeHistoryVersion((version) => version + 1),
+          setHistoryLines: scheduleRuntimeHistoryRender,
         });
         appendStateTransitionLogIfNeeded({
           frameNo: frameNoRef.current,
@@ -378,6 +400,7 @@ export function WebMugenApp() {
     return () => {
       disposed = true;
       cancelAnimationFrame(frameId);
+      clearRuntimeHistoryRenderTimer();
       inputRef.current?.dispose();
       inputRef.current = null;
     };
@@ -431,12 +454,14 @@ export function WebMugenApp() {
 
   const handleJumpToRuntimeFrame = (frameNo: number) => {
     pendingRuntimeScrollFrameRef.current = frameNo;
+    invalidateRuntimeHistoryViews();
     setHumanHistoryWindow({ mode: 'aroundFrame', targetFrame: frameNo });
     setAiHistoryWindow({ mode: 'aroundFrame', targetFrame: frameNo });
   };
 
   const showLatestRuntimeHistory = () => {
     pendingRuntimeScrollFrameRef.current = null;
+    invalidateRuntimeHistoryViews();
     setHumanHistoryWindow({ mode: 'latest' });
     setAiHistoryWindow({ mode: 'latest' });
   };
