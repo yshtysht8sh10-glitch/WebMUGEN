@@ -21,13 +21,13 @@ function aiEntry(frame: number): string[] {
 }
 
 describe('RuntimeHistoryWindow', () => {
-  it('renders only the latest 200 human entries by default', () => {
+  it('renders only the latest 50 human entries by default', () => {
     const lines = Array.from({ length: 240 }, (_, index) => humanEntry(240 - index)).flat();
     const visible = selectVisibleRuntimeHistory(lines, 'human', { mode: 'latest' });
 
-    expect(visible.visibleEntries).toBe(200);
+    expect(visible.visibleEntries).toBe(50);
     expect(visible.lines[0]).toContain('frame=240');
-    expect(visible.lines.at(-2)).toContain('frame=41');
+    expect(visible.lines.at(-2)).toContain('frame=191');
     expect(visible.totalEntries).toBe(240);
   });
 
@@ -55,9 +55,9 @@ describe('RuntimeHistoryWindow', () => {
     const lines = Array.from({ length: 220 }, (_, index) => aiEntry(220 - index)).flat();
     const visible = selectVisibleRuntimeHistory(lines, 'ai', { mode: 'latest' });
 
-    expect(visible.visibleEntries).toBe(200);
+    expect(visible.visibleEntries).toBe(50);
     expect(visible.lines[0]).toContain('frame=220');
-    expect(visible.lines.at(-3)).toContain('frame=21');
+    expect(visible.lines.at(-3)).toContain('frame=171');
   });
 
   it('limits internal history by entries rather than raw lines', () => {

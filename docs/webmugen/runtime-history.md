@@ -82,7 +82,7 @@ Runtime history storage and runtime history rendering use separate limits.
 
 The visible window has two modes:
 
-- `latest`: render only the newest runtime-history entries.
+- `latest`: render only the newest 50 runtime-history entries.
 - `aroundFrame`: render entries around a selected frame.
 
 When a StateNo transition link points at an old frame, the UI first switches the visible window to `aroundFrame` for that target frame, then scrolls the matching entry into view after React renders it. The Debug UI should show the current mode, entry range, visible entry count, total retained entry count, and whether the target frame was retained.
