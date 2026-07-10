@@ -84,6 +84,7 @@ The human-facing runtime history uses a lightweight frame index plus a selected 
 - Clicking an index row loads exactly that frame's detail entry into the right pane.
 - New logs append to the index but do not replace the selected detail pane.
 - `最新フレームを表示` loads the newest retained detail entry on demand.
+- The frame index can auto-scroll to the newest visible index row or stay in fully manual scrolling mode.
 - The visible index is capped separately from the retained store, so older retained frames can still be copied or loaded by frame when exposed through tooling.
 
 This structure prevents thousands of retained detail rows from becoming DOM nodes. In normal use the right pane renders one frame's human detail log.

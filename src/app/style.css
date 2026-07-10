@@ -332,6 +332,34 @@ canvas {
   overflow: auto;
 }
 
+.runtime-frame-index-controls {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  margin: 0 0 8px;
+}
+
+.runtime-frame-index-controls span {
+  color: #bfdbfe;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.runtime-frame-index-controls button {
+  background: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  color: #e2e8f0;
+  cursor: pointer;
+  font-weight: 800;
+  padding: 4px 8px;
+}
+
+.runtime-frame-index-controls button:hover {
+  background: #334155;
+}
+
 .runtime-frame-index-row {
   align-items: center;
   background: rgba(15, 23, 42, 0.72);

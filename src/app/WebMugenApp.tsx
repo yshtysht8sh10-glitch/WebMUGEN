@@ -163,6 +163,7 @@ export function WebMugenApp() {
   const [runtimeHistoryVersion, setRuntimeHistoryVersion] = useState(0);
   const [runtimeLogIndexEntries, setRuntimeLogIndexEntries] = useState<RuntimeLogIndexEntry[]>([]);
   const [selectedReadableEntry, setSelectedReadableEntry] = useState<ReadableRuntimeEntry | null>(null);
+  const [runtimeFrameIndexAutoScroll, setRuntimeFrameIndexAutoScroll] = useState(true);
   const [stateTransitionLogLines, setStateTransitionLogLines] = useState<string[]>(['StateNoが変化すると、ここに遷移だけが残ります。']);
   const [stageDebugLines, setStageDebugLines] = useState<string[]>(['State: -']);
   const [activeDebugTab, setActiveDebugTab] = useState<DebugTab>('runtime-human');
@@ -531,6 +532,8 @@ export function WebMugenApp() {
             indexEntries={runtimeLogIndexEntries}
             selectedEntry={selectedReadableEntry}
             onSelectFrame={handleSelectRuntimeFrame}
+            autoScrollIndex={runtimeFrameIndexAutoScroll}
+            onToggleAutoScrollIndex={() => setRuntimeFrameIndexAutoScroll((enabled) => !enabled)}
             onShowLatest={showLatestRuntimeHistory}
             cnsSourceFiles={cnsSourceFiles}
             selectedCnsSource={selectedCnsSource}
@@ -1287,30 +1290,51 @@ function StateDefListPanel({ rows }: { rows: StateDebugRow[] }) {
 const RuntimeFrameIndexList = memo(function RuntimeFrameIndexList({
   entries,
   selectedFrameNo,
+  autoScroll,
+  onToggleAutoScroll,
   onSelectFrame,
 }: {
   entries: RuntimeLogIndexEntry[];
   selectedFrameNo: number | null;
+  autoScroll: boolean;
+  onToggleAutoScroll: () => void;
   onSelectFrame: (frameNo: number) => void;
 }) {
+  const listRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!autoScroll) return;
+    const list = listRef.current;
+    if (!list) return;
+    list.scrollTop = list.scrollHeight;
+  }, [autoScroll, entries]);
+
   return (
-    <div className="runtime-frame-index">
-      {entries.length === 0 ? (
-        <div className="history-empty">ログが生成されると、ここにフレーム索引が追加されます。</div>
-      ) : entries.map((entry) => (
-        <button
-          type="button"
-          className={`runtime-frame-index-row ${entry.frameNo === selectedFrameNo ? 'selected' : ''}`}
-          key={entry.id}
-          onClick={() => onSelectFrame(entry.frameNo)}
-        >
-          <span>{entry.timestamp}</span>
-          <span>f={entry.frameNo}</span>
-          <span>P1 S={entry.p1StateNo} A={entry.p1AnimNo}</span>
-          <span>P2 S={entry.p2StateNo} A={entry.p2AnimNo}</span>
+    <>
+      <div className="runtime-frame-index-controls">
+        <span>{autoScroll ? '最新ログへ自動追従' : '手動スクロール'}</span>
+        <button type="button" onClick={onToggleAutoScroll}>
+          {autoScroll ? '手動に切替' : '自動追従に切替'}
         </button>
-      ))}
-    </div>
+      </div>
+      <div className="runtime-frame-index" ref={listRef}>
+        {entries.length === 0 ? (
+          <div className="history-empty">ログが生成されると、ここにフレーム索引が追加されます。</div>
+        ) : entries.map((entry) => (
+          <button
+            type="button"
+            className={`runtime-frame-index-row ${entry.frameNo === selectedFrameNo ? 'selected' : ''}`}
+            key={entry.id}
+            onClick={() => onSelectFrame(entry.frameNo)}
+          >
+            <span>{entry.timestamp}</span>
+            <span>f={entry.frameNo}</span>
+            <span>P1 S={entry.p1StateNo} A={entry.p1AnimNo}</span>
+            <span>P2 S={entry.p2StateNo} A={entry.p2AnimNo}</span>
+          </button>
+        ))}
+      </div>
+    </>
   );
 });
 
@@ -1342,6 +1366,8 @@ function HumanRuntimePanel({
   indexEntries,
   selectedEntry,
   onSelectFrame,
+  autoScrollIndex,
+  onToggleAutoScrollIndex,
   onShowLatest,
   cnsSourceFiles,
   selectedCnsSource,
@@ -1351,6 +1377,8 @@ function HumanRuntimePanel({
   indexEntries: RuntimeLogIndexEntry[];
   selectedEntry: ReadableRuntimeEntry | null;
   onSelectFrame: (frameNo: number) => void;
+  autoScrollIndex: boolean;
+  onToggleAutoScrollIndex: () => void;
   onShowLatest: () => void;
   cnsSourceFiles: CharacterSourceFile[];
   selectedCnsSource: CnsSourceSelection;
@@ -1368,7 +1396,13 @@ function HumanRuntimePanel({
         <section>
           <h2>実行フレーム一覧</h2>
           <p className="debug-note">右側の詳細ログが存在するフレームだけを軽量に表示します。</p>
-          <RuntimeFrameIndexList entries={indexEntries} selectedFrameNo={selectedEntry?.frameNo ?? null} onSelectFrame={onSelectFrame} />
+          <RuntimeFrameIndexList
+            entries={indexEntries}
+            selectedFrameNo={selectedEntry?.frameNo ?? null}
+            autoScroll={autoScrollIndex}
+            onToggleAutoScroll={onToggleAutoScrollIndex}
+            onSelectFrame={onSelectFrame}
+          />
         </section>
         <section>
           <h2>人間用 詳細ログ</h2>
