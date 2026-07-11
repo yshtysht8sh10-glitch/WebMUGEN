@@ -300,7 +300,7 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'screenposy':
     case 'screenpos y': return (context) => context.player.y;
     case 'velx':
-    case 'vel x': return (context) => context.player.vx;
+    case 'vel x': return (context) => context.player.vx * context.player.facing;
     case 'vely':
     case 'vel y': return (context) => context.player.vy;
     case 'hitvelx':

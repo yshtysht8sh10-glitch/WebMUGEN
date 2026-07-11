@@ -339,7 +339,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | Time | Complete | State time comparison. |
 | UniqHitCount | Unsupported | Hit counter not implemented. |
 | Var | Complete | Basic numeric comparison. |
-| Vel X | Complete | Basic X velocity comparison. |
+| Vel X | Complete | Exposes world X velocity relative to the player's facing. |
 | Vel Y | Complete | Basic Y velocity comparison. |
 | Win | Partial | Safe default false. Round result not implemented. |
 | WinKO | Unsupported | Round result not implemented. |

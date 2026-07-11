@@ -95,6 +95,15 @@ describe('CnsRuntimeTrigger', () => {
     expect(evaluateCnsRuntimeTrigger('vel x > 2 || vel y > 0', { player })).toBe(true);
   });
 
+  it('exposes Vel X relative to the player facing', () => {
+    expect(evaluateCnsRuntimeTrigger('vel x > 0', {
+      player: { ...player, facing: -1, vx: -3 },
+    })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('vel x < 0', {
+      player: { ...player, facing: -1, vx: 3 },
+    })).toBe(true);
+  });
+
   it('evaluates arithmetic in numeric trigger expressions', () => {
     expect(evaluateCnsRuntimeTrigger('time + 4 = 10', { player })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('time - 1 = 5', { player })).toBe(true);

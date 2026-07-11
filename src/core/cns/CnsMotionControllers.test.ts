@@ -106,6 +106,42 @@ x = 2
     expect(result.vx).toBe(-12);
   });
 
+  it.each([
+    { label: 'right-facing forward short jump', facing: 1 as const, initialVx: 2.5, expectedVx: 3.4 },
+    { label: 'left-facing forward short jump', facing: -1 as const, initialVx: -2.5, expectedVx: -3.4 },
+    { label: 'right-facing back short jump', facing: 1 as const, initialVx: -2.5, expectedVx: -3.6 },
+    { label: 'left-facing back short jump', facing: -1 as const, initialVx: 2.5, expectedVx: 3.6 },
+  ])('keeps $label moving in its relative direction', ({ facing, initialVx, expectedVx }) => {
+    const cns = parseCnsText(`
+[Statedef 50]
+type = A
+physics = A
+
+[State 50, Short jump]
+type = VelSet
+trigger1 = time = 0
+x = IfElse(vel x = 0, 0, IfElse(vel x < 0, -3.6, 3.4))
+y = -6.4
+`);
+    const initial = createInitialGameState();
+    const state = {
+      ...initial,
+      players: [{
+        ...initial.players[0],
+        stateNo: 50,
+        stateTime: 0,
+        stateType: 'A' as const,
+        physics: 'A' as const,
+        facing,
+        vx: initialVx,
+      }, initial.players[1]],
+    };
+
+    const result = stepCnsStateRuntime(state, cns).state.players[0];
+
+    expect(result.vx).toBe(expectedVx);
+  });
+
   it('executes VelAdd', () => {
     const cns = parseCnsText(`
 [Statedef 100]

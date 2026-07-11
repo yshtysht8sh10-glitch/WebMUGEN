@@ -67,6 +67,10 @@ Examples:
 
 When adding expression support, update Expression rows in the matrix, not unrelated Trigger rows.
 
+## Velocity coordinates
+
+`PlayerState.vx` is stored in world coordinates, but the CNS `Vel X` trigger is facing-relative. The evaluator multiplies world X velocity by the player's facing when exposing `Vel X`; `Vel Y` remains unchanged.
+
 ## Safe defaults
 
 Safe defaults are useful but should not be overclaimed.
