@@ -97,7 +97,7 @@ The current ground value is visible in common routing notes where used. Hard-cod
 
 Fallback stage push uses a simple rectangular push box centered on each player's `x`, extending 22 units to either side and 80 units upward from the player's `y` position. Horizontal separation is applied only when both the horizontal and vertical ranges overlap. This preserves ground contact push while allowing an airborne player whose box has cleared the opponent vertically to cross over and change sides.
 
-`PlayerPush = 0` disables separation when set on either player. Facing is updated from the players' horizontal order before separation, so a completed aerial cross-over faces both players toward each other.
+`PlayerPush = 0` disables separation for the frame in which the controller executes; it returns to enabled on the next CNS frame unless another `PlayerPush = 0` executes. Facing is updated from the players' horizontal order before separation, so a completed aerial cross-over faces both players toward each other. Vertical non-overlap skips push only when at least one player is airborne; two grounded players retain horizontal push.
 
 This remains Partial compatibility: the fixed box is a generic fallback and does not yet derive its bounds from character Width data or the current AIR `Clsn2` boxes.
 

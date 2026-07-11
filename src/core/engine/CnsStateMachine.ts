@@ -42,7 +42,7 @@ export function stepPlayerByCnsWithEvents(
     };
   }
 
-  let nextPlayer = player;
+  let nextPlayer = { ...player, playerPush: true };
   let velocityChanged = false;
   let projectiles: ProjectileState[] = [];
 

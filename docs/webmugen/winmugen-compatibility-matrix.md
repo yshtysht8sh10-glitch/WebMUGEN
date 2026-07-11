@@ -179,7 +179,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | ParentVarAdd | Partial | Recognized safe no-op. Parent var lookup not implemented. |
 | ParentVarSet | Partial | Recognized safe no-op. Parent var lookup not implemented. |
 | Pause | Partial | Stores pause time field only. Full pause effect handled elsewhere/incomplete. |
-| PlayerPush | Partial | `value = 0` disables fallback stage push. Push requires overlap of fixed 44x80 generic boxes, allowing cleared aerial cross-overs; Width/AIR `Clsn2` integration remains incomplete. |
+| PlayerPush | Partial | `value = 0` disables fallback stage push for its execution frame. Grounded players always use horizontal push; airborne cross-over requires fixed 44x80 boxes to clear vertically. Width/AIR `Clsn2` integration remains incomplete. |
 | PlaySnd | Partial | Recognized safe no-op. Sound playback not implemented. |
 | PosAdd | Complete | Basic implementation exists. |
 | PosFreeze | Partial | Recognized safe no-op. Freeze behavior not implemented. |

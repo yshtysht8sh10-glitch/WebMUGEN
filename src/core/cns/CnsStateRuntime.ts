@@ -129,7 +129,7 @@ function stepPlayer(
   commands?: ReadonlySet<string>,
 ): { player: PlayerState; trace: CnsRuntimeTrace } {
   const originalStateNo = player.stateNo;
-  let next = player;
+  let next = { ...player, playerPush: true };
   const trace: CnsRuntimeTrace = {
     playerId,
     stateNo: player.stateNo,

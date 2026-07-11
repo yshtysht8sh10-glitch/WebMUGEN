@@ -53,7 +53,7 @@ function applyPushApart(p1: PlayerState, p2: PlayerState): [PlayerState, PlayerS
 
   const p1Box = getPushBox(p1);
   const p2Box = getPushBox(p2);
-  if (!overlapsVertically(p1Box, p2Box)) {
+  if ((isAirborne(p1) || isAirborne(p2)) && !overlapsVertically(p1Box, p2Box)) {
     return [p1, p2];
   }
 
@@ -91,6 +91,10 @@ function getPushBox(player: PlayerState): PushBox {
 
 function overlapsVertically(a: PushBox, b: PushBox): boolean {
   return a.bottom > b.top && b.bottom > a.top;
+}
+
+function isAirborne(player: PlayerState): boolean {
+  return player.stateType === 'A' || player.physics === 'A';
 }
 
 function clampToStage(player: PlayerState): PlayerState {

@@ -86,4 +86,25 @@ value = 0
     expect(next.players[0].x).toBe(300);
     expect(next.players[1].x).toBe(320);
   });
+
+  it('restores player push on the next frame when no PlayerPush controller executes', () => {
+    const state = createInitialGameState();
+    const next = stepGameByCns(
+      {
+        ...state,
+        players: [
+          { ...state.players[0], x: 300, playerPush: false },
+          { ...state.players[1], x: 320, playerPush: false },
+        ],
+      },
+      idleCns,
+      {
+        p1: { left: false, right: false, up: false, down: false, attack: false },
+      },
+    );
+
+    expect(next.players[0].playerPush).toBe(true);
+    expect(next.players[1].playerPush).toBe(true);
+    expect(Math.abs(next.players[1].x - next.players[0].x)).toBeGreaterThanOrEqual(44);
+  });
 });
