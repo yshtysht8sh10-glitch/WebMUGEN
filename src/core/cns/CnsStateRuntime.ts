@@ -554,6 +554,7 @@ function executeController(
   if (type === 'angleset') return withExtendedPlayer(player, { angle: num(controller, 'value') ?? 0 }, 'AngleSet');
   if (type === 'hitby') return withExtendedPlayer(player, { hitBy: str(controller, 'value') ?? str(controller, 'attr') }, 'HitBy');
   if (type === 'nothitby') return withExtendedPlayer(player, { notHitBy: str(controller, 'value') ?? str(controller, 'attr') }, 'NotHitBy');
+  if (type === 'hitdef') return activateHitDef(player, controller, input, commands, opponent);
   if (type === 'hitfallvel') return withPlayer({ ...player, vy: num(controller, 'y') ?? player.vy }, hasNum(controller, 'y'), 'HitFallVel');
   if (type === 'hitvelset') return withPlayer({ ...player, vx: num(controller, 'x', player, input, commands, opponent) ?? player.vx, vy: num(controller, 'y', player, input, commands, opponent) ?? player.vy }, hasNum(controller, 'x', player, input, commands, opponent) || hasNum(controller, 'y', player, input, commands, opponent), 'HitVelSet');
   if (type === 'hitfalldamage') return hitFallDamage(player, controller);
@@ -690,6 +691,28 @@ function hitAdd(player: PlayerState, controller: CnsStateController): Controller
 function hitFallDamage(player: PlayerState, controller: CnsStateController): ControllerResult {
   const value = num(controller, 'value');
   return value === null ? withPlayer(player, false, 'HitFallDamage') : withPlayer({ ...player, life: Math.max(0, player.life - value) }, true, 'HitFallDamage');
+}
+
+function activateHitDef(
+  player: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands: ReadonlySet<string> | undefined,
+  opponent: PlayerState,
+): ControllerResult {
+  const damageParam = controller.params.damage;
+  const damageValue = Array.isArray(damageParam) ? damageParam[0] : damageParam;
+  const damage = cnsValueToNumber(damageValue, player, input, commands, opponent) ?? 60;
+  return withPlayer({
+    ...player,
+    activeHitDef: {
+      damage: Math.max(0, damage),
+      guardDamage: 0,
+      pauseTime: { attacker: 4, defender: 8 },
+      groundVelocity: { x: -3.5, y: 0 },
+      airVelocity: { x: -2.5, y: -5.5 },
+    },
+  }, true, 'HitDef');
 }
 
 function setVarController(

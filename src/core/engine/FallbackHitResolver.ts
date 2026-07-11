@@ -26,15 +26,17 @@ export function resolveFallbackHits(state: GameState, airDocument?: AirDocument 
   const p2Body = getPlayerBodyBoxes(p2, airDocument);
 
   if (canFallbackHit(p1) && p2.hitPause === 0 && anyIntersects(p1Attack, p2Body)) {
+    const damage = p1.activeHitDef?.damage ?? FALLBACK_DAMAGE;
     p1 = markAttackerHit(p1);
-    p2 = applyFallbackHit(p2, p1);
-    hitEvents.push({ attackerId: 1, defenderId: 2, damage: FALLBACK_DAMAGE });
+    p2 = applyFallbackHit(p2, p1, damage);
+    hitEvents.push({ attackerId: 1, defenderId: 2, damage });
   }
 
   if (canFallbackHit(p2) && p1.hitPause === 0 && anyIntersects(p2Attack, p1Body)) {
+    const damage = p2.activeHitDef?.damage ?? FALLBACK_DAMAGE;
     p2 = markAttackerHit(p2);
-    p1 = applyFallbackHit(p1, p2);
-    hitEvents.push({ attackerId: 2, defenderId: 1, damage: FALLBACK_DAMAGE });
+    p1 = applyFallbackHit(p1, p2, damage);
+    hitEvents.push({ attackerId: 2, defenderId: 1, damage });
   }
 
   return {
@@ -56,10 +58,10 @@ function markAttackerHit(player: PlayerState): PlayerState {
   };
 }
 
-function applyFallbackHit(defender: PlayerState, attacker: PlayerState): PlayerState {
+function applyFallbackHit(defender: PlayerState, attacker: PlayerState, damage: number): PlayerState {
   return {
     ...defender,
-    life: Math.max(0, defender.life - FALLBACK_DAMAGE),
+    life: Math.max(0, defender.life - damage),
     stateNo: STAND_HIT_STATE,
     animNo: STAND_HIT_STATE,
     stateTime: 0,
