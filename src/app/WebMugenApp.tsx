@@ -69,6 +69,7 @@ import {
 import {
   appendReadableRuntimeEntry,
   clearReadableRuntimeLogStores,
+  createReadableRuntimeEntryKey,
   createRuntimeLogIndexEntry,
   formatAllReadableRuntimeEntriesCopy,
   formatReadableRuntimeEntryCopy,
@@ -142,7 +143,7 @@ export function WebMugenApp() {
   const lastFrameTickTimeRef = useRef<number | null>(null);
   const frameNoRef = useRef(0);
   const runtimeHistoryRef = useRef<string[]>([]);
-  const readableEntryStoreRef = useRef<Map<number, ReadableRuntimeEntry>>(new Map());
+  const readableEntryStoreRef = useRef<Map<string, ReadableRuntimeEntry>>(new Map());
   const readableIndexStoreRef = useRef<RuntimeLogIndexEntry[]>([]);
   const nextRuntimeLogEntryIdRef = useRef(1);
   const stateTransitionLogRef = useRef<string[]>([]);
@@ -167,6 +168,8 @@ export function WebMugenApp() {
   const [runtimeHistoryVersion, setRuntimeHistoryVersion] = useState(0);
   const [runtimeLogIndexEntries, setRuntimeLogIndexEntries] = useState<RuntimeLogIndexEntry[]>([]);
   const [selectedReadableEntry, setSelectedReadableEntry] = useState<ReadableRuntimeEntry | null>(null);
+  const [showHumanDetail, setShowHumanDetail] = useState(false);
+  const [showCharacterFiles, setShowCharacterFiles] = useState(false);
   const [runtimeFrameIndexAutoScroll, setRuntimeFrameIndexAutoScroll] = useState(true);
   const [stateTransitionLogLines, setStateTransitionLogLines] = useState<string[]>(['StateNoが変化すると、ここに遷移だけが残ります。']);
   const [stageDebugLines, setStageDebugLines] = useState<string[]>(['State: -']);
@@ -231,6 +234,8 @@ export function WebMugenApp() {
       invalidateRuntimeHistoryViews();
       setRuntimeLogIndexEntries([]);
       setSelectedReadableEntry(null);
+      setShowHumanDetail(false);
+      setShowCharacterFiles(false);
       p1CommandBufferRef.current.clear();
       p2CommandBufferRef.current.clear();
       setSelectedCnsSource(null);
@@ -398,6 +403,7 @@ export function WebMugenApp() {
           inputConfig: config,
           frameNo: frameNoRef.current,
           state: nextReadableHistoryState,
+          traces: nextCnsTraces,
           pressedKeys,
           entryStoreRef: readableEntryStoreRef,
           indexStoreRef: readableIndexStoreRef,
@@ -465,8 +471,14 @@ export function WebMugenApp() {
     p2CommandBufferRef.current.clear();
   };
 
-  const handleSelectRuntimeFrame = (frameNo: number) => {
-    setSelectedReadableEntry(getReadableRuntimeEntry(readableEntryStoreRef.current, frameNo));
+  const openCnsSource = (selection: CnsSourceSelection) => {
+    setSelectedCnsSource(selection);
+    if (selection) setShowCharacterFiles(true);
+  };
+
+  const handleSelectRuntimeFrame = (entry: RuntimeLogIndexEntry) => {
+    setSelectedReadableEntry(getReadableRuntimeEntry(readableEntryStoreRef.current, entry.frameNo, entry.p1StateNo));
+    setShowHumanDetail(true);
   };
 
   const showLatestRuntimeHistory = () => {
@@ -474,6 +486,7 @@ export function WebMugenApp() {
       indexStore: readableIndexStoreRef.current,
       entryStore: readableEntryStoreRef.current,
     }));
+    setShowHumanDetail(true);
     setAiHistoryWindow({ mode: 'latest' });
   };
 
@@ -489,6 +502,7 @@ export function WebMugenApp() {
     nextRuntimeLogEntryIdRef.current = 1;
     setRuntimeLogIndexEntries([]);
     setSelectedReadableEntry(null);
+    setShowHumanDetail(false);
     setStateTransitionLogLines(['history cleared']);
     invalidateRuntimeHistoryViews();
   };
@@ -550,10 +564,12 @@ export function WebMugenApp() {
             coverageDebugLines={coverageDebugLines}
             sourceFiles={cnsSourceFiles}
             selectedSource={selectedCnsSource}
-            onOpenSource={setSelectedCnsSource}
+            onOpenSource={openCnsSource}
             sourceScrollPositionsRef={cnsSourceScrollPositionsRef}
             air={loadedAir}
             sprites={loadedSprites}
+            showCharacterFiles={showCharacterFiles}
+            onToggleCharacterFiles={() => setShowCharacterFiles((visible) => !visible)}
           />
         )}
         {activeDebugTab === 'runtime-human' && (
@@ -561,15 +577,19 @@ export function WebMugenApp() {
             indexEntries={runtimeLogIndexEntries}
             selectedEntry={selectedReadableEntry}
             onSelectFrame={handleSelectRuntimeFrame}
+            showHumanDetail={showHumanDetail}
+            onToggleHumanDetail={() => setShowHumanDetail((visible) => !visible)}
             autoScrollIndex={runtimeFrameIndexAutoScroll}
             onToggleAutoScrollIndex={() => setRuntimeFrameIndexAutoScroll((enabled) => !enabled)}
             onShowLatest={showLatestRuntimeHistory}
             cnsSourceFiles={cnsSourceFiles}
             selectedCnsSource={selectedCnsSource}
-            onOpenCnsSource={setSelectedCnsSource}
+            onOpenCnsSource={openCnsSource}
             sourceScrollPositionsRef={cnsSourceScrollPositionsRef}
             air={loadedAir}
             sprites={loadedSprites}
+            showCharacterFiles={showCharacterFiles}
+            onToggleCharacterFiles={() => setShowCharacterFiles((visible) => !visible)}
           />
         )}
         {activeDebugTab === 'runtime-ai' && (
@@ -1147,7 +1167,7 @@ function CopyToolbarV2({
   allAiLinesRef: MutableRefObject<string[]>;
   selectedReadableEntry: ReadableRuntimeEntry | null;
   readableIndexStoreRef: MutableRefObject<RuntimeLogIndexEntry[]>;
-  readableEntryStoreRef: MutableRefObject<Map<number, ReadableRuntimeEntry>>;
+  readableEntryStoreRef: MutableRefObject<Map<string, ReadableRuntimeEntry>>;
   copyStatus: string;
   onCopy: (label: string, text: string) => void;
   onClearLogs: () => void;
@@ -1278,6 +1298,8 @@ function StaticDebugPanel({
   sourceScrollPositionsRef,
   air,
   sprites,
+  showCharacterFiles,
+  onToggleCharacterFiles,
 }: {
   loadMessage: string;
   staticDebugInfo: StaticDebugInfo;
@@ -1288,13 +1310,25 @@ function StaticDebugPanel({
   sourceScrollPositionsRef: MutableRefObject<Record<string, number>>;
   air: AirDocument | null;
   sprites: ImageDataSpritePack | null;
+  showCharacterFiles: boolean;
+  onToggleCharacterFiles: () => void;
 }) {
   return (
     <div className="debug-grid">
-      <DebugBlock title="Character / DEF 読込結果" lines={[loadMessage, ...staticDebugInfo.characterRows]} />
-      <DebugBlock title="CMD コマンド一覧" lines={staticDebugInfo.commandRows} />
-      <DebugBlock title="CNS対応状況" lines={coverageDebugLines} />
-      <CharacterSourceFilesViewer files={sourceFiles} selection={selectedSource} onSelect={onOpenSource} scrollPositionsRef={sourceScrollPositionsRef} air={air} sprites={sprites} />
+      <DebugBlock title="Character / DEF" lines={[loadMessage, ...staticDebugInfo.characterRows]} />
+      <DebugBlock title="CMD Commands" lines={staticDebugInfo.commandRows} />
+      <DebugBlock title="CNS Coverage" lines={coverageDebugLines} />
+      <section className="debug-block character-source-toggle-panel">
+        <div className="collapsible-debug-header">
+          <h2>Character Files</h2>
+          <button type="button" onClick={onToggleCharacterFiles}>{showCharacterFiles ? 'Hide' : 'Show'}</button>
+        </div>
+        {showCharacterFiles ? (
+          <CharacterSourceFilesViewer files={sourceFiles} selection={selectedSource} onSelect={onOpenSource} scrollPositionsRef={sourceScrollPositionsRef} air={air} sprites={sprites} />
+        ) : (
+          <p className="debug-note">Character Files is hidden to keep the debug UI light. Use Show or a StateDef link in the runtime log.</p>
+        )}
+      </section>
       <StateDefListPanel rows={staticDebugInfo.stateRows} />
     </div>
   );
@@ -1329,16 +1363,16 @@ function StateDefListPanel({ rows }: { rows: StateDebugRow[] }) {
 
 const RuntimeFrameIndexList = memo(function RuntimeFrameIndexList({
   entries,
-  selectedFrameNo,
+  selectedKey,
   autoScroll,
   onToggleAutoScroll,
   onSelectFrame,
 }: {
   entries: RuntimeLogIndexEntry[];
-  selectedFrameNo: number | null;
+  selectedKey: string | null;
   autoScroll: boolean;
   onToggleAutoScroll: () => void;
-  onSelectFrame: (frameNo: number) => void;
+  onSelectFrame: (entry: RuntimeLogIndexEntry) => void;
 }) {
   const listRef = useRef<HTMLDivElement | null>(null);
 
@@ -1358,19 +1392,31 @@ const RuntimeFrameIndexList = memo(function RuntimeFrameIndexList({
         </button>
       </div>
       <div className="runtime-frame-index" ref={listRef}>
+        {entries.length > 0 ? (
+          <div className="runtime-frame-index-header">
+            <span>時</span>
+            <span>f</span>
+            <span>S</span>
+            <span>A</span>
+            <span>S2</span>
+            <span>A2</span>
+          </div>
+        ) : null}
         {entries.length === 0 ? (
           <div className="history-empty">ログが生成されると、ここにフレーム索引が追加されます。</div>
         ) : entries.map((entry) => (
           <button
             type="button"
-            className={`runtime-frame-index-row ${entry.frameNo === selectedFrameNo ? 'selected' : ''}`}
+            className={`runtime-frame-index-row ${entry.key === selectedKey ? 'selected' : ''}`}
             key={entry.id}
-            onClick={() => onSelectFrame(entry.frameNo)}
+            onClick={() => onSelectFrame(entry)}
           >
             <span>{entry.timestamp}</span>
-            <span>f={entry.frameNo}</span>
-            <span>P1 <b className="runtime-index-state">S={entry.p1StateNo}</b> <b className="runtime-index-anim">A={entry.p1AnimNo}</b></span>
-            <span>P2 <b className="runtime-index-state">S={entry.p2StateNo}</b> <b className="runtime-index-anim">A={entry.p2AnimNo}</b></span>
+            <span>{entry.frameNo}</span>
+            <span className="runtime-index-state">{entry.p1StateNo}</span>
+            <span className="runtime-index-anim">{entry.p1AnimNo}</span>
+            <span className="runtime-index-state secondary">{entry.p2StateNo}</span>
+            <span className="runtime-index-anim secondary">{entry.p2AnimNo}</span>
           </button>
         ))}
       </div>
@@ -1386,7 +1432,7 @@ function createSelectedReadableRuntimeHistory(entry: ReadableRuntimeEntry | null
     targetFound: Boolean(entry),
     totalEntries: entry ? 1 : 0,
     visibleEntries: entry ? 1 : 0,
-    rangeLabel: entry ? `frame=${entry.frameNo}` : '0/0',
+    rangeLabel: entry ? `frame=${entry.frameNo} state=${entry.p1StateNo}` : '0/0',
   };
 }
 
@@ -1406,6 +1452,8 @@ function HumanRuntimePanel({
   indexEntries,
   selectedEntry,
   onSelectFrame,
+  showHumanDetail,
+  onToggleHumanDetail,
   autoScrollIndex,
   onToggleAutoScrollIndex,
   onShowLatest,
@@ -1415,10 +1463,14 @@ function HumanRuntimePanel({
   sourceScrollPositionsRef,
   air,
   sprites,
+  showCharacterFiles,
+  onToggleCharacterFiles,
 }: {
   indexEntries: RuntimeLogIndexEntry[];
   selectedEntry: ReadableRuntimeEntry | null;
-  onSelectFrame: (frameNo: number) => void;
+  onSelectFrame: (entry: RuntimeLogIndexEntry) => void;
+  showHumanDetail: boolean;
+  onToggleHumanDetail: () => void;
   autoScrollIndex: boolean;
   onToggleAutoScrollIndex: () => void;
   onShowLatest: () => void;
@@ -1428,76 +1480,60 @@ function HumanRuntimePanel({
   sourceScrollPositionsRef: MutableRefObject<Record<string, number>>;
   air: AirDocument | null;
   sprites: ImageDataSpritePack | null;
+  showCharacterFiles: boolean;
+  onToggleCharacterFiles: () => void;
 }) {
-  const stateTransitionLogLines: string[] = [];
-  const onJumpFrame = onSelectFrame;
-  const visibleReadableRuntimeHistory = createSelectedReadableRuntimeHistory(selectedEntry);
-  const historyWindow: RuntimeHistoryWindow = { mode: 'latest' };
-
   return (
     <section className="runtime-history-panel">
       <div className="runtime-human-grid">
         <section>
-          <h2>実行フレーム一覧</h2>
-          <p className="debug-note">右側の詳細ログが存在するフレームだけを軽量に表示します。</p>
+          <h2>Runtime Frame Index</h2>
+          <p className="debug-note">Only frames with retained detail logs are listed. Multiple StateNo values in one frame appear as separate rows.</p>
           <RuntimeFrameIndexList
             entries={indexEntries}
-            selectedFrameNo={selectedEntry?.frameNo ?? null}
+            selectedKey={selectedEntry?.key ?? null}
             autoScroll={autoScrollIndex}
             onToggleAutoScroll={onToggleAutoScrollIndex}
             onSelectFrame={onSelectFrame}
           />
         </section>
         <section>
-          <h2>人間用 詳細ログ</h2>
-          <p className="debug-note">左のフレームを選ぶと、その1件だけを表示します。新ログ追加では自動更新しません。</p>
-          <button type="button" className="history-latest-button" onClick={onShowLatest}>最新フレームを表示</button>
-          {selectedEntry ? (
+          <div className="collapsible-debug-header">
+            <h2>Human Detail Log</h2>
+            <button type="button" onClick={onToggleHumanDetail}>{showHumanDetail ? 'Hide' : 'Show'}</button>
+          </div>
+          <p className="debug-note">Selecting a row loads only that one detail entry. New logs do not replace the current selection.</p>
+          <button type="button" className="history-latest-button" onClick={onShowLatest}>Show Latest Frame</button>
+          {!showHumanDetail ? (
+            <div className="history-empty">Detail log is hidden. Select a frame or show the latest frame to open it.</div>
+          ) : selectedEntry ? (
             <>
-              <div className="history-selected-frame">選択 frame={selectedEntry.frameNo}</div>
+              <div className="history-selected-frame">selected frame={selectedEntry.frameNo} state={selectedEntry.p1StateNo}</div>
               <ReadableRuntimeHistoryMarkup lines={selectedEntry.lines} onOpenCnsSource={onOpenCnsSource} />
             </>
           ) : (
-            <div className="history-empty">左のフレームを選択してください。</div>
+            <div className="history-empty">Select a frame on the left.</div>
           )}
         </section>
       </div>
-      {selectedCnsSource ? (
-        <CharacterSourceFilesViewer
-          files={cnsSourceFiles}
-          selection={selectedCnsSource}
-          onSelect={onOpenCnsSource}
-          scrollPositionsRef={sourceScrollPositionsRef}
-          air={air}
-          sprites={sprites}
-        />
-      ) : null}
-    </section>
-  );
-
-  return (
-    <section className="runtime-history-panel">
-      <div className="runtime-human-grid">
-        <section>
-          <h2>StateNo 遷移</h2>
-          <p className="debug-note">StateNoが変わった瞬間だけを短く表示します。f=を押すと右側の該当フレームへ移動します。</p>
-          <StateTransitionLogMarkup lines={stateTransitionLogLines} onJumpFrame={onJumpFrame} />
-        </section>
-        <section>
-          <h2>人間用 実行履歴</h2>
-          <p className="debug-note">タイムスタンプ、StateNo、AnimNo、State状況を短く表示します。Timeだけの変化では増えません。</p>
-          <HistoryWindowStatus visible={visibleReadableRuntimeHistory} window={historyWindow} onShowLatest={onShowLatest} />
-          <ReadableRuntimeHistoryMarkup lines={visibleReadableRuntimeHistory.lines} onOpenCnsSource={onOpenCnsSource} />
-        </section>
-      </div>
-      {selectedCnsSource ? (
-        <CharacterSourceFilesViewer
-          files={cnsSourceFiles}
-          selection={selectedCnsSource}
-          onSelect={onOpenCnsSource}
-          scrollPositionsRef={sourceScrollPositionsRef}
-        />
-      ) : null}
+      <section className="debug-block character-source-toggle-panel">
+        <div className="collapsible-debug-header">
+          <h2>Character Files</h2>
+          <button type="button" onClick={onToggleCharacterFiles}>{showCharacterFiles ? 'Hide' : 'Show'}</button>
+        </div>
+        {showCharacterFiles ? (
+          <CharacterSourceFilesViewer
+            files={cnsSourceFiles}
+            selection={selectedCnsSource}
+            onSelect={onOpenCnsSource}
+            scrollPositionsRef={sourceScrollPositionsRef}
+            air={air}
+            sprites={sprites}
+          />
+        ) : (
+          <p className="debug-note">Character Files is hidden. Use Show here or click a StateDef link in the detail log.</p>
+        )}
+      </section>
     </section>
   );
 }
@@ -2603,6 +2639,7 @@ function appendReadableRuntimeHistoryIfNeeded({
   inputConfig,
   frameNo,
   state,
+  traces,
   pressedKeys,
   entryStoreRef,
   indexStoreRef,
@@ -2616,47 +2653,92 @@ function appendReadableRuntimeHistoryIfNeeded({
   inputConfig: InputConfig;
   frameNo: number;
   state: GameState;
+  traces: CnsRuntimeTrace[];
   pressedKeys: ReadonlySet<string>;
-  entryStoreRef: MutableRefObject<Map<number, ReadableRuntimeEntry>>;
+  entryStoreRef: MutableRefObject<Map<string, ReadableRuntimeEntry>>;
   indexStoreRef: MutableRefObject<RuntimeLogIndexEntry[]>;
   nextEntryIdRef: MutableRefObject<number>;
   lastSignatureRef: MutableRefObject<string>;
   setIndexEntries: (entries: RuntimeLogIndexEntry[]) => void;
 }) {
-  const [p1] = state.players;
-  const triggerSummary = formatP1SatisfiedStateDefTriggerSummary(cns, state, commands, getAnimEndTime);
-  const damageSummary = formatHitEventSummary(state);
   const keySummary = formatMugenPressedKeys(pressedKeys, inputConfig.players[0]);
-  const signature = [
-    p1.stateNo,
-    p1.animNo,
-    stripReadableRuntimeValueSummaries(triggerSummary),
-    damageSummary,
-    keySummary,
-  ].join('|');
+  const snapshots = createReadableRuntimeStateSnapshots(state, traces);
+  const signature = snapshots.map((snapshot) => {
+    const [p1] = snapshot.players;
+    return [
+      p1.stateNo,
+      p1.animNo,
+      stripReadableRuntimeValueSummaries(formatP1SatisfiedStateDefTriggerSummary(cns, snapshot, commands, getAnimEndTime)),
+      formatHitEventSummary(snapshot),
+      keySummary,
+    ].join('|');
+  }).join('||');
   if (signature === lastSignatureRef.current) return;
 
   lastSignatureRef.current = signature;
   const timestamp = new Date().toLocaleTimeString('ja-JP', { hour12: false });
-  const id = nextEntryIdRef.current;
-  nextEntryIdRef.current += 1;
-  const lines = freezeHistoryLines([
-    `---- ${timestamp} frame=${frameNo} ----`,
-    `P1 StateNo=${p1.stateNo} Time=${p1.stateTime} AnimNo=${p1.animNo}`,
-    formatReadableStateDefLine(cns, p1.stateNo),
-    keySummary,
-    `State状況:`,
-    ...triggerSummary.split('\n').map((line) => `  ${line}`),
-    `Damage=${damageSummary}`,
-    '',
-  ]);
-  const visibleEntries = appendReadableRuntimeEntry({
-    indexStore: indexStoreRef.current,
-    entryStore: entryStoreRef.current,
-    indexEntry: createRuntimeLogIndexEntry({ id, frameNo, timestamp, state }),
-    entry: { id, frameNo, lines },
-  });
-  setIndexEntries(visibleEntries);
+  let visibleEntries: RuntimeLogIndexEntry[] | null = null;
+  const appendedKeys = new Set<string>();
+  for (const snapshot of snapshots) {
+    const [p1] = snapshot.players;
+    const key = createReadableRuntimeEntryKey(frameNo, p1.stateNo);
+    if (appendedKeys.has(key)) continue;
+    appendedKeys.add(key);
+    const triggerSummary = formatP1SatisfiedStateDefTriggerSummary(cns, snapshot, commands, getAnimEndTime);
+    const damageSummary = formatHitEventSummary(snapshot);
+    const id = nextEntryIdRef.current;
+    nextEntryIdRef.current += 1;
+    const lines = freezeHistoryLines([
+      `---- ${timestamp} frame=${frameNo} state=${p1.stateNo} ----`,
+      `P1 StateNo=${p1.stateNo} Time=${p1.stateTime} AnimNo=${p1.animNo}`,
+      formatReadableStateDefLine(cns, p1.stateNo),
+      keySummary,
+      'State Status',
+      ...triggerSummary.split('\n').map((line) => `  ${line}`),
+      `Damage=${damageSummary}`,
+      '',
+    ]);
+    visibleEntries = appendReadableRuntimeEntry({
+      indexStore: indexStoreRef.current,
+      entryStore: entryStoreRef.current,
+      indexEntry: createRuntimeLogIndexEntry({ id, frameNo, timestamp, state: snapshot }),
+      entry: { id, key, frameNo, p1StateNo: p1.stateNo, lines },
+    });
+  }
+  if (visibleEntries) setIndexEntries(visibleEntries);
+}
+
+function createReadableRuntimeStateSnapshots(state: GameState, traces: readonly CnsRuntimeTrace[]): GameState[] {
+  const snapshots: GameState[] = [];
+  const seenStateNos = new Set<number>();
+  const addSnapshot = (snapshot: GameState) => {
+    const p1 = snapshot.players[0];
+    if (!p1 || seenStateNos.has(p1.stateNo)) return;
+    seenStateNos.add(p1.stateNo);
+    snapshots.push(snapshot);
+  };
+  const p1Trace = traces.find((trace) => trace.playerId === 1);
+  if (p1Trace && p1Trace.stateNo !== state.players[0]?.stateNo) {
+    addSnapshot(withReadableP1TraceState(state, p1Trace));
+  }
+  addSnapshot(state);
+  return snapshots;
+}
+
+function withReadableP1TraceState(state: GameState, trace: CnsRuntimeTrace): GameState {
+  const [p1, p2] = state.players;
+  return {
+    ...state,
+    players: [
+      {
+        ...p1,
+        stateNo: trace.stateNo,
+        stateTime: trace.stateTime,
+        animNo: trace.animNo,
+      },
+      p2,
+    ],
+  };
 }
 
 function formatReadableStateDefLine(cns: CnsDocument, stateNo: number): string {

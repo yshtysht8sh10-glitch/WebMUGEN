@@ -5,6 +5,7 @@ export const RUNTIME_LOG_INDEX_VISIBLE_LIMIT = 200;
 
 export type RuntimeLogIndexEntry = {
   id: number;
+  key: string;
   frameNo: number;
   timestamp: string;
   p1StateNo: number;
@@ -15,7 +16,9 @@ export type RuntimeLogIndexEntry = {
 
 export type ReadableRuntimeEntry = {
   id: number;
+  key: string;
   frameNo: number;
+  p1StateNo: number;
   lines: string[];
 };
 
@@ -33,6 +36,7 @@ export function createRuntimeLogIndexEntry({
   const [p1, p2] = state.players;
   return {
     id,
+    key: createReadableRuntimeEntryKey(frameNo, p1?.stateNo ?? -1),
     frameNo,
     timestamp,
     p1StateNo: p1?.stateNo ?? -1,
@@ -51,18 +55,18 @@ export function appendReadableRuntimeEntry({
   visibleLimit = RUNTIME_LOG_INDEX_VISIBLE_LIMIT,
 }: {
   indexStore: RuntimeLogIndexEntry[];
-  entryStore: Map<number, ReadableRuntimeEntry>;
+  entryStore: Map<string, ReadableRuntimeEntry>;
   indexEntry: RuntimeLogIndexEntry;
   entry: ReadableRuntimeEntry;
   storeLimit?: number;
   visibleLimit?: number;
 }): RuntimeLogIndexEntry[] {
-  entryStore.set(entry.frameNo, entry);
+  entryStore.set(entry.key, entry);
   indexStore.push(indexEntry);
 
   while (indexStore.length > storeLimit) {
     const removed = indexStore.shift();
-    if (removed) entryStore.delete(removed.frameNo);
+    if (removed) entryStore.delete(removed.key);
   }
 
   return getVisibleRuntimeLogIndex(indexStore, visibleLimit);
@@ -76,10 +80,11 @@ export function getVisibleRuntimeLogIndex(
 }
 
 export function getReadableRuntimeEntry(
-  entryStore: ReadonlyMap<number, ReadableRuntimeEntry>,
+  entryStore: ReadonlyMap<string, ReadableRuntimeEntry>,
   frameNo: number,
+  p1StateNo: number,
 ): ReadableRuntimeEntry | null {
-  return entryStore.get(frameNo) ?? null;
+  return entryStore.get(createReadableRuntimeEntryKey(frameNo, p1StateNo)) ?? null;
 }
 
 export function getLatestReadableRuntimeEntry({
@@ -87,10 +92,10 @@ export function getLatestReadableRuntimeEntry({
   entryStore,
 }: {
   indexStore: readonly RuntimeLogIndexEntry[];
-  entryStore: ReadonlyMap<number, ReadableRuntimeEntry>;
+  entryStore: ReadonlyMap<string, ReadableRuntimeEntry>;
 }): ReadableRuntimeEntry | null {
   for (let index = indexStore.length - 1; index >= 0; index -= 1) {
-    const entry = entryStore.get(indexStore[index].frameNo);
+    const entry = entryStore.get(indexStore[index].key);
     if (entry) return entry;
   }
   return null;
@@ -105,10 +110,10 @@ export function formatAllReadableRuntimeEntriesCopy({
   entryStore,
 }: {
   indexStore: readonly RuntimeLogIndexEntry[];
-  entryStore: ReadonlyMap<number, ReadableRuntimeEntry>;
+  entryStore: ReadonlyMap<string, ReadableRuntimeEntry>;
 }): string {
   return indexStore
-    .map((indexEntry) => entryStore.get(indexEntry.frameNo))
+    .map((indexEntry) => entryStore.get(indexEntry.key))
     .filter((entry): entry is ReadableRuntimeEntry => Boolean(entry))
     .map((entry) => entry.lines.join('\n'))
     .join('\n');
@@ -119,9 +124,13 @@ export function clearReadableRuntimeLogStores({
   entryStore,
 }: {
   indexStore: RuntimeLogIndexEntry[];
-  entryStore: Map<number, ReadableRuntimeEntry>;
+  entryStore: Map<string, ReadableRuntimeEntry>;
 }): RuntimeLogIndexEntry[] {
   indexStore.length = 0;
   entryStore.clear();
   return [];
+}
+
+export function createReadableRuntimeEntryKey(frameNo: number, p1StateNo: number): string {
+  return `${frameNo}:${p1StateNo}`;
 }

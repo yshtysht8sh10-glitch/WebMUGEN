@@ -77,17 +77,19 @@ The human-facing history is capped by both entry count and rendered line count. 
 
 The human-facing runtime history uses a lightweight frame index plus a selected detail entry.
 
-- Each generated human detail entry is stored in a retained `Map<frameNo, entry>` outside React render state.
+- Each generated human detail entry is stored outside React render state. The retained key is `frameNo + P1 StateNo`, so a single frame can keep multiple detail entries when CNS execution crosses more than one StateNo.
 - React state holds only the visible frame index and the currently selected detail entry.
-- The frame index records `frameNo`, timestamp, P1 StateNo/AnimNo, and P2 StateNo/AnimNo.
+- The frame index records timestamp, `frameNo`, P1 StateNo/AnimNo, and P2 StateNo/AnimNo in compact columns so rows can stay narrow.
 - A frame is indexed whenever a human detail log is generated, even if StateNo did not change.
 - Clicking an index row loads exactly that frame's detail entry into the right pane.
 - New logs append to the index but do not replace the selected detail pane.
+- The human detail pane can be hidden to avoid rendering the heavy State status DOM; selecting a frame or using the latest-frame action opens it again.
 - `最新フレームを表示` loads the newest retained detail entry on demand.
 - The frame index can auto-scroll to the newest visible index row or stay in fully manual scrolling mode.
 - The visible index is capped separately from the retained store, so older retained frames can still be copied or loaded by frame when exposed through tooling.
 - Frame index rows visually distinguish state numbers and animation numbers so repeated-state failures can be scanned quickly.
 - Human detail entries include a `StateDef` source link that opens the matching source file and line in `Character Files`.
+- `Character Files` can also be hidden from the runtime-history tab. The Show button opens it even when no source link has been clicked yet.
 - A runtime log clear action resets retained human entries, the lightweight frame index, AI history, and signatures together.
 
 This structure prevents thousands of retained detail rows from becoming DOM nodes. In normal use the right pane renders one frame's human detail log.

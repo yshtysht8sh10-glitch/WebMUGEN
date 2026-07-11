@@ -341,6 +341,23 @@ canvas {
   overflow: auto;
 }
 
+.runtime-frame-index-header {
+  align-items: center;
+  background: #020617;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.32);
+  color: #93c5fd;
+  display: grid;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  font-weight: 900;
+  gap: 6px;
+  grid-template-columns: 58px 48px 42px 42px 42px 42px;
+  padding: 5px 7px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
 .runtime-frame-index-controls {
   align-items: center;
   display: flex;
@@ -379,10 +396,10 @@ canvas {
   display: grid;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 12px;
-  gap: 8px;
-  grid-template-columns: 64px 74px minmax(92px, 1fr) minmax(92px, 1fr);
+  gap: 6px;
+  grid-template-columns: 58px 48px 42px 42px 42px 42px;
   line-height: 1.35;
-  padding: 7px 9px;
+  padding: 6px 7px;
   text-align: left;
   width: 100%;
 }
@@ -399,6 +416,7 @@ canvas {
   border-radius: 4px;
   color: #bfdbfe;
   padding: 1px 4px;
+  text-align: center;
 }
 
 .runtime-index-anim {
@@ -407,6 +425,42 @@ canvas {
   border-radius: 4px;
   color: #fecdd3;
   padding: 1px 4px;
+  text-align: center;
+}
+
+.runtime-index-state.secondary,
+.runtime-index-anim.secondary {
+  opacity: 0.72;
+}
+
+.collapsible-debug-header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin: 0 0 8px;
+}
+
+.collapsible-debug-header h2 {
+  margin: 0;
+}
+
+.collapsible-debug-header button {
+  background: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  color: #e2e8f0;
+  cursor: pointer;
+  font-weight: 800;
+  padding: 5px 10px;
+}
+
+.collapsible-debug-header button:hover {
+  background: #334155;
+}
+
+.character-source-toggle-panel {
+  grid-column: 1 / -1;
 }
 
 .history-latest-button {

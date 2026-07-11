@@ -111,9 +111,11 @@ The runtime-history tabs render a visible window instead of the full retained hi
 
 Retained runtime-history lines should stay outside React render state. React should track only visible-window controls, lightweight index rows, selected detail entries, and invalidation counters; otherwise every appended log copies and reconciles thousands of retained lines even when the DOM window is capped.
 
-The human runtime-history view should use a frame index on the left and a selected one-frame detail pane on the right. The index is populated whenever a human detail log is generated, including frames where StateNo did not change. Clicking an index row loads that frame's retained detail from the non-rendering store. New log entries must not automatically replace the selected detail pane; use the latest-frame action for that.
+The human runtime-history view should use a frame index on the left and a selected one-entry detail pane on the right. The index is populated whenever a human detail log is generated, including frames where StateNo did not change. If one frame crosses multiple P1 StateNo values, retain separate entries keyed by `frameNo + StateNo`. Clicking an index row loads that retained detail from the non-rendering store. New log entries must not automatically replace the selected detail pane; use the latest-frame action for that.
 
 Human-readable detail entries include a `StateDef` source link. Clicking it should open `Character Files` at the StateDef header line so the active state can be inspected quickly.
+
+The human detail pane and `Character Files` pane can be hidden with Show/Hide controls. This keeps heavy State status markup and source/AIR preview canvases out of the DOM during long debugging sessions. `Character Files` must still be openable from a button even when no StateDef source link has been clicked.
 
 Runtime log tabs should provide a clear action that drops retained human and AI logs together. This is for long debugging sessions where retained history is no longer useful and memory/DOM pressure should be reset.
 
