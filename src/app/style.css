@@ -61,6 +61,34 @@ canvas {
   white-space: normal;
 }
 
+.page-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 16px;
+  border-bottom: 1px solid #475569;
+}
+
+.page-tabs button {
+  border: 1px solid #475569;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  background: #172033;
+  color: #cbd5e1;
+  cursor: pointer;
+  font-weight: 800;
+  padding: 11px 16px;
+}
+
+.page-tabs button:hover {
+  background: #334155;
+  color: #ffffff;
+}
+
+.page-tabs button.active {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
 .debug-tabs {
   display: flex;
   gap: 8px;
@@ -140,6 +168,10 @@ canvas {
   border-top: none;
   background: #0f172a;
   padding: 16px;
+}
+
+.page-debug-panel {
+  border-top: 1px solid #334155;
 }
 
 .debug-grid {

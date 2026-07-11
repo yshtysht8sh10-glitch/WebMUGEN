@@ -58,6 +58,8 @@ The static tab should show information that does not change frame-by-frame:
 
 If a route is missing from the static tab, suspect loader/parser/merge before runtime.
 
+The Debug UI is split into top-level pages. The game canvas, runtime logs, manual, and settings live under the play/runtime page. Static information and `Character Files` live under a separate static/files page so heavy source viewers and AIR previews are not part of the normal play/debug DOM.
+
 `Character Files` shows loaded character text files and the applied common CNS. It should span the full static-info width so long CNS/AIR files remain readable. Source scrolling is remembered per file; changing tabs or switching files must not reuse another file's scroll position.
 
 The file list is shown as a compact multi-column list above the source reader. The source reader itself is on the next row with a summary pane on the left and text on the right. The summary pane should expose useful jump points such as AIR `Begin Action`, CNS `StateDef`, CMD `Command`, and DEF sections. Summary items jump the text reader to the corresponding source line.
@@ -116,6 +118,8 @@ The human runtime-history view should use a frame index on the left and a select
 Human-readable detail entries include a `StateDef` source link. Clicking it should open `Character Files` at the StateDef header line so the active state can be inspected quickly.
 
 The human detail pane and `Character Files` pane can be hidden with Show/Hide controls. This keeps heavy State status markup and source/AIR preview canvases out of the DOM during long debugging sessions. `Character Files` must still be openable from a button even when no StateDef source link has been clicked.
+
+When a runtime detail link opens a source location, the UI should switch to the static/files page, reveal `Character Files`, and scroll to the requested file and line.
 
 Runtime log tabs should provide a clear action that drops retained human and AI logs together. This is for long debugging sessions where retained history is no longer useful and memory/DOM pressure should be reset.
 

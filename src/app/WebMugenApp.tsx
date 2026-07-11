@@ -100,7 +100,8 @@ const DEFAULT_RUNTIME_SETTINGS: RuntimeSettings = {
   frameIntervalMs: DEFAULT_FRAME_INTERVAL_MS,
 };
 
-type DebugTab = 'runtime-human' | 'runtime-ai' | 'static' | 'manual' | 'settings';
+type AppPage = 'play' | 'static-files';
+type DebugTab = 'runtime-human' | 'runtime-ai' | 'manual' | 'settings';
 type RuntimeLogTab = 'human' | 'ai';
 type CnsSourceSelection = { path: string; line: number } | null;
 
@@ -173,6 +174,7 @@ export function WebMugenApp() {
   const [runtimeFrameIndexAutoScroll, setRuntimeFrameIndexAutoScroll] = useState(true);
   const [stateTransitionLogLines, setStateTransitionLogLines] = useState<string[]>(['StateNoが変化すると、ここに遷移だけが残ります。']);
   const [stageDebugLines, setStageDebugLines] = useState<string[]>(['State: -']);
+  const [activePage, setActivePage] = useState<AppPage>('play');
   const [activeDebugTab, setActiveDebugTab] = useState<DebugTab>('runtime-human');
   const [aiHistoryWindow, setAiHistoryWindow] = useState<RuntimeHistoryWindow>({ mode: 'latest' });
   const [copyStatus, setCopyStatus] = useState('');
@@ -473,7 +475,10 @@ export function WebMugenApp() {
 
   const openCnsSource = (selection: CnsSourceSelection) => {
     setSelectedCnsSource(selection);
-    if (selection) setShowCharacterFiles(true);
+    if (selection) {
+      setShowCharacterFiles(true);
+      setActivePage('static-files');
+    }
   };
 
   const handleSelectRuntimeFrame = (entry: RuntimeLogIndexEntry) => {
@@ -528,36 +533,74 @@ export function WebMugenApp() {
         <p>CharacterLoader app integration prototype</p>
       </header>
 
-      <section className="stage-panel">
-        <div className="stage-viewport">
-          <canvas
-            ref={canvasRef}
-            width={960}
-            height={540}
+      <AppPageTabs activePage={activePage} onChange={setActivePage} />
+
+      {activePage === 'play' ? (
+        <>
+          <section className="stage-panel">
+            <div className="stage-viewport">
+              <canvas
+                ref={canvasRef}
+                width={960}
+                height={540}
+              />
+              <div className="stage-debug-overlay" aria-label="stage debug overlay">
+                {stageDebugLines.map((line, index) => (
+                  <div key={`${line}-${index}`}>{line}</div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <DebugTabsV2 activeTab={activeDebugTab} onChange={setActiveDebugTab} />
+          <CopyToolbarV2
+            activeTab={activeDebugTab}
+            visibleAiLines={visibleAiHistory.lines}
+            allAiLinesRef={runtimeHistoryRef}
+            selectedReadableEntry={selectedReadableEntry}
+            readableIndexStoreRef={readableIndexStoreRef}
+            readableEntryStoreRef={readableEntryStoreRef}
+            copyStatus={copyStatus}
+            onCopy={handleCopy}
+            onClearLogs={clearRuntimeLogs}
           />
-          <div className="stage-debug-overlay" aria-label="stage debug overlay">
-            {stageDebugLines.map((line, index) => (
-              <div key={`${line}-${index}`}>{line}</div>
-            ))}
-          </div>
-        </div>
-      </section>
 
-      <DebugTabsV2 activeTab={activeDebugTab} onChange={setActiveDebugTab} />
-      <CopyToolbarV2
-        activeTab={activeDebugTab}
-        visibleAiLines={visibleAiHistory.lines}
-        allAiLinesRef={runtimeHistoryRef}
-        selectedReadableEntry={selectedReadableEntry}
-        readableIndexStoreRef={readableIndexStoreRef}
-        readableEntryStoreRef={readableEntryStoreRef}
-        copyStatus={copyStatus}
-        onCopy={handleCopy}
-        onClearLogs={clearRuntimeLogs}
-      />
-
-      <section className="debug-panel">
-        {activeDebugTab === 'static' && (
+          <section className="debug-panel">
+            {activeDebugTab === 'runtime-human' && (
+              <HumanRuntimePanel
+                indexEntries={runtimeLogIndexEntries}
+                selectedEntry={selectedReadableEntry}
+                onSelectFrame={handleSelectRuntimeFrame}
+                showHumanDetail={showHumanDetail}
+                onToggleHumanDetail={() => setShowHumanDetail((visible) => !visible)}
+                autoScrollIndex={runtimeFrameIndexAutoScroll}
+                onToggleAutoScrollIndex={() => setRuntimeFrameIndexAutoScroll((enabled) => !enabled)}
+                onShowLatest={showLatestRuntimeHistory}
+                onOpenCnsSource={openCnsSource}
+              />
+            )}
+            {activeDebugTab === 'runtime-ai' && (
+              <AiRuntimePanel
+                visibleRuntimeHistory={visibleAiHistory}
+                historyWindow={aiHistoryWindow}
+                onShowLatest={showLatestRuntimeHistory}
+              />
+            )}
+            {activeDebugTab === 'manual' && <ManualPanel />}
+            {activeDebugTab === 'settings' && (
+              <SettingsPanel
+                characterPath={characterPath}
+                inputConfig={inputConfig}
+                runtimeSettings={runtimeSettings}
+                onCharacterPathChange={setCharacterPath}
+                onInputConfigChange={setInputConfig}
+                onRuntimeSettingsChange={setRuntimeSettings}
+              />
+            )}
+          </section>
+        </>
+      ) : (
+        <section className="debug-panel page-debug-panel">
           <StaticDebugPanel
             loadMessage={loadMessage}
             staticDebugInfo={staticDebugInfo}
@@ -571,46 +614,8 @@ export function WebMugenApp() {
             showCharacterFiles={showCharacterFiles}
             onToggleCharacterFiles={() => setShowCharacterFiles((visible) => !visible)}
           />
-        )}
-        {activeDebugTab === 'runtime-human' && (
-          <HumanRuntimePanel
-            indexEntries={runtimeLogIndexEntries}
-            selectedEntry={selectedReadableEntry}
-            onSelectFrame={handleSelectRuntimeFrame}
-            showHumanDetail={showHumanDetail}
-            onToggleHumanDetail={() => setShowHumanDetail((visible) => !visible)}
-            autoScrollIndex={runtimeFrameIndexAutoScroll}
-            onToggleAutoScrollIndex={() => setRuntimeFrameIndexAutoScroll((enabled) => !enabled)}
-            onShowLatest={showLatestRuntimeHistory}
-            cnsSourceFiles={cnsSourceFiles}
-            selectedCnsSource={selectedCnsSource}
-            onOpenCnsSource={openCnsSource}
-            sourceScrollPositionsRef={cnsSourceScrollPositionsRef}
-            air={loadedAir}
-            sprites={loadedSprites}
-            showCharacterFiles={showCharacterFiles}
-            onToggleCharacterFiles={() => setShowCharacterFiles((visible) => !visible)}
-          />
-        )}
-        {activeDebugTab === 'runtime-ai' && (
-          <AiRuntimePanel
-            visibleRuntimeHistory={visibleAiHistory}
-            historyWindow={aiHistoryWindow}
-            onShowLatest={showLatestRuntimeHistory}
-          />
-        )}
-        {activeDebugTab === 'manual' && <ManualPanel />}
-        {activeDebugTab === 'settings' && (
-          <SettingsPanel
-            characterPath={characterPath}
-            inputConfig={inputConfig}
-            runtimeSettings={runtimeSettings}
-            onCharacterPathChange={setCharacterPath}
-            onInputConfigChange={setInputConfig}
-            onRuntimeSettingsChange={setRuntimeSettings}
-          />
-        )}
-      </section>
+        </section>
+      )}
     </div>
   );
 }
@@ -1101,17 +1106,27 @@ function formatGamepadMapping(player: PlayerInputMapping): string {
   ].join(', ');
 }
 
+function AppPageTabs({ activePage, onChange }: { activePage: AppPage; onChange: (page: AppPage) => void }) {
+  return (
+    <nav className="page-tabs" aria-label="main page tabs">
+      <button className={activePage === 'play' ? 'active' : ''} onClick={() => onChange('play')} type="button">
+        Game / Runtime
+      </button>
+      <button className={activePage === 'static-files' ? 'active' : ''} onClick={() => onChange('static-files')} type="button">
+        Static Info / Character Files
+      </button>
+    </nav>
+  );
+}
+
 function DebugTabsV2({ activeTab, onChange }: { activeTab: DebugTab; onChange: (tab: DebugTab) => void }) {
   return (
     <nav className="debug-tabs" aria-label="debug tabs">
       <button className={activeTab === 'runtime-human' ? 'active' : ''} onClick={() => onChange('runtime-human')} type="button">
-        実行履歴人間用
+        Human Runtime
       </button>
       <button className={activeTab === 'runtime-ai' ? 'active' : ''} onClick={() => onChange('runtime-ai')} type="button">
-        実行履歴AI用
-      </button>
-      <button className={activeTab === 'static' ? 'active' : ''} onClick={() => onChange('static')} type="button">
-        静的情報
+        AI Runtime
       </button>
       <button className={activeTab === 'manual' ? 'active' : ''} onClick={() => onChange('manual')} type="button">
         Manual
@@ -1457,14 +1472,7 @@ function HumanRuntimePanel({
   autoScrollIndex,
   onToggleAutoScrollIndex,
   onShowLatest,
-  cnsSourceFiles,
-  selectedCnsSource,
   onOpenCnsSource,
-  sourceScrollPositionsRef,
-  air,
-  sprites,
-  showCharacterFiles,
-  onToggleCharacterFiles,
 }: {
   indexEntries: RuntimeLogIndexEntry[];
   selectedEntry: ReadableRuntimeEntry | null;
@@ -1474,14 +1482,7 @@ function HumanRuntimePanel({
   autoScrollIndex: boolean;
   onToggleAutoScrollIndex: () => void;
   onShowLatest: () => void;
-  cnsSourceFiles: CharacterSourceFile[];
-  selectedCnsSource: CnsSourceSelection;
   onOpenCnsSource: (selection: CnsSourceSelection) => void;
-  sourceScrollPositionsRef: MutableRefObject<Record<string, number>>;
-  air: AirDocument | null;
-  sprites: ImageDataSpritePack | null;
-  showCharacterFiles: boolean;
-  onToggleCharacterFiles: () => void;
 }) {
   return (
     <section className="runtime-history-panel">
@@ -1516,24 +1517,6 @@ function HumanRuntimePanel({
           )}
         </section>
       </div>
-      <section className="debug-block character-source-toggle-panel">
-        <div className="collapsible-debug-header">
-          <h2>Character Files</h2>
-          <button type="button" onClick={onToggleCharacterFiles}>{showCharacterFiles ? 'Hide' : 'Show'}</button>
-        </div>
-        {showCharacterFiles ? (
-          <CharacterSourceFilesViewer
-            files={cnsSourceFiles}
-            selection={selectedCnsSource}
-            onSelect={onOpenCnsSource}
-            scrollPositionsRef={sourceScrollPositionsRef}
-            air={air}
-            sprites={sprites}
-          />
-        ) : (
-          <p className="debug-note">Character Files is hidden. Use Show here or click a StateDef link in the detail log.</p>
-        )}
-      </section>
     </section>
   );
 }
