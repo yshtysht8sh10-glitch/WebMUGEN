@@ -131,6 +131,10 @@ Preferred format:
 
 Keep it copyable and grep-friendly.
 
+## HitDef diagnostics
+
+When Runtime Settings `Hit diagnostics` is enabled, AI runtime entries include an event-driven `SECTION hit_diagnostics`. Lines prefixed with `raw.hitdef_activate`, `raw.hit_collision`, `raw.hit_damage`, `raw.hit_reaction`, and `raw.hitdef_lifecycle` share an `activeHitDefId` from controller activation through collision, damage, reaction, consumption, or state-change discard. Missing ActiveHitDef data is labeled `existing_fallback` with an explicit fallback reason. Diagnostics are emitted only for activation changes, the first duplicate registration, collision outcomes, damage, reaction, and lifecycle events; normal frames do not generate hit diagnostic lines.
+
 ## What to look for
 
 | Symptom in history | Interpretation |

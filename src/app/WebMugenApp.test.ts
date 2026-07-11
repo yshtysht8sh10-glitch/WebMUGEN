@@ -71,6 +71,24 @@ describe('WebMugenApp runtime history', () => {
     expect(appendedSnapshot.join('\n')).not.toContain('mutated seed');
   });
 
+  it('includes event-driven hit diagnostics in AI runtime history', () => {
+    const historyRef: MutableRefObject<string[]> = { current: [] };
+    const lastSignatureRef: MutableRefObject<string> = { current: '' };
+    appendRuntimeHistoryIfNeeded({
+      frameNo: 20,
+      inputLines: ['keys=-'], commandLines: ['cmd p1=-'], physicsLines: ['phys p1=-'],
+      roundLine: 'round=1', scoreLine: 'score=-', cnsLines: ['cns=-'], traces: [],
+      hitDiagnosticLines: [
+        'raw.hit_damage target=p2',
+        '  activeHitDefId=123 lifeBefore=1000 appliedDamage=37 lifeAfter=963 source=active_hitdef ko=0',
+      ],
+      pressedKeys: new Set(), historyRef, lastSignatureRef, setHistoryLines: () => undefined,
+    });
+
+    expect(historyRef.current.join('\n')).toContain('SECTION hit_diagnostics');
+    expect(historyRef.current.join('\n')).toContain('activeHitDefId=123');
+  });
+
   it('does not append when only time-like values changed', () => {
     const historyRef: MutableRefObject<string[]> = { current: [] };
     const lastSignatureRef: MutableRefObject<string> = { current: '' };

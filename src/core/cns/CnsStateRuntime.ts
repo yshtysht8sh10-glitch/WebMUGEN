@@ -23,6 +23,7 @@ export type CnsRuntimeInput = {
   p2Commands?: ReadonlySet<string>;
   getAnimationDuration?: (animNo: number) => number | null;
   getAnimationElementNo?: (animNo: number, animTime: number) => number | null;
+  hitDiagnostics?: boolean;
 };
 
 export type CnsRuntimeResult = { state: GameState; traces: CnsRuntimeTrace[] };
@@ -111,6 +112,8 @@ const RECOGNIZED_NO_OP_CONTROLLERS = new Map<string, string>([
   ['zoom', 'Zoom'],
 ]);
 
+let nextActiveHitDefDiagnosticId = 1;
+
 export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, input: CnsRuntimeInput = {}): CnsRuntimeResult {
   if (!cns) return { state, traces: [missingTrace(1, state.players[0], input), missingTrace(2, state.players[1], input)] };
 
@@ -129,7 +132,7 @@ function stepPlayer(
   commands?: ReadonlySet<string>,
 ): { player: PlayerState; trace: CnsRuntimeTrace } {
   const originalStateNo = player.stateNo;
-  let next = { ...player, playerPush: true };
+  let next = { ...player, playerPush: true, hitDiagnosticLines: [] };
   const trace: CnsRuntimeTrace = {
     playerId,
     stateNo: player.stateNo,
@@ -283,6 +286,11 @@ function enterState(player: PlayerState, opponent: PlayerState, stateNo: number,
   const animChanged = player.animNo !== animNo;
   const powered = player as ExtendedPlayerState;
   const power = Math.max(0, (powered.power ?? 0) + (stateDef.powerAdd ?? 0));
+  const hitDiagnosticLines = player.activeHitDef?.diagnosticId ? [
+    ...(player.hitDiagnosticLines ?? []),
+    `raw.hitdef_lifecycle activeHitDefId=${player.activeHitDef.diagnosticId}`,
+    `  event=discard reason=state_change hitCount=${player.hitDefUsed ? 1 : 0}`,
+  ] : player.hitDiagnosticLines;
 
   return {
     ...player,
@@ -300,6 +308,7 @@ function enterState(player: PlayerState, opponent: PlayerState, stateNo: number,
     juggle: stateDef.juggle ?? powered.juggle,
     activeHitDef: null,
     hitDefUsed: false,
+    hitDiagnosticLines,
   } as PlayerState;
 }
 
@@ -701,13 +710,45 @@ function activateHitDef(
   opponent: PlayerState,
 ): ControllerResult {
   const damageParam = controller.params.damage;
-  const damageValue = Array.isArray(damageParam) ? damageParam[0] : damageParam;
-  const damage = cnsValueToNumber(damageValue, player, input, commands, opponent) ?? 60;
+  const damageParts = Array.isArray(damageParam) ? damageParam : damageParam === undefined ? [] : [damageParam];
+  const evaluatedHitDamage = cnsValueToNumber(damageParts[0], player, input, commands, opponent);
+  const evaluatedGuardDamage = cnsValueToNumber(damageParts[1], player, input, commands, opponent);
+  const damage = evaluatedHitDamage ?? 60;
+  const guardDamage = evaluatedGuardDamage ?? 0;
+  const damageSource = evaluatedHitDamage === null ? 'existing_fallback' : 'cns';
+  const controllerKey = [player.id, player.stateNo, controller.sourceFile ?? '-', controller.sourceLine ?? '-'].join(':');
+  const existing = player.activeHitDef;
+  const sameController = existing?.controllerKey === controllerKey;
+  const sameValues = sameController && existing.damageValues?.[0] === damage && existing.damageValues?.[1] === guardDamage;
+  const diagnosticId = sameController && existing?.diagnosticId ? existing.diagnosticId : nextActiveHitDefDiagnosticId++;
+  const action = sameController ? 'update' : 'create';
+  const diagnosticsEnabled = input.hitDiagnostics !== false;
+  const duplicateFirstSeen = diagnosticsEnabled && sameValues && !existing?.duplicateLogged;
+  const hitDiagnosticLines = !diagnosticsEnabled ? [] : duplicateFirstSeen ? [
+    ...(player.hitDiagnosticLines ?? []),
+    `raw.hitdef_lifecycle activeHitDefId=${diagnosticId}`,
+    `  event=duplicate_ignore reason=same_controller_same_values hitCount=${player.hitDefUsed ? 1 : 0}`,
+  ] : sameValues ? (player.hitDiagnosticLines ?? []) : [
+    ...(player.hitDiagnosticLines ?? []),
+    `raw.hitdef_activate attacker=p${player.id} state=${player.stateNo} time=${player.stateTime}`,
+    `  controller=${controller.sourceFile ?? '-'}:${controller.sourceLine ?? '-'} activeHitDefId=${diagnosticId}`,
+    `  damage=${damage},${guardDamage} source=${damageSource} action=${action}`,
+    `raw.hitdef_lifecycle activeHitDefId=${diagnosticId}`,
+    `  event=${action} reason=controller_execute hitCount=${player.hitDefUsed ? 1 : 0}`,
+  ];
   return withPlayer({
     ...player,
+    hitDiagnosticLines,
     activeHitDef: {
       damage: Math.max(0, damage),
-      guardDamage: 0,
+      guardDamage: Math.max(0, guardDamage),
+      diagnosticId,
+      controllerKey,
+      damageValues: [Math.max(0, damage), Math.max(0, guardDamage)],
+      damageSource,
+      missLogged: sameController ? existing?.missLogged : false,
+      rejectedLogged: sameController ? existing?.rejectedLogged : false,
+      duplicateLogged: diagnosticsEnabled && sameValues ? true : false,
       pauseTime: { attacker: 4, defender: 8 },
       groundVelocity: { x: -3.5, y: 0 },
       airVelocity: { x: -2.5, y: -5.5 },

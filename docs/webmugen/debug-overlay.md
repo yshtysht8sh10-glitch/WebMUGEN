@@ -136,6 +136,8 @@ Copy buttons should provide:
 
 The copied text should be sufficient to diagnose the current issue without needing a screenshot.
 
+AI runtime hit diagnostics can be disabled in Runtime Settings. When enabled, they expose the ActiveHitDef identifier, evaluated damage pair and source, collision result, Life before/after, fixed reaction sources, and lifecycle events without adding the same lines every frame.
+
 ## Minimum useful dump
 
 A useful dump includes:

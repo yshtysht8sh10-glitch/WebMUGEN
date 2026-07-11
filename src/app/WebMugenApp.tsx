@@ -93,11 +93,13 @@ const RUNTIME_HISTORY_RENDER_THROTTLE_MS = 250;
 type RuntimeSettings = {
   roundTime: number;
   frameIntervalMs: number;
+  hitDiagnostics: boolean;
 };
 
 const DEFAULT_RUNTIME_SETTINGS: RuntimeSettings = {
   roundTime: DEFAULT_ROUND_TIMER,
   frameIntervalMs: DEFAULT_FRAME_INTERVAL_MS,
+  hitDiagnostics: true,
 };
 
 type AppPage = 'play' | 'static-files';
@@ -333,6 +335,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
               const element = getCurrentAnimationElement(character.air, animNo, animTime);
               return element ? element.elementIndex + 1 : null;
             },
+            hitDiagnostics: runtimeSettingsRef.current.hitDiagnostics,
           });
           nextState = cnsResult.state;
           nextReadableHistoryState = cnsResult.state;
@@ -345,7 +348,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           }
 
           nextState = applyFallbackStageRules(nextState);
-          nextState = resolveFallbackHits(nextState, character.air);
+          nextState = resolveFallbackHits(nextState, character.air, runtimeSettingsRef.current.hitDiagnostics);
           nextState = applyFallbackHitRecovery(nextState);
 
           nextRoundState = stepRoundState(nextRoundState, nextState);
@@ -394,6 +397,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           scoreLine: nextScoreDebugLine,
           cnsLines: nextCnsDebugLines,
           traces: nextCnsTraces,
+          hitDiagnosticLines: nextState.hitDiagnosticLines ?? [],
           pressedKeys,
           historyRef: runtimeHistoryRef,
           lastSignatureRef: lastRuntimeSignatureRef,
@@ -785,6 +789,14 @@ function RuntimeSettingsPanel({
           />
         </label>
         <label>
+          <input
+            type="checkbox"
+            checked={settings.hitDiagnostics}
+            onChange={(event) => onChange({ ...settings, hitDiagnostics: event.currentTarget.checked })}
+          />
+          Hit diagnostics
+        </label>
+        <label>
           Frame ms
           <input
             min={1}
@@ -1031,6 +1043,7 @@ function normalizeRuntimeSettings(value: unknown): RuntimeSettings {
   return {
     roundTime: clampInteger(source.roundTime, 0, 999, DEFAULT_RUNTIME_SETTINGS.roundTime),
     frameIntervalMs: clampNumber(source.frameIntervalMs, 1, 1000, DEFAULT_RUNTIME_SETTINGS.frameIntervalMs),
+    hitDiagnostics: source.hitDiagnostics ?? DEFAULT_RUNTIME_SETTINGS.hitDiagnostics,
   };
 }
 
@@ -2509,6 +2522,7 @@ export function appendRuntimeHistoryIfNeeded({
   scoreLine,
   cnsLines,
   traces,
+  hitDiagnosticLines = [],
   pressedKeys,
   historyRef,
   lastSignatureRef,
@@ -2522,6 +2536,7 @@ export function appendRuntimeHistoryIfNeeded({
   scoreLine: string;
   cnsLines: string[];
   traces: CnsRuntimeTrace[];
+  hitDiagnosticLines?: string[];
   pressedKeys: ReadonlySet<string>;
   historyRef: MutableRefObject<string[]>;
   lastSignatureRef: MutableRefObject<string>;
@@ -2530,7 +2545,7 @@ export function appendRuntimeHistoryIfNeeded({
   const stateChanged = traces.some((trace) => trace.stateNo !== trace.afterStateNo || trace.animNo !== trace.afterAnimNo);
   const controllerRan = traces.some((trace) => trace.executedControllers.length > 0 || trace.debugLines.length > 0);
   const hasInput = pressedKeys.size > 0;
-  if (!hasInput && !stateChanged && !controllerRan) return;
+  if (!hasInput && !stateChanged && !controllerRan && hitDiagnosticLines.length === 0) return;
 
   const snapshot = formatAiRuntimeSnapshot({
     inputLines,
@@ -2540,6 +2555,7 @@ export function appendRuntimeHistoryIfNeeded({
     scoreLine,
     cnsLines,
     traces,
+    hitDiagnosticLines,
     pressedKeys,
   });
   const signature = formatRuntimeHistorySignature({
@@ -2547,6 +2563,7 @@ export function appendRuntimeHistoryIfNeeded({
     inputLines,
     pressedKeys,
     traces,
+    hitDiagnosticLines,
   });
   if (signature === lastSignatureRef.current) return;
 
@@ -2573,6 +2590,7 @@ function formatAiRuntimeSnapshot({
   scoreLine,
   cnsLines,
   traces,
+  hitDiagnosticLines = [],
   pressedKeys,
 }: {
   inputLines: string[];
@@ -2582,6 +2600,7 @@ function formatAiRuntimeSnapshot({
   scoreLine: string;
   cnsLines: string[];
   traces: CnsRuntimeTrace[];
+  hitDiagnosticLines?: string[];
   pressedKeys: ReadonlySet<string>;
 }): string[] {
   return freezeHistoryLines([
@@ -2601,6 +2620,8 @@ function formatAiRuntimeSnapshot({
     ...formatCodexTraceSummaryLines(traces),
     'SECTION cns_trace_detail',
     ...formatCodexTraceDetailLines(traces),
+    'SECTION hit_diagnostics',
+    ...(hitDiagnosticLines.length > 0 ? hitDiagnosticLines : ['raw.hit_diagnostics=-']),
     'END AI_RUNTIME',
   ]);
 }
@@ -2776,16 +2797,19 @@ function formatRuntimeHistorySignature({
   inputLines,
   pressedKeys,
   traces,
+  hitDiagnosticLines = [],
 }: {
   commandLines: string[];
   inputLines: string[];
   pressedKeys: ReadonlySet<string>;
   traces: CnsRuntimeTrace[];
+  hitDiagnosticLines?: string[];
 }): string {
   return [
     formatPressedKeys(pressedKeys),
     ...inputLines.filter((line) => !/^keys=/.test(line)),
     ...commandLines,
+    ...hitDiagnosticLines,
     ...traces.map((trace) => [
       trace.playerId,
       trace.stateNo,

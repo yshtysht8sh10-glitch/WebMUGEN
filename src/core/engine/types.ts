@@ -24,6 +24,13 @@ export type Rect = {
 };
 
 export type ActiveHitDef = {
+  diagnosticId?: number;
+  controllerKey?: string;
+  damageValues?: [number, number];
+  damageSource?: 'cns' | 'existing_fallback';
+  missLogged?: boolean;
+  rejectedLogged?: boolean;
+  duplicateLogged?: boolean;
   damage: number;
   guardDamage: number;
   pauseTime: {
@@ -60,6 +67,7 @@ export type PlayerState = {
   activeHitDef: ActiveHitDef | null;
   hitDefUsed: boolean;
   playerPush?: boolean;
+  hitDiagnosticLines?: string[];
 };
 
 export type ProjectileState = {
@@ -89,6 +97,7 @@ export type GameState = {
   players: [PlayerState, PlayerState];
   projectiles: ProjectileState[];
   hitEvents: HitEvent[];
+  hitDiagnosticLines?: string[];
   commandBuffers?: [InputBuffer, InputBuffer];
   commandNames?: [ReadonlySet<string>, ReadonlySet<string>];
 };

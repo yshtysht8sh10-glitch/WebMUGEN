@@ -11,7 +11,7 @@ const ATTACKER_HIT_PAUSE = 4;
 const DEFENDER_HIT_PAUSE = 8;
 const STAND_HIT_STATE = 5000;
 
-export function resolveFallbackHits(state: GameState, airDocument?: AirDocument | null): GameState {
+export function resolveFallbackHits(state: GameState, airDocument?: AirDocument | null, diagnosticsEnabled = true): GameState {
   if (!airDocument) {
     return state;
   }
@@ -19,35 +19,104 @@ export function resolveFallbackHits(state: GameState, airDocument?: AirDocument 
   let p1 = state.players[0];
   let p2 = state.players[1];
   const hitEvents: HitEvent[] = [];
+  const hitDiagnosticLines = diagnosticsEnabled ? [
+    ...(p1.hitDiagnosticLines ?? []),
+    ...(p2.hitDiagnosticLines ?? []),
+  ] : [];
 
   const p1Attack = getPlayerAttackBoxes(p1, airDocument);
   const p1Body = getPlayerBodyBoxes(p1, airDocument);
   const p2Attack = getPlayerAttackBoxes(p2, airDocument);
   const p2Body = getPlayerBodyBoxes(p2, airDocument);
 
-  if (canFallbackHit(p1) && p2.hitPause === 0 && anyIntersects(p1Attack, p2Body)) {
-    const damage = p1.activeHitDef?.damage ?? FALLBACK_DAMAGE;
-    p1 = markAttackerHit(p1);
-    p2 = applyFallbackHit(p2, p1, damage);
-    hitEvents.push({ attackerId: 1, defenderId: 2, damage });
-  }
+  const p1Result = resolveAttack(p1, p2, p1Attack, p2Body, diagnosticsEnabled);
+  p1 = p1Result.attacker;
+  p2 = p1Result.target;
+  hitDiagnosticLines.push(...p1Result.diagnosticLines);
+  if (p1Result.hitEvent) hitEvents.push(p1Result.hitEvent);
 
-  if (canFallbackHit(p2) && p1.hitPause === 0 && anyIntersects(p2Attack, p1Body)) {
-    const damage = p2.activeHitDef?.damage ?? FALLBACK_DAMAGE;
-    p2 = markAttackerHit(p2);
-    p1 = applyFallbackHit(p1, p2, damage);
-    hitEvents.push({ attackerId: 2, defenderId: 1, damage });
-  }
+  const p2Result = resolveAttack(p2, p1, p2Attack, p1Body, diagnosticsEnabled);
+  p2 = p2Result.attacker;
+  p1 = p2Result.target;
+  hitDiagnosticLines.push(...p2Result.diagnosticLines);
+  if (p2Result.hitEvent) hitEvents.push(p2Result.hitEvent);
 
   return {
     ...state,
     players: [p1, p2],
     hitEvents,
+    hitDiagnosticLines,
   };
 }
 
-function canFallbackHit(player: PlayerState): boolean {
-  return player.moveType === 'A' && !player.hitDefUsed && player.hitPause === 0;
+function resolveAttack(
+  attacker: PlayerState,
+  target: PlayerState,
+  attackBoxes: ReturnType<typeof getPlayerAttackBoxes>,
+  bodyBoxes: ReturnType<typeof getPlayerBodyBoxes>,
+  diagnosticsEnabled: boolean,
+): { attacker: PlayerState; target: PlayerState; hitEvent: HitEvent | null; diagnosticLines: string[] } {
+  const diagnosticLines: string[] = [];
+  if (attacker.moveType !== 'A' || attacker.hitPause > 0 || attackBoxes.length === 0) {
+    return { attacker, target, hitEvent: null, diagnosticLines };
+  }
+
+  const collided = anyIntersects(attackBoxes, bodyBoxes);
+  const active = attacker.activeHitDef;
+  const activeHitDefId = active?.diagnosticId ?? null;
+  const damage = active?.damage ?? FALLBACK_DAMAGE;
+  const guardDamage = active?.damageValues?.[1] ?? 0;
+  const source = active ? 'active_hitdef' : 'existing_fallback';
+
+  if (attacker.hitDefUsed) {
+    if (diagnosticsEnabled && collided && activeHitDefId !== null && !active?.rejectedLogged) {
+      diagnosticLines.push(
+        `raw.hit_collision attacker=p${attacker.id} target=p${target.id}`,
+        `  activeHitDefId=${activeHitDefId} damage=${damage},${guardDamage} source=${source} result=rejected reason=hitonce_already_consumed`,
+      );
+      attacker = { ...attacker, activeHitDef: active ? { ...active, rejectedLogged: true } : active };
+    }
+    return { attacker, target, hitEvent: null, diagnosticLines };
+  }
+
+  if (!collided || target.hitPause > 0) {
+    if (diagnosticsEnabled && activeHitDefId !== null && !active?.missLogged) {
+      diagnosticLines.push(
+        `raw.hit_collision attacker=p${attacker.id} target=p${target.id}`,
+        `  activeHitDefId=${activeHitDefId} damage=${damage},${guardDamage} source=${source} result=miss reason=${target.hitPause > 0 ? 'target_hitpause' : 'clsn_no_overlap'}`,
+      );
+      attacker = { ...attacker, activeHitDef: active ? { ...active, missLogged: true } : active };
+    }
+    return { attacker, target, hitEvent: null, diagnosticLines };
+  }
+
+  const lifeBefore = target.life;
+  const hitAttacker = markAttackerHit(attacker);
+  const hitTarget = applyFallbackHit(target, hitAttacker, damage);
+  const idText = activeHitDefId === null ? 'none' : String(activeHitDefId);
+  const fallbackReason = active ? '-' : 'active_hitdef_missing';
+  if (diagnosticsEnabled) diagnosticLines.push(
+    `raw.hit_collision attacker=p${attacker.id} target=p${target.id}`,
+    `  activeHitDefId=${idText} damage=${damage},${guardDamage} source=${source} fallbackReason=${fallbackReason} result=hit`,
+    `raw.hit_damage target=p${target.id}`,
+    `  activeHitDefId=${idText} lifeBefore=${lifeBefore} appliedDamage=${damage} lifeAfter=${hitTarget.life} source=${source} ko=${hitTarget.life === 0 ? 1 : 0}`,
+    `raw.hit_reaction target=p${target.id}`,
+    `  state=${STAND_HIT_STATE} source=existing_fallback anim=${STAND_HIT_STATE} source=existing_fallback`,
+    `  velocity=(${hitAttacker.facing * 4},0) source=existing_fallback pausetime=${DEFENDER_HIT_PAUSE} source=existing_fallback`,
+    '  hittime=28 source=hardcoded fall=0 source=existing_fallback',
+  );
+  if (diagnosticsEnabled && activeHitDefId !== null) {
+    diagnosticLines.push(
+      `raw.hitdef_lifecycle activeHitDefId=${activeHitDefId}`,
+      '  event=consume reason=successful_hit hitCount=1',
+    );
+  }
+  return {
+    attacker: hitAttacker,
+    target: hitTarget,
+    hitEvent: { attackerId: attacker.id, defenderId: target.id, damage },
+    diagnosticLines,
+  };
 }
 
 function markAttackerHit(player: PlayerState): PlayerState {
