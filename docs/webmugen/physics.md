@@ -1,6 +1,6 @@
 # Physics Runtime
 
-Updated: 2026-07-06
+Updated: 2026-07-11
 
 This document describes the physics layer after CNS runtime has executed controllers for a frame.
 
@@ -92,6 +92,14 @@ ChangeState 52
 ```
 
 The current ground value is visible in common routing notes where used. Hard-coded temporary values should be documented and eventually replaced with stage/coordinate-aware logic.
+
+## Player push
+
+Fallback stage push uses a simple rectangular push box centered on each player's `x`, extending 22 units to either side and 80 units upward from the player's `y` position. Horizontal separation is applied only when both the horizontal and vertical ranges overlap. This preserves ground contact push while allowing an airborne player whose box has cleared the opponent vertically to cross over and change sides.
+
+`PlayerPush = 0` disables separation when set on either player. Facing is updated from the players' horizontal order before separation, so a completed aerial cross-over faces both players toward each other.
+
+This remains Partial compatibility: the fixed box is a generic fallback and does not yet derive its bounds from character Width data or the current AIR `Clsn2` boxes.
 
 ## Debug Overlay fields
 

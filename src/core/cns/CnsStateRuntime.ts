@@ -41,7 +41,6 @@ type ExtendedPlayerState = PlayerState & {
   hitCount?: number;
   attackMultiplier?: number;
   defenseMultiplier?: number;
-  playerPush?: boolean;
   sprPriority?: number;
   drawOffset?: { x: number; y: number };
   transparent?: string;

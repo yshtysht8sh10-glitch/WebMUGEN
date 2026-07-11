@@ -3,6 +3,15 @@ import type { GameState, PlayerState } from './types';
 const STAGE_LEFT = 48;
 const STAGE_RIGHT = 912;
 const PUSH_DISTANCE = 44;
+const PUSH_HALF_WIDTH = PUSH_DISTANCE / 2;
+const PUSH_HEIGHT = 80;
+
+type PushBox = {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+};
 
 export function applyFallbackStageRules(state: GameState): GameState {
   const [p1, p2] = state.players;
@@ -38,6 +47,16 @@ function applyFacing(p1: PlayerState, p2: PlayerState): [PlayerState, PlayerStat
 }
 
 function applyPushApart(p1: PlayerState, p2: PlayerState): [PlayerState, PlayerState] {
+  if (p1.playerPush === false || p2.playerPush === false) {
+    return [p1, p2];
+  }
+
+  const p1Box = getPushBox(p1);
+  const p2Box = getPushBox(p2);
+  if (!overlapsVertically(p1Box, p2Box)) {
+    return [p1, p2];
+  }
+
   const distance = p2.x - p1.x;
   const overlap = PUSH_DISTANCE - Math.abs(distance);
 
@@ -59,6 +78,19 @@ function applyPushApart(p1: PlayerState, p2: PlayerState): [PlayerState, PlayerS
     { ...p1, x: p1.x - direction * push },
     { ...p2, x: p2.x + direction * push },
   ];
+}
+
+function getPushBox(player: PlayerState): PushBox {
+  return {
+    left: player.x - PUSH_HALF_WIDTH,
+    right: player.x + PUSH_HALF_WIDTH,
+    top: player.y - PUSH_HEIGHT,
+    bottom: player.y,
+  };
+}
+
+function overlapsVertically(a: PushBox, b: PushBox): boolean {
+  return a.bottom > b.top && b.bottom > a.top;
 }
 
 function clampToStage(player: PlayerState): PlayerState {

@@ -59,6 +59,7 @@ export type PlayerState = {
   hitPause: number;
   activeHitDef: ActiveHitDef | null;
   hitDefUsed: boolean;
+  playerPush?: boolean;
 };
 
 export type ProjectileState = {

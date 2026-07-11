@@ -116,6 +116,17 @@ export function executeController(
         projectiles: [],
       };
 
+    case 'playerpush':
+      return {
+        player: {
+          ...player,
+          playerPush: readOptionalBoolean(controller, 'value') ?? true,
+        },
+        changedState: false,
+        velocityChanged: false,
+        projectiles: [],
+      };
+
     case 'changeanim':
       return {
         player: executeChangeAnim(player, controller),

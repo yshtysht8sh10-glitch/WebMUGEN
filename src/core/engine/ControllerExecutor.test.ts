@@ -77,6 +77,21 @@ describe('executeController', () => {
     expect(result.player.ctrl).toBe(false);
   });
 
+  it('executes PlayerPush', () => {
+    const player = createInitialGameState().players[0];
+    const controller: CnsStateController = {
+      type: 'PlayerPush',
+      triggers: [],
+      params: {
+        value: 0,
+      },
+    };
+
+    const result = executeController(player, controller);
+
+    expect(result.player.playerPush).toBe(false);
+  });
+
   it('executes ChangeAnim', () => {
     const player = createInitialGameState().players[0];
     const controller: CnsStateController = {
