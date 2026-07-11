@@ -9,11 +9,16 @@ export type InputFrame = {
 
 export class InputBuffer {
   private readonly frames: InputFrame[] = [];
+  private facing: 1 | -1 | null = null;
 
   constructor(private readonly maxFrames = 60) {}
 
-  push(input: PlayerInput): void {
-    this.frames.unshift(inputToFrame(input));
+  push(input: PlayerInput, facing: 1 | -1 = 1): void {
+    if (this.facing !== null && this.facing !== facing) {
+      this.frames.length = 0;
+    }
+    this.facing = facing;
+    this.frames.unshift(inputToFrame(input, facing));
 
     if (this.frames.length > this.maxFrames) {
       this.frames.length = this.maxFrames;
@@ -26,6 +31,7 @@ export class InputBuffer {
 
   clone(): InputBuffer {
     const clone = new InputBuffer(this.maxFrames);
+    clone.facing = this.facing;
     clone.frames.push(
       ...this.frames.map((frame) => ({
         direction: frame.direction,
@@ -37,12 +43,13 @@ export class InputBuffer {
 
   clear(): void {
     this.frames.length = 0;
+    this.facing = null;
   }
 }
 
-export function inputToFrame(input: PlayerInput): InputFrame {
+export function inputToFrame(input: PlayerInput, facing: 1 | -1 = 1): InputFrame {
   return {
-    direction: inputToDirection(input),
+    direction: inputToDirection(input, facing),
     buttons: inputToButtons(input),
   };
 }
@@ -63,18 +70,18 @@ export function inputToButtons(input: PlayerInput): Set<string> {
   return buttons;
 }
 
-export function inputToDirection(input: PlayerInput): DirectionToken {
-  const left = input.left;
-  const right = input.right;
+export function inputToDirection(input: PlayerInput, facing: 1 | -1 = 1): DirectionToken {
+  const forward = facing === 1 ? input.right : input.left;
+  const back = facing === 1 ? input.left : input.right;
   const up = input.up ?? false;
   const down = input.down ?? false;
 
-  if (right && down) return 'DF';
-  if (left && down) return 'DB';
-  if (right && up) return 'UF';
-  if (left && up) return 'UB';
-  if (right) return 'F';
-  if (left) return 'B';
+  if (forward && down) return 'DF';
+  if (back && down) return 'DB';
+  if (forward && up) return 'UF';
+  if (back && up) return 'UB';
+  if (forward) return 'F';
+  if (back) return 'B';
   if (down) return 'D';
   if (up) return 'U';
   return 'N';

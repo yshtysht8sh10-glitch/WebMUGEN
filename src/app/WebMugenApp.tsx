@@ -290,10 +290,11 @@ export function WebMugenApp() {
         const inputSnapshot = createInputDebugSnapshot(pressedKeys);
         const p1Input = keysToP1Input(pressedKeys, config);
         const p2Input = keysToP2Input(pressedKeys, config);
-        p1CommandBufferRef.current.push(p1Input);
-        p2CommandBufferRef.current.push(p2Input);
-        const p1Commands = normalizeResolvedCommands(resolveCommands(character.cmd, p1Input, p1CommandBufferRef.current).activeCommandNames);
-        const p2Commands = normalizeResolvedCommands(resolveCommands(character.cmd, p2Input, p2CommandBufferRef.current).activeCommandNames);
+        const currentPlayers = gameStateRef.current.players;
+        p1CommandBufferRef.current.push(p1Input, currentPlayers[0].facing);
+        p2CommandBufferRef.current.push(p2Input, currentPlayers[1].facing);
+        const p1Commands = normalizeResolvedCommands(resolveCommands(character.cmd, p1Input, p1CommandBufferRef.current, currentPlayers[0].facing).activeCommandNames);
+        const p2Commands = normalizeResolvedCommands(resolveCommands(character.cmd, p2Input, p2CommandBufferRef.current, currentPlayers[1].facing).activeCommandNames);
 
         const nextInputDebugLines = formatInputDebugOverlay(inputSnapshot);
         const nextCommandDebugLines = formatCnsCommandDebugOverlay(p1Commands, p2Commands);

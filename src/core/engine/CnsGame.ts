@@ -21,8 +21,8 @@ export function stepGameByCns(
 ): GameState {
   const p1RawInput = input.p1;
   const p2RawInput = input.p2 ?? { left: false, right: false, up: false, down: false, attack: false };
-  const p1CommandInput = attachCommands(p1RawInput, cmdDocument, current.commandBuffers?.[0]);
-  const p2CommandInput = attachCommands(p2RawInput, cmdDocument, current.commandBuffers?.[1]);
+  const p1CommandInput = attachCommands(p1RawInput, current.players[0].facing, cmdDocument, current.commandBuffers?.[0]);
+  const p2CommandInput = attachCommands(p2RawInput, current.players[1].facing, cmdDocument, current.commandBuffers?.[1]);
   const controlledState = applyFallbackControls(current, p1CommandInput.input, p2CommandInput.input);
 
   const p1Result = stepPlayerByCnsWithEvents(
@@ -77,15 +77,16 @@ type AttachedCommandInput = {
 
 function attachCommands(
   input: PlayerInput,
+  facing: PlayerState['facing'],
   cmdDocument?: CmdDocument,
   previousBuffer?: InputBuffer,
 ): AttachedCommandInput {
   const buffer = input.inputBuffer?.clone() ?? previousBuffer?.clone() ?? new InputBuffer();
-  buffer.push(input);
+  buffer.push(input, facing);
 
   const resolvedCommandNames = cmdDocument
-    ? normalizeCommandNames(resolveCommands(cmdDocument, input, buffer).activeCommandNames)
-    : normalizeCommandNames(input.commandNames ?? createLegacyCommandNames(input));
+    ? normalizeCommandNames(resolveCommands(cmdDocument, input, buffer, facing).activeCommandNames)
+    : normalizeCommandNames(input.commandNames ?? createLegacyCommandNames(input, facing));
 
   return {
     input: {
@@ -102,15 +103,15 @@ function normalizeCommandNames(commands: Iterable<string>): ReadonlySet<string> 
   return new Set(Array.from(commands, (command) => command.toLowerCase()));
 }
 
-function createLegacyCommandNames(input: PlayerInput): ReadonlySet<string> {
+function createLegacyCommandNames(input: PlayerInput, facing: PlayerState['facing']): ReadonlySet<string> {
   const commands = new Set<string>();
 
-  if (input.right) commands.add('holdfwd');
-  if (input.left) commands.add('holdback');
+  if (facing === 1 ? input.right : input.left) commands.add('holdfwd');
+  if (facing === 1 ? input.left : input.right) commands.add('holdback');
   if (input.up) commands.add('holdup');
   if (input.down) commands.add('holddown');
-  if (input.right && input.up) commands.add('holdfwd_up');
-  if (input.left && input.up) commands.add('holdback_up');
+  if ((facing === 1 ? input.right : input.left) && input.up) commands.add('holdfwd_up');
+  if ((facing === 1 ? input.left : input.right) && input.up) commands.add('holdback_up');
   if (input.attack) commands.add('a');
 
   for (const button of readButtons(input.buttons)) {

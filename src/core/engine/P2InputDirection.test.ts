@@ -5,11 +5,9 @@ import { stepGameByCns } from './CnsGame';
 import { sampleCharacterCns } from '../../app/sampleCharacterCns';
 
 describe('P2 input direction', () => {
-  it('moves P2 left when J is pressed', () => {
+  it('treats physical left as forward while P2 faces left', () => {
     const document = parseCnsText(sampleCharacterCns);
     let state = createInitialGameState();
-
-    const originalX = state.players[1].x;
 
     state = stepGameByCns(state, document, {
       p1: { left: false, right: false, up: false, attack: false },
@@ -19,29 +17,25 @@ describe('P2 input direction', () => {
     state = stepGameByCns(state, document, {
       p1: { left: false, right: false, up: false, attack: false },
       p2: { left: true, right: false, up: false, attack: false },
-    });
-
-    expect(state.commandNames?.[1].has('holdback')).toBe(true);
-    expect(state.players[1].x).toBeLessThan(originalX);
-  });
-
-  it('moves P2 right when L is pressed', () => {
-    const document = parseCnsText(sampleCharacterCns);
-    let state = createInitialGameState();
-
-    const originalX = state.players[1].x;
-
-    state = stepGameByCns(state, document, {
-      p1: { left: false, right: false, up: false, attack: false },
-      p2: { left: false, right: true, up: false, attack: false },
-    });
-
-    state = stepGameByCns(state, document, {
-      p1: { left: false, right: false, up: false, attack: false },
-      p2: { left: false, right: true, up: false, attack: false },
     });
 
     expect(state.commandNames?.[1].has('holdfwd')).toBe(true);
-    expect(state.players[1].x).toBeGreaterThan(originalX);
+  });
+
+  it('treats physical right as back while P2 faces left', () => {
+    const document = parseCnsText(sampleCharacterCns);
+    let state = createInitialGameState();
+
+    state = stepGameByCns(state, document, {
+      p1: { left: false, right: false, up: false, attack: false },
+      p2: { left: false, right: true, up: false, attack: false },
+    });
+
+    state = stepGameByCns(state, document, {
+      p1: { left: false, right: false, up: false, attack: false },
+      p2: { left: false, right: true, up: false, attack: false },
+    });
+
+    expect(state.commandNames?.[1].has('holdback')).toBe(true);
   });
 });

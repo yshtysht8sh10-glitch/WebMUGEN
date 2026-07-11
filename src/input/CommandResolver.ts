@@ -11,9 +11,10 @@ export function resolveCommands(
   document: CmdDocument,
   input: PlayerInput,
   buffer?: InputBuffer,
+  facing: 1 | -1 = 1,
 ): CommandState {
   const activeCommandNames = new Set<string>();
-  const frames = buffer ? buffer.getFrames() : [inputToFrame(input)];
+  const frames = buffer ? buffer.getFrames() : [inputToFrame(input, facing)];
 
   for (const command of document.commands) {
     if (matchesCommand(command, frames)) {
@@ -21,7 +22,7 @@ export function resolveCommands(
     }
   }
 
-  addRawDirectionCommandAliases(activeCommandNames, input);
+  addRawDirectionCommandAliases(activeCommandNames, input, facing);
 
   return {
     activeCommandNames,
@@ -32,7 +33,9 @@ export function hasCommand(commandState: CommandState, commandName: string): boo
   return commandState.activeCommandNames.has(commandName.toLowerCase());
 }
 
-function addRawDirectionCommandAliases(commandNames: Set<string>, input: PlayerInput): void {
+function addRawDirectionCommandAliases(commandNames: Set<string>, input: PlayerInput, facing: 1 | -1): void {
+  const forward = facing === 1 ? input.right : input.left;
+  const back = facing === 1 ? input.left : input.right;
   if (input.up) {
     commandNames.add('holdup');
     commandNames.add('up');
@@ -43,29 +46,29 @@ function addRawDirectionCommandAliases(commandNames: Set<string>, input: PlayerI
     commandNames.add('down');
   }
 
-  if (input.right) {
+  if (forward) {
     commandNames.add('holdfwd');
     commandNames.add('fwd');
   }
 
-  if (input.left) {
+  if (back) {
     commandNames.add('holdback');
     commandNames.add('back');
   }
 
-  if (input.right && input.up) {
+  if (forward && input.up) {
     commandNames.add('holdfwd_up');
   }
 
-  if (input.left && input.up) {
+  if (back && input.up) {
     commandNames.add('holdback_up');
   }
 
-  if (input.right && input.down) {
+  if (forward && input.down) {
     commandNames.add('holdfwd_down');
   }
 
-  if (input.left && input.down) {
+  if (back && input.down) {
     commandNames.add('holdback_down');
   }
 }

@@ -53,11 +53,11 @@ export function simulateCnsInputScenario(
     for (let i = 0; i < count; i += 1) {
       const p1Input = step.p1Input ?? keysToP1Input(new Set(step.p1Keys ?? []));
       const p2Input = step.p2Input ?? keysToP2Input(new Set(step.p2Keys ?? []));
-      p1Buffer.push(p1Input);
-      p2Buffer.push(p2Input);
+      p1Buffer.push(p1Input, state.players[0].facing);
+      p2Buffer.push(p2Input, state.players[1].facing);
 
-      const p1Commands = normalizeCommands(resolveCommands(character.cmd, p1Input, p1Buffer).activeCommandNames);
-      const p2Commands = normalizeCommands(resolveCommands(character.cmd, p2Input, p2Buffer).activeCommandNames);
+      const p1Commands = normalizeCommands(resolveCommands(character.cmd, p1Input, p1Buffer, state.players[0].facing).activeCommandNames);
+      const p2Commands = normalizeCommands(resolveCommands(character.cmd, p2Input, p2Buffer, state.players[1].facing).activeCommandNames);
       const cnsResult = stepCnsStateRuntime(state, character.cns, {
         p1Commands: new Set(p1Commands),
         p2Commands: new Set(p2Commands),
