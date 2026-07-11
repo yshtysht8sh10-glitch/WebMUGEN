@@ -123,7 +123,7 @@ If the controller only stores a field or is skipped safely, mark Partial.
 
 `AfterImage` as safe no-op is Partial because the visual effect is missing.
 
-`HitDef` is Partial. The live CNS runtime creates a limited `ActiveHitDef` and applies its damage through collision resolution, while pause, velocity, hit time, animation, fall, guard, flags, targets, and broader combat semantics remain incomplete.
+`HitDef` is Partial. The live CNS runtime creates a limited `ActiveHitDef`, applies damage, and selects ground/air hit time at contact, while pause, velocity, animation, fall, guard, flags, targets, and broader combat semantics remain incomplete.
 
 ## Debugging controller issues
 

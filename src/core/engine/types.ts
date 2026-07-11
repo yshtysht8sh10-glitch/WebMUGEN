@@ -31,6 +31,12 @@ export type ActiveHitDef = {
   missLogged?: boolean;
   rejectedLogged?: boolean;
   duplicateLogged?: boolean;
+  groundHitTime?: number;
+  airHitTime?: number;
+  groundHitTimeSource?: 'cns' | 'hardcoded';
+  airHitTimeSource?: 'cns' | 'hardcoded';
+  groundHitTimeFallbackReason?: string;
+  airHitTimeFallbackReason?: string;
   damage: number;
   guardDamage: number;
   pauseTime: {
@@ -68,6 +74,14 @@ export type PlayerState = {
   hitDefUsed: boolean;
   playerPush?: boolean;
   hitDiagnosticLines?: string[];
+  hitStun?: {
+    activeHitDefId: number | null;
+    selectedHitTime: number;
+    kind: 'ground' | 'air' | 'fallback';
+    source: 'active_hitdef' | 'hardcoded';
+    targetStateTypeAtHit: PlayerState['stateType'];
+    fallbackReason?: string;
+  };
 };
 
 export type ProjectileState = {

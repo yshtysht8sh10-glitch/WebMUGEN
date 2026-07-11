@@ -715,11 +715,24 @@ function activateHitDef(
   const evaluatedGuardDamage = cnsValueToNumber(damageParts[1], player, input, commands, opponent);
   const damage = evaluatedHitDamage ?? 60;
   const guardDamage = evaluatedGuardDamage ?? 0;
+  const groundHitTimeParam = controller.params['ground.hittime'];
+  const airHitTimeParam = controller.params['air.hittime'];
+  const evaluatedGroundHitTime = cnsValueToNumber(groundHitTimeParam, player, input, commands, opponent);
+  const evaluatedAirHitTime = cnsValueToNumber(airHitTimeParam, player, input, commands, opponent);
+  const groundHitTime = evaluatedGroundHitTime === null ? undefined : Math.max(0, evaluatedGroundHitTime);
+  const airHitTime = evaluatedAirHitTime === null ? undefined : Math.max(0, evaluatedAirHitTime);
+  const groundHitTimeFallbackReason = groundHitTime === undefined
+    ? groundHitTimeParam === undefined ? 'missing_ground_hittime' : 'invalid_ground_hittime'
+    : undefined;
+  const airHitTimeFallbackReason = airHitTime === undefined
+    ? airHitTimeParam === undefined ? 'missing_air_hittime' : 'invalid_air_hittime'
+    : undefined;
   const damageSource = evaluatedHitDamage === null ? 'existing_fallback' : 'cns';
   const controllerKey = [player.id, player.stateNo, controller.sourceFile ?? '-', controller.sourceLine ?? '-'].join(':');
   const existing = player.activeHitDef;
   const sameController = existing?.controllerKey === controllerKey;
-  const sameValues = sameController && existing.damageValues?.[0] === damage && existing.damageValues?.[1] === guardDamage;
+  const sameValues = sameController && existing.damageValues?.[0] === damage && existing.damageValues?.[1] === guardDamage
+    && existing.groundHitTime === groundHitTime && existing.airHitTime === airHitTime;
   const diagnosticId = sameController && existing?.diagnosticId ? existing.diagnosticId : nextActiveHitDefDiagnosticId++;
   const action = sameController ? 'update' : 'create';
   const diagnosticsEnabled = input.hitDiagnostics !== false;
@@ -733,6 +746,8 @@ function activateHitDef(
     `raw.hitdef_activate attacker=p${player.id} state=${player.stateNo} time=${player.stateTime}`,
     `  controller=${controller.sourceFile ?? '-'}:${controller.sourceLine ?? '-'} activeHitDefId=${diagnosticId}`,
     `  damage=${damage},${guardDamage} source=${damageSource} action=${action}`,
+    `  groundHitTime=${groundHitTime ?? 28} source=${groundHitTime === undefined ? 'hardcoded' : 'cns'}${groundHitTimeFallbackReason ? ` fallbackReason=${groundHitTimeFallbackReason}` : ''}`,
+    `  airHitTime=${airHitTime ?? 28} source=${airHitTime === undefined ? 'hardcoded' : 'cns'}${airHitTimeFallbackReason ? ` fallbackReason=${airHitTimeFallbackReason}` : ''}`,
     `raw.hitdef_lifecycle activeHitDefId=${diagnosticId}`,
     `  event=${action} reason=controller_execute hitCount=${player.hitDefUsed ? 1 : 0}`,
   ];
@@ -746,6 +761,12 @@ function activateHitDef(
       controllerKey,
       damageValues: [Math.max(0, damage), Math.max(0, guardDamage)],
       damageSource,
+      groundHitTime,
+      airHitTime,
+      groundHitTimeSource: groundHitTime === undefined ? 'hardcoded' : 'cns',
+      airHitTimeSource: airHitTime === undefined ? 'hardcoded' : 'cns',
+      groundHitTimeFallbackReason,
+      airHitTimeFallbackReason,
       missLogged: sameController ? existing?.missLogged : false,
       rejectedLogged: sameController ? existing?.rejectedLogged : false,
       duplicateLogged: diagnosticsEnabled && sameValues ? true : false,

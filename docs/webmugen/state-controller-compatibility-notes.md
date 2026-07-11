@@ -29,7 +29,7 @@ Recognized safe no-ops are normally **Partial**, not Complete.
 | Player collision | `PlayerPush`, `Width` | `PlayerPush = 0` disables separation for its execution frame. Grounded players retain horizontal push; airborne players may cross only after the fixed generic rectangles clear vertically. `Width` is still stored only and AIR `Clsn2`/character width integration remains incomplete. |
 | Life/power | `LifeAdd`, `LifeSet`, `PowerAdd`, `PowerSet` | Basic behavior exists. Header `poweradd` is tracked separately as a StateDef header field. |
 | Vars | `VarSet`, `VarAdd`, `VarRangeSet`, `VarRandom` | Integer vars exist. `VarRandom` is still a deterministic placeholder. |
-| Hit-related | `HitDef`, `HitBy`, `NotHitBy`, `HitVelSet`, `HitFallVel`, `HitFallDamage` | `HitDef` damage reaches the live collision path through a limited `ActiveHitDef`; pause, velocity, hit time, animation, fall, guard, and flags remain incomplete. Other hit-related controllers are mostly Partial. |
+| Hit-related | `HitDef`, `HitBy`, `NotHitBy`, `HitVelSet`, `HitFallVel`, `HitFallDamage` | `HitDef` damage and ground/air hit time reach the live collision path through a limited `ActiveHitDef`; pause, velocity, animation, fall, guard, and flags remain incomplete. Other hit-related controllers are mostly Partial. |
 | Target-related | `TargetState`, `TargetVelSet`, `TargetLifeAdd`, etc. | Mostly recognized safe no-ops. True target list and custom-state mutation are incomplete. |
 | Helper/Projectile/Explod | `Helper`, `Projectile`, `Explod`, `ModifyExplod`, `RemoveExplod` | CNS runtime recognition exists as Partial; full subsystem behavior must be implemented separately. |
 | Visual/audio effects | `AfterImage`, `PalFX`, `EnvShake`, `PlaySnd`, `Trans`, `AngleDraw` | Mostly Partial safe no-op or field storage. Rendering/audio integration incomplete. |
@@ -54,7 +54,7 @@ Good TypeScript controller logic should:
 
 `AfterImage` should remain Partial if it is only recognized and skipped, because the visual effect is not implemented.
 
-`HitDef` remains Partial: the live runtime applies its damage value, but true WinMUGEN hit resolution, move contact, target creation, guard, hit pause, velocity, and get-hit state integration are incomplete.
+`HitDef` remains Partial: the live runtime applies damage and selects `ground.hittime` or `air.hittime` once from the target state type at contact. True WinMUGEN move contact, target creation, guard, hit pause, velocity, animation, fall, and broader get-hit integration are incomplete.
 
 ## Test expectations
 

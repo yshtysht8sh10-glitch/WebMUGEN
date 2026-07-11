@@ -91,8 +91,25 @@ function resolveAttack(
   }
 
   const lifeBefore = target.life;
+  const targetStateTypeAtHit = target.stateType;
+  const hitTimeKind = targetStateTypeAtHit === 'A' ? 'air' : 'ground';
+  const activeHitTime = hitTimeKind === 'air' ? active?.airHitTime : active?.groundHitTime;
+  const selectedHitTime = activeHitTime ?? 28;
+  const hitTimeSource = activeHitTime === undefined ? 'hardcoded' : 'active_hitdef';
+  const hitTimeFallbackReason = active
+    ? hitTimeKind === 'air'
+      ? active.airHitTimeFallbackReason ?? 'missing_air_hittime'
+      : active.groundHitTimeFallbackReason ?? 'missing_ground_hittime'
+    : 'active_hitdef_missing';
   const hitAttacker = markAttackerHit(attacker);
-  const hitTarget = applyFallbackHit(target, hitAttacker, damage);
+  const hitTarget = applyFallbackHit(target, hitAttacker, damage, {
+    activeHitDefId,
+    selectedHitTime,
+    kind: activeHitTime === undefined ? 'fallback' : hitTimeKind,
+    source: hitTimeSource,
+    targetStateTypeAtHit,
+    ...(activeHitTime === undefined ? { fallbackReason: hitTimeFallbackReason } : {}),
+  });
   const idText = activeHitDefId === null ? 'none' : String(activeHitDefId);
   const fallbackReason = active ? '-' : 'active_hitdef_missing';
   if (diagnosticsEnabled) diagnosticLines.push(
@@ -103,7 +120,10 @@ function resolveAttack(
     `raw.hit_reaction target=p${target.id}`,
     `  state=${STAND_HIT_STATE} source=existing_fallback anim=${STAND_HIT_STATE} source=existing_fallback`,
     `  velocity=(${hitAttacker.facing * 4},0) source=existing_fallback pausetime=${DEFENDER_HIT_PAUSE} source=existing_fallback`,
-    '  hittime=28 source=hardcoded fall=0 source=existing_fallback',
+    `  hittime=${selectedHitTime} source=${hitTimeSource} hittimeKind=${activeHitTime === undefined ? 'fallback' : hitTimeKind} targetStateTypeAtHit=${targetStateTypeAtHit}`,
+    '  fall=0 source=existing_fallback',
+    `raw.hitstun target=p${target.id}`,
+    `  activeHitDefId=${idText} event=start selectedHitTime=${selectedHitTime} kind=${activeHitTime === undefined ? 'fallback' : hitTimeKind} remaining=${selectedHitTime} source=${hitTimeSource}${activeHitTime === undefined ? ` fallbackReason=${hitTimeFallbackReason}` : ''}`,
   );
   if (diagnosticsEnabled && activeHitDefId !== null) {
     diagnosticLines.push(
@@ -127,7 +147,12 @@ function markAttackerHit(player: PlayerState): PlayerState {
   };
 }
 
-function applyFallbackHit(defender: PlayerState, attacker: PlayerState, damage: number): PlayerState {
+function applyFallbackHit(
+  defender: PlayerState,
+  attacker: PlayerState,
+  damage: number,
+  hitStun: NonNullable<PlayerState['hitStun']>,
+): PlayerState {
   return {
     ...defender,
     life: Math.max(0, defender.life - damage),
@@ -144,5 +169,6 @@ function applyFallbackHit(defender: PlayerState, attacker: PlayerState, damage: 
     hitPause: DEFENDER_HIT_PAUSE,
     hitDefUsed: false,
     activeHitDef: null,
+    hitStun,
   };
 }

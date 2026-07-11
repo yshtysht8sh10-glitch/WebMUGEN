@@ -4,6 +4,7 @@ import { createInitialGameState } from './GameState';
 import { resolveFallbackHits } from './FallbackHitResolver';
 import { parseCnsText } from '../../parser/cns/CnsParser';
 import { stepCnsStateRuntime } from '../cns/CnsStateRuntime';
+import { applyFallbackHitRecovery } from './FallbackHitRecovery';
 
 const air = parseAirText(`
 [Begin Action 0]
@@ -20,6 +21,56 @@ Clsn1: 1
 `);
 
 describe('FallbackHitResolver', () => {
+  it.each([7, 20])('uses ground.hittime=%i for a grounded target', (hitTime) => {
+    const hit = resolveConfiguredHit({ damage: 37, groundHitTime: hitTime });
+    const target = hit.players[1];
+
+    expect(target.hitStun).toMatchObject({ selectedHitTime: hitTime, kind: 'ground', source: 'active_hitdef' });
+    expect(hit.hitDiagnosticLines?.join('\n')).toContain(`hittime=${hitTime} source=active_hitdef hittimeKind=ground targetStateTypeAtHit=S`);
+
+    const before = applyFallbackHitRecovery({
+      ...hit,
+      players: [hit.players[0], { ...target, hitPause: 0, stateTime: Math.max(0, hitTime - 1) }],
+    });
+    const ended = applyFallbackHitRecovery({
+      ...hit,
+      players: [hit.players[0], { ...target, hitPause: 0, stateTime: hitTime }],
+    });
+    if (hitTime > 0) expect(before.players[1].ctrl).toBe(false);
+    expect(ended.players[1].stateNo).toBe(0);
+    expect(ended.hitDiagnosticLines?.join('\n')).toContain(`event=end selectedHitTime=${hitTime}`);
+  });
+
+  it('selects air.hittime for a target airborne at contact', () => {
+    const hit = resolveConfiguredHit({ groundHitTime: 20, airHitTime: 11, targetStateType: 'A' });
+
+    expect(hit.players[1].hitStun).toMatchObject({ selectedHitTime: 11, kind: 'air', targetStateTypeAtHit: 'A' });
+    expect(hit.hitDiagnosticLines?.join('\n')).toContain('hittime=11 source=active_hitdef hittimeKind=air targetStateTypeAtHit=A');
+  });
+
+  it('treats ground.hittime=0 as an explicit value', () => {
+    const hit = resolveConfiguredHit({ groundHitTime: 0 });
+
+    expect(hit.players[1].hitStun).toMatchObject({ selectedHitTime: 0, kind: 'ground', source: 'active_hitdef' });
+    expect(hit.hitDiagnosticLines?.join('\n')).not.toContain('missing_ground_hittime');
+  });
+
+  it('uses hardcoded 28 when ground.hittime is missing and logs the reason', () => {
+    const hit = resolveConfiguredHit({ damage: 100 });
+
+    expect(hit.players[1].life).toBe(900);
+    expect(hit.players[1].hitStun).toMatchObject({ selectedHitTime: 28, kind: 'fallback', fallbackReason: 'missing_ground_hittime' });
+    expect(hit.hitDiagnosticLines?.join('\n')).toContain('selectedHitTime=28 kind=fallback');
+    expect(hit.hitDiagnosticLines?.join('\n')).toContain('fallbackReason=missing_ground_hittime');
+  });
+
+  it('applies the same ground.hittime selection when P2 attacks P1', () => {
+    const hit = resolveConfiguredHit({ damage: 100, groundHitTime: 7, attackerId: 2 });
+
+    expect(hit.players[0].life).toBe(900);
+    expect(hit.players[0].hitStun).toMatchObject({ selectedHitTime: 7, kind: 'ground' });
+  });
+
   it.each([7, 37])('applies CNS HitDef damage %i to the live hit path', (damage) => {
     const cns = parseCnsText(`
 [Statedef 200]
@@ -224,6 +275,20 @@ damage = 37, 0
     expect(next.players[1].life).toBe(1000);
   });
 
+  it('does not reset selected hit time after continued contact is rejected', () => {
+    const first = resolveConfiguredHit({ groundHitTime: 7 });
+    const second = resolveFallbackHits({
+      ...first,
+      players: [
+        { ...first.players[0], hitPause: 0 },
+        { ...first.players[1], hitPause: 0 },
+      ],
+    }, air);
+
+    expect(second.hitEvents).toHaveLength(0);
+    expect(second.players[1].hitStun?.selectedHitTime).toBe(7);
+  });
+
   it('does not keep stale hit events when no new contact occurs', () => {
     const state = createInitialGameState();
     const next = resolveFallbackHits(
@@ -258,3 +323,58 @@ damage = 37, 0
     expect(next.hitEvents).toHaveLength(0);
   });
 });
+
+function resolveConfiguredHit({
+  damage = 37,
+  groundHitTime,
+  airHitTime,
+  targetStateType = 'S',
+  attackerId = 1,
+}: {
+  damage?: number;
+  groundHitTime?: number;
+  airHitTime?: number;
+  targetStateType?: 'S' | 'A';
+  attackerId?: 1 | 2;
+}) {
+  const hitTimeLines = [
+    groundHitTime === undefined ? '' : `ground.hittime = ${groundHitTime}`,
+    airHitTime === undefined ? '' : `air.hittime = ${airHitTime}`,
+  ].filter(Boolean).join('\n');
+  const cns = parseCnsText(`
+[Statedef 0]
+type = ${targetStateType}
+movetype = I
+physics = ${targetStateType === 'A' ? 'A' : 'S'}
+[Statedef 200]
+type = S
+movetype = A
+physics = S
+[State 200, Hit]
+type = HitDef
+trigger1 = 1
+damage = ${damage}, 0
+${hitTimeLines}
+`);
+  const initial = createInitialGameState();
+  const attackerIndex = attackerId - 1;
+  const targetIndex = attackerId === 1 ? 1 : 0;
+  const players = [...initial.players] as typeof initial.players;
+  players[attackerIndex] = {
+    ...players[attackerIndex],
+    x: attackerId === 1 ? 240 : 290,
+    facing: attackerId === 1 ? 1 : -1,
+    stateNo: 200,
+    animNo: 200,
+    moveType: 'A',
+  };
+  players[targetIndex] = {
+    ...players[targetIndex],
+    x: attackerId === 1 ? 290 : 240,
+    animNo: 0,
+    stateType: targetStateType,
+    physics: targetStateType === 'A' ? 'A' : 'S',
+  };
+  const runtime = stepCnsStateRuntime({ ...initial, players }, cns).state;
+  return resolveFallbackHits(runtime, air);
+}
