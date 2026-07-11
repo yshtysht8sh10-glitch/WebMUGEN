@@ -89,6 +89,14 @@ canvas {
   color: #0f172a;
 }
 
+.top-panel.hidden {
+  display: none;
+}
+
+.top-panel.active {
+  display: block;
+}
+
 .debug-tabs {
   display: flex;
   gap: 8px;

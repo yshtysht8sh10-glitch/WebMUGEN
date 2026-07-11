@@ -186,6 +186,10 @@ Do not skip directly to TypeScript changes before identifying the failing layer.
 | `CanvasRenderer` | Drawing the state produced by runtime and physics. |
 | Debug Overlay | Observability for each layer. |
 
+## UI lifetime
+
+The requestAnimationFrame loop, `CanvasRenderer`, `gameStateRef`, input buffers, round state, and the canvas DOM node are part of the live runtime. Debug top-level tabs must not unmount the game/canvas panel when switching to static source views. Keep the game/runtime panel and static/files panel mounted at the same time and switch visibility with CSS/ARIA so the renderer continues to draw to the same canvas element and runtime state is not reinitialized.
+
 ## Common failure patterns
 
 | Symptom | Likely failing layer |

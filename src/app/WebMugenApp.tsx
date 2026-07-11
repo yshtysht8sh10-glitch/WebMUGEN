@@ -535,9 +535,11 @@ export function WebMugenApp() {
 
       <AppPageTabs activePage={activePage} onChange={setActivePage} />
 
-      {activePage === 'play' ? (
-        <>
-          <section className="stage-panel">
+      <section
+        className={`top-panel ${activePage === 'play' ? 'active' : 'hidden'}`}
+        aria-hidden={activePage !== 'play'}
+      >
+        <section className="stage-panel">
             <div className="stage-viewport">
               <canvas
                 ref={canvasRef}
@@ -598,8 +600,12 @@ export function WebMugenApp() {
               />
             )}
           </section>
-        </>
-      ) : (
+      </section>
+
+      <section
+        className={`top-panel ${activePage === 'static-files' ? 'active' : 'hidden'}`}
+        aria-hidden={activePage !== 'static-files'}
+      >
         <section className="debug-panel page-debug-panel">
           <StaticDebugPanel
             loadMessage={loadMessage}
@@ -615,7 +621,7 @@ export function WebMugenApp() {
             onToggleCharacterFiles={() => setShowCharacterFiles((visible) => !visible)}
           />
         </section>
-      )}
+      </section>
     </div>
   );
 }

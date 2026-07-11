@@ -1,9 +1,21 @@
 import { describe, expect, it } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import type { MutableRefObject } from 'react';
 import type { CnsRuntimeTrace } from '../core/cns/CnsStateRuntime';
-import { appendRuntimeHistoryIfNeeded, createSourceOutline, findAirActionForLine, stripReadableRuntimeValueSummaries } from './WebMugenApp';
+import { WebMugenApp, appendRuntimeHistoryIfNeeded, createSourceOutline, findAirActionForLine, stripReadableRuntimeValueSummaries } from './WebMugenApp';
 
 describe('WebMugenApp runtime history', () => {
+  it('keeps game and static top-level panels in the same render tree', () => {
+    const html = renderToStaticMarkup(createElement(WebMugenApp));
+
+    expect(html.match(/class="top-panel/g)?.length).toBe(2);
+    expect(html).toContain('class="top-panel active"');
+    expect(html).toContain('class="top-panel hidden"');
+    expect(html).toContain('<canvas');
+    expect(html).toContain('Static Info / Character Files');
+  });
+
   it('stores immutable line snapshots instead of live debug array references', () => {
     const inputLines = ['keys=ArrowRight'];
     const commandLines = ['cmd p1=holdfwd'];
