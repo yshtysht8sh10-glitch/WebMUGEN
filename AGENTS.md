@@ -24,7 +24,39 @@ WebMUGEN is not a KFM-only demo.
 
 The goal is WinMUGEN compatibility: existing WinMUGEN characters should run in the browser with behavior as close to WinMUGEN as practical.
 
-Compatibility comes before convenience, shortcuts, or local KFM-only fixes.
+Compatibility comes before convenience, shortcuts, local KFM-only fixes, or code elegance.
+
+## Role and decision authority
+
+You are the implementation engineer.
+
+The user is responsible for architecture and product decisions.
+
+Do not invent specifications, silently broaden scope, or change behavior merely because another implementation looks cleaner.
+
+When requirements are ambiguous, investigate first and ask for clarification instead of guessing.
+
+## Required pre-change workflow
+
+Before editing code:
+
+1. Inspect the relevant implementation, tests, and documentation.
+2. Identify the root cause or the precise compatibility gap.
+3. State the proposed change and affected files.
+4. Note likely compatibility risks.
+5. Only then implement the smallest justified change.
+
+Do not immediately start editing when the task is still unclear.
+
+## General coding rules
+
+- Keep changes as small and focused as possible.
+- Follow the existing naming, formatting, and architectural patterns.
+- Avoid unrelated refactoring.
+- Do not modify code solely because it looks cleaner.
+- Preserve backward compatibility and performance.
+- Add comments only when they explain non-obvious compatibility behavior.
+- Never modify unrelated files to make a test pass.
 
 ## Non-negotiable rules
 
@@ -97,10 +129,10 @@ When asked to improve compatibility, do this loop:
 7. Update `winmugen-compatibility-matrix.md`.
 8. Update the relevant topic document if behavior or limitations changed.
 9. Run `npm test -- --run`.
-10. Commit the one item.
-11. Immediately continue with the next matrix item until the requested task or available context is exhausted.
+10. Commit the one item when explicitly requested to commit.
+11. Continue with the next matrix item only when the requested scope allows it.
 
-Do not stop after only one small compatibility item unless explicitly requested.
+Do not expand a narrowly scoped request into a broad compatibility sweep.
 
 ## Topic document mapping
 
@@ -116,6 +148,23 @@ Update these documents when relevant:
 - Animation: `docs/webmugen/animation.md`
 - Debug UI/history: `docs/webmugen/debug-overlay.md` and `docs/webmugen/runtime-history.md`
 - Matrix process: `docs/webmugen/matrix-maintenance.md`
+
+## Runtime caution areas
+
+Changes in core runtime behavior can affect every character. Treat these areas with extra care:
+
+- `CnsStateRuntime`
+- `CnsRuntimeTrigger`
+- StateDef processing
+- HitDef and collision
+- Physics
+- Animation timing
+- Command buffering
+- State transitions
+
+Before changing them, read the relevant compatibility matrix rows and topic documents.
+
+Prefer compatibility and observability over optimization.
 
 ## Debugging policy
 
@@ -138,11 +187,27 @@ If necessary, improve Debug Overlay or Runtime History before changing compatibi
 
 ## Testing policy
 
-Run:
+Always run:
 
 ```bash
 npm test -- --run
 ```
+
+When the affected area has a narrower focused test command, run that first, then run the full suite.
+
+Also run when practical:
+
+```bash
+npm run build
+```
+
+If tests or build fail:
+
+- investigate the failure;
+- determine whether it is pre-existing or caused by the change;
+- fix failures caused by the change;
+- report pre-existing failures honestly;
+- never ignore or conceal a failing check.
 
 Add focused tests whenever possible.
 
@@ -159,18 +224,59 @@ Good assertions include:
 
 `npm run build` may fail because of known TypeScript configuration issues such as TS5107. If so, report whether the failure is pre-existing or caused by your change.
 
-## Commit policy
+## Git policy
+
+Before finishing, summarize:
+
+- modified files;
+- purpose of each change;
+- tests and build commands run;
+- possible risks or remaining limitations.
 
 Prefer one compatibility item per commit.
 
-Commit message examples:
+When a commit is requested, use a clear Conventional Commits-style message where practical, for example:
 
-- `Implement BodyDist X trigger compatibility`
-- `Implement facep2 StateDef compatibility`
-- `Add command buffer time tests`
-- `Update compatibility matrix for AnimExist`
+- `fix: implement BodyDist X trigger compatibility`
+- `fix: implement facep2 StateDef compatibility`
+- `test: add command buffer time coverage`
+- `docs: update compatibility matrix for AnimExist`
 
 Do not mix unrelated debug UI, docs, and compatibility changes unless they are part of the same item.
+
+Never push, open a pull request, merge, rebase, rewrite history, or force-push unless the user explicitly requests that action.
+
+## Required completion report
+
+Use this structure when reporting completed work:
+
+### Summary
+
+What changed and why.
+
+### Files changed
+
+List each changed file and its purpose.
+
+### Tests
+
+List commands run and their results.
+
+### Risks / remaining work
+
+State compatibility risks, limitations, assumptions, and any pre-existing failures.
+
+## Safety rules
+
+Never:
+
+- delete large portions of code without confirmation;
+- modify unrelated files;
+- rewrite Git history;
+- force-push;
+- hide a failing test;
+- claim WinMUGEN compatibility without evidence;
+- make destructive changes merely to simplify implementation.
 
 ## Forbidden shortcuts
 
@@ -179,11 +285,11 @@ Do not:
 - edit `public/chars/common1.cns`;
 - add KFM-only behavior;
 - hide common movement rules in TypeScript when `common.cmd` is appropriate;
-- update code without matrix updates;
-- update matrix without tests or honest notes;
+- update code without matrix updates when compatibility status changes;
+- update matrix status without tests or honest notes;
 - mark Partial behavior as Complete;
 - lump many unrelated items into one vague commit;
-- remove diagnostics that are needed to understand the runtime pipeline.
+- remove diagnostics needed to understand the runtime pipeline.
 
 ## Preferred next-item strategy
 
@@ -196,3 +302,12 @@ When choosing the next item, prefer small, testable matrix rows:
 5. Debug improvements that reveal where a route fails.
 
 Large systems such as HitDef, guard, Helper, Projectile, Explod, Target, pause/superpause, and full collision should be split into smaller observable milestones.
+
+## Priority order
+
+1. WinMUGEN compatibility
+2. Correctness
+3. Tests passing
+4. Minimal, focused changes
+5. Observability and maintainability
+6. Readability
