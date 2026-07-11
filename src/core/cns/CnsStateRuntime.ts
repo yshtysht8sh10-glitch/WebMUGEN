@@ -528,8 +528,8 @@ function executeController(
   const type = controller.type.toLowerCase();
   if (type === 'null') return withPlayer(player, true, 'Null');
   if (type === 'changeanim') return changeAnim(player, opponent, controller, input, commands);
-  if (type === 'velset') return withPlayer({ ...player, vx: num(controller, 'x', player, input, commands, opponent) ?? player.vx, vy: num(controller, 'y', player, input, commands, opponent) ?? player.vy }, hasNum(controller, 'x', player, input, commands, opponent) || hasNum(controller, 'y', player, input, commands, opponent), 'VelSet');
-  if (type === 'veladd') return withPlayer({ ...player, vx: player.vx + (num(controller, 'x', player, input, commands, opponent) ?? 0), vy: player.vy + (num(controller, 'y', player, input, commands, opponent) ?? 0) }, hasNum(controller, 'x', player, input, commands, opponent) || hasNum(controller, 'y', player, input, commands, opponent), 'VelAdd');
+  if (type === 'velset') return velSet(player, opponent, controller, input, commands);
+  if (type === 'veladd') return velAdd(player, opponent, controller, input, commands);
   if (type === 'velmul') return velMul(player, controller);
   if (type === 'posset') return posSet(player, controller);
   if (type === 'posadd') return withPlayer({ ...player, x: player.x + (num(controller, 'x') ?? 0), y: player.y + (num(controller, 'y') ?? 0) }, hasNum(controller, 'x') || hasNum(controller, 'y'), 'PosAdd');
@@ -598,6 +598,38 @@ function velMul(player: PlayerState, controller: CnsStateController): Controller
   const x = num(controller, 'x');
   const y = num(controller, 'y');
   return withPlayer({ ...player, vx: player.vx * (x ?? 1), vy: player.vy * (y ?? 1) }, x !== null || y !== null, 'VelMul');
+}
+
+function velSet(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const x = num(controller, 'x', player, input, commands, opponent);
+  const y = num(controller, 'y', player, input, commands, opponent);
+  return withPlayer(
+    { ...player, vx: x === null ? player.vx : x * player.facing, vy: y ?? player.vy },
+    x !== null || y !== null,
+    'VelSet',
+  );
+}
+
+function velAdd(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const x = num(controller, 'x', player, input, commands, opponent);
+  const y = num(controller, 'y', player, input, commands, opponent);
+  return withPlayer(
+    { ...player, vx: player.vx + (x ?? 0) * player.facing, vy: player.vy + (y ?? 0) },
+    x !== null || y !== null,
+    'VelAdd',
+  );
 }
 
 function posSet(player: PlayerState, controller: CnsStateController): ControllerResult {

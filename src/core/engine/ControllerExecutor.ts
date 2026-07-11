@@ -203,9 +203,10 @@ function executeChangeState(
 }
 
 function executeVelSet(player: PlayerState, controller: CnsStateController): PlayerState {
+  const hasX = controller.params.x !== undefined;
   return {
     ...player,
-    vx: readNumber(controller, 'x', player.vx),
+    vx: hasX ? readNumber(controller, 'x', 0) * player.facing : player.vx,
     vy: readNumber(controller, 'y', player.vy),
   };
 }

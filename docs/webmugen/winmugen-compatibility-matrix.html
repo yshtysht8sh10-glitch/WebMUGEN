@@ -24,6 +24,7 @@
 <section class="src card"><b data-ja="基準資料" data-en="Baseline references">基準資料</b><br><a href="https://www.elecbyte.com/mugendocs-11b1/trigger.html">Trigger Reference</a> / <a href="https://www.elecbyte.com/mugendocs-11b1/sctrls.html">State Controllers</a> / <a href="https://www.elecbyte.com/mugendocs-11b1/cns.html">CNS Format</a> / <a href="https://www.elecbyte.com/mugendocs-11b1/common1.html">Common States</a></section>
 <main id="tables"></main>
 <p class="foot" data-ja="運用ルール: 実装やテストを追加したら、このHTMLとMarkdownの互換表を同時に更新する。item列ではスラッシュ、範囲、カンマ区切りで複数項目をまとめない。" data-en="Maintenance rule: update this HTML and the Markdown matrix whenever implementation or tests change. Do not group multiple entries in the item column with slashes, ranges, or comma-separated lists.">運用ルール: 実装やテストを追加したら、このHTMLとMarkdownの互換表を同時に更新する。item列ではスラッシュ、範囲、カンマ区切りで複数項目をまとめない。</p>
+<p class="foot" data-ja="速度コントローラ: VelSet/VelAdd の X は向き基準でワールド速度へ一度変換し、VelMul は変換済み速度へ倍率だけを適用する。" data-en="Velocity controllers: VelSet/VelAdd X is converted once from facing-relative to world velocity; VelMul only scales the converted velocity.">速度コントローラ: VelSet/VelAdd の X は向き基準でワールド速度へ一度変換し、VelMul は変換済み速度へ倍率だけを適用する。</p>
 </div>
 <script>
 const statuses={complete:{ja:'対応済み',en:'Complete',klass:'s-complete'},partial:{ja:'一部対応',en:'Partial',klass:'s-partial'},unsupported:{ja:'未対応',en:'Unsupported',klass:'s-unsupported'},untested:{ja:'未調査',en:'Untested',klass:'s-untested'}};

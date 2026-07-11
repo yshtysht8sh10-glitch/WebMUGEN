@@ -63,7 +63,7 @@ Examples:
 - `PosSet`
 - `PosAdd`
 
-These should be direct numeric mutations. If parameters are expressions, parser/evaluator support must be verified before marking broad compatibility.
+`PlayerState.vx` is stored in world coordinates and position integration adds it directly to world X. `VelSet` and `VelAdd` therefore multiply CNS X values by the player's current facing once when the controller executes. `VelMul` scales the already converted world velocity and must not apply facing again. If parameters are expressions, parser/evaluator support must be verified before marking broad compatibility.
 
 ### Animation
 

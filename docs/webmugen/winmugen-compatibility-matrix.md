@@ -210,9 +210,9 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | VarRandom | Partial | Deterministic midpoint placeholder. True RNG/range semantics incomplete. |
 | VarRangeSet | Partial | Basic integer var range set exists. Full syntax incomplete. |
 | VarSet | Complete | Basic implementation exists. |
-| VelAdd | Complete | Basic implementation exists. |
-| VelMul | Complete | Basic implementation exists. |
-| VelSet | Complete | Basic implementation exists. |
+| VelAdd | Complete | X values are facing-relative and converted once to world velocity. |
+| VelMul | Complete | Multiplies the stored world velocity without reapplying facing. |
+| VelSet | Complete | X values are facing-relative; positive X moves forward for either facing. |
 | Width | Partial | Stores width fields only. Collision integration needs audit. |
 | Zoom | Partial | Recognized safe no-op. Camera zoom not implemented. |
 

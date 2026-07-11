@@ -24,7 +24,7 @@ Recognized safe no-ops are normally **Partial**, not Complete.
 |---|---|---|
 | State transition | `ChangeState`, `SelfState` | `ChangeState` is basic Complete. `SelfState` is Partial because full custom-state ownership semantics are incomplete. |
 | Animation | `ChangeAnim`, `ChangeAnim2` | `ChangeAnim` is Complete for runtime animation selection and evaluates numeric `value` expressions with current player context. `ChangeAnim2` is a safe no-op/Partial until target/common animation behavior exists. |
-| Velocity/position | `VelSet`, `VelAdd`, `VelMul`, `PosSet`, `PosAdd` | Basic numeric behavior exists and is matrix-tracked. |
+| Velocity/position | `VelSet`, `VelAdd`, `VelMul`, `PosSet`, `PosAdd` | `VelSet`/`VelAdd` X values are converted from facing-relative CNS coordinates to world velocity when applied. `VelMul` scales that stored world velocity without applying facing again. |
 | State flags | `CtrlSet`, `StateTypeSet`, `MoveTypeSet` | Basic behavior exists. |
 | Player collision | `PlayerPush`, `Width` | `PlayerPush = 0` disables fallback stage separation. Push uses a fixed generic rectangle with vertical overlap; `Width` is still stored only and AIR `Clsn2`/character width integration remains incomplete. |
 | Life/power | `LifeAdd`, `LifeSet`, `PowerAdd`, `PowerSet` | Basic behavior exists. Header `poweradd` is tracked separately as a StateDef header field. |

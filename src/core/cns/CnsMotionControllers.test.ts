@@ -2,8 +2,110 @@ import { describe, expect, it } from 'vitest';
 import { parseCnsText } from '../../parser/cns/CnsParser';
 import { createInitialGameState } from '../engine/GameState';
 import { stepCnsStateRuntime } from './CnsStateRuntime';
+import { stepCnsPhysicsMotion } from './CnsPhysicsStep';
 
 describe('CNS motion controllers', () => {
+  const velSetCns = parseCnsText(`
+[Statedef 101]
+type = S
+movetype = I
+physics = N
+ctrl = 0
+anim = 101
+
+[State 101, Dash]
+type = VelSet
+trigger1 = time = 0
+x = 5
+`);
+
+  function stepVelSet(facing: 1 | -1, xValue = 5, noAutoTurn = false) {
+    const cns = xValue === 5 && !noAutoTurn ? velSetCns : parseCnsText(`
+[Statedef 101]
+type = S
+movetype = I
+physics = N
+ctrl = 0
+anim = 101
+
+${noAutoTurn ? `[State 101, Keep facing]\ntype = AssertSpecial\ntrigger1 = 1\nflag = noautoturn` : ''}
+
+[State 101, Dash]
+type = VelSet
+trigger1 = time = 0
+x = ${xValue}
+`);
+    const initial = createInitialGameState();
+    const state = {
+      ...initial,
+      players: [{ ...initial.players[0], stateNo: 101, stateTime: 0, x: 300, facing }, initial.players[1]] as typeof initial.players,
+    };
+    const runtime = stepCnsStateRuntime(state, cns).state;
+    return {
+      runtime: runtime.players[0],
+      moved: stepCnsPhysicsMotion(runtime, cns).players[0],
+    };
+  }
+
+  it('moves right-facing VelSet x = 5 toward world right', () => {
+    const result = stepVelSet(1);
+    expect(result.runtime.vx).toBe(5);
+    expect(result.moved.x).toBe(305);
+  });
+
+  it('moves left-facing VelSet x = 5 toward world left', () => {
+    const result = stepVelSet(-1);
+    expect(result.runtime.vx).toBe(-5);
+    expect(result.moved.x).toBe(295);
+  });
+
+  it('moves VelSet x = -5 backward for both facings', () => {
+    const facingRight = stepVelSet(1, -5);
+    const facingLeft = stepVelSet(-1, -5);
+    expect(facingRight.runtime.vx).toBe(-5);
+    expect(facingRight.moved.x).toBe(295);
+    expect(facingLeft.runtime.vx).toBe(5);
+    expect(facingLeft.moved.x).toBe(305);
+  });
+
+  it('keeps NoAutoTurn velocity in the starting facing direction', () => {
+    const result = stepVelSet(-1, 5, true);
+    expect(result.runtime).toMatchObject({ vx: -5, facing: -1 });
+    expect(result.moved.x).toBe(295);
+  });
+
+  it('applies Facing to VelAdd before VelMul scales world velocity', () => {
+    const cns = parseCnsText(`
+[Statedef 101]
+type = S
+physics = N
+
+[State 101, Set]
+type = VelSet
+trigger1 = 1
+x = 5
+
+[State 101, Add]
+type = VelAdd
+trigger1 = 1
+x = 1
+
+[State 101, Multiply]
+type = VelMul
+trigger1 = 1
+x = 2
+`);
+    const initial = createInitialGameState();
+    const state = {
+      ...initial,
+      players: [{ ...initial.players[0], stateNo: 101, facing: -1 as const }, initial.players[1]],
+    };
+
+    const result = stepCnsStateRuntime(state, cns).state.players[0];
+
+    expect(result.vx).toBe(-12);
+  });
+
   it('executes VelAdd', () => {
     const cns = parseCnsText(`
 [Statedef 100]
