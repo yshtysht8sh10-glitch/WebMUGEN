@@ -126,7 +126,7 @@ const EMPTY_STATIC_DEBUG_INFO: StaticDebugInfo = {
   commandRows: ['commands=-'],
 };
 
-export function WebMugenApp() {
+export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } = {}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
   const gameStateRef = useRef<GameState>(createInitialGameState());
@@ -174,7 +174,7 @@ export function WebMugenApp() {
   const [runtimeFrameIndexAutoScroll, setRuntimeFrameIndexAutoScroll] = useState(true);
   const [stateTransitionLogLines, setStateTransitionLogLines] = useState<string[]>(['StateNoが変化すると、ここに遷移だけが残ります。']);
   const [stageDebugLines, setStageDebugLines] = useState<string[]>(['State: -']);
-  const [activePage, setActivePage] = useState<AppPage>('play');
+  const [activePage, setActivePage] = useState<AppPage>(initialPage);
   const [activeDebugTab, setActiveDebugTab] = useState<DebugTab>('runtime-human');
   const [aiHistoryWindow, setAiHistoryWindow] = useState<RuntimeHistoryWindow>({ mode: 'latest' });
   const [copyStatus, setCopyStatus] = useState('');
@@ -607,21 +607,23 @@ export function WebMugenApp() {
         className={`top-panel ${activePage === 'static-files' ? 'active' : 'hidden'}`}
         aria-hidden={activePage !== 'static-files'}
       >
-        <section className="debug-panel page-debug-panel">
-          <StaticDebugPanel
-            loadMessage={loadMessage}
-            staticDebugInfo={staticDebugInfo}
-            coverageDebugLines={coverageDebugLines}
-            sourceFiles={cnsSourceFiles}
-            selectedSource={selectedCnsSource}
-            onOpenSource={openCnsSource}
-            sourceScrollPositionsRef={cnsSourceScrollPositionsRef}
-            air={loadedAir}
-            sprites={loadedSprites}
-            showCharacterFiles={showCharacterFiles}
-            onToggleCharacterFiles={() => setShowCharacterFiles((visible) => !visible)}
-          />
-        </section>
+        {activePage === 'static-files' ? (
+          <section className="debug-panel page-debug-panel">
+            <StaticDebugPanel
+              loadMessage={loadMessage}
+              staticDebugInfo={staticDebugInfo}
+              coverageDebugLines={coverageDebugLines}
+              sourceFiles={cnsSourceFiles}
+              selectedSource={selectedCnsSource}
+              onOpenSource={openCnsSource}
+              sourceScrollPositionsRef={cnsSourceScrollPositionsRef}
+              air={loadedAir}
+              sprites={loadedSprites}
+              showCharacterFiles={showCharacterFiles}
+              onToggleCharacterFiles={() => setShowCharacterFiles((visible) => !visible)}
+            />
+          </section>
+        ) : null}
       </section>
     </div>
   );
@@ -1827,13 +1829,14 @@ function CharacterSourceFilesViewer({
   useEffect(() => {
     const codeElement = codeRef.current;
     if (!codeElement || !effectiveSelection) return;
-    requestAnimationFrame(() => {
+    const frameId = requestAnimationFrame(() => {
       if (selectedLine > 1 && selectedLineId) {
         document.getElementById(selectedLineId)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
         return;
       }
       codeElement.scrollTop = effectiveScrollPositionsRef.current[selectedPath] ?? 0;
     });
+    return () => cancelAnimationFrame(frameId);
   }, [effectiveScrollPositionsRef, selectedLine, selectedLineId, selectedPath]);
 
   useEffect(() => {

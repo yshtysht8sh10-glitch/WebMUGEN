@@ -188,7 +188,7 @@ Do not skip directly to TypeScript changes before identifying the failing layer.
 
 ## UI lifetime
 
-The requestAnimationFrame loop, `CanvasRenderer`, `gameStateRef`, input buffers, round state, and the canvas DOM node are part of the live runtime. Debug top-level tabs must not unmount the game/canvas panel when switching to static source views. Keep the game/runtime panel and static/files panel mounted at the same time and switch visibility with CSS/ARIA so the renderer continues to draw to the same canvas element and runtime state is not reinitialized.
+The requestAnimationFrame loop, `CanvasRenderer`, `gameStateRef`, input buffers, round state, and the canvas DOM node are part of the live runtime. Debug top-level tabs must not unmount the game/canvas panel when switching to static source views. Keep the game/runtime panel mounted and switch its visibility with CSS/ARIA so the renderer continues to draw to the same canvas element and runtime state is not reinitialized. Heavy static/files contents may unmount while inactive and remount on demand.
 
 ## Common failure patterns
 

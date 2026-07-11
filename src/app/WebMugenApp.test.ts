@@ -6,7 +6,7 @@ import type { CnsRuntimeTrace } from '../core/cns/CnsStateRuntime';
 import { WebMugenApp, appendRuntimeHistoryIfNeeded, createSourceOutline, findAirActionForLine, stripReadableRuntimeValueSummaries } from './WebMugenApp';
 
 describe('WebMugenApp runtime history', () => {
-  it('keeps game and static top-level panels in the same render tree', () => {
+  it('keeps the game panel mounted while leaving hidden static content unmounted', () => {
     const html = renderToStaticMarkup(createElement(WebMugenApp));
 
     expect(html.match(/class="top-panel/g)?.length).toBe(2);
@@ -14,6 +14,17 @@ describe('WebMugenApp runtime history', () => {
     expect(html).toContain('class="top-panel hidden"');
     expect(html).toContain('<canvas');
     expect(html).toContain('Static Info / Character Files');
+    expect(html).not.toContain('<h2>Character Files</h2>');
+  });
+
+  it('mounts static content on demand while retaining one game canvas across repeated page renders', () => {
+    for (let index = 0; index < 10; index += 1) {
+      const activePage = index % 2 === 0 ? 'static-files' : 'play';
+      const html = renderToStaticMarkup(createElement(WebMugenApp, { initialPage: activePage }));
+
+      expect(html.match(/<canvas/g)?.length).toBe(1);
+      expect(html.includes('<h2>Character Files</h2>')).toBe(activePage === 'static-files');
+    }
   });
 
   it('stores immutable line snapshots instead of live debug array references', () => {

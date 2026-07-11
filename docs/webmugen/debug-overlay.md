@@ -58,7 +58,7 @@ The static tab should show information that does not change frame-by-frame:
 
 If a route is missing from the static tab, suspect loader/parser/merge before runtime.
 
-The Debug UI is split into top-level pages. The game canvas, runtime logs, manual, and settings live under the play/runtime page. Static information and `Character Files` live under a separate static/files page so heavy source viewers and AIR previews are not part of the normal play/debug DOM. Top-level page switching must keep both page panels mounted and hide inactive panels with CSS/ARIA only; the game canvas must not be unmounted because `CanvasRenderer` owns that canvas reference for the running loop.
+The Debug UI is split into top-level pages. The game canvas, runtime logs, manual, and settings live under the play/runtime page. Static information and `Character Files` live under a separate static/files page so heavy source viewers and AIR previews are not part of the normal play/debug DOM. Top-level page switching keeps the game panel and canvas mounted because `CanvasRenderer` owns that canvas reference for the running loop. Heavy static/files contents unmount while inactive and remount when reopened.
 
 `Character Files` shows loaded character text files and the applied common CNS. It should span the full static-info width so long CNS/AIR files remain readable. Source scrolling is remembered per file; changing tabs or switching files must not reuse another file's scroll position.
 
