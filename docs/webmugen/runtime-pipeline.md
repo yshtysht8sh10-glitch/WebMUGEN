@@ -66,6 +66,8 @@ The negative states execute before the current state. This is important for comm
 
 If a negative state changes `stateNo`, the runtime returns early after recording the trace. This prevents the old current state from executing after a command route changes state.
 
+When a player's HitDef hit-pause counter is positive, CNS StateDef headers and controllers are skipped for that player. The following physics step decrements only the counter; position, velocity, StateTime, and AnimTime remain frozen. Input buffers are updated before CNS execution and therefore continue collecting input during hit pause. Hit pause is per player and separate from SuperPause.
+
 ## Controller execution flow
 
 For each controller in a StateDef:

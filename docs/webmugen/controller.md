@@ -129,6 +129,8 @@ The currently connected subset requires an ActiveHitDef and AIR Clsn overlap, th
 
 Successful contacts are recorded by ActiveHitDef generation and defender id. Continued overlap with the same pair cannot apply damage, HitEvent, or hit stun again. A new ActiveHitDef generation can hit the defender again; state entry and `MoveHitReset` clear the relevant history. The current behavior is one hit per generation/defender regardless of the `hitonce` parameter, whose distinct 0/1 semantics remain Partial.
 
+HitDef `pausetime` is applied as separate attacker/defender counters. Positive counters skip CNS controller execution and freeze physics/timers while input buffering continues; zero resumes without an extra frame. This hit pause is independent of the Partial SuperPause controller. `guard.pausetime` awaits guard contact.
+
 During the selected hit time, the runtime keeps `ctrl = false`, blocks control-enabling `CtrlSet`, blocks early recovery to State 0/52, and ignores State -1 input ChangeState routes. Internal common get-hit transitions such as State 5000 to 5001 remain available. Hit-stun elapsed time is stored independently from `stateTime` so internal get-hit State changes do not shorten the configured duration.
 
 ## Debugging controller issues

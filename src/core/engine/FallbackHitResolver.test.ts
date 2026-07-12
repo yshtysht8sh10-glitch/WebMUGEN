@@ -30,6 +30,28 @@ Clsn1: 1
 
 describe('FallbackHitResolver', () => {
   it.each([
+    [[2, 5] as [number, number], 2, 5],
+    [[0, 0] as [number, number], 0, 0],
+  ])('applies distinct HitDef pausetime %j counters', (pauseTime, attackerFrames, defenderFrames) => {
+    const hit = resolveConfiguredHit({ pauseTime });
+    expect(hit.players[0].hitPause).toBe(attackerFrames);
+    expect(hit.players[1].hitPause).toBe(defenderFrames);
+    expect(hit.hitDiagnosticLines?.join('\n')).toContain(`attackerFrames=${attackerFrames} defenderFrames=${defenderFrames} source=active_hitdef`);
+  });
+
+  it('freezes motion and timers for exactly the defender pausetime then resumes', () => {
+    let state = resolveConfiguredHit({ pauseTime: [0, 2], groundVelocity: [-4, 0] });
+    const targetAtHit = state.players[1];
+    state = stepCnsPhysicsMotion(state);
+    expect(state.players[1]).toMatchObject({ x: targetAtHit.x, stateTime: targetAtHit.stateTime, animTime: targetAtHit.animTime, hitPause: 1 });
+    state = stepCnsPhysicsMotion(state);
+    expect(state.players[1]).toMatchObject({ x: targetAtHit.x, stateTime: targetAtHit.stateTime, animTime: targetAtHit.animTime, hitPause: 0 });
+    state = stepCnsPhysicsMotion(state);
+    expect(state.players[1].x).toBe(targetAtHit.x - 4);
+    expect(state.players[1].stateTime).toBe(targetAtHit.stateTime + 1);
+    expect(state.players[1].animTime).toBe(targetAtHit.animTime + 1);
+  });
+  it.each([
     [1, -6],
     [-1, 6],
   ] as const)('applies ground.velocity relative to attacker facing %i', (facing, expectedX) => {
@@ -458,6 +480,7 @@ function resolveConfiguredHit({
   groundVelocity,
   airVelocity,
   attackerFacing,
+  pauseTime,
 }: {
   damage?: number;
   groundHitTime?: number;
@@ -469,6 +492,7 @@ function resolveConfiguredHit({
   groundVelocity?: [number, number];
   airVelocity?: [number, number];
   attackerFacing?: 1 | -1;
+  pauseTime?: [number, number];
 }) {
   const hitTimeLines = [
     groundHitTime === undefined ? '' : `ground.hittime = ${groundHitTime}`,
@@ -479,6 +503,7 @@ function resolveConfiguredHit({
     groundVelocity ? `ground.velocity = ${groundVelocity.join(', ')}` : '',
     airVelocity ? `air.velocity = ${airVelocity.join(', ')}` : '',
   ].filter(Boolean).join('\n');
+  const pauseTimeLine = pauseTime ? `pausetime = ${pauseTime.join(', ')}` : '';
   const cns = parseCnsText(`
 [Statedef 0]
 type = ${targetStateType}
@@ -495,6 +520,7 @@ damage = ${damage}, 0
 ${hitTimeLines}
 ${animTypeLine}
 ${velocityLines}
+${pauseTimeLine}
 `);
   const initial = createInitialGameState();
   const attackerIndex = attackerId - 1;

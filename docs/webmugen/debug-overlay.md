@@ -138,6 +138,8 @@ The copied text should be sufficient to diagnose the current issue without needi
 
 AI runtime hit diagnostics can be disabled in Runtime Settings. When enabled, they expose the ActiveHitDef identifier, evaluated damage pair and source, collision result, Life before/after, fixed reaction sources, and lifecycle events without adding the same lines every frame.
 
+Hit-pause diagnostics show the event-time attacker/defender counters and the live physics line includes each player's remaining `hitPause`. During positive pause, CNS trace records `hitpause skip`, making stopped controllers distinguishable from failed triggers.
+
 Canvas collision debug uses the same AIR world-coordinate boxes as the hit resolver. Labels identify attack/body kind, box index, default versus element source, animation number, and current element index; boundaries include player position, facing, and AIR element offsets.
 
 ## Minimum useful dump

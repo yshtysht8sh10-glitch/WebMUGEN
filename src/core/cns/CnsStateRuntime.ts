@@ -148,6 +148,10 @@ function stepPlayer(
   };
 
   const debugEnabled = shouldDebugRuntime(commands);
+  if (player.hitPause > 0) {
+    trace.debugLines.push(`hitpause skip remaining=${player.hitPause}`);
+    return finishTrace(next, trace);
+  }
   if (debugEnabled) {
     appendDebug(trace, `scan ${stateScanSummary(cns)} cmds=${formatCommands(commands)}`);
     appendDebug(trace, `pipeline start state=${next.stateNo} type=${next.stateType} ctrl=${next.ctrl ? 1 : 0} time=${next.stateTime}`);

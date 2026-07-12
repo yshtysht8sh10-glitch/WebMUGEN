@@ -160,7 +160,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | Helper | Partial | Recognized safe no-op in CNS runtime; Helper system exists separately. |
 | HitAdd | Partial | Stores hit count field only. |
 | HitBy | Partial | Stores allowed-hit attribute string only. |
-| HitDef | Partial | Contact applies ground/air velocity selected from defender StateType; X is attacker-facing-relative, Y direct, and hit pause preserves it until physics resumes. Guard velocity awaits guard contact. Per-generation target history prevents duplicate application. |
+| HitDef | Partial | `pausetime` creates separate attacker/defender freezes: CNS controllers, physics, StateTime, and AnimTime stop for exactly each counter while input buffers continue. Zero resumes immediately and duplicate contact cannot reset counters. Guard pause and SuperPause remain separate/incomplete. |
 | HitFallDamage | Partial | Applies simple life reduction. Full fall damage semantics incomplete. |
 | HitFallSet | Partial | Recognized safe no-op. Fall flags not implemented. |
 | HitFallVel | Partial | Applies simple Y velocity. Full get-hit semantics incomplete. |

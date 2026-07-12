@@ -6,8 +6,6 @@ import {
 } from '../collision/CollisionResolver';
 import type { GameState, HitEvent, PlayerState } from './types';
 
-const ATTACKER_HIT_PAUSE = 4;
-const DEFENDER_HIT_PAUSE = 8;
 const STAND_HIT_STATE = 5000;
 
 export function resolveFallbackHits(state: GameState, airDocument?: AirDocument | null, diagnosticsEnabled = true): GameState {
@@ -121,8 +119,8 @@ function resolveAttack(
   const animType = active?.animType ?? 'Light';
   const animSource = active?.animTypeSource ?? 'existing_fallback';
   const animationExists = airDocumentHasAction(airDocument, selectedAnim);
-  const hitAttacker = markAttackerHit(attacker, activeHitDefId, target.id);
-  const hitTarget = applyFallbackHit(target, damage, selectedAnim, appliedVelocity, {
+  const hitAttacker = markAttackerHit(attacker, activeHitDefId, target.id, active.pauseTime.attacker);
+  const hitTarget = applyFallbackHit(target, damage, selectedAnim, appliedVelocity, active.pauseTime.defender, {
     activeHitDefId,
     selectedHitTime,
     kind: activeHitTime === undefined ? 'fallback' : hitTimeKind,
@@ -140,13 +138,15 @@ function resolveAttack(
     `${collisionHeader} overlap=${formatOverlap(overlap)} damage=${damage},${guardDamage} source=${source} fallbackReason=${fallbackReason} result=hit`,
     `raw.hit_damage target=p${target.id}`,
     `  activeHitDefId=${idText} lifeBefore=${lifeBefore} appliedDamage=${damage} lifeAfter=${hitTarget.life} source=${source} ko=${hitTarget.life === 0 ? 1 : 0}`,
+    `raw.hitpause attacker=p${attacker.id} target=p${target.id}`,
+    `  activeHitDefId=${idText} event=start attackerFrames=${active.pauseTime.attacker} defenderFrames=${active.pauseTime.defender} source=active_hitdef`,
     ...(hitTimeKind === 'ground' ? [
       `raw.hit_anim_select target=p${target.id}`,
       `  activeHitDefId=${idText} animType=${animType} targetStateTypeAtHit=${targetStateTypeAtHit} requestedAnim=${selectedAnim} selectedAnim=${selectedAnim} animationExists=${animationExists ? 1 : 0} source=${animSource} fallbackReason=${animSource === 'cns' ? '-' : 'existing_fixed_5000'}${animationExists ? '' : ' warning=missing_required_animation'}`,
     ] : []),
     `raw.hit_reaction target=p${target.id}`,
     `  state=${STAND_HIT_STATE} source=existing_fallback anim=${selectedAnim} source=${hitTimeKind === 'ground' ? animSource : 'existing_fallback'}`,
-    `  velocity=(${appliedVelocity.x},${appliedVelocity.y}) source=active_hitdef velocityKind=${hitTimeKind} attackerFacing=${attacker.facing} pausetime=${DEFENDER_HIT_PAUSE} source=existing_fallback`,
+    `  velocity=(${appliedVelocity.x},${appliedVelocity.y}) source=active_hitdef velocityKind=${hitTimeKind} attackerFacing=${attacker.facing} pausetime=${active.pauseTime.defender} source=active_hitdef`,
     `  hittime=${selectedHitTime} source=${hitTimeSource} hittimeKind=${activeHitTime === undefined ? 'fallback' : hitTimeKind} targetStateTypeAtHit=${targetStateTypeAtHit}`,
     '  fall=0 source=existing_fallback',
     `raw.hitstun target=p${target.id}`,
@@ -182,10 +182,10 @@ function formatOverlap(value: ReturnType<typeof findOverlap>): string {
   return value ? `${value.attackBoxIndex}:${value.bodyBoxIndex}` : '-';
 }
 
-function markAttackerHit(player: PlayerState, activeHitDefId: number | null, defenderId: number): PlayerState {
+function markAttackerHit(player: PlayerState, activeHitDefId: number | null, defenderId: number, pauseTime: number): PlayerState {
   return {
     ...player,
-    hitPause: ATTACKER_HIT_PAUSE,
+    hitPause: pauseTime,
     hitDefUsed: true,
     hitTargets: activeHitDefId === null ? (player.hitTargets ?? []) : [
       ...(player.hitTargets ?? []),
@@ -199,6 +199,7 @@ function applyFallbackHit(
   damage: number,
   selectedAnim: number,
   velocity: { x: number; y: number },
+  pauseTime: number,
   hitStun: NonNullable<PlayerState['hitStun']>,
 ): PlayerState {
   return {
@@ -214,7 +215,7 @@ function applyFallbackHit(
     ctrl: false,
     vx: velocity.x,
     vy: velocity.y,
-    hitPause: DEFENDER_HIT_PAUSE,
+    hitPause: pauseTime,
     hitDefUsed: false,
     activeHitDef: null,
     hitStun,

@@ -819,6 +819,26 @@ trigger1 = 1
     expect(result.traces[0].executedControllers).toContain('MoveHitReset');
   });
 
+  it('does not execute CNS controllers during hit pause', () => {
+    const cns = parseCnsText(`
+[Statedef 5000]
+type = S
+movetype = H
+[State 5000, Must Pause]
+type = VelSet
+trigger1 = 1
+x = 99
+`);
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime({
+      ...state,
+      players: [{ ...state.players[0], stateNo: 5000, moveType: 'H', hitPause: 2, vx: -4 }, state.players[1]],
+    }, cns);
+    expect(result.state.players[0]).toMatchObject({ vx: -4, hitPause: 2 });
+    expect(result.traces[0].executedControllers).not.toContain('VelSet');
+    expect(result.traces[0].debugLines).toContain('hitpause skip remaining=2');
+  });
+
   it('recognizes WinMUGEN state controllers that have runtime shims', () => {
     const controllerBlocks = recognizedControllerFixtures
       .map(({ type, params }) => `
