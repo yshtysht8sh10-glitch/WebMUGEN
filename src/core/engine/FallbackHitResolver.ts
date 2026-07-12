@@ -119,7 +119,9 @@ function resolveAttack(
     : 'active_hitdef_missing';
   const selectedAnim = hitTimeKind === 'ground' ? groundHitAnim(active?.animType) : STAND_HIT_STATE;
   const selectedVelocity = hitTimeKind === 'air' ? active.airVelocity : active.groundVelocity;
-  const appliedVelocity = { x: selectedVelocity.x * attacker.facing, y: selectedVelocity.y };
+  // WinMUGEN HitDef X velocity is expressed in the defender's reaction direction:
+  // the commonly used negative value must send the target away from the attacker.
+  const appliedVelocity = { x: selectedVelocity.x * -attacker.facing, y: selectedVelocity.y };
   const animType = active?.animType ?? 'Light';
   const animSource = active?.animTypeSource ?? 'existing_fallback';
   const animationExists = airDocumentHasAction(airDocument, selectedAnim);
