@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PlaySnd - WebMUGEN Documentation</title>
+<style>
+:root{color-scheme:light dark;--bg:#0f172a;--panel:#111827;--line:#334155;--text:#e5e7eb;--muted:#94a3b8;--link:#38bdf8;--warn:#fde68a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.7}.wrap{max-width:980px;margin:0 auto;padding:28px 20px 64px}a{color:var(--link)}h1{margin-bottom:4px}.lead{color:var(--muted)}.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin:18px 0}.status{display:inline-block;background:rgba(202,138,4,.22);color:var(--warn);font-weight:700;border-radius:999px;padding:4px 10px}code{background:rgba(127,127,127,.18);padding:2px 5px;border-radius:4px}pre{background:#020617;border:1px solid var(--line);padding:14px;border-radius:8px;overflow:auto}table{width:100%;border-collapse:collapse;background:var(--panel)}th,td{border:1px solid var(--line);padding:9px;text-align:left;vertical-align:top}th{background:#172033}.nav{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:24px}
+</style>
+</head>
+<body><main class="wrap">
+<nav class="nav"><a href="../index.html">Documentation</a><a href="../winmugen-compatibility-matrix.html">Compatibility Matrix</a><a href="https://github.com/yshtysht8sh10-glitch/WebMUGEN/issues/28">GitHub Issue #28</a></nav>
+<h1>PlaySnd</h1>
+<p class="lead">WinMUGEN CNS state controller for playing a sound sample from a character SND archive.</p>
+<div class="card"><span class="status">Issue書き出し済み</span><p>現在はCNS Runtimeで名称を認識するsafe no-opです。構文を読んでもクラッシュしませんが、SNDの読み込みや音声再生はまだ行いません。</p><p><a href="https://github.com/yshtysht8sh10-glitch/WebMUGEN/issues/28"><strong>実装Issue #28を開く</strong></a><br><a href="https://github.com/yshtysht8sh10-glitch/WebMUGEN/issues/26">前提 #26: SND v1 parser / loader</a><br><a href="https://github.com/yshtysht8sh10-glitch/WebMUGEN/issues/27">前提 #27: Browser Audio runtime</a></p></div>
+<h2>想定構文</h2>
+<pre><code>[State 200, Voice]
+type = PlaySnd
+trigger1 = Time = 0
+value = 2, 5
+channel = 0
+volume = 100
+pan = 0
+freqmul = 1.0
+loop = 0</code></pre>
+<h2>対象パラメータ</h2>
+<table><thead><tr><th>Parameter</th><th>Purpose</th><th>Current status</th></tr></thead><tbody>
+<tr><td><code>value = group, index</code></td><td>ownerキャラクターのSND sampleを選択</td><td>未実装</td></tr>
+<tr><td><code>channel</code></td><td>owner scope内の再生channelを選択・置換</td><td>未実装</td></tr>
+<tr><td><code>volume</code> / <code>volumescale</code></td><td>音量制御</td><td>未実装</td></tr>
+<tr><td><code>pan</code> / <code>abspan</code></td><td>左右定位</td><td>未実装</td></tr>
+<tr><td><code>freqmul</code></td><td>再生速度・周波数倍率</td><td>未実装</td></tr>
+<tr><td><code>loop</code></td><td>停止・channel置換までループ</td><td>未実装</td></tr>
+</tbody></table>
+<h2>予定するRuntimeフロー</h2>
+<pre><code>CNS PlaySnd controller
+  ↓ firing frameで式を評価
+Sound event snapshot
+  ↓ owner CharacterAssets / SND group,indexを解決
+Owner-scoped audio channel table
+  ↓
+Web Audio adapter</code></pre>
+<p>P1 channel 0とP2 channel 0は別channelとして管理します。将来のHelper / Projectile ownerにも拡張できる構造を前提とします。</p>
+<h2>診断ログ</h2>
+<pre><code>raw.sound_play owner=p1 sample=2,5 channel=0
+  volume=100 pan=0 freqmul=1 loop=0
+  result=started voiceId=87</code></pre>
+<pre><code>raw.sound_play_rejected owner=p1 sample=2,5 reason=sample_not_found</code></pre>
+<h2>完了条件</h2>
+<ul><li>DEF/ZIPからSND archiveをロードする</li><li><code>value</code>式から実sampleを選択する</li><li>再利用されるAudioContext経由で再生する</li><li>owner scopeのchannel置換を実装する</li><li>volume/pan/frequency/loopを対応範囲どおりテストする</li><li>Runtime HistoryとMatrixを同期する</li></ul>
+<p><a href="https://github.com/yshtysht8sh10-glitch/WebMUGEN/issues/28"><strong>GitHub Issue #28で実装状況を見る</strong></a></p>
+</main></body></html>
