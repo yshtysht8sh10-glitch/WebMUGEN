@@ -349,7 +349,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
 
           nextState = applyFallbackStageRules(nextState);
           nextState = resolveFallbackHits(nextState, character.air, runtimeSettingsRef.current.hitDiagnostics);
-          nextState = applyFallbackHitRecovery(nextState);
+          nextState = applyFallbackHitRecovery(nextState, runtimeSettingsRef.current.hitDiagnostics);
 
           nextRoundState = stepRoundState(nextRoundState, nextState);
           nextScore = updateRoundScore(nextScore, nextRoundState);

@@ -241,6 +241,26 @@ function executeStateControllers(
     }
     if (!run) continue;
 
+    const hitStunBlock = getHitStunControllerBlock(next, stateDef, controller, input, commands, opponent);
+    if (hitStunBlock) {
+      const blockedEvents = next.hitStun?.blockedEvents ?? [];
+      const firstOccurrence = !blockedEvents.includes(hitStunBlock.key);
+      next = {
+        ...next,
+        ctrl: false,
+        hitStun: next.hitStun ? {
+          ...next.hitStun,
+          blockedEvents: firstOccurrence ? [...blockedEvents, hitStunBlock.key] : blockedEvents,
+        } : next.hitStun,
+        hitDiagnosticLines: input.hitDiagnostics !== false && firstOccurrence ? [
+          ...(next.hitDiagnosticLines ?? []),
+          `raw.hitstun_guard target=p${next.id}`,
+          `  activeHitDefId=${next.hitStun?.activeHitDefId ?? 'none'} event=block_controller controller=${controller.type} value=${hitStunBlock.value} state=${stateDef.stateNo} reason=${hitStunBlock.reason}`,
+        ] : next.hitDiagnosticLines,
+      };
+      continue;
+    }
+
     const beforeStateNo = next.stateNo;
     const result = executeController(next, opponent, controller, cns, input, commands);
     next = result.player;
@@ -372,6 +392,34 @@ function evaluateTriggerRecords(triggers: readonly CnsTrigger[], context: CnsRun
   return Array.from(groups.values()).some((group) =>
     group.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context)),
   );
+}
+
+function getHitStunControllerBlock(
+  player: PlayerState,
+  stateDef: CnsStateDefinition,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands: ReadonlySet<string> | undefined,
+  opponent: PlayerState,
+): { key: string; value: number | string; reason: string } | null {
+  if (!player.hitStun) return null;
+  const type = controller.type.toLowerCase();
+  if (type === 'ctrlset') {
+    const value = num(controller, 'value', player, input, commands, opponent);
+    if (value !== null && value !== 0) {
+      return { key: `ctrlset:${stateDef.stateNo}:${controller.sourceLine ?? '-'}`, value, reason: 'hitstun_active' };
+    }
+  }
+  if (type !== 'changestate') return null;
+  const value = num(controller, 'value', player, input, commands, opponent);
+  if (value === null) return null;
+  if (stateDef.stateNo === -1) {
+    return { key: `input:${controller.sourceLine ?? '-'}:${value}`, value, reason: 'input_changestate_during_hitstun' };
+  }
+  if (value === 0 || value === 52) {
+    return { key: `recovery:${stateDef.stateNo}:${controller.sourceLine ?? '-'}:${value}`, value, reason: 'early_recovery_state_during_hitstun' };
+  }
+  return null;
 }
 
 function debugControllerCheck(

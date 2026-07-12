@@ -108,6 +108,8 @@ function resolveAttack(
     kind: activeHitTime === undefined ? 'fallback' : hitTimeKind,
     source: hitTimeSource,
     targetStateTypeAtHit,
+    elapsed: 0,
+    lastStateNo: STAND_HIT_STATE,
     ...(activeHitTime === undefined ? { fallbackReason: hitTimeFallbackReason } : {}),
   });
   const idText = activeHitDefId === null ? 'none' : String(activeHitDefId);

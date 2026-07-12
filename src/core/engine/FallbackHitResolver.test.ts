@@ -30,11 +30,11 @@ describe('FallbackHitResolver', () => {
 
     const before = applyFallbackHitRecovery({
       ...hit,
-      players: [hit.players[0], { ...target, hitPause: 0, stateTime: Math.max(0, hitTime - 1) }],
+      players: [hit.players[0], { ...target, hitPause: 0, hitStun: target.hitStun ? { ...target.hitStun, elapsed: Math.max(0, hitTime - 1) } : target.hitStun }],
     });
     const ended = applyFallbackHitRecovery({
       ...hit,
-      players: [hit.players[0], { ...target, hitPause: 0, stateTime: hitTime }],
+      players: [hit.players[0], { ...target, hitPause: 0, hitStun: target.hitStun ? { ...target.hitStun, elapsed: hitTime } : target.hitStun }],
     });
     if (hitTime > 0) expect(before.players[1].ctrl).toBe(false);
     expect(ended.players[1].stateNo).toBe(0);

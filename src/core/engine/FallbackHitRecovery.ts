@@ -4,9 +4,9 @@ const STAND_HIT_STATE = 5000;
 const AIR_HIT_STATE = 5030;
 const FALLBACK_HIT_RECOVERY_FRAMES = 28;
 
-export function applyFallbackHitRecovery(state: GameState): GameState {
-  const p1 = recoverPlayer(state.players[0]);
-  const p2 = recoverPlayer(state.players[1]);
+export function applyFallbackHitRecovery(state: GameState, diagnosticsEnabled = true): GameState {
+  const p1 = recoverPlayer(state.players[0], diagnosticsEnabled);
+  const p2 = recoverPlayer(state.players[1], diagnosticsEnabled);
   return {
     ...state,
     players: [p1.player, p2.player],
@@ -18,23 +18,57 @@ export function applyFallbackHitRecovery(state: GameState): GameState {
   };
 }
 
-function recoverPlayer(player: PlayerState): { player: PlayerState; diagnosticLines: string[] } {
-  if (!isFallbackHitState(player)) {
+function recoverPlayer(player: PlayerState, diagnosticsEnabled: boolean): { player: PlayerState; diagnosticLines: string[] } {
+  if (!player.hitStun && !isFallbackHitState(player)) {
     return { player, diagnosticLines: [] };
   }
 
   if (player.hitPause > 0) {
-    return { player: { ...player, ctrl: false }, diagnosticLines: [] };
+    const hitStun = player.hitStun;
+    const diagnosticLines = diagnosticsEnabled && hitStun ? [
+      `raw.hitstun_tick target=p${player.id}`,
+      `  activeHitDefId=${hitStun.activeHitDefId ?? 'none'} elapsed=${hitStun.elapsed} remaining=${Math.max(0, hitStun.selectedHitTime - hitStun.elapsed)} state=${player.stateNo} ctrl=0 ctrlSource=hitstun stateChanged=${hitStun.lastStateNo !== player.stateNo ? 1 : 0} hitPause=${player.hitPause}`,
+    ] : [];
+    return {
+      player: {
+        ...player,
+        ctrl: false,
+        hitStun: hitStun ? { ...hitStun, lastStateNo: player.stateNo } : hitStun,
+      },
+      diagnosticLines,
+    };
   }
 
   const selectedHitTime = player.hitStun?.selectedHitTime ?? FALLBACK_HIT_RECOVERY_FRAMES;
-  if (player.stateTime < selectedHitTime) {
-    return { player: { ...player, ctrl: false }, diagnosticLines: [] };
+  const elapsed = player.hitStun?.elapsed ?? player.stateTime;
+  if (elapsed < selectedHitTime) {
+    const nextElapsed = elapsed + 1;
+    const stateChanged = player.hitStun ? player.hitStun.lastStateNo !== player.stateNo : false;
+    const diagnosticLines = diagnosticsEnabled && player.hitStun ? [
+      `raw.hitstun_tick target=p${player.id}`,
+      `  activeHitDefId=${player.hitStun.activeHitDefId ?? 'none'} elapsed=${nextElapsed} remaining=${Math.max(0, selectedHitTime - nextElapsed)} state=${player.stateNo} ctrl=0 ctrlSource=${player.ctrl ? 'common_state' : 'hitstun'} stateChanged=${stateChanged ? 1 : 0}`,
+      ...(player.ctrl ? [
+        `raw.hitstun_violation target=p${player.id}`,
+        `  activeHitDefId=${player.hitStun.activeHitDefId ?? 'none'} event=ctrl_enabled_early state=${player.stateNo} forcedCtrl=0`,
+      ] : []),
+      ...((player.stateNo === 0 || player.stateNo === 52) ? [
+        `raw.hitstun_violation target=p${player.id}`,
+        `  activeHitDefId=${player.hitStun.activeHitDefId ?? 'none'} event=early_state_exit state=${player.stateNo} forcedCtrl=0`,
+      ] : []),
+    ] : [];
+    return {
+      player: {
+        ...player,
+        ctrl: false,
+        hitStun: player.hitStun ? { ...player.hitStun, elapsed: nextElapsed, lastStateNo: player.stateNo } : player.hitStun,
+      },
+      diagnosticLines,
+    };
   }
 
   const diagnosticLines = player.hitStun ? [
     `raw.hitstun target=p${player.id}`,
-    `  activeHitDefId=${player.hitStun.activeHitDefId ?? 'none'} event=end selectedHitTime=${selectedHitTime} elapsed=${player.stateTime} recoveryPath=existing`,
+    `  activeHitDefId=${player.hitStun.activeHitDefId ?? 'none'} event=end selectedHitTime=${selectedHitTime} elapsed=${elapsed} recoveryPath=existing`,
   ] : [];
   return { player: {
     ...player,

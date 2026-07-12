@@ -81,6 +81,9 @@ export type PlayerState = {
     source: 'active_hitdef' | 'hardcoded';
     targetStateTypeAtHit: PlayerState['stateType'];
     fallbackReason?: string;
+    elapsed: number;
+    lastStateNo: number;
+    blockedEvents?: string[];
   };
 };
 
