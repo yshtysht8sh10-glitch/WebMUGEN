@@ -119,7 +119,7 @@ function resolveAttack(
     const lifeBefore = target.life;
     const guardedAttacker = markAttackerHit(attacker, activeHitDefId, target.id, guardPause.attacker);
     const contactedAttacker = activeHitDefId === null ? guardedAttacker : recordMoveContact(guardedAttacker, activeHitDefId, 'guarded');
-    const guardedTarget = applyGuardHit(target, guardDamage, guardState, appliedGuardVelocity, guardPause.defender, {
+    const guardedTarget = applyGuardHit(target, guardDamage, active.guardKill !== false, guardState, appliedGuardVelocity, guardPause.defender, {
       activeHitDefId,
       selectedHitTime: guardHitTime,
       kind: target.stateType === 'A' ? 'air' : 'ground',
@@ -141,7 +141,7 @@ function resolveAttack(
       `raw.hit_damage target=p${target.id}`,
       `  activeHitDefId=${idText} lifeBefore=${lifeBefore} appliedDamage=${guardDamage} lifeAfter=${guardedTarget.life} source=guard_damage ko=${guardedTarget.life === 0 ? 1 : 0}`,
       `raw.guard_reaction target=p${target.id}`,
-      `  activeHitDefId=${idText} state=${guardState} kind=${guardKind} velocity=(${appliedGuardVelocity.x},${appliedGuardVelocity.y}) hittime=${guardHitTime} pausetime=${guardPause.defender}`,
+      `  activeHitDefId=${idText} state=${guardState} kind=${guardKind} velocity=(${appliedGuardVelocity.x},${appliedGuardVelocity.y}) damage=${guardDamage} kill=${active.guardKill === false ? 0 : 1} hittime=${guardHitTime} ctrltime=${active.controlTime ?? guardHitTime} pausetime=${guardPause.defender}`,
     );
     return {
       attacker: contactedAttacker,
@@ -326,6 +326,7 @@ function applyFallbackHit(
 function applyGuardHit(
   defender: PlayerState,
   damage: number,
+  canKill: boolean,
   stateNo: number,
   velocity: { x: number; y: number },
   pauseTime: number,
@@ -334,7 +335,7 @@ function applyGuardHit(
 ): PlayerState {
   return {
     ...defender,
-    life: Math.max(0, defender.life - damage),
+    life: Math.max(canKill ? 0 : Math.min(1, defender.life), defender.life - damage),
     stateNo,
     stateTime: 0,
     animNo: stateNo,

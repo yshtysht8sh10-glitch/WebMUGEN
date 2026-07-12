@@ -487,6 +487,8 @@ function getHitStunControllerBlock(
   if (type === 'ctrlset') {
     const value = num(controller, 'value', player, input, commands, opponent);
     if (value !== null && value !== 0) {
+      const guardControlTime = player.getHitVars?.guarded ? player.getHitVars.ctrltime : undefined;
+      if (guardControlTime !== undefined && player.hitStun.elapsed >= guardControlTime) return null;
       return { key: `ctrlset:${stateDef.stateNo}:${controller.sourceLine ?? '-'}`, value, reason: 'hitstun_active' };
     }
   }
@@ -504,6 +506,8 @@ function getHitStunControllerBlock(
 
 function forceHitStunControl(player: PlayerState, source: string, diagnosticsEnabled: boolean): PlayerState {
   if (!player.hitStun || !player.ctrl) return player;
+  const guardControlTime = player.getHitVars?.guarded ? player.getHitVars.ctrltime : undefined;
+  if (guardControlTime !== undefined && player.hitStun.elapsed >= guardControlTime) return player;
   const key = `ctrl-force:${source}`;
   const blockedEvents = player.hitStun.blockedEvents ?? [];
   const firstOccurrence = !blockedEvents.includes(key);
@@ -991,7 +995,7 @@ function activateHitDef(
     `  airHitTime=${airHitTime ?? 28} source=${airHitTime === undefined ? 'hardcoded' : 'cns'}${airHitTimeFallbackReason ? ` fallbackReason=${airHitTimeFallbackReason}` : ''}`,
     `  animType=${selectedAnimType} source=${animTypeSource}`,
     `raw.hitdef_parameters activeHitDefId=${diagnosticId}`,
-    `  attr=${formatAttr(snapshot.attr)} hitflag=${snapshot.hitFlag ?? '-'} guardflag=${snapshot.guardFlag ?? '-'} guard.dist=${snapshot.guardDistance ?? '-'} priority=${formatPriority(snapshot.priority)}`,
+    `  attr=${formatAttr(snapshot.attr)} hitflag=${snapshot.hitFlag ?? '-'} guardflag=${snapshot.guardFlag ?? '-'} guard.dist=${snapshot.guardDistance ?? '-'} guard.kill=${snapshot.guardKill === undefined ? '-' : snapshot.guardKill ? 1 : 0} priority=${formatPriority(snapshot.priority)}`,
     `  animtypes=ground:${selectedAnimType},air:${snapshot.airAnimType ?? '-'},fall:${snapshot.fallAnimType ?? '-'} types=ground:${snapshot.groundType ?? '-'},air:${snapshot.airType ?? '-'}`,
     `  pausetime=${snapshot.pauseTime.attacker},${snapshot.pauseTime.defender} guard.pausetime=${formatPair(snapshot.guardPauseTime)} hittime=${groundHitTime ?? '-'},${airHitTime ?? '-'},${snapshot.guardHitTime ?? '-'}`,
     `  velocity=ground:${formatPair(snapshot.groundVelocity)},air:${formatPair(snapshot.airVelocity)},guard:${formatPair(snapshot.guardVelocity)} ids=${snapshot.hitId ?? '-'},${snapshot.chainId ?? '-'},${snapshot.noChainIds?.join('|') || '-'}`,
@@ -1088,7 +1092,8 @@ function evaluateHitDefSnapshot(
   ].filter((key) => controller.params[key] !== undefined);
   return {
     damage: Math.max(0, damage[0] ?? 60),
-    guardDamage: Math.max(0, damage[1] ?? 0),
+    guardDamage: Math.max(0, numValue('guard.damage') ?? damage[1] ?? 0),
+    guardKill: boolValue('guard.kill'),
     pauseTime: { attacker: Math.max(0, pause[0] ?? 4), defender: Math.max(0, pause[1] ?? 8) },
     groundVelocity: { x: groundVelocity[0] ?? -3.5, y: groundVelocity[1] ?? 0 },
     airVelocity: { x: airVelocity[0] ?? -2.5, y: airVelocity[1] ?? -5.5 },

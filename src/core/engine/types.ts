@@ -73,6 +73,7 @@ export type ActiveHitDef = {
   invalidParameters?: string[];
   damage: number;
   guardDamage: number;
+  guardKill?: boolean;
   pauseTime: {
     attacker: number;
     defender: number;

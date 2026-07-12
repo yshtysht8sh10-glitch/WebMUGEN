@@ -160,7 +160,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | Helper | Partial | Recognized safe no-op in CNS runtime; Helper system exists separately. |
 | HitAdd | Partial | Stores hit count field only. |
 | HitBy | Partial | Stores allowed-hit attribute string only. |
-| HitDef | Partial | Ground/air hittime selects at contact and uses independent hit-stun elapsed across internal get-hit State changes. CtrlSet, StateDef/ChangeState ctrl, early State 0/52, and State -1 input are suppressed until expiry; internal 5000/5001 transitions remain allowed. Full GetHitVar branching remains Partial. |
+| HitDef | Partial | Live paths apply normal or guard damage, pause, hit/control time, Facing-relative velocity, guard kill, ground/air/fall/down reactions, duplicate/juggle limits, contact triggers, targets, and diagnostics. Advanced guard flags, priority/chain, Helper/projectile parity, and uncommon fall/down behavior remain incomplete. |
 | HitFallDamage | Partial | Applies simple life reduction. Full fall damage semantics incomplete. |
 | HitFallSet | Partial | Recognized safe no-op. Fall flags not implemented. |
 | HitFallVel | Partial | Restores the contact-snapshotted fall X/Y velocity for common bounce states. Full down-hit variants remain incomplete. |

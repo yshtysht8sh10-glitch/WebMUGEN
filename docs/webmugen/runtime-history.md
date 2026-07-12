@@ -147,7 +147,7 @@ For air contact, `raw.hit_reaction` also records State 5020, the selected air an
 
 `raw.hit_juggle` records attacker State, ActiveHitDef generation, cost, before/after/max pool values, and accepted or `insufficient_points` rejection. The associated `raw.hit_collision` rejection uses `reason=juggle_insufficient`.
 
-`raw.guard_check` records guardflag, Facing-relative holdback intent, crouch intent, StateType, selected stand/crouch/air kind, distance/guard distance, and accepted or mismatch/range rejection. `raw.guard_reaction` records common GuardHit State, guard velocity, hit time, and pause. Guarded `raw.move_contact` has `contact=1 hit=0 guarded=1`.
+`raw.guard_check` records guardflag, Facing-relative holdback intent, crouch intent, StateType, selected stand/crouch/air kind, distance/guard distance, and accepted or mismatch/range rejection. `raw.guard_reaction` records common GuardHit State, guard damage/kill, velocity, hit/control time, and pause. Guarded `raw.move_contact` has `contact=1 hit=0 guarded=1`; `raw.hit_damage source=guard_damage` records chip Life and KO outcome.
 
 `raw.hitpause` records the event-time attacker and defender counters from ActiveHitDef. Live physics and `raw.hitstun_tick` expose the remaining counter; duplicate contact rejection does not reset it.
 

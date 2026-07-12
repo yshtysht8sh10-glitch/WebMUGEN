@@ -152,6 +152,25 @@ physics = S
     expect(tooFar.hitDiagnosticLines?.join('\n')).toContain('reason=out_of_guard_distance');
   });
 
+  it('uses guard.damage independently and honors guard.kill=false', () => {
+    const guarded = resolveConfiguredHit({
+      targetLife: 10, damage: 7, guardDamage: 20, guardKill: false, guardFlag: 'H',
+      targetCommands: new Set(['holdback']), guardPauseTime: [0, 0],
+    });
+    expect(guarded.players[1]).toMatchObject({ stateNo: 150, life: 1 });
+    expect(guarded.hitEvents[0].damage).toBe(20);
+    expect(guarded.players[1].getHitVars).toMatchObject({ damage: 20, guarded: 1 });
+
+    const normal = resolveConfiguredHit({ targetLife: 10, damage: 7, guardDamage: 20, guardKill: false, guardFlag: 'H', guardPauseTime: [0, 0] });
+    expect(normal.players[1]).toMatchObject({ stateNo: 5000, life: 3 });
+
+    const lethalGuard = resolveConfiguredHit({
+      targetLife: 10, guardDamage: 20, guardKill: true, guardFlag: 'H',
+      targetCommands: new Set(['holdback']), guardPauseTime: [0, 0],
+    });
+    expect(lethalGuard.players[1].life).toBe(0);
+  });
+
   it('freezes motion and timers for exactly the defender pausetime then resumes', () => {
     let state = resolveConfiguredHit({ pauseTime: [0, 2], groundVelocity: [-4, 0] });
     const targetAtHit = state.players[1];
@@ -677,11 +696,14 @@ function resolveConfiguredHit({
   airJuggle,
   guardFlag,
   guardDamage,
+  guardKill,
+  guardControlTime,
   guardVelocity,
   guardPauseTime,
   guardHitTime,
   guardDistance,
   targetCommands,
+  targetLife,
 }: {
   damage?: number;
   groundHitTime?: number;
@@ -706,11 +728,14 @@ function resolveConfiguredHit({
   airJuggle?: number;
   guardFlag?: string;
   guardDamage?: number;
+  guardKill?: boolean;
+  guardControlTime?: number;
   guardVelocity?: [number, number];
   guardPauseTime?: [number, number];
   guardHitTime?: number;
   guardDistance?: number;
   targetCommands?: ReadonlySet<string>;
+  targetLife?: number;
 }) {
   const hitTimeLines = [
     groundHitTime === undefined ? '' : `ground.hittime = ${groundHitTime}`,
@@ -738,6 +763,9 @@ function resolveConfiguredHit({
     guardPauseTime ? `guard.pausetime = ${guardPauseTime.join(', ')}` : '',
     guardHitTime === undefined ? '' : `guard.hittime = ${guardHitTime}`,
     guardDistance === undefined ? '' : `guard.dist = ${guardDistance}`,
+    guardDamage === undefined ? '' : `guard.damage = ${guardDamage}`,
+    guardKill === undefined ? '' : `guard.kill = ${guardKill ? 1 : 0}`,
+    guardControlTime === undefined ? '' : `guard.ctrltime = ${guardControlTime}`,
   ].filter(Boolean).join('\n');
   const cns = parseCnsText(`
 [Data]
@@ -754,7 +782,7 @@ ${juggle === undefined ? '' : `juggle = ${juggle}`}
 [State 200, Hit]
 type = HitDef
 trigger1 = 1
-damage = ${damage}, ${guardDamage ?? 0}
+damage = ${damage}, 0
 ${hitTimeLines}
 ${animTypeLine}
 ${velocityLines}
@@ -780,6 +808,7 @@ ${guardLines}
     ...players[targetIndex],
     x: resolvedFacing === 1 ? 290 : 240,
     animNo: 0,
+    life: targetLife ?? players[targetIndex].life,
     stateType: targetStateType,
     physics: targetStateType === 'A' ? 'A' : targetStateType === 'C' ? 'C' : 'S',
   };
