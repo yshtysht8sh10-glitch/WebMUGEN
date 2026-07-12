@@ -8,6 +8,8 @@ import type { GameState, HitEvent, PlayerState } from './types';
 import { recordMoveContact } from '../hitdef/MoveContactState';
 import { pruneTargets, registerTarget } from '../hitdef/TargetState';
 import { hitAttributeMatchesFilter } from '../hitdef/HitAttribute';
+import { addPower } from '../power/PowerGauge';
+import { isAtFallbackStageEdge } from './FallbackStageRules';
 
 const STAND_HIT_STATE = 5000;
 const AIR_HIT_SHAKE_STATE = 5020;
@@ -129,7 +131,7 @@ function resolveAttack(
   const chainDecision = evaluateHitChain(active, previousHitDefId);
   if (diagnosticsEnabled) diagnosticLines.push(
     `raw.hit_chain attacker=p${attacker.id} target=p${target.id}`,
-    `  activeHitDefId=${activeHitDefId ?? 'none'} id=${active.hitId ?? '-'} chainid=${active.chainId ?? '-'} nochainid=${active.noChainIds?.join('|') || '-'} previous=${previousHitDefId ?? '-'} hitonce=${active.hitOnce === false ? 0 : 1} result=${chainDecision.accepted ? 'accepted' : 'rejected'} reason=${chainDecision.reason}`,
+    `  activeHitDefId=${activeHitDefId ?? 'none'} id=${active.hitId ?? '-'} chainid=${active.chainId ?? '-'} nochainid=${active.noChainIds?.join('|') || '-'} previous=${previousHitDefId ?? '-'} hitonce=${active.hitOnce ? 1 : 0} result=${chainDecision.accepted ? 'accepted' : 'rejected'} reason=${chainDecision.reason}`,
   );
   if (!chainDecision.accepted) return { attacker, target, hitEvent: null, diagnosticLines };
 
@@ -169,7 +171,7 @@ function resolveAttack(
       activeHitDefId === null ? guardedAttacker : recordMoveContact(guardedAttacker, activeHitDefId, 'guarded'),
       active,
     );
-    const guardedTarget = applyTargetRequestedState(applyGuardHit(target, guardDamage, active.guardKill !== false, guardState, appliedGuardVelocity, guardPause.defender, {
+    const guardedTarget = applyTargetRequestedState(applyGuardHit(applyHitDefSnap(target, attacker, active), guardDamage, active.guardKill !== false, guardState, appliedGuardVelocity, guardPause.defender, {
       activeHitDefId,
       selectedHitTime: guardHitTime,
       kind: target.stateType === 'A' ? 'air' : 'ground',
@@ -180,6 +182,7 @@ function resolveAttack(
       selectedAnim: guardState,
       ...(active.guardHitTime === undefined ? { fallbackReason: 'missing_guard_hittime' } : {}),
     }, createGetHitVarSnapshot(active, guardDamage, guardHitTime, target.stateType === 'A' ? 'air' : 'ground', guardVelocity)), active, attacker.id);
+    const auxiliary = applyHitDefAuxiliary(contactedAttacker, guardedTarget, attacker, target, active, true);
     const idText = activeHitDefId === null ? 'none' : String(activeHitDefId);
     const hitEvent = createContactHitEvent(attacker, target, active, true, guardDamage, overlap, attackBoxes, bodyBoxes, airDocument);
     if (diagnosticsEnabled) diagnosticLines.push(
@@ -195,10 +198,11 @@ function resolveAttack(
       `  activeHitDefId=${idText} state=${guardState} kind=${guardKind} velocity=(${appliedGuardVelocity.x},${appliedGuardVelocity.y}) damage=${guardDamage} kill=${active.guardKill === false ? 0 : 1} hittime=${guardHitTime} ctrltime=${active.controlTime ?? guardHitTime} pausetime=${guardPause.defender}`,
       ...formatRequestedStateDiagnostics(attacker, target, active, contactedAttacker, guardedTarget),
       ...formatHitEffectDiagnostics(hitEvent, activeHitDefId),
+      ...formatHitAuxiliaryDiagnostics(activeHitDefId, attacker, target, auxiliary, active, true),
     );
     return {
-      attacker: contactedAttacker,
-      target: guardedTarget,
+      attacker: auxiliary.attacker,
+      target: auxiliary.target,
       hitEvent,
       diagnosticLines,
     };
@@ -254,7 +258,7 @@ function resolveAttack(
     x: (active.fall?.xVelocity ?? active.downVelocity?.x ?? 0) * attacker.facing,
     y: active.fall?.yVelocity ?? active.downVelocity?.y ?? 0,
   };
-  const hitTarget = rememberHitDefId(applyTargetRequestedState(applyFallbackHit(target, damage, reactionState, selectedAnim, appliedVelocity, fallVelocity, active.pauseTime.defender, {
+  const hitTarget = rememberHitDefId(applyTargetRequestedState(applyFallbackHit(applyHitDefSnap(target, attacker, active), damage, active.kill !== false, active.numHits ?? 1, reactionState, selectedAnim, appliedVelocity, fallVelocity, active.pauseTime.defender, {
     activeHitDefId,
     selectedHitTime,
     kind: activeHitTime === undefined ? 'fallback' : hitTimeKind,
@@ -266,9 +270,10 @@ function resolveAttack(
     ...(activeHitTime === undefined ? { fallbackReason: hitTimeFallbackReason } : {}),
   }, createGetHitVarSnapshot(active, damage, selectedHitTime, hitTimeKind, selectedVelocity)), active, attacker.id), attacker.id, active.hitId);
   const idText = activeHitDefId === null ? 'none' : String(activeHitDefId);
+  const auxiliary = applyHitDefAuxiliary(contactedAttacker, hitTarget, attacker, target, active, false);
   const targetedAttacker = activeHitDefId === null
-    ? contactedAttacker
-    : registerTarget(contactedAttacker, hitTarget, activeHitDefId, active.hitId ?? 0);
+    ? auxiliary.attacker
+    : registerTarget(auxiliary.attacker, auxiliary.target, activeHitDefId, active.hitId ?? 0);
   const fallbackReason = '-';
   const hitEvent = createContactHitEvent(attacker, target, active, false, damage, overlap, attackBoxes, bodyBoxes, airDocument);
   if (diagnosticsEnabled) diagnosticLines.push(
@@ -277,9 +282,9 @@ function resolveAttack(
     `raw.move_contact attacker=p${attacker.id} target=p${target.id}`,
     `  activeHitDefId=${idText} contact=1 hit=1 guarded=0 hitCount=${targetedAttacker.moveContact?.hitCount ?? 0} result=accepted`,
     `raw.target_register owner=p${attacker.id} target=p${target.id}`,
-    `  activeHitDefId=${idText} hitDefId=${active.hitId ?? 0} targetLife=${hitTarget.life} registered=${hitTarget.life > 0 ? 1 : 0} reason=${hitTarget.life > 0 ? 'successful_hit' : 'target_ko'}`,
+    `  activeHitDefId=${idText} hitDefId=${active.hitId ?? 0} targetLife=${auxiliary.target.life} registered=${auxiliary.target.life > 0 ? 1 : 0} reason=${auxiliary.target.life > 0 ? 'successful_hit' : 'target_ko'}`,
     `raw.hit_damage target=p${target.id}`,
-    `  activeHitDefId=${idText} lifeBefore=${lifeBefore} appliedDamage=${damage} lifeAfter=${hitTarget.life} source=${source} ko=${hitTarget.life === 0 ? 1 : 0}`,
+    `  activeHitDefId=${idText} lifeBefore=${lifeBefore} appliedDamage=${damage} lifeAfter=${hitTarget.life} source=${source} kill=${active.kill === false ? 0 : 1} ko=${hitTarget.life === 0 ? 1 : 0}`,
     ...(isAirJuggle ? [
       `raw.hit_juggle attacker=p${attacker.id} target=p${target.id}`,
       `  activeHitDefId=${idText} state=${attacker.stateNo} cost=${juggleCost} before=${juggleBefore} after=${hitTarget.juggleRemaining ?? juggleBefore} max=${juggleMax} result=accepted`,
@@ -301,6 +306,7 @@ function resolveAttack(
     `  activeHitDefId=${idText} event=start selectedHitTime=${selectedHitTime} kind=${activeHitTime === undefined ? 'fallback' : hitTimeKind} remaining=${selectedHitTime} source=${hitTimeSource}${activeHitTime === undefined ? ` fallbackReason=${hitTimeFallbackReason}` : ''}`,
     ...formatRequestedStateDiagnostics(attacker, target, active, contactedAttacker, hitTarget),
     ...formatHitEffectDiagnostics(hitEvent, activeHitDefId),
+    ...formatHitAuxiliaryDiagnostics(activeHitDefId, attacker, target, auxiliary, active, false),
   );
   if (diagnosticsEnabled && activeHitDefId !== null) {
     diagnosticLines.push(
@@ -310,7 +316,7 @@ function resolveAttack(
   }
   return {
     attacker: targetedAttacker,
-    target: hitTarget,
+    target: auxiliary.target,
     hitEvent,
     diagnosticLines,
   };
@@ -552,6 +558,88 @@ function markAttackerHit(
   };
 }
 
+type HitAuxiliaryResult = {
+  attacker: PlayerState;
+  target: PlayerState;
+  attackerPowerBefore: number;
+  targetPowerBefore: number;
+  atEdge: boolean;
+  cornerVelocity: number | undefined;
+};
+
+function applyHitDefSnap(
+  target: PlayerState,
+  attacker: PlayerState,
+  hitDef: NonNullable<PlayerState['activeHitDef']>,
+): PlayerState {
+  if (!hitDef.snap) return target;
+  return {
+    ...target,
+    x: attacker.x + hitDef.snap.x * attacker.facing,
+    y: attacker.y + hitDef.snap.y,
+  };
+}
+
+function applyHitDefAuxiliary(
+  attackerAfterContact: PlayerState,
+  targetAfterContact: PlayerState,
+  attackerBefore: PlayerState,
+  targetBefore: PlayerState,
+  hitDef: NonNullable<PlayerState['activeHitDef']>,
+  guarded: boolean,
+): HitAuxiliaryResult {
+  const attackerPowerBefore = attackerAfterContact.power ?? 0;
+  const targetPowerBefore = targetAfterContact.power ?? 0;
+  const attackerPower = guarded ? hitDef.getPower?.guarded : hitDef.getPower?.hit;
+  const targetPower = guarded ? hitDef.givePower?.guarded : hitDef.givePower?.hit;
+  const atEdge = isAtFallbackStageEdge(targetBefore);
+  const cornerVelocity = guarded
+    ? targetBefore.stateType === 'A' ? hitDef.cornerPush?.airGuard : hitDef.cornerPush?.guard
+    : targetBefore.stateType === 'L' ? hitDef.cornerPush?.down
+      : targetBefore.stateType === 'A' ? hitDef.cornerPush?.air
+        : hitDef.cornerPush?.ground;
+  const attacker = {
+    ...attackerAfterContact,
+    ...(attackerPower === undefined ? {} : { power: addPower(attackerPowerBefore, attackerPower) }),
+    ...(hitDef.p1SprPriority === undefined ? {} : { sprPriority: hitDef.p1SprPriority }),
+    ...(atEdge && cornerVelocity !== undefined ? { vx: attackerAfterContact.vx + cornerVelocity * attackerBefore.facing } : {}),
+  };
+  const target = {
+    ...targetAfterContact,
+    ...(targetPower === undefined ? {} : { power: addPower(targetPowerBefore, targetPower) }),
+    ...(hitDef.p2SprPriority === undefined ? {} : { sprPriority: hitDef.p2SprPriority }),
+  };
+  return { attacker, target, attackerPowerBefore, targetPowerBefore, atEdge, cornerVelocity };
+}
+
+function formatHitAuxiliaryDiagnostics(
+  activeHitDefId: number | null,
+  attackerBefore: PlayerState,
+  targetBefore: PlayerState,
+  result: HitAuxiliaryResult,
+  hitDef: NonNullable<PlayerState['activeHitDef']>,
+  guarded: boolean,
+): string[] {
+  const lines: string[] = [];
+  if (hitDef.getPower || hitDef.givePower) lines.push(
+    `raw.hit_power attacker=p${attackerBefore.id} target=p${targetBefore.id}`,
+    `  activeHitDefId=${activeHitDefId ?? 'none'} kind=${guarded ? 'guard' : 'hit'} getpower=${guarded ? hitDef.getPower?.guarded ?? '-' : hitDef.getPower?.hit ?? '-'} attackerBefore=${result.attackerPowerBefore} attackerAfter=${result.attacker.power ?? 0} givepower=${guarded ? hitDef.givePower?.guarded ?? '-' : hitDef.givePower?.hit ?? '-'} targetBefore=${result.targetPowerBefore} targetAfter=${result.target.power ?? 0} result=applied`,
+  );
+  if (hitDef.cornerPush && Object.values(hitDef.cornerPush).some((value) => value !== undefined)) lines.push(
+    `raw.hit_cornerpush attacker=p${attackerBefore.id} target=p${targetBefore.id}`,
+    `  activeHitDefId=${activeHitDefId ?? 'none'} kind=${guarded ? 'guard' : targetBefore.stateType === 'L' ? 'down' : targetBefore.stateType === 'A' ? 'air' : 'ground'} atEdge=${result.atEdge ? 1 : 0} veloff=${result.cornerVelocity ?? '-'} facing=${attackerBefore.facing} vxBefore=${attackerBefore.vx} vxAfter=${result.attacker.vx} result=${result.atEdge && result.cornerVelocity !== undefined ? 'applied' : 'skipped'} reason=${!result.atEdge ? 'target_not_at_edge' : result.cornerVelocity === undefined ? 'parameter_not_selected' : '-'}`,
+  );
+  if (hitDef.snap) lines.push(
+    `raw.hit_snap attacker=p${attackerBefore.id} target=p${targetBefore.id}`,
+    `  activeHitDefId=${activeHitDefId ?? 'none'} offset=${hitDef.snap.x},${hitDef.snap.y} facing=${attackerBefore.facing} before=${targetBefore.x},${targetBefore.y} after=${result.target.x},${result.target.y} result=applied`,
+  );
+  if (hitDef.p1SprPriority !== undefined || hitDef.p2SprPriority !== undefined) lines.push(
+    `raw.hit_sprpriority attacker=p${attackerBefore.id} target=p${targetBefore.id}`,
+    `  activeHitDefId=${activeHitDefId ?? 'none'} p1=${hitDef.p1SprPriority ?? '-'} p2=${hitDef.p2SprPriority ?? '-'} result=applied`,
+  );
+  return lines;
+}
+
 function hasConsumedHitTarget(
   attacker: PlayerState,
   target: PlayerState,
@@ -592,6 +680,8 @@ function rememberHitDefId(player: PlayerState, attackerId: number, hitDefId: num
 function applyFallbackHit(
   defender: PlayerState,
   damage: number,
+  canKill: boolean,
+  numHits: number,
   stateNo: number,
   selectedAnim: number,
   velocity: { x: number; y: number },
@@ -600,9 +690,11 @@ function applyFallbackHit(
   hitStun: NonNullable<PlayerState['hitStun']>,
   getHitVars: Record<string, number>,
 ): PlayerState {
+  const comboHitCount = (defender.comboHitCount ?? 0) + Math.max(0, Math.trunc(numHits));
   return {
     ...defender,
-    life: Math.max(0, defender.life - damage),
+    life: Math.max(canKill ? 0 : Math.min(1, defender.life), defender.life - damage),
+    comboHitCount,
     stateNo,
     animNo: selectedAnim,
     stateTime: 0,
@@ -623,8 +715,8 @@ function applyFallbackHit(
     hitDefUsed: false,
     activeHitDef: null,
     hitStun,
-    getHitVars,
-    getHitVarUnsupportedKeys: ['fall.time', 'xoff', 'yoff', 'zoff'],
+    getHitVars: { ...getHitVars, hitcount: comboHitCount },
+    getHitVarUnsupportedKeys: ['fall.time', 'zoff'],
   };
 }
 
@@ -658,7 +750,7 @@ function applyGuardHit(
     hitFall: false,
     hitStun,
     getHitVars: { ...getHitVars, guarded: 1 },
-    getHitVarUnsupportedKeys: ['fall.time', 'xoff', 'yoff', 'zoff'],
+    getHitVarUnsupportedKeys: ['fall.time', 'zoff'],
   };
 }
 
@@ -698,12 +790,15 @@ function createGetHitVarSnapshot(
     groundtype: groundType,
     fall: fall.enabled ? 1 : 0,
     'fall.damage': fall.damage ?? 0,
+    'fall.kill': fall.kill === false ? 0 : 1,
     'fall.xvel': fall.xVelocity ?? 0,
     'fall.yvel': fall.yVelocity ?? 0,
     'fall.recover': fall.recover === false ? 0 : 1,
     'fall.recovertime': fall.recoverTime ?? 0,
     hitid: hitDef.hitId ?? 0,
     chainid: hitDef.chainId ?? -1,
+    xoff: hitDef.snap?.x ?? 0,
+    yoff: hitDef.snap?.y ?? 0,
     guarded: 0,
     yaccel: hitDef.yAcceleration ?? 0.6,
     'down.xvel': hitDef.downVelocity?.x ?? 0,

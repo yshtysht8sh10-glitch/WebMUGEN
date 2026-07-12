@@ -513,7 +513,7 @@ damage = ${damage}, 0
     }, air);
 
     expect(next.players[1].life).toBe(0);
-    expect(next.hitDiagnosticLines?.join('\n')).toContain('activeHitDefId=901 lifeBefore=20 appliedDamage=37 lifeAfter=0 source=active_hitdef ko=1');
+    expect(next.hitDiagnosticLines?.join('\n')).toContain('activeHitDefId=901 lifeBefore=20 appliedDamage=37 lifeAfter=0 source=active_hitdef kill=1 ko=1');
   });
 
   it('does not reset one-hit control when HitDef executes again', () => {
@@ -849,6 +849,103 @@ movetype = A
     expect(afterThirdParty.hitDiagnosticLines?.join('\n')).toContain('nochainid=10 previous=-');
   });
 
+  it('separates normal kill from guard.kill and prevents normal KO when kill=0', () => {
+    const nonLethal = resolveConfiguredHit({ targetLife: 10, damage: 20, kill: false, pauseTime: [0, 0] });
+    expect(nonLethal.players[1].life).toBe(1);
+    expect(nonLethal.hitDiagnosticLines?.join('\n')).toContain('kill=0 ko=0');
+
+    const lethal = resolveConfiguredHit({ targetLife: 10, damage: 20, kill: true, pauseTime: [0, 0] });
+    expect(lethal.players[1].life).toBe(0);
+    expect(lethal.hitDiagnosticLines?.join('\n')).toContain('kill=1 ko=1');
+  });
+
+  it('applies explicit hit/guard getpower and givepower once and clamps the gauges', () => {
+    const hit = resolveConfiguredHit({
+      getPower: [120, 30], givePower: [-50, 10], attackerPower: 2950, targetPower: 40, pauseTime: [0, 0],
+    });
+    expect(hit.players[0].power).toBe(3000);
+    expect(hit.players[1].power).toBe(0);
+    expect(hit.hitDiagnosticLines?.join('\n')).toContain('getpower=120 attackerBefore=2950 attackerAfter=3000');
+
+    const duplicate = resolveFallbackHits({
+      ...hit,
+      players: [hit.players[0], { ...hit.players[1], hitPause: 0, animNo: 0 }],
+    }, air);
+    expect(duplicate.players[0].power).toBe(3000);
+    expect(duplicate.players[1].power).toBe(0);
+
+    const guard = resolveConfiguredHit({
+      getPower: [120, 30], givePower: [-50, 10], attackerPower: 100, targetPower: 100,
+      guardFlag: 'H', targetCommands: new Set(['holdback']), guardPauseTime: [0, 0],
+    });
+    expect(guard.players[0].power).toBe(130);
+    expect(guard.players[1].power).toBe(110);
+    expect(guard.hitDiagnosticLines?.join('\n')).toContain('kind=guard getpower=30');
+  });
+
+  it('uses numhits for the defender combo count without changing attacker HitCount or contact damage', () => {
+    const hit = resolveConfiguredHit({ damage: 25, numHits: 3, pauseTime: [0, 0] });
+    expect(hit.players[0].moveContact?.hitCount).toBe(1);
+    expect(hit.players[1].comboHitCount).toBe(3);
+    expect(hit.players[1].getHitVars?.hitcount).toBe(3);
+    expect(hit.players[1].life).toBe(975);
+    expect(hit.hitEvents).toHaveLength(1);
+  });
+
+  it('applies selected cornerpush only while the target is at a fallback stage edge', () => {
+    const edge = resolveConfiguredHit({
+      attackerX: 862, targetX: 912, groundCornerPush: -6, pauseTime: [0, 0],
+    });
+    expect(edge.players[0].vx).toBe(-6);
+    expect(edge.hitDiagnosticLines?.join('\n')).toContain('kind=ground atEdge=1 veloff=-6');
+
+    const middle = resolveConfiguredHit({ groundCornerPush: -6, pauseTime: [0, 0] });
+    expect(middle.players[0].vx).toBe(0);
+    expect(middle.hitDiagnosticLines?.join('\n')).toContain('result=skipped reason=target_not_at_edge');
+
+    const guarded = resolveConfiguredHit({
+      attackerX: 862, targetX: 912, guardCornerPush: -4, guardFlag: 'H',
+      targetCommands: new Set(['holdback']), guardPauseTime: [0, 0],
+    });
+    expect(guarded.players[0].vx).toBe(-4);
+    expect(guarded.hitDiagnosticLines?.join('\n')).toContain('kind=guard atEdge=1 veloff=-4');
+  });
+
+  it.each([
+    { kind: 'air', targetStateType: 'A' as const, hitFlag: 'A', options: { airCornerPush: -5 } },
+    { kind: 'down', targetStateType: 'L' as const, hitFlag: 'D', options: { downCornerPush: -4 } },
+  ])('selects $kind cornerpush for the target contact class', ({ kind, targetStateType, hitFlag, options }) => {
+    const hit = resolveConfiguredHit({
+      attackerX: 862, targetX: 912, targetStateType, hitFlag, pauseTime: [0, 0], ...options,
+    });
+    expect(hit.players[0].vx).toBe(Object.values(options)[0]);
+    expect(hit.hitDiagnosticLines?.join('\n')).toContain(`kind=${kind} atEdge=1`);
+  });
+
+  it('selects airguard.cornerpush.veloff for an airborne guard', () => {
+    const guarded = resolveConfiguredHit({
+      attackerX: 862, targetX: 912, targetStateType: 'A', guardFlag: 'A', airGuardCornerPush: -2,
+      targetCommands: new Set(['holdback']), guardPauseTime: [0, 0],
+    });
+    expect(guarded.players[0].vx).toBe(-2);
+    expect(guarded.hitDiagnosticLines?.join('\n')).toContain('kind=guard atEdge=1 veloff=-2');
+  });
+
+  it.each([1, -1] as const)('applies snap and sprite priorities relative to Facing %i', (attackerFacing) => {
+    const hit = resolveConfiguredHit({
+      attackerFacing, attackerX: 400, targetX: attackerFacing === 1 ? 450 : 350,
+      snap: [30, -10], p1SprPriority: 7, p2SprPriority: 3, pauseTime: [0, 0],
+    });
+    const attacker = hit.players[attackerFacing === 1 ? 0 : 0];
+    const target = hit.players[1];
+    expect(target.x).toBe(400 + 30 * attackerFacing);
+    expect(target.y).toBe(275);
+    expect(target.getHitVars).toMatchObject({ xoff: 30, yoff: -10 });
+    expect(attacker.sprPriority).toBe(7);
+    expect(target.sprPriority).toBe(3);
+    expect(hit.hitDiagnosticLines?.join('\n')).toContain(`offset=30,-10 facing=${attackerFacing}`);
+  });
+
   it('does not keep stale hit events when no new contact occurs', () => {
     const state = createInitialGameState();
     const next = resolveFallbackHits(
@@ -898,6 +995,22 @@ function resolveConfiguredHit({
   pauseTime,
   hitId,
   hitOnce,
+  kill,
+  getPower,
+  givePower,
+  numHits,
+  groundCornerPush,
+  airCornerPush,
+  downCornerPush,
+  guardCornerPush,
+  airGuardCornerPush,
+  snap,
+  p1SprPriority,
+  p2SprPriority,
+  attackerPower,
+  targetPower,
+  attackerX,
+  targetX,
   airAnimType,
   fall,
   fallVelocity,
@@ -946,6 +1059,22 @@ function resolveConfiguredHit({
   pauseTime?: [number, number];
   hitId?: number;
   hitOnce?: boolean;
+  kill?: boolean;
+  getPower?: [number, number];
+  givePower?: [number, number];
+  numHits?: number;
+  groundCornerPush?: number;
+  airCornerPush?: number;
+  downCornerPush?: number;
+  guardCornerPush?: number;
+  airGuardCornerPush?: number;
+  snap?: [number, number];
+  p1SprPriority?: number;
+  p2SprPriority?: number;
+  attackerPower?: number;
+  targetPower?: number;
+  attackerX?: number;
+  targetX?: number;
   airAnimType?: string;
   fall?: boolean;
   fallVelocity?: [number, number];
@@ -993,6 +1122,20 @@ function resolveConfiguredHit({
   const pauseTimeLine = pauseTime ? `pausetime = ${pauseTime.join(', ')}` : '';
   const hitIdLine = hitId === undefined ? '' : `id = ${hitId}`;
   const hitOnceLine = hitOnce === undefined ? '' : `hitonce = ${hitOnce ? 1 : 0}`;
+  const auxiliaryLines = [
+    kill === undefined ? '' : `kill = ${kill ? 1 : 0}`,
+    getPower === undefined ? '' : `getpower = ${getPower.join(', ')}`,
+    givePower === undefined ? '' : `givepower = ${givePower.join(', ')}`,
+    numHits === undefined ? '' : `numhits = ${numHits}`,
+    groundCornerPush === undefined ? '' : `ground.cornerpush.veloff = ${groundCornerPush}`,
+    airCornerPush === undefined ? '' : `air.cornerpush.veloff = ${airCornerPush}`,
+    downCornerPush === undefined ? '' : `down.cornerpush.veloff = ${downCornerPush}`,
+    guardCornerPush === undefined ? '' : `guard.cornerpush.veloff = ${guardCornerPush}`,
+    airGuardCornerPush === undefined ? '' : `airguard.cornerpush.veloff = ${airGuardCornerPush}`,
+    snap === undefined ? '' : `snap = ${snap.join(', ')}`,
+    p1SprPriority === undefined ? '' : `p1sprpriority = ${p1SprPriority}`,
+    p2SprPriority === undefined ? '' : `p2sprpriority = ${p2SprPriority}`,
+  ].filter(Boolean).join('\n');
   const fallLines = [
     airAnimType === undefined ? '' : `air.animtype = ${airAnimType}`,
     fall === undefined ? '' : `fall = ${fall ? 1 : 0}`,
@@ -1046,6 +1189,7 @@ ${velocityLines}
 ${pauseTimeLine}
 ${hitIdLine}
 ${hitOnceLine}
+${auxiliaryLines}
 ${fallLines}
 ${guardLines}
 `);
@@ -1056,21 +1200,23 @@ ${guardLines}
   const resolvedFacing = attackerFacing ?? (attackerId === 1 ? 1 : -1);
   players[attackerIndex] = {
     ...players[attackerIndex],
-    x: resolvedFacing === 1 ? 240 : 290,
+    x: attackerX ?? (resolvedFacing === 1 ? 240 : 290),
     facing: resolvedFacing,
     stateNo: 200,
     animNo: 200,
     moveType: 'A',
+    power: attackerPower,
   };
   players[targetIndex] = {
     ...players[targetIndex],
-    x: resolvedFacing === 1 ? 290 : 240,
+    x: targetX ?? (resolvedFacing === 1 ? 290 : 240),
     animNo: 0,
     life: targetLife ?? players[targetIndex].life,
     hitBy: targetHitBy,
     notHitBy: targetNotHitBy,
     stateType: targetStateType,
     physics: targetStateType === 'A' ? 'A' : targetStateType === 'C' ? 'C' : 'S',
+    power: targetPower,
   };
   const runtime = stepCnsStateRuntime({ ...initial, players }, cns, attackerId === 1 ? { p2Commands: targetCommands } : { p1Commands: targetCommands }).state;
   return resolveFallbackHits(runtime, airDocument);

@@ -107,6 +107,12 @@ Fallback stage push uses a simple rectangular push box centered on each player's
 
 This remains Partial compatibility: the fixed box is a generic fallback and does not yet derive its bounds from character Width data or the current AIR `Clsn2` boxes.
 
+## HitDef cornerpush and snap
+
+Accepted HitDef contact selects `ground.cornerpush.veloff`, `air.cornerpush.veloff`, `down.cornerpush.veloff`, `guard.cornerpush.veloff`, or `airguard.cornerpush.veloff` from the defender contact class. It changes attacker world X velocity only when the defender is at the existing fallback stage boundary (48 or 912), with the CNS value converted once by attacker Facing. A middle-stage contact leaves velocity unchanged. Camera-relative screen edges and dynamic stage bounds remain Partial.
+
+HitDef `snap` places the defender at attacker position plus the requested offset; X is Facing-relative and Y uses the runtime stage coordinate directly. Existing stage rules clamp/push later in the frame, so snap does not bypass stage safety.
+
 ## Debug Overlay fields
 
 A physics line should generally expose:

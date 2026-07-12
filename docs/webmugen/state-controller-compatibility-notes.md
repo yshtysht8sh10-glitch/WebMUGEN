@@ -54,7 +54,9 @@ Good TypeScript controller logic should:
 
 `AfterImage` should remain Partial if it is only recognized and skipped, because the visual effect is not implemented.
 
-`HitDef` remains Partial: major parameters are evaluated once into `ActiveHitDef`, with unapplied and invalid fields diagnosed rather than silently dropped. The live runtime applies normal/guard reactions, H/L/M/A/F/D target filtering, normalized HitBy/NotHitBy attr, simultaneous priority, ID/attacker-based chain/no-chain eligibility (including third-party interruption), per-generation repeat prevention, and `hitonce` target limiting before entering common ground/air/fall/down states. Required animations are not substituted when absent. Hitflag modifiers, mixed priority-type edges, full team-mode validation, advanced animation/down behavior, and broader get-hit integration remain incomplete.
+`HitDef` remains Partial: major parameters are evaluated once into `ActiveHitDef`, with unapplied and invalid fields diagnosed rather than silently dropped. The live runtime applies normal/guard/fall kill separation, explicit power pairs, numhits combo count, edge-only cornerpush selection, snap, sprite priorities, target class/attr/priority, chain eligibility, repeat prevention, and `hitonce` before entering common reaction states. Required animations are not substituted when absent. mugen.cfg power defaults, camera-relative corner bounds, hitflag modifiers, mixed priority-type edges, full team-mode validation, and broader get-hit integration remain incomplete.
+
+`HitFallDamage` reads the contact-snapshotted `fall.damage` and honors `fall.kill`; the existing common State triggers ensure it executes at the intended landing time. Explicit legacy `value` remains accepted for backward compatibility.
 
 ## Test expectations
 

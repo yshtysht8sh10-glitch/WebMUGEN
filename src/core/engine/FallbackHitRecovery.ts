@@ -44,6 +44,7 @@ function recoverPlayer(player: PlayerState, diagnosticsEnabled: boolean): { play
       hitVelY: undefined,
       getHitVars: undefined,
       getHitVarUnsupportedKeys: undefined,
+      comboHitCount: undefined,
     }, diagnosticLines: [] };
   }
   if (!player.hitStun && !isFallbackHitState(player)) {
@@ -133,6 +134,7 @@ function recoverPlayer(player: PlayerState, diagnosticsEnabled: boolean): { play
     hitStun: undefined,
     getHitVars: undefined,
     getHitVarUnsupportedKeys: undefined,
+    comboHitCount: undefined,
     hitFall: undefined,
     fallRecover: undefined,
     fallRecoverTime: undefined,

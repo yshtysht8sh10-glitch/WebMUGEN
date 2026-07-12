@@ -49,8 +49,9 @@ export class CanvasRenderer {
     this.drawLifeBars(ctx, state);
     if (roundState) this.roundStateRenderer.render(ctx, roundState, roundScore);
     this.drawProjectiles(ctx, state.projectiles);
-    this.drawPlayer(ctx, state.players[0], '#66ccff');
-    this.drawPlayer(ctx, state.players[1], '#ff99aa');
+    for (const player of getPlayersInSpritePriorityOrder(state)) {
+      this.drawPlayer(ctx, player, player.id === 1 ? '#66ccff' : '#ff99aa');
+    }
     if (hitFeedback) this.hitFeedbackRenderer.render(ctx, hitFeedback);
     this.drawDebugBoxes(ctx, state.players[0]);
     this.drawDebugBoxes(ctx, state.players[1]);
@@ -258,4 +259,8 @@ export class CanvasRenderer {
     ctx.strokeStyle = color;
     ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
   }
+}
+
+export function getPlayersInSpritePriorityOrder(state: GameState): PlayerState[] {
+  return [...state.players].sort((a, b) => (a.sprPriority ?? 0) - (b.sprPriority ?? 0) || a.id - b.id);
 }

@@ -24,7 +24,7 @@ This document is a high-level inventory of WebMUGEN implementation areas. It is 
 | State entry | Centralized entry applies several StateDef header fields. |
 | Physics | Basic position/velocity stepping exists; full WinMUGEN physics is Partial. |
 | Animation | AIR-based animation selection and timing exist; exact edge cases need audit. |
-| Hit/Collision | Partial paths exist; full HitDef/guard/target/get-hit behavior remains a major area. |
+| Hit/Collision | Partial live paths cover normal/guard/fall kill separation, explicit power/numhits, edge cornerpush, snap, sprite priority, effects, chains, targets, and common get-hit routing; projectile/team/camera-relative behavior remains a major area. |
 | Projectile/Helper/Explod | Some recognition or partial systems exist; full compatibility remains incomplete. |
 
 ## App/debug layer

@@ -976,8 +976,21 @@ function hitAdd(player: PlayerState, controller: CnsStateController): Controller
 }
 
 function hitFallDamage(player: PlayerState, controller: CnsStateController): ControllerResult {
-  const value = num(controller, 'value');
-  return value === null ? withPlayer(player, false, 'HitFallDamage') : withPlayer({ ...player, life: Math.max(0, player.life - value) }, true, 'HitFallDamage');
+  const explicitValue = controller.params.value === undefined ? null : num(controller, 'value');
+  const value = explicitValue ?? player.getHitVars?.['fall.damage'];
+  if (value === undefined || value === null) return withPlayer(player, false, 'HitFallDamage');
+  const canKill = player.getHitVars?.['fall.kill'] !== 0;
+  const lifeBefore = player.life;
+  const life = Math.max(canKill ? 0 : Math.min(1, lifeBefore), lifeBefore - Math.max(0, value));
+  return withPlayer({
+    ...player,
+    life,
+    hitDiagnosticLines: [
+      ...(player.hitDiagnosticLines ?? []),
+      `raw.hit_fall_damage target=p${player.id}`,
+      `  activeHitDefId=${player.hitStun?.activeHitDefId ?? 'none'} lifeBefore=${lifeBefore} damage=${Math.max(0, value)} lifeAfter=${life} kill=${canKill ? 1 : 0} result=applied`,
+    ],
+  }, true, 'HitFallDamage');
 }
 
 function activateHitDef(
@@ -1035,6 +1048,7 @@ function activateHitDef(
     `  fall=${formatFall(snapshot.fall)}`,
     `  customState=p1:${snapshot.p1StateNo ?? '-'},p2:${snapshot.p2StateNo ?? '-'},p2getp1state:${formatOptionalBool(snapshot.p2GetP1State)},forcestand:${formatOptionalBool(snapshot.forceStand)}`,
     `  effects=spark:${formatEffectAnimation(snapshot.spark)},guardSpark:${formatEffectAnimation(snapshot.guardSpark)},sparkxy:${snapshot.sparkOffset?.x ?? 0},${snapshot.sparkOffset?.y ?? 0},hitsound:${formatEffectSound(snapshot.hitSound)},guardsound:${formatEffectSound(snapshot.guardSound)},envshake:${snapshot.envShake?.time ?? 0},${snapshot.envShake?.frequency ?? '-'},${snapshot.envShake?.amplitude ?? '-'},${snapshot.envShake?.phase ?? '-'}`,
+    `  auxiliary=kill:${formatOptionalBool(snapshot.kill)},guard.kill:${formatOptionalBool(snapshot.guardKill)},fall.kill:${formatOptionalBool(snapshot.fall?.kill)},getpower:${formatPowerPair(snapshot.getPower)},givepower:${formatPowerPair(snapshot.givePower)},numhits:${snapshot.numHits ?? 1},cornerpush:${formatCornerPush(snapshot.cornerPush)},snap:${formatPoint(snapshot.snap)},sprpriority:${snapshot.p1SprPriority ?? '-'},${snapshot.p2SprPriority ?? '-'}`,
     ...(snapshot.unappliedParameters.length > 0 ? [`raw.hitdef_unapplied activeHitDefId=${diagnosticId} params=${snapshot.unappliedParameters.join(',')} reason=stored_not_applied`] : []),
     ...(snapshot.invalidParameters.length > 0 ? [`raw.hitdef_invalid activeHitDefId=${diagnosticId} params=${snapshot.invalidParameters.join(',')} reason=evaluation_failed`] : []),
     `raw.hitdef_lifecycle activeHitDefId=${diagnosticId}`,
@@ -1108,6 +1122,9 @@ function evaluateHitDefSnapshot(
   const groundVelocity = pairValue('ground.velocity');
   const airVelocity = pairValue('air.velocity');
   const guardVelocity = pairValue('guard.velocity');
+  const getPower = pairValue('getpower');
+  const givePower = pairValue('givepower');
+  const snap = pairValue('snap');
   const priorityParts = controller.params.priority;
   const priorityValues = Array.isArray(priorityParts) ? priorityParts : priorityParts === undefined ? [] : [priorityParts];
   const priorityValue = priorityValues.length > 0 ? cnsValueToNumber(priorityValues[0], player, input, commands, opponent) : null;
@@ -1128,12 +1145,29 @@ function evaluateHitDefSnapshot(
   const presentUnapplied = [
     'fall.animtype',
     'ground.slidetime', 'guard.ctrltime',
-    'fall.damage', 'fall.kill',
   ].filter((key) => controller.params[key] !== undefined);
   return {
     damage: Math.max(0, damage[0] ?? 60),
     guardDamage: Math.max(0, numValue('guard.damage') ?? damage[1] ?? 0),
     guardKill: boolValue('guard.kill'),
+    kill: boolValue('kill'),
+    getPower: getPower[0] === undefined ? undefined : {
+      hit: getPower[0], guarded: getPower[1] ?? Math.trunc(getPower[0] / 2),
+    },
+    givePower: givePower[0] === undefined ? undefined : {
+      hit: givePower[0], guarded: givePower[1] ?? Math.trunc(givePower[0] / 2),
+    },
+    numHits: Math.max(0, Math.trunc(numValue('numhits') ?? 1)),
+    cornerPush: {
+      ground: numValue('ground.cornerpush.veloff'),
+      air: numValue('air.cornerpush.veloff'),
+      down: numValue('down.cornerpush.veloff'),
+      guard: numValue('guard.cornerpush.veloff'),
+      airGuard: numValue('airguard.cornerpush.veloff'),
+    },
+    snap: snap[0] === undefined && snap[1] === undefined ? undefined : { x: snap[0] ?? 0, y: snap[1] ?? 0 },
+    p1SprPriority: numValue('p1sprpriority'),
+    p2SprPriority: numValue('p2sprpriority'),
     p1StateNo: numValue('p1stateno'),
     p2StateNo: numValue('p2stateno'),
     p2GetP1State: boolValue('p2getp1state'),
@@ -1206,6 +1240,18 @@ function formatAttr(value: ActiveHitDef['attr']): string {
 
 function formatPriority(value: ActiveHitDef['priority']): string {
   return value ? `${value.value},${value.type ?? '-'}` : '-';
+}
+
+function formatPowerPair(value: { hit: number; guarded: number } | undefined): string {
+  return value ? `${value.hit},${value.guarded}` : '-';
+}
+
+function formatCornerPush(value: ActiveHitDef['cornerPush']): string {
+  return value ? `${value.ground ?? '-'},${value.air ?? '-'},${value.down ?? '-'},${value.guard ?? '-'},${value.airGuard ?? '-'}` : '-';
+}
+
+function formatPoint(value: { x: number; y: number } | undefined): string {
+  return value ? `${value.x},${value.y}` : '-';
 }
 
 function preserveMoveContact(player: PlayerState, preserveResult: boolean, preserveCount: boolean): PlayerState['moveContact'] {

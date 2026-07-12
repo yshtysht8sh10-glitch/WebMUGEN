@@ -85,7 +85,7 @@ These should generally remain Partial.
 
 ## GetHitVar snapshot
 
-Successful HitDef contact stores numeric get-hit values on the defender so common get-hit states can read them after State changes. The current snapshot covers damage, selected hittime/slidetime/ctrltime, velocity values, type/animtype/airtype/groundtype codes, fall values, basic down velocity/hittime, hit/chain id, guarded, and yaccel. It persists through the air fall/down path and is cleared after leaving get-hit states. Unsupported offset/fall-time keys return the existing safe zero and are listed in contact diagnostics; therefore GetHitVar remains Partial.
+Successful HitDef contact stores numeric get-hit values on the defender so common get-hit states can read them after State changes. The current snapshot covers damage, selected hittime/slidetime/ctrltime, velocity values, type/animtype/airtype/groundtype codes, fall values including `fall.damage`/`fall.kill`, basic down velocity/hittime, hit/chain id, guarded, combo `hitcount`, snap `xoff`/`yoff`, and yaccel. It persists through the air fall/down path and is cleared after leaving get-hit states. Unsupported `zoff`/fall-time keys return the existing safe zero and are listed in contact diagnostics; therefore GetHitVar remains Partial.
 
 ## HitDefAttr
 

@@ -74,6 +74,20 @@ export type ActiveHitDef = {
   damage: number;
   guardDamage: number;
   guardKill?: boolean;
+  kill?: boolean;
+  getPower?: { hit: number; guarded: number };
+  givePower?: { hit: number; guarded: number };
+  numHits?: number;
+  cornerPush?: {
+    ground?: number;
+    air?: number;
+    down?: number;
+    guard?: number;
+    airGuard?: number;
+  };
+  snap?: { x: number; y: number };
+  p1SprPriority?: number;
+  p2SprPriority?: number;
   p1StateNo?: number;
   p2StateNo?: number;
   p2GetP1State?: boolean;
@@ -109,6 +123,9 @@ export type PlayerState = {
   vy: number;
   facing: 1 | -1;
   life: number;
+  power?: number;
+  sprPriority?: number;
+  comboHitCount?: number;
   stateNo: number;
   stateTime: number;
   stateType: 'S' | 'C' | 'A' | 'L';

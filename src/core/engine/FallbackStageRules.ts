@@ -1,7 +1,7 @@
 import type { GameState, PlayerState } from './types';
 
-const STAGE_LEFT = 48;
-const STAGE_RIGHT = 912;
+export const FALLBACK_STAGE_LEFT = 48;
+export const FALLBACK_STAGE_RIGHT = 912;
 const PUSH_DISTANCE = 44;
 const PUSH_HALF_WIDTH = PUSH_DISTANCE / 2;
 const PUSH_HEIGHT = 80;
@@ -100,6 +100,10 @@ function isAirborne(player: PlayerState): boolean {
 function clampToStage(player: PlayerState): PlayerState {
   return {
     ...player,
-    x: Math.min(STAGE_RIGHT, Math.max(STAGE_LEFT, player.x)),
+    x: Math.min(FALLBACK_STAGE_RIGHT, Math.max(FALLBACK_STAGE_LEFT, player.x)),
   };
+}
+
+export function isAtFallbackStageEdge(player: PlayerState): boolean {
+  return player.x <= FALLBACK_STAGE_LEFT || player.x >= FALLBACK_STAGE_RIGHT;
 }

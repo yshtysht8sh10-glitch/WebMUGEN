@@ -160,8 +160,8 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | Helper | Partial | Recognized safe no-op in CNS runtime; Helper system exists separately. |
 | HitAdd | Partial | Stores hit count field only. |
 | HitBy | Partial | Normalized HitDef attr must match the stored allowed state/attack filter before live contact. Duration/stacking remains incomplete. |
-| HitDef | Partial | Live paths filter contact, apply reactions/custom States, and emit effects once per generation. Last attacker/id history drives chainid/nochainid including third-party interruption, `hitonce` limits a generation to one target, and StateDef persistence controls ActiveHitDef/result/count retention. Team validation, modifiers, mixed priority types, full fightfx/SND, and Helper/projectile ownership remain incomplete. |
-| HitFallDamage | Partial | Applies simple life reduction. Full fall damage semantics incomplete. |
+| HitDef | Partial | Live paths apply independent kill/guard/fall rules, explicit power, numhits, edge-only cornerpush, snap and sprite priorities in addition to filtering/reactions/effects/chains/persistence. mugen.cfg power defaults, camera-relative edges, team validation, modifiers, full fightfx/SND, and Helper/projectile parity remain incomplete. |
+| HitFallDamage | Partial | Applies snapshotted fall.damage at the common-State trigger and honors fall.kill; fall envshake/projectile parity remains incomplete. |
 | HitFallSet | Partial | Recognized safe no-op. Fall flags not implemented. |
 | HitFallVel | Partial | Restores the contact-snapshotted fall X/Y velocity for common bounce states. Full down-hit variants remain incomplete. |
 | HitOverride | Partial | Recognized safe no-op. Override table not implemented. |
@@ -216,6 +216,25 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | Width | Partial | Stores width fields only. Collision integration needs audit. |
 | Zoom | Partial | Recognized safe no-op. Camera zoom not implemented. |
 
+## HitDef Auxiliary Parameter Compatibility
+
+| Parameter | Status | Notes |
+|---|---|---|
+| kill | Partial | Normal contact honors 0 by clamping the defender to one Life and honors 1/default by permitting KO. Projectile parity remains incomplete. |
+| guard.kill | Partial | Guard contact independently clamps chip damage at one Life when 0. Projectile parity remains incomplete. |
+| fall.kill | Partial | Snapshotted into GetHitVar and honored by common-State HitFallDamage independently of normal/guard kill. Projectile parity remains incomplete. |
+| getpower | Partial | Explicit hit/guard values are applied once to the attacker and clamped to 0..3000. mugen.cfg-derived omitted defaults remain unavailable. |
+| givepower | Partial | Explicit hit/guard values are applied once to the defender and clamped to 0..3000. mugen.cfg-derived omitted defaults remain unavailable. |
+| numhits | Partial | Adds the configured value to defender combo/GetHitVar(hitcount) once while attacker HitCount remains one per accepted target contact. Team display semantics remain incomplete. |
+| ground.cornerpush.veloff | Partial | Applies Facing-relative attacker X velocity only when a grounded target is at the fallback stage boundary. Camera-relative boundaries remain incomplete. |
+| air.cornerpush.veloff | Partial | Applies Facing-relative attacker X velocity only when an airborne target is at the fallback stage boundary. Camera-relative boundaries remain incomplete. |
+| down.cornerpush.veloff | Partial | Applies Facing-relative attacker X velocity only when a down target is at the fallback stage boundary. Camera-relative boundaries remain incomplete. |
+| guard.cornerpush.veloff | Partial | Applies Facing-relative attacker X velocity only for grounded guard at the fallback stage boundary. Camera-relative boundaries remain incomplete. |
+| airguard.cornerpush.veloff | Partial | Applies Facing-relative attacker X velocity only for air guard at the fallback stage boundary. Camera-relative boundaries remain incomplete. |
+| snap | Partial | Sets target X/Y from attacker position with X transformed by attacker Facing. Stage/camera clamping occurs in the existing later stage pass. |
+| p1sprpriority | Partial | Applies attacker runtime sprite priority on accepted hit or guard; Canvas draws higher priority later. Projectile/effect layering remains incomplete. |
+| p2sprpriority | Partial | Applies defender runtime sprite priority on accepted hit or guard; Canvas draws higher priority later. Projectile/effect layering remains incomplete. |
+
 ## Trigger Compatibility
 
 | Trigger | Status | Notes |
@@ -253,7 +272,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | FrontEdgeDist | Partial | Uses internal screen/player coordinate approximation. |
 | FVar | Partial | `fvar(n)` lookup supported with default 0. |
 | GameTime | Partial | Context/player fallback exists; real global frame integration needs audit. |
-| GetHitVar | Partial | Contact snapshot supplies damage, hit/slide/control time, velocity, type/anim codes, fall values, ids, guarded, and yaccel across get-hit State changes. Unsupported offset/fall-time keys are diagnosed safe defaults. |
+| GetHitVar | Partial | Contact snapshot supplies damage, hit/slide/control time, velocity, type/anim codes, fall damage/kill, combo hitcount, snap xoff/yoff, ids, guarded, and yaccel across get-hit State changes. Unsupported zoff/fall-time keys are diagnosed safe defaults. |
 | HitCount | Partial | Counts accepted hits across ActiveHitDef generations; `hitcountpersist` independently preserves or resets it on State entry. UniqHitCount and full multi-target semantics remain incomplete. |
 | HitDefAttr | Partial | Compares State and attack categories against the same normalized attr snapshot used by live HitBy/NotHitBy filtering. Redirect and malformed-attr edge cases remain incomplete. |
 | HitFall | Partial | Reads the contact-snapshotted HitDef fall flag through common air get-hit states. Guard/projectile parity remains incomplete. |

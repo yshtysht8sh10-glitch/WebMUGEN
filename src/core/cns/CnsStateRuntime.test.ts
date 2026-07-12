@@ -967,6 +967,18 @@ id = var(5) + 100
 chainid = 9
 nochainid = 3, 4
 hitonce = 1
+kill = 0
+getpower = 100, 20
+givepower = 30, 10
+numhits = 3
+ground.cornerpush.veloff = -6
+air.cornerpush.veloff = -5
+down.cornerpush.veloff = -4
+guard.cornerpush.veloff = -3
+airguard.cornerpush.veloff = -2
+snap = 12, -4
+p1sprpriority = 7
+p2sprpriority = 3
 `);
     const initial = createInitialGameState();
     const activated = stepCnsStateRuntime({
@@ -988,9 +1000,12 @@ hitonce = 1
       groundVelocity: { x: -4, y: -1 }, airVelocity: { x: -2.5, y: -5.5 }, guardVelocity: { x: -3, y: 0 },
       fall: { enabled: true, animType: 'Up', xVelocity: 1.5, yVelocity: -6, recover: false, recoverTime: 35, damage: 12, kill: false },
       hitId: 106, chainId: 9, noChainIds: [3, 4], hitOnce: true,
+      kill: false, getPower: { hit: 100, guarded: 20 }, givePower: { hit: 30, guarded: 10 }, numHits: 3,
+      cornerPush: { ground: -6, air: -5, down: -4, guard: -3, airGuard: -2 },
+      snap: { x: 12, y: -4 }, p1SprPriority: 7, p2SprPriority: 3,
     });
     expect(activated.players[0].hitDiagnosticLines?.join('\n')).toContain('raw.hitdef_parameters');
-    expect(activated.players[0].hitDiagnosticLines?.join('\n')).toContain('raw.hitdef_unapplied');
+    expect(activated.players[0].hitDiagnosticLines?.join('\n')).toContain('auxiliary=kill:0');
 
     const afterHit = stepCnsStateRuntime({
       ...activated,
