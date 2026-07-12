@@ -123,7 +123,7 @@ If the controller only stores a field or is skipped safely, mark Partial.
 
 `AfterImage` as safe no-op is Partial because the visual effect is missing.
 
-`HitDef` is Partial. The live CNS runtime creates a limited `ActiveHitDef`, applies damage, and selects ground/air hit time at contact, while pause, velocity, animation, fall, guard, flags, targets, and broader combat semantics remain incomplete.
+`HitDef` is Partial. The live CNS runtime creates a limited `ActiveHitDef`, applies damage, selects ground/air hit time at contact, and maps explicit ground `animtype` Light/Medium/Hard to the initial required Anim 5000/5001/5002. The animation is selected once at successful contact; a missing required animation is diagnosed without substituting another animation. Omitted or currently unsupported `animtype` values preserve the previous Anim 5000 behavior. Air, crouch, guard, fall, Back/Up/DiagUp, pause, velocity, flags, targets, and broader combat semantics remain incomplete.
 
 During the selected hit time, the runtime keeps `ctrl = false`, blocks control-enabling `CtrlSet`, blocks early recovery to State 0/52, and ignores State -1 input ChangeState routes. Internal common get-hit transitions such as State 5000 to 5001 remain available. Hit-stun elapsed time is stored independently from `stateTime` so internal get-hit State changes do not shorten the configured duration.
 

@@ -1,5 +1,5 @@
 import type { CnsDocument, CnsStateController, CnsStateDefinition, CnsTrigger, CnsValue } from '../../mugen/common/cnsTypes';
-import type { GameState, PlayerState } from '../engine/types';
+import type { ActiveHitDef, GameState, PlayerState } from '../engine/types';
 import { calculateMugenAnimTime } from '../animation/AnimationDuration';
 import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, readNumberExpression, type CnsRuntimeTriggerContext } from './CnsRuntimeTrigger';
@@ -649,7 +649,13 @@ function changeAnim(
 ): ControllerResult {
   const value = num(controller, 'value', player, input, commands, opponent);
   if (value === null) return withPlayer(player, false, 'ChangeAnim');
-  return withPlayer({ ...player, animNo: value, animTime: player.animNo === value ? player.animTime : 0 }, true, 'ChangeAnim');
+  const changedDuringHitStun = player.hitStun && player.animNo !== value;
+  const hitDiagnosticLines = changedDuringHitStun && input.hitDiagnostics !== false ? [
+    ...(player.hitDiagnosticLines ?? []),
+    `raw.hit_anim_change target=p${player.id}`,
+    `  activeHitDefId=${player.hitStun?.activeHitDefId ?? 'none'} from=${player.animNo} to=${value} state=${player.stateNo} controller=ChangeAnim reason=common_state_transition`,
+  ] : player.hitDiagnosticLines;
+  return withPlayer({ ...player, hitDiagnosticLines, animNo: value, animTime: player.animNo === value ? player.animTime : 0 }, true, 'ChangeAnim');
 }
 
 function velMul(player: PlayerState, controller: CnsStateController): ControllerResult {
@@ -769,6 +775,10 @@ function activateHitDef(
   const evaluatedAirHitTime = cnsValueToNumber(airHitTimeParam, player, input, commands, opponent);
   const groundHitTime = evaluatedGroundHitTime === null ? undefined : Math.max(0, evaluatedGroundHitTime);
   const airHitTime = evaluatedAirHitTime === null ? undefined : Math.max(0, evaluatedAirHitTime);
+  const animTypeParam = controller.params.animtype;
+  const animType = readGroundAnimType(animTypeParam);
+  const animTypeSource = animTypeParam === undefined || animType === null ? 'existing_fallback' : 'cns';
+  const selectedAnimType = animType ?? 'Light';
   const groundHitTimeFallbackReason = groundHitTime === undefined
     ? groundHitTimeParam === undefined ? 'missing_ground_hittime' : 'invalid_ground_hittime'
     : undefined;
@@ -780,7 +790,8 @@ function activateHitDef(
   const existing = player.activeHitDef;
   const sameController = existing?.controllerKey === controllerKey;
   const sameValues = sameController && existing.damageValues?.[0] === damage && existing.damageValues?.[1] === guardDamage
-    && existing.groundHitTime === groundHitTime && existing.airHitTime === airHitTime;
+    && existing.groundHitTime === groundHitTime && existing.airHitTime === airHitTime
+    && existing.animType === selectedAnimType && existing.animTypeSource === animTypeSource;
   const diagnosticId = sameController && existing?.diagnosticId ? existing.diagnosticId : nextActiveHitDefDiagnosticId++;
   const action = sameController ? 'update' : 'create';
   const diagnosticsEnabled = input.hitDiagnostics !== false;
@@ -796,6 +807,7 @@ function activateHitDef(
     `  damage=${damage},${guardDamage} source=${damageSource} action=${action}`,
     `  groundHitTime=${groundHitTime ?? 28} source=${groundHitTime === undefined ? 'hardcoded' : 'cns'}${groundHitTimeFallbackReason ? ` fallbackReason=${groundHitTimeFallbackReason}` : ''}`,
     `  airHitTime=${airHitTime ?? 28} source=${airHitTime === undefined ? 'hardcoded' : 'cns'}${airHitTimeFallbackReason ? ` fallbackReason=${airHitTimeFallbackReason}` : ''}`,
+    `  animType=${selectedAnimType} source=${animTypeSource}`,
     `raw.hitdef_lifecycle activeHitDefId=${diagnosticId}`,
     `  event=${action} reason=controller_execute hitCount=${player.hitDefUsed ? 1 : 0}`,
   ];
@@ -815,6 +827,8 @@ function activateHitDef(
       airHitTimeSource: airHitTime === undefined ? 'hardcoded' : 'cns',
       groundHitTimeFallbackReason,
       airHitTimeFallbackReason,
+      animType: selectedAnimType,
+      animTypeSource,
       missLogged: sameController ? existing?.missLogged : false,
       rejectedLogged: sameController ? existing?.rejectedLogged : false,
       duplicateLogged: diagnosticsEnabled && sameValues ? true : false,
@@ -823,6 +837,15 @@ function activateHitDef(
       airVelocity: { x: -2.5, y: -5.5 },
     },
   }, true, 'HitDef');
+}
+
+function readGroundAnimType(value: CnsValue | undefined): ActiveHitDef['animType'] | null {
+  if (value === undefined || value === null) return null;
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized === 'light') return 'Light';
+  if (normalized === 'medium' || normalized === 'med') return 'Medium';
+  if (normalized === 'hard' || normalized === 'heavy') return 'Hard';
+  return null;
 }
 
 function setVarController(

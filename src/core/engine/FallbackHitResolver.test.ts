@@ -18,9 +18,59 @@ Clsn2Default: 1
 Clsn1: 1
  Clsn1[0] = 10,-60,70,-30
 200,0, 0,0, 5
+
+[Begin Action 5000]
+0,0, 0,0, 5
+[Begin Action 5001]
+0,0, 0,0, 5
+[Begin Action 5002]
+0,0, 0,0, 5
 `);
 
 describe('FallbackHitResolver', () => {
+  it.each([
+    ['Light', 5000],
+    ['Medium', 5001],
+    ['Hard', 5002],
+  ] as const)('selects grounded animtype %s as Anim %i', (animType, selectedAnim) => {
+    const hit = resolveConfiguredHit({ damage: 100, groundHitTime: 20, animType });
+
+    expect(hit.players[1]).toMatchObject({ life: 900, animNo: selectedAnim });
+    expect(hit.players[1].hitStun).toMatchObject({ selectedHitTime: 20, selectedAnim });
+    expect(hit.hitDiagnosticLines?.join('\n')).toContain(`animType=${animType} targetStateTypeAtHit=S requestedAnim=${selectedAnim} selectedAnim=${selectedAnim}`);
+  });
+
+  it.each([
+    ['Medium', 5001],
+    ['Hard', 5002],
+  ] as const)('keeps required Anim %i selected when it is missing', (animType, selectedAnim) => {
+    const missingRequiredAnim = { ...air, actions: air.actions.filter((action) => action.actionNo !== selectedAnim) };
+    const hit = resolveConfiguredHit({ animType, airDocument: missingRequiredAnim });
+
+    expect(hit.players[1].animNo).toBe(selectedAnim);
+    expect(hit.hitDiagnosticLines?.join('\n')).toContain(`requestedAnim=${selectedAnim} selectedAnim=${selectedAnim} animationExists=0`);
+    expect(hit.hitDiagnosticLines?.join('\n')).toContain('warning=missing_required_animation');
+  });
+
+  it('preserves the existing Anim 5000 behavior when animtype is omitted', () => {
+    const hit = resolveConfiguredHit({});
+    expect(hit.players[1].animNo).toBe(5000);
+    expect(hit.hitDiagnosticLines?.join('\n')).toContain('animType=Light targetStateTypeAtHit=S requestedAnim=5000 selectedAnim=5000');
+    expect(hit.hitDiagnosticLines?.join('\n')).toContain('source=existing_fallback fallbackReason=existing_fixed_5000');
+  });
+
+  it.each(['Back', 'Up', 'DiagUp'])('does not implement out-of-scope animtype %s', (animType) => {
+    const hit = resolveConfiguredHit({ animType });
+    expect(hit.players[1].animNo).toBe(5000);
+    expect(hit.players[0].activeHitDef?.animTypeSource).toBe('existing_fallback');
+  });
+
+  it('does not apply grounded animtype selection to an airborne target', () => {
+    const hit = resolveConfiguredHit({ animType: 'Hard', targetStateType: 'A' });
+    expect(hit.players[1].animNo).toBe(5000);
+    expect(hit.players[1].hitStun?.targetStateTypeAtHit).toBe('A');
+    expect(hit.hitDiagnosticLines?.join('\n')).not.toContain('raw.hit_anim_select');
+  });
   it.each([7, 20])('uses ground.hittime=%i for a grounded target', (hitTime) => {
     const hit = resolveConfiguredHit({ damage: 37, groundHitTime: hitTime });
     const target = hit.players[1];
@@ -65,10 +115,11 @@ describe('FallbackHitResolver', () => {
   });
 
   it('applies the same ground.hittime selection when P2 attacks P1', () => {
-    const hit = resolveConfiguredHit({ damage: 100, groundHitTime: 7, attackerId: 2 });
+    const hit = resolveConfiguredHit({ damage: 100, groundHitTime: 7, animType: 'Hard', attackerId: 2 });
 
     expect(hit.players[0].life).toBe(900);
     expect(hit.players[0].hitStun).toMatchObject({ selectedHitTime: 7, kind: 'ground' });
+    expect(hit.players[0].animNo).toBe(5002);
   });
 
   it.each([7, 37])('applies CNS HitDef damage %i to the live hit path', (damage) => {
@@ -276,7 +327,7 @@ damage = 37, 0
   });
 
   it('does not reset selected hit time after continued contact is rejected', () => {
-    const first = resolveConfiguredHit({ groundHitTime: 7 });
+    const first = resolveConfiguredHit({ groundHitTime: 7, animType: 'Medium' });
     const second = resolveFallbackHits({
       ...first,
       players: [
@@ -287,6 +338,8 @@ damage = 37, 0
 
     expect(second.hitEvents).toHaveLength(0);
     expect(second.players[1].hitStun?.selectedHitTime).toBe(7);
+    expect(second.players[1].animNo).toBe(5001);
+    expect(second.hitDiagnosticLines?.join('\n')).not.toContain('raw.hit_anim_select');
   });
 
   it('does not keep stale hit events when no new contact occurs', () => {
@@ -330,17 +383,22 @@ function resolveConfiguredHit({
   airHitTime,
   targetStateType = 'S',
   attackerId = 1,
+  animType,
+  airDocument = air,
 }: {
   damage?: number;
   groundHitTime?: number;
   airHitTime?: number;
   targetStateType?: 'S' | 'A';
   attackerId?: 1 | 2;
+  animType?: string;
+  airDocument?: typeof air;
 }) {
   const hitTimeLines = [
     groundHitTime === undefined ? '' : `ground.hittime = ${groundHitTime}`,
     airHitTime === undefined ? '' : `air.hittime = ${airHitTime}`,
   ].filter(Boolean).join('\n');
+  const animTypeLine = animType === undefined ? '' : `animtype = ${animType}`;
   const cns = parseCnsText(`
 [Statedef 0]
 type = ${targetStateType}
@@ -355,6 +413,7 @@ type = HitDef
 trigger1 = 1
 damage = ${damage}, 0
 ${hitTimeLines}
+${animTypeLine}
 `);
   const initial = createInitialGameState();
   const attackerIndex = attackerId - 1;
@@ -376,5 +435,5 @@ ${hitTimeLines}
     physics: targetStateType === 'A' ? 'A' : 'S',
   };
   const runtime = stepCnsStateRuntime({ ...initial, players }, cns).state;
-  return resolveFallbackHits(runtime, air);
+  return resolveFallbackHits(runtime, airDocument);
 }

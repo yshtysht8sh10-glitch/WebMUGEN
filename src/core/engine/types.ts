@@ -37,6 +37,8 @@ export type ActiveHitDef = {
   airHitTimeSource?: 'cns' | 'hardcoded';
   groundHitTimeFallbackReason?: string;
   airHitTimeFallbackReason?: string;
+  animType?: 'Light' | 'Medium' | 'Hard';
+  animTypeSource?: 'cns' | 'existing_fallback';
   damage: number;
   guardDamage: number;
   pauseTime: {
@@ -84,6 +86,7 @@ export type PlayerState = {
     elapsed: number;
     lastStateNo: number;
     blockedEvents?: string[];
+    selectedAnim?: number;
   };
 };
 

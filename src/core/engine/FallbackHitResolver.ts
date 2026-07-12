@@ -29,13 +29,13 @@ export function resolveFallbackHits(state: GameState, airDocument?: AirDocument 
   const p2Attack = getPlayerAttackBoxes(p2, airDocument);
   const p2Body = getPlayerBodyBoxes(p2, airDocument);
 
-  const p1Result = resolveAttack(p1, p2, p1Attack, p2Body, diagnosticsEnabled);
+  const p1Result = resolveAttack(p1, p2, p1Attack, p2Body, airDocument, diagnosticsEnabled);
   p1 = p1Result.attacker;
   p2 = p1Result.target;
   hitDiagnosticLines.push(...p1Result.diagnosticLines);
   if (p1Result.hitEvent) hitEvents.push(p1Result.hitEvent);
 
-  const p2Result = resolveAttack(p2, p1, p2Attack, p1Body, diagnosticsEnabled);
+  const p2Result = resolveAttack(p2, p1, p2Attack, p1Body, airDocument, diagnosticsEnabled);
   p2 = p2Result.attacker;
   p1 = p2Result.target;
   hitDiagnosticLines.push(...p2Result.diagnosticLines);
@@ -54,6 +54,7 @@ function resolveAttack(
   target: PlayerState,
   attackBoxes: ReturnType<typeof getPlayerAttackBoxes>,
   bodyBoxes: ReturnType<typeof getPlayerBodyBoxes>,
+  airDocument: AirDocument,
   diagnosticsEnabled: boolean,
 ): { attacker: PlayerState; target: PlayerState; hitEvent: HitEvent | null; diagnosticLines: string[] } {
   const diagnosticLines: string[] = [];
@@ -101,8 +102,12 @@ function resolveAttack(
       ? active.airHitTimeFallbackReason ?? 'missing_air_hittime'
       : active.groundHitTimeFallbackReason ?? 'missing_ground_hittime'
     : 'active_hitdef_missing';
+  const selectedAnim = hitTimeKind === 'ground' ? groundHitAnim(active?.animType) : STAND_HIT_STATE;
+  const animType = active?.animType ?? 'Light';
+  const animSource = active?.animTypeSource ?? 'existing_fallback';
+  const animationExists = airDocumentHasAction(airDocument, selectedAnim);
   const hitAttacker = markAttackerHit(attacker);
-  const hitTarget = applyFallbackHit(target, hitAttacker, damage, {
+  const hitTarget = applyFallbackHit(target, hitAttacker, damage, selectedAnim, {
     activeHitDefId,
     selectedHitTime,
     kind: activeHitTime === undefined ? 'fallback' : hitTimeKind,
@@ -110,6 +115,7 @@ function resolveAttack(
     targetStateTypeAtHit,
     elapsed: 0,
     lastStateNo: STAND_HIT_STATE,
+    selectedAnim,
     ...(activeHitTime === undefined ? { fallbackReason: hitTimeFallbackReason } : {}),
   });
   const idText = activeHitDefId === null ? 'none' : String(activeHitDefId);
@@ -119,8 +125,12 @@ function resolveAttack(
     `  activeHitDefId=${idText} damage=${damage},${guardDamage} source=${source} fallbackReason=${fallbackReason} result=hit`,
     `raw.hit_damage target=p${target.id}`,
     `  activeHitDefId=${idText} lifeBefore=${lifeBefore} appliedDamage=${damage} lifeAfter=${hitTarget.life} source=${source} ko=${hitTarget.life === 0 ? 1 : 0}`,
+    ...(hitTimeKind === 'ground' ? [
+      `raw.hit_anim_select target=p${target.id}`,
+      `  activeHitDefId=${idText} animType=${animType} targetStateTypeAtHit=${targetStateTypeAtHit} requestedAnim=${selectedAnim} selectedAnim=${selectedAnim} animationExists=${animationExists ? 1 : 0} source=${animSource} fallbackReason=${animSource === 'cns' ? '-' : 'existing_fixed_5000'}${animationExists ? '' : ' warning=missing_required_animation'}`,
+    ] : []),
     `raw.hit_reaction target=p${target.id}`,
-    `  state=${STAND_HIT_STATE} source=existing_fallback anim=${STAND_HIT_STATE} source=existing_fallback`,
+    `  state=${STAND_HIT_STATE} source=existing_fallback anim=${selectedAnim} source=${hitTimeKind === 'ground' ? animSource : 'existing_fallback'}`,
     `  velocity=(${hitAttacker.facing * 4},0) source=existing_fallback pausetime=${DEFENDER_HIT_PAUSE} source=existing_fallback`,
     `  hittime=${selectedHitTime} source=${hitTimeSource} hittimeKind=${activeHitTime === undefined ? 'fallback' : hitTimeKind} targetStateTypeAtHit=${targetStateTypeAtHit}`,
     '  fall=0 source=existing_fallback',
@@ -153,13 +163,14 @@ function applyFallbackHit(
   defender: PlayerState,
   attacker: PlayerState,
   damage: number,
+  selectedAnim: number,
   hitStun: NonNullable<PlayerState['hitStun']>,
 ): PlayerState {
   return {
     ...defender,
     life: Math.max(0, defender.life - damage),
     stateNo: STAND_HIT_STATE,
-    animNo: STAND_HIT_STATE,
+    animNo: selectedAnim,
     stateTime: 0,
     animTime: 0,
     stateType: 'S',
@@ -173,4 +184,14 @@ function applyFallbackHit(
     activeHitDef: null,
     hitStun,
   };
+}
+
+function groundHitAnim(animType: NonNullable<PlayerState['activeHitDef']>['animType']): number {
+  if (animType === 'Medium') return 5001;
+  if (animType === 'Hard') return 5002;
+  return 5000;
+}
+
+function airDocumentHasAction(document: AirDocument | null, actionNo: number): boolean {
+  return document?.actions.some((action) => action.actionNo === actionNo) === true;
 }

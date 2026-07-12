@@ -826,6 +826,34 @@ ${controllerBlocks}
       recognizedControllerFixtures.map(({ traceName }) => traceName),
     ));
   });
+
+  it('logs a later Common State ChangeAnim during active hit stun', () => {
+    const cns = parseCnsText(`
+[Statedef 5000]
+type = S
+movetype = H
+physics = N
+[State 5000, Continue]
+type = ChangeAnim
+trigger1 = 1
+value = 5010
+`);
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime({
+      ...state,
+      players: [{
+        ...state.players[0], stateNo: 5000, animNo: 5001, moveType: 'H', ctrl: false,
+        hitStun: {
+          activeHitDefId: 77, selectedHitTime: 20, kind: 'ground', source: 'active_hitdef',
+          targetStateTypeAtHit: 'S', elapsed: 1, lastStateNo: 5000, selectedAnim: 5001,
+        },
+      }, state.players[1]],
+    }, cns);
+
+    expect(result.state.players[0].animNo).toBe(5010);
+    expect(result.state.players[0].hitDiagnosticLines?.join('\n')).toContain('raw.hit_anim_change target=p1');
+    expect(result.state.players[0].hitDiagnosticLines?.join('\n')).toContain('activeHitDefId=77 from=5001 to=5010 state=5000 controller=ChangeAnim reason=common_state_transition');
+  });
 });
 
 const recognizedControllerFixtures: { type: string; traceName: string; params?: string }[] = [

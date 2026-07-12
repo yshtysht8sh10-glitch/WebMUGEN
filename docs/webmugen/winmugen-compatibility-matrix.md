@@ -160,7 +160,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | Helper | Partial | Recognized safe no-op in CNS runtime; Helper system exists separately. |
 | HitAdd | Partial | Stores hit count field only. |
 | HitBy | Partial | Stores allowed-hit attribute string only. |
-| HitDef | Partial | CNS runtime applies `damage`, `ground.hittime`, and `air.hittime` through a limited ActiveHitDef. Other HitDef/get-hit parameters remain incomplete. |
+| HitDef | Partial | CNS runtime applies `damage`, `ground.hittime`, `air.hittime`, and grounded Light/Medium/Hard `animtype` (Anim 5000/5001/5002) through a limited ActiveHitDef. Missing required animations are diagnosed without substitution. Other HitDef/get-hit parameters remain incomplete. |
 | HitFallDamage | Partial | Applies simple life reduction. Full fall damage semantics incomplete. |
 | HitFallSet | Partial | Recognized safe no-op. Fall flags not implemented. |
 | HitFallVel | Partial | Applies simple Y velocity. Full get-hit semantics incomplete. |
