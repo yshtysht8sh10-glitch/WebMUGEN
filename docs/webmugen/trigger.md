@@ -89,7 +89,7 @@ Successful HitDef contact stores numeric get-hit values on the defender so commo
 
 ## Move contact results
 
-MoveContact, MoveHit, MoveGuarded, and HitCount read an attacker-side result owned by the current ActiveHitDef generation. A normal hit sets contact/hit and increments the State-local count; a guarded result can set contact/guarded through the same API. New HitDef activation clears result flags while retaining the State hit count, State change clears all, and MoveHitReset clears flags without erasing target hit history or count.
+MoveContact, MoveHit, MoveGuarded, and HitCount read an attacker-side result owned by the current ActiveHitDef generation. A normal hit sets contact/hit and increments the State-local count; a live guardflag-approved contact sets contact/guarded without MoveHit or hit-count increment. New HitDef activation clears result flags while retaining the State hit count, State change clears all, and MoveHitReset clears flags without erasing target hit history or count.
 
 ## Target lookup
 

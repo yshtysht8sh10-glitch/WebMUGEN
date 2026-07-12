@@ -34,7 +34,7 @@ This document is a high-level inventory of WebMUGEN implementation areas. It is 
 | Browser input | Keyboard input and player mapping exist. |
 | Command debug | Active command names are visible. |
 | CNS debug | Runtime traces expose state/animation/controller execution. |
-| Physics debug | Post-physics state, velocity, facing, power, attack juggle cost, and remaining/max juggle pool are visible. |
+| Physics debug | Post-physics state, velocity, facing, power, juggle pool, and resolved guard intent are visible. |
 | Runtime history | Snapshot-based history exists for copyable debugging. |
 | Static debug | Character load, StateDef list, command routes, and coverage are visible. |
 

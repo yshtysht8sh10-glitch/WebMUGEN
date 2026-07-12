@@ -97,6 +97,17 @@ function recoverPlayer(player: PlayerState, diagnosticsEnabled: boolean): { play
     `raw.hitstun target=p${player.id}`,
     `  activeHitDefId=${player.hitStun.activeHitDefId ?? 'none'} event=end selectedHitTime=${selectedHitTime} elapsed=${elapsed} recoveryPath=existing`,
   ] : [];
+  if (player.getHitVars?.guarded) {
+    return { player: {
+      ...player,
+      hitStun: undefined,
+      hitReactionElapsed: undefined,
+      hitVelX: undefined,
+      hitVelY: undefined,
+      getHitVars: undefined,
+      getHitVarUnsupportedKeys: undefined,
+    }, diagnosticLines: diagnosticLines.map((line) => line.replace('recoveryPath=existing', 'recoveryPath=common_guard')) };
+  }
   if (player.hitStun?.targetStateTypeAtHit === 'A') {
     return { player: {
       ...player,

@@ -51,6 +51,7 @@ export type ActiveHitDef = {
   groundType?: string;
   airType?: string;
   guardHitTime?: number;
+  guardDistance?: number;
   groundSlideTime?: number;
   controlTime?: number;
   yAcceleration?: number;
@@ -120,6 +121,8 @@ export type PlayerState = {
   juggle?: number;
   juggleMax?: number;
   juggleRemaining?: number;
+  guardIntent?: boolean;
+  guardCrouchIntent?: boolean;
   moveContact?: {
     activeHitDefId: number;
     contact: boolean;

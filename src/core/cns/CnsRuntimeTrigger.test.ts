@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialGameState } from '../engine/GameState';
 import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
-import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup } from './CnsRuntimeTrigger';
+import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, readNumberExpression } from './CnsRuntimeTrigger';
 
 describe('CnsRuntimeTrigger', () => {
+  it('evaluates command comparisons as numeric terms in common-state arithmetic', () => {
+    const state = createInitialGameState();
+    expect(readNumberExpression('151 + 2*(command = "holddown")', {
+      player: state.players[0], commands: new Set(['holddown']),
+    })).toBe(153);
+    expect(readNumberExpression('151 + 2*(command = "holddown")', {
+      player: state.players[0], commands: new Set(['holdback']),
+    })).toBe(151);
+  });
   const player = {
     ...createInitialGameState().players[0],
     stateTime: 6,

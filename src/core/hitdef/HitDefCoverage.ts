@@ -24,6 +24,7 @@ const HITDEF_PARTIAL_PARAMS = new Set([
   'ground.type',
   'air.type',
   'guard.hittime',
+  'guard.dist',
   'ground.velocity',
   'air.velocity',
   'guard.velocity',

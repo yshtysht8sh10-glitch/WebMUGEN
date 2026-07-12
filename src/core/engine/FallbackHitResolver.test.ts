@@ -114,6 +114,44 @@ physics = S
     expect(hit.hitDiagnosticLines?.join('\n')).not.toContain('raw.hit_juggle');
   });
 
+  it.each([
+    ['S', 'H', ['holdback'], 150],
+    ['S', 'L', ['holdback', 'holddown'], 152],
+    ['A', 'A', ['holdback'], 154],
+  ] as const)('guards a %s target when guardflag=%s permits its guard kind', (targetStateType, guardFlag, commands, guardState) => {
+    const hit = resolveConfiguredHit({
+      targetStateType, guardFlag, targetCommands: new Set(commands), guardDamage: 5,
+      guardVelocity: [-2, 0], guardPauseTime: [0, 0], guardHitTime: 6,
+    });
+    expect(hit.players[1]).toMatchObject({ stateNo: guardState, life: 995, ctrl: false, vx: -2 });
+    expect(hit.players[1].getHitVars?.guarded).toBe(1);
+    expect(hit.players[0].moveContact).toMatchObject({ contact: true, hit: false, guarded: true, hitCount: 0 });
+    expect(hit.hitDiagnosticLines?.join('\n')).toContain(`kind=${guardState === 150 ? 'stand' : guardState === 152 ? 'crouch' : 'air'}`);
+  });
+
+  it.each([1, -1] as const)('uses Facing-relative holdback intent and guard velocity for attacker facing %i', (attackerFacing) => {
+    const hit = resolveConfiguredHit({
+      guardFlag: 'H', targetCommands: new Set(['holdback']), attackerFacing,
+      guardVelocity: [-2, 0], guardPauseTime: [0, 0],
+    });
+    const targetIndex = 1;
+    expect(hit.players[targetIndex]).toMatchObject({ stateNo: 150, vx: -2 * attackerFacing });
+  });
+
+  it('does not guard without holdback or when guardflag/state kind and guard distance do not permit it', () => {
+    const noInput = resolveConfiguredHit({ guardFlag: 'H', guardDamage: 5, guardPauseTime: [0, 0] });
+    expect(noInput.players[1]).toMatchObject({ stateNo: 5000, life: 963 });
+    expect(noInput.players[0].moveContact?.hit).toBe(true);
+
+    const wrongFlag = resolveConfiguredHit({ guardFlag: 'L', targetCommands: new Set(['holdback']), guardDamage: 5, guardPauseTime: [0, 0] });
+    expect(wrongFlag.players[1]).toMatchObject({ stateNo: 5000, life: 963 });
+    expect(wrongFlag.hitDiagnosticLines?.join('\n')).toContain('reason=guardflag_mismatch');
+
+    const tooFar = resolveConfiguredHit({ guardFlag: 'H', guardDistance: 30, targetCommands: new Set(['holdback']), guardDamage: 5, guardPauseTime: [0, 0] });
+    expect(tooFar.players[1]).toMatchObject({ stateNo: 5000, life: 963 });
+    expect(tooFar.hitDiagnosticLines?.join('\n')).toContain('reason=out_of_guard_distance');
+  });
+
   it('freezes motion and timers for exactly the defender pausetime then resumes', () => {
     let state = resolveConfiguredHit({ pauseTime: [0, 2], groundVelocity: [-4, 0] });
     const targetAtHit = state.players[1];
@@ -637,11 +675,18 @@ function resolveConfiguredHit({
   downHitTime,
   juggle,
   airJuggle,
+  guardFlag,
+  guardDamage,
+  guardVelocity,
+  guardPauseTime,
+  guardHitTime,
+  guardDistance,
+  targetCommands,
 }: {
   damage?: number;
   groundHitTime?: number;
   airHitTime?: number;
-  targetStateType?: 'S' | 'A';
+  targetStateType?: 'S' | 'C' | 'A';
   attackerId?: 1 | 2;
   animType?: string;
   airDocument?: typeof air;
@@ -659,6 +704,13 @@ function resolveConfiguredHit({
   downHitTime?: number;
   juggle?: number;
   airJuggle?: number;
+  guardFlag?: string;
+  guardDamage?: number;
+  guardVelocity?: [number, number];
+  guardPauseTime?: [number, number];
+  guardHitTime?: number;
+  guardDistance?: number;
+  targetCommands?: ReadonlySet<string>;
 }) {
   const hitTimeLines = [
     groundHitTime === undefined ? '' : `ground.hittime = ${groundHitTime}`,
@@ -680,6 +732,13 @@ function resolveConfiguredHit({
     downVelocity ? `down.velocity = ${downVelocity.join(', ')}` : '',
     downHitTime === undefined ? '' : `down.hittime = ${downHitTime}`,
   ].filter(Boolean).join('\n');
+  const guardLines = [
+    guardFlag === undefined ? '' : `guardflag = ${guardFlag}`,
+    guardVelocity ? `guard.velocity = ${guardVelocity.join(', ')}` : '',
+    guardPauseTime ? `guard.pausetime = ${guardPauseTime.join(', ')}` : '',
+    guardHitTime === undefined ? '' : `guard.hittime = ${guardHitTime}`,
+    guardDistance === undefined ? '' : `guard.dist = ${guardDistance}`,
+  ].filter(Boolean).join('\n');
   const cns = parseCnsText(`
 [Data]
 airjuggle = ${airJuggle ?? 15}
@@ -695,13 +754,14 @@ ${juggle === undefined ? '' : `juggle = ${juggle}`}
 [State 200, Hit]
 type = HitDef
 trigger1 = 1
-damage = ${damage}, 0
+damage = ${damage}, ${guardDamage ?? 0}
 ${hitTimeLines}
 ${animTypeLine}
 ${velocityLines}
 ${pauseTimeLine}
 ${hitIdLine}
 ${fallLines}
+${guardLines}
 `);
   const initial = createInitialGameState();
   const attackerIndex = attackerId - 1;
@@ -721,8 +781,8 @@ ${fallLines}
     x: resolvedFacing === 1 ? 290 : 240,
     animNo: 0,
     stateType: targetStateType,
-    physics: targetStateType === 'A' ? 'A' : 'S',
+    physics: targetStateType === 'A' ? 'A' : targetStateType === 'C' ? 'C' : 'S',
   };
-  const runtime = stepCnsStateRuntime({ ...initial, players }, cns).state;
+  const runtime = stepCnsStateRuntime({ ...initial, players }, cns, attackerId === 1 ? { p2Commands: targetCommands } : { p1Commands: targetCommands }).state;
   return resolveFallbackHits(runtime, airDocument);
 }

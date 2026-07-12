@@ -59,17 +59,17 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | 105 | Hop back / back dash | Partial | Common route added with PosAdd. Common walk routes no longer interrupt dash states 100-107. |
 | 106 | Back dash substate | Untested | Common implementations vary. |
 | 107 | Back dash substate | Untested | Common implementations vary. |
-| 120 | Guard start | Unsupported | Required for basic defense. |
-| 130 | Standing guard | Unsupported | Required for basic defense. |
-| 131 | Crouching guard | Unsupported | Required for basic defense. |
-| 132 | Air guard | Unsupported | Required for basic defense. |
-| 140 | Guard hit state | Unsupported | Required for blocking. |
-| 150 | Guard recoil state | Unsupported | Required for blocking. |
-| 151 | Guard recoil state | Unsupported | Required for blocking. |
-| 152 | Guard recoil state | Unsupported | Required for blocking. |
-| 153 | Guard recoil state | Unsupported | Required for blocking. |
-| 154 | Guard recoil state | Unsupported | Required for blocking. |
-| 155 | Guard recoil state | Unsupported | Required for blocking. |
+| 120 | Guard start | Partial | Common guard-start controllers execute; proactive pre-contact routing remains incomplete. |
+| 130 | Standing guard | Partial | Standing GuardHit returns to the unmodified common standing guard while holdback and guard distance remain valid. |
+| 131 | Crouching guard | Partial | Crouch guard and common high/low transitions execute; broader command timing remains incomplete. |
+| 132 | Air guard | Partial | Air guardflag contact enters the common air GuardHit path; full landing variants remain incomplete. |
+| 140 | Guard end | Partial | Common U-type guard-end state preserves StateType/physics and releases guard. |
+| 150 | Standing GuardHit shake | Partial | H/M-guarded standing contact enters this common state with guard pause/hit time snapshot. |
+| 151 | Standing GuardHit recoil | Partial | Common HitVelSet/HitOver path is integration-tested. |
+| 152 | Crouching GuardHit shake | Partial | L/M-guarded crouch contact enters this common state. |
+| 153 | Crouching GuardHit recoil | Partial | Common crouch recoil path is connected; advanced timing remains incomplete. |
+| 154 | Air GuardHit shake | Partial | A-guarded air contact enters this common state. |
+| 155 | Air GuardHit recoil | Partial | Common air recoil path receives guard velocity; full landing behavior remains incomplete. |
 | 170 | Lose state | Unsupported | Round flow only partially implemented. |
 | 171 | Lose state | Unsupported | Round flow only partially implemented. |
 | 172 | Lose state | Unsupported | Round flow only partially implemented. |
@@ -276,8 +276,8 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | LoseTime | Unsupported | Round result not implemented. |
 | MatchNo | Unsupported | Match metadata not implemented. |
 | MatchOver | Unsupported | Match flow not implemented. |
-| MoveContact | Partial | Reads real contact state for the current ActiveHitDef generation; guard and persistence integration remain incomplete. |
-| MoveGuarded | Partial | Reads guarded-contact state from the shared result model; guard resolver connection is pending. |
+| MoveContact | Partial | Reads real hit or guarded contact state for the current ActiveHitDef generation; persistence integration remains incomplete. |
+| MoveGuarded | Partial | Guardflag-approved live contact sets guarded without setting MoveHit; persist headers remain incomplete. |
 | MoveHit | Partial | Reads accepted-hit state and drives tested hit-confirm cancel routes; persistence remains incomplete. |
 | MoveReversed | Unsupported | Reversal/contact state not implemented. |
 | MoveType | Complete | Basic support. |

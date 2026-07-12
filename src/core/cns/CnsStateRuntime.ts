@@ -148,6 +148,8 @@ function stepPlayer(
     hitDiagnosticLines: [],
     juggleMax,
     juggleRemaining: resetJuggle ? juggleMax : player.juggleRemaining ?? juggleMax,
+    guardIntent: commands?.has('holdback') ?? false,
+    guardCrouchIntent: commands?.has('holddown') ?? false,
   };
   const trace: CnsRuntimeTrace = {
     playerId,
@@ -393,9 +395,9 @@ function enterState(player: PlayerState, opponent: PlayerState, stateNo: number,
     stateTime: 0,
     animNo,
     animTime: animChanged ? 0 : player.animTime,
-    stateType: stateDef.stateType ?? player.stateType,
-    moveType: stateDef.moveType ?? player.moveType,
-    physics: stateDef.physics ?? player.physics,
+    stateType: toStateType(stateDef.stateType ?? null) ?? player.stateType,
+    moveType: toMoveType(stateDef.moveType ?? null) ?? player.moveType,
+    physics: toPhysics(stateDef.physics ?? null) ?? player.physics,
     ctrl: stateDef.ctrl ?? inferDefaultCtrl(stateNo, player.ctrl),
     facing: stateDef.faceP2 ? faceToward(player, opponent) : player.facing,
     power,
@@ -424,7 +426,7 @@ function inferDefaultCtrl(stateNo: number, currentCtrl: boolean): boolean {
 
 function applyStateHeader(player: PlayerState, stateDef: CnsStateDefinition, resetAnimOnChange: boolean): PlayerState {
   const animNo = stateDef.initialAnim ?? player.animNo;
-  return { ...player, stateType: stateDef.stateType ?? player.stateType, moveType: stateDef.moveType ?? player.moveType, physics: stateDef.physics ?? player.physics, ctrl: stateDef.ctrl ?? player.ctrl, juggle: stateDef.juggle ?? player.juggle, animNo, animTime: resetAnimOnChange && player.animNo !== animNo ? 0 : player.animTime };
+  return { ...player, stateType: toStateType(stateDef.stateType ?? null) ?? player.stateType, moveType: toMoveType(stateDef.moveType ?? null) ?? player.moveType, physics: toPhysics(stateDef.physics ?? null) ?? player.physics, ctrl: stateDef.ctrl ?? player.ctrl, juggle: stateDef.juggle ?? player.juggle, animNo, animTime: resetAnimOnChange && player.animNo !== animNo ? 0 : player.animTime };
 }
 
 function shouldRun(controller: CnsStateController, player: PlayerState, input: CnsRuntimeInput, commands?: ReadonlySet<string>, opponent?: PlayerState): boolean {
@@ -989,7 +991,7 @@ function activateHitDef(
     `  airHitTime=${airHitTime ?? 28} source=${airHitTime === undefined ? 'hardcoded' : 'cns'}${airHitTimeFallbackReason ? ` fallbackReason=${airHitTimeFallbackReason}` : ''}`,
     `  animType=${selectedAnimType} source=${animTypeSource}`,
     `raw.hitdef_parameters activeHitDefId=${diagnosticId}`,
-    `  attr=${formatAttr(snapshot.attr)} hitflag=${snapshot.hitFlag ?? '-'} guardflag=${snapshot.guardFlag ?? '-'} priority=${formatPriority(snapshot.priority)}`,
+    `  attr=${formatAttr(snapshot.attr)} hitflag=${snapshot.hitFlag ?? '-'} guardflag=${snapshot.guardFlag ?? '-'} guard.dist=${snapshot.guardDistance ?? '-'} priority=${formatPriority(snapshot.priority)}`,
     `  animtypes=ground:${selectedAnimType},air:${snapshot.airAnimType ?? '-'},fall:${snapshot.fallAnimType ?? '-'} types=ground:${snapshot.groundType ?? '-'},air:${snapshot.airType ?? '-'}`,
     `  pausetime=${snapshot.pauseTime.attacker},${snapshot.pauseTime.defender} guard.pausetime=${formatPair(snapshot.guardPauseTime)} hittime=${groundHitTime ?? '-'},${airHitTime ?? '-'},${snapshot.guardHitTime ?? '-'}`,
     `  velocity=ground:${formatPair(snapshot.groundVelocity)},air:${formatPair(snapshot.airVelocity)},guard:${formatPair(snapshot.guardVelocity)} ids=${snapshot.hitId ?? '-'},${snapshot.chainId ?? '-'},${snapshot.noChainIds?.join('|') || '-'}`,
@@ -1080,8 +1082,8 @@ function evaluateHitDefSnapshot(
   const noChainIds = noChainParts.map((value) => cnsValueToNumber(value, player, input, commands, opponent));
   if (noChainIds.some((value) => value === null)) invalidParameters.push('nochainid');
   const presentUnapplied = [
-    'attr', 'fall.animtype', 'hitflag', 'guardflag', 'priority', 'guard.pausetime',
-    'guard.hittime', 'ground.slidetime', 'guard.ctrltime', 'guard.velocity',
+    'attr', 'fall.animtype', 'hitflag', 'priority',
+    'ground.slidetime', 'guard.ctrltime',
     'fall.damage', 'fall.kill', 'chainid', 'nochainid',
   ].filter((key) => controller.params[key] !== undefined);
   return {
@@ -1105,6 +1107,7 @@ function evaluateHitDefSnapshot(
     groundHitTime: nonNegative(numValue('ground.hittime')),
     airHitTime: nonNegative(numValue('air.hittime')),
     guardHitTime: nonNegative(numValue('guard.hittime')),
+    guardDistance: nonNegative(numValue('guard.dist')),
     groundSlideTime: nonNegative(numValue('ground.slidetime')),
     controlTime: nonNegative(numValue('guard.ctrltime')),
     yAcceleration: numValue('yaccel'),

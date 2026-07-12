@@ -230,6 +230,10 @@ export function readNumberExpression(rawExpression: string, context: CnsRuntimeT
     return readNumberExpression(evaluateBooleanExpression(args[0], context) ? args[1] : args[2], context);
   }
 
+  if (splitTopLevelComparison(expression) || splitTopLevel(expression, '&&').length > 1 || splitTopLevel(expression, '||').length > 1 || expression.startsWith('!')) {
+    return evaluateBooleanExpression(expression, context) ? 1 : 0;
+  }
+
   const source = getNumberSource(expression);
   return source ? source(context) : null;
 }

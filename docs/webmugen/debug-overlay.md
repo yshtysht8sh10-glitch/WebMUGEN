@@ -142,6 +142,8 @@ Hit-pause diagnostics show the event-time attacker/defender counters and the liv
 
 The physics line exposes the current attack StateDef `juggle` cost and the defender's `juggleRemaining/juggleMax` pool. A rejected air follow-up is paired with `raw.hit_juggle ... reason=insufficient_points` in AI runtime history.
 
+The same line exposes resolved guard intent as `guard=back`, `guard=back+down`, or `guard=-`. Guard acceptance/rejection details remain in the structured `raw.guard_check` history record.
+
 Canvas collision debug uses the same AIR world-coordinate boxes as the hit resolver. Labels identify attack/body kind, box index, default versus element source, animation number, and current element index; boundaries include player position, facing, and AIR element offsets.
 
 ## Minimum useful dump

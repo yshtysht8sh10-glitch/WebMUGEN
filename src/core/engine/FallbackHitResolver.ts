@@ -107,6 +107,54 @@ function resolveAttack(
     return { attacker, target, hitEvent: null, diagnosticLines };
   }
 
+  const guardKind = selectGuardKind(target, active.guardFlag);
+  const guardDistance = active.guardDistance ?? 160;
+  const withinGuardDistance = Math.abs(target.x - attacker.x) <= guardDistance;
+  if (guardKind && target.guardIntent && withinGuardDistance) {
+    const guardPause = active.guardPauseTime ?? active.pauseTime;
+    const guardVelocity = active.guardVelocity ?? active.groundVelocity;
+    const appliedGuardVelocity = { x: guardVelocity.x * attacker.facing, y: guardVelocity.y };
+    const guardHitTime = active.guardHitTime ?? active.groundHitTime ?? 12;
+    const guardState = guardKind === 'stand' ? 150 : guardKind === 'crouch' ? 152 : 154;
+    const lifeBefore = target.life;
+    const guardedAttacker = markAttackerHit(attacker, activeHitDefId, target.id, guardPause.attacker);
+    const contactedAttacker = activeHitDefId === null ? guardedAttacker : recordMoveContact(guardedAttacker, activeHitDefId, 'guarded');
+    const guardedTarget = applyGuardHit(target, guardDamage, guardState, appliedGuardVelocity, guardPause.defender, {
+      activeHitDefId,
+      selectedHitTime: guardHitTime,
+      kind: target.stateType === 'A' ? 'air' : 'ground',
+      source: active.guardHitTime === undefined ? 'hardcoded' : 'active_hitdef',
+      targetStateTypeAtHit: target.stateType,
+      elapsed: 0,
+      lastStateNo: guardState,
+      selectedAnim: guardState,
+      ...(active.guardHitTime === undefined ? { fallbackReason: 'missing_guard_hittime' } : {}),
+    }, createGetHitVarSnapshot(active, guardDamage, guardHitTime, target.stateType === 'A' ? 'air' : 'ground', guardVelocity));
+    const idText = activeHitDefId === null ? 'none' : String(activeHitDefId);
+    if (diagnosticsEnabled) diagnosticLines.push(
+      `raw.hit_collision attacker=p${attacker.id} target=p${target.id}`,
+      `${collisionHeader} overlap=${formatOverlap(overlap)} damage=${damage},${guardDamage} source=${source} result=guarded`,
+      `raw.guard_check attacker=p${attacker.id} target=p${target.id}`,
+      `  activeHitDefId=${idText} guardflag=${active.guardFlag ?? '-'} intent=holdback stateType=${target.stateType} crouchIntent=${target.guardCrouchIntent ? 1 : 0} kind=${guardKind} distance=${Math.abs(target.x - attacker.x)} guardDistance=${guardDistance} result=accepted`,
+      `raw.move_contact attacker=p${attacker.id} target=p${target.id}`,
+      `  activeHitDefId=${idText} contact=1 hit=0 guarded=1 hitCount=${contactedAttacker.moveContact?.hitCount ?? 0} result=accepted`,
+      `raw.hit_damage target=p${target.id}`,
+      `  activeHitDefId=${idText} lifeBefore=${lifeBefore} appliedDamage=${guardDamage} lifeAfter=${guardedTarget.life} source=guard_damage ko=${guardedTarget.life === 0 ? 1 : 0}`,
+      `raw.guard_reaction target=p${target.id}`,
+      `  activeHitDefId=${idText} state=${guardState} kind=${guardKind} velocity=(${appliedGuardVelocity.x},${appliedGuardVelocity.y}) hittime=${guardHitTime} pausetime=${guardPause.defender}`,
+    );
+    return {
+      attacker: contactedAttacker,
+      target: guardedTarget,
+      hitEvent: { attackerId: attacker.id, defenderId: target.id, damage: guardDamage },
+      diagnosticLines,
+    };
+  }
+  if (diagnosticsEnabled && target.guardIntent) diagnosticLines.push(
+    `raw.guard_check attacker=p${attacker.id} target=p${target.id}`,
+    `  activeHitDefId=${activeHitDefId ?? 'none'} guardflag=${active.guardFlag ?? '-'} intent=holdback stateType=${target.stateType} crouchIntent=${target.guardCrouchIntent ? 1 : 0} kind=${guardKind ?? 'none'} distance=${Math.abs(target.x - attacker.x)} guardDistance=${guardDistance} result=rejected reason=${guardKind ? 'out_of_guard_distance' : 'guardflag_mismatch'}`,
+  );
+
   const isAirJuggle = target.stateType === 'A';
   const juggleCost = Math.max(0, attacker.juggle ?? 0);
   const juggleMax = target.juggleMax ?? 15;
@@ -273,6 +321,47 @@ function applyFallbackHit(
     getHitVars,
     getHitVarUnsupportedKeys: ['fall.time', 'xoff', 'yoff', 'zoff'],
   };
+}
+
+function applyGuardHit(
+  defender: PlayerState,
+  damage: number,
+  stateNo: number,
+  velocity: { x: number; y: number },
+  pauseTime: number,
+  hitStun: NonNullable<PlayerState['hitStun']>,
+  getHitVars: Record<string, number>,
+): PlayerState {
+  return {
+    ...defender,
+    life: Math.max(0, defender.life - damage),
+    stateNo,
+    stateTime: 0,
+    animNo: stateNo,
+    animTime: 0,
+    moveType: 'H',
+    physics: 'N',
+    ctrl: false,
+    vx: velocity.x,
+    vy: velocity.y,
+    hitVelX: velocity.x,
+    hitVelY: velocity.y,
+    hitPause: pauseTime,
+    hitDefUsed: false,
+    activeHitDef: null,
+    hitFall: false,
+    hitStun,
+    getHitVars: { ...getHitVars, guarded: 1 },
+    getHitVarUnsupportedKeys: ['fall.time', 'xoff', 'yoff', 'zoff'],
+  };
+}
+
+function selectGuardKind(player: PlayerState, guardFlag: string | undefined): 'stand' | 'crouch' | 'air' | null {
+  if (!guardFlag) return null;
+  const flags = guardFlag.toUpperCase();
+  if (player.stateType === 'A') return flags.includes('A') ? 'air' : null;
+  if (player.stateType === 'C' || player.guardCrouchIntent) return flags.includes('L') || flags.includes('M') ? 'crouch' : null;
+  return flags.includes('H') || flags.includes('M') ? 'stand' : null;
 }
 
 function createGetHitVarSnapshot(
