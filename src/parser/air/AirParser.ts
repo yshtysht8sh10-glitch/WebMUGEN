@@ -27,6 +27,8 @@ export function parseAirText(text: string): AirDocument {
         actionNo: Number(beginActionMatch[1]),
         elements: [],
         loopStartIndex: null,
+        defaultClsn1: [],
+        defaultClsn2: [],
       };
       actions.push(currentAction);
       defaultClsn1 = [];
@@ -48,9 +50,11 @@ export function parseAirText(text: string): AirDocument {
     if (clsnDefaultMatch) {
       if (clsnDefaultMatch[1] === '1') {
         defaultClsn1 = [];
+        currentAction.defaultClsn1 = defaultClsn1;
         writingBoxes = defaultClsn1;
       } else {
         defaultClsn2 = [];
+        currentAction.defaultClsn2 = defaultClsn2;
         writingBoxes = defaultClsn2;
       }
       continue;
@@ -80,6 +84,8 @@ export function parseAirText(text: string): AirDocument {
         ...element,
         clsn1: pendingClsn1 ? cloneBoxes(pendingClsn1) : cloneBoxes(defaultClsn1),
         clsn2: pendingClsn2 ? cloneBoxes(pendingClsn2) : cloneBoxes(defaultClsn2),
+        clsn1Source: pendingClsn1 ? 'element' : defaultClsn1.length > 0 ? 'default' : 'none',
+        clsn2Source: pendingClsn2 ? 'element' : defaultClsn2.length > 0 ? 'default' : 'none',
       });
       pendingClsn1 = null;
       pendingClsn2 = null;

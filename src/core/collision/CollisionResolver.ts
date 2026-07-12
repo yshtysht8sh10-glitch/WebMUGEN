@@ -65,16 +65,22 @@ export function getPlayerAttackBoxes(
   player: PlayerState,
   airDocument: AirDocument,
 ): WorldCollisionBox[] {
-  const element = getCurrentAnimationElement(airDocument, player.animNo, player.animTime)?.element;
-  return element ? element.clsn1.map((box) => airBoxToWorldRect(player, box, 'attack')) : [];
+  const current = getCurrentAnimationElement(airDocument, player.animNo, player.animTime);
+  return current ? current.element.clsn1.map((box, boxIndex) => airBoxToWorldRect(
+    player, box, 'attack', { x: current.element.offsetX, y: current.element.offsetY },
+    { source: current.element.clsn1Source ?? 'none', animNo: player.animNo, elementIndex: current.elementIndex, boxIndex },
+  )) : [];
 }
 
 export function getPlayerBodyBoxes(
   player: PlayerState,
   airDocument: AirDocument,
 ): WorldCollisionBox[] {
-  const element = getCurrentAnimationElement(airDocument, player.animNo, player.animTime)?.element;
-  return element ? element.clsn2.map((box) => airBoxToWorldRect(player, box, 'body')) : [];
+  const current = getCurrentAnimationElement(airDocument, player.animNo, player.animTime);
+  return current ? current.element.clsn2.map((box, boxIndex) => airBoxToWorldRect(
+    player, box, 'body', { x: current.element.offsetX, y: current.element.offsetY },
+    { source: current.element.clsn2Source ?? 'none', animNo: player.animNo, elementIndex: current.elementIndex, boxIndex },
+  )) : [];
 }
 
 export function anyIntersects(a: Rect[], b: Rect[]): boolean {

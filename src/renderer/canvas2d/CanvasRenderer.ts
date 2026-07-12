@@ -223,16 +223,27 @@ export class CanvasRenderer {
   private drawDebugBoxes(ctx: CanvasRenderingContext2D, player: PlayerState): void {
     if (this.airDocument) {
       getPlayerBodyBoxes(player, this.airDocument).forEach((box) =>
-        this.strokeRect(ctx, box, '#00ff00'),
+        this.strokeCollisionRect(ctx, box, '#00ff00'),
       );
       getPlayerAttackBoxes(player, this.airDocument).forEach((box) =>
-        this.strokeRect(ctx, box, '#ff0000'),
+        this.strokeCollisionRect(ctx, box, '#ff0000'),
       );
       return;
     }
 
     this.strokeRect(ctx, getBodyBox(player), '#00ff00');
     if (isAttackActive(player)) this.strokeRect(ctx, getAttackBox(player), '#ff0000');
+  }
+
+  private strokeCollisionRect(
+    ctx: CanvasRenderingContext2D,
+    rect: ReturnType<typeof getPlayerAttackBoxes>[number],
+    color: string,
+  ): void {
+    this.strokeRect(ctx, rect, color);
+    ctx.fillStyle = color;
+    ctx.font = '9px monospace';
+    ctx.fillText(`${rect.kind}[${rect.boxIndex}] ${rect.source} a${rect.animNo}e${rect.elementIndex}`, rect.x, rect.y - 2);
   }
 
   private drawProjectileDebugBoxes(ctx: CanvasRenderingContext2D, projectiles: ProjectileState[]): void {

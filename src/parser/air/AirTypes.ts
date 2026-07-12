@@ -5,9 +5,12 @@ export type AirDocument = {
 export type AirAction = {
   actionNo: number;
   elements: AirElement[];
+  loopStartIndex?: number | null;
   defaultClsn1: AirCollisionBox[];
   defaultClsn2: AirCollisionBox[];
 };
+
+export type AirClsnSet = AirCollisionBox[];
 
 export type AirElement = {
   groupNo: number;
@@ -19,6 +22,8 @@ export type AirElement = {
   blend?: string;
   clsn1: AirCollisionBox[];
   clsn2: AirCollisionBox[];
+  clsn1Source?: 'default' | 'element' | 'none';
+  clsn2Source?: 'default' | 'element' | 'none';
 };
 
 export type AirCollisionBox = {

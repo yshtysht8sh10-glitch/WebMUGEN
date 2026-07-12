@@ -5,20 +5,31 @@ export type CollisionKind = 'attack' | 'body';
 
 export type WorldCollisionBox = Rect & {
   kind: CollisionKind;
+  source: 'default' | 'element' | 'none';
+  animNo: number;
+  elementIndex: number;
+  boxIndex: number;
 };
 
 export function airBoxToWorldRect(
   player: PlayerState,
   box: AirCollisionBox,
   kind: CollisionKind,
+  offset: { x: number; y: number } = { x: 0, y: 0 },
+  metadata: Pick<WorldCollisionBox, 'source' | 'animNo' | 'elementIndex' | 'boxIndex'> = {
+    source: 'none', animNo: player.animNo, elementIndex: 0, boxIndex: 0,
+  },
 ): WorldCollisionBox {
-  const left = player.facing === 1 ? box.left : -box.right;
-  const right = player.facing === 1 ? box.right : -box.left;
+  const localLeft = box.left + offset.x;
+  const localRight = box.right + offset.x;
+  const left = player.facing === 1 ? localLeft : -localRight;
+  const right = player.facing === 1 ? localRight : -localLeft;
 
   return {
     kind,
+    ...metadata,
     x: player.x + left,
-    y: player.y + box.top,
+    y: player.y + box.top + offset.y,
     width: right - left,
     height: box.bottom - box.top,
   };

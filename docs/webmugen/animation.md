@@ -30,6 +30,8 @@ Begin Action 20
 
 Each element references a sprite group/image and has display time.
 
+Current-element Clsn1 and Clsn2 boxes are converted through a shared world-coordinate API. The conversion applies the element X/Y offset, mirrors the combined local X coordinates for left-facing players, adds the player world origin, preserves multiple boxes, and returns no rectangles when the selected element has no applicable default or element Clsn block. Each result records attack/body kind, default/element source, animation number, element index, and box index for collision diagnostics and renderer debug labels.
+
 ## Runtime interaction
 
 StateDef headers and controllers can select animation:

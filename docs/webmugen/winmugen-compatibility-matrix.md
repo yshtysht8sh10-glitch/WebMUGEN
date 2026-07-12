@@ -160,7 +160,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | Helper | Partial | Recognized safe no-op in CNS runtime; Helper system exists separately. |
 | HitAdd | Partial | Stores hit count field only. |
 | HitBy | Partial | Stores allowed-hit attribute string only. |
-| HitDef | Partial | Activation-frame CNS expressions are frozen in a typed ActiveHitDef for major attr/damage/animtype/flags/priority/pause/type/hittime/velocity/fall/id/chain fields. Damage, ground/air hittime, and grounded Light/Medium/Hard Anim 5000/5001/5002 are connected; other stored fields are diagnosed as unapplied. Missing required animations are not substituted. |
+| HitDef | Partial | Activation values are frozen in a typed ActiveHitDef. Shared AIR world boxes apply current AnimElem Clsn1/Clsn2, element offsets, facing, player origin, multiple boxes, and default/override provenance. Damage, ground/air hittime, and grounded Light/Medium/Hard Anim are connected; many stored fields remain unapplied. |
 | HitFallDamage | Partial | Applies simple life reduction. Full fall damage semantics incomplete. |
 | HitFallSet | Partial | Recognized safe no-op. Fall flags not implemented. |
 | HitFallVel | Partial | Applies simple Y velocity. Full get-hit semantics incomplete. |
