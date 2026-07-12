@@ -6,7 +6,6 @@ import {
 } from '../collision/CollisionResolver';
 import type { GameState, HitEvent, PlayerState } from './types';
 
-const FALLBACK_DAMAGE = 60;
 const ATTACKER_HIT_PAUSE = 4;
 const DEFENDER_HIT_PAUSE = 8;
 const STAND_HIT_STATE = 5000;
@@ -58,22 +57,33 @@ function resolveAttack(
   diagnosticsEnabled: boolean,
 ): { attacker: PlayerState; target: PlayerState; hitEvent: HitEvent | null; diagnosticLines: string[] } {
   const diagnosticLines: string[] = [];
-  if (attacker.moveType !== 'A' || attacker.hitPause > 0 || attackBoxes.length === 0) {
+  if (attacker.moveType !== 'A' || attacker.hitPause > 0) {
     return { attacker, target, hitEvent: null, diagnosticLines };
   }
 
-  const collided = anyIntersects(attackBoxes, bodyBoxes);
   const active = attacker.activeHitDef;
   const activeHitDefId = active?.diagnosticId ?? null;
-  const damage = active?.damage ?? FALLBACK_DAMAGE;
-  const guardDamage = active?.damageValues?.[1] ?? 0;
-  const source = active ? 'active_hitdef' : 'existing_fallback';
+  const attackElement = attackBoxes[0]?.elementIndex ?? '-';
+  const bodyElement = bodyBoxes[0]?.elementIndex ?? '-';
+  const collisionHeader = `  activeHitDefId=${activeHitDefId ?? 'none'} attackerAnim=${attacker.animNo} attackerElem=${attackElement} defenderAnim=${target.animNo} defenderElem=${bodyElement} clsn1=${attackBoxes.length} clsn2=${bodyBoxes.length}`;
+  if (!active || attackBoxes.length === 0 || bodyBoxes.length === 0) {
+    if (diagnosticsEnabled) diagnosticLines.push(
+      `raw.hit_collision attacker=p${attacker.id} target=p${target.id}`,
+      `${collisionHeader} result=rejected reason=${!active ? 'active_hitdef_missing' : attackBoxes.length === 0 ? 'clsn1_missing' : 'clsn2_missing'}`,
+    );
+    return { attacker, target, hitEvent: null, diagnosticLines };
+  }
+  const overlap = findOverlap(attackBoxes, bodyBoxes);
+  const collided = overlap !== null;
+  const damage = active.damage;
+  const guardDamage = active.damageValues?.[1] ?? 0;
+  const source = 'active_hitdef';
 
   if (attacker.hitDefUsed) {
     if (diagnosticsEnabled && collided && activeHitDefId !== null && !active?.rejectedLogged) {
       diagnosticLines.push(
         `raw.hit_collision attacker=p${attacker.id} target=p${target.id}`,
-        `  activeHitDefId=${activeHitDefId} damage=${damage},${guardDamage} source=${source} result=rejected reason=hitonce_already_consumed`,
+        `${collisionHeader} overlap=${formatOverlap(overlap)} damage=${damage},${guardDamage} source=${source} result=rejected reason=hitonce_already_consumed`,
       );
       attacker = { ...attacker, activeHitDef: active ? { ...active, rejectedLogged: true } : active };
     }
@@ -84,7 +94,7 @@ function resolveAttack(
     if (diagnosticsEnabled && activeHitDefId !== null && !active?.missLogged) {
       diagnosticLines.push(
         `raw.hit_collision attacker=p${attacker.id} target=p${target.id}`,
-        `  activeHitDefId=${activeHitDefId} damage=${damage},${guardDamage} source=${source} result=miss reason=${target.hitPause > 0 ? 'target_hitpause' : 'clsn_no_overlap'}`,
+        `${collisionHeader} overlap=${formatOverlap(overlap)} damage=${damage},${guardDamage} source=${source} result=miss reason=${target.hitPause > 0 ? 'target_hitpause' : 'clsn_no_overlap'}`,
       );
       attacker = { ...attacker, activeHitDef: active ? { ...active, missLogged: true } : active };
     }
@@ -119,10 +129,10 @@ function resolveAttack(
     ...(activeHitTime === undefined ? { fallbackReason: hitTimeFallbackReason } : {}),
   });
   const idText = activeHitDefId === null ? 'none' : String(activeHitDefId);
-  const fallbackReason = active ? '-' : 'active_hitdef_missing';
+  const fallbackReason = '-';
   if (diagnosticsEnabled) diagnosticLines.push(
     `raw.hit_collision attacker=p${attacker.id} target=p${target.id}`,
-    `  activeHitDefId=${idText} damage=${damage},${guardDamage} source=${source} fallbackReason=${fallbackReason} result=hit`,
+    `${collisionHeader} overlap=${formatOverlap(overlap)} damage=${damage},${guardDamage} source=${source} fallbackReason=${fallbackReason} result=hit`,
     `raw.hit_damage target=p${target.id}`,
     `  activeHitDefId=${idText} lifeBefore=${lifeBefore} appliedDamage=${damage} lifeAfter=${hitTarget.life} source=${source} ko=${hitTarget.life === 0 ? 1 : 0}`,
     ...(hitTimeKind === 'ground' ? [
@@ -149,6 +159,22 @@ function resolveAttack(
     hitEvent: { attackerId: attacker.id, defenderId: target.id, damage },
     diagnosticLines,
   };
+}
+
+function findOverlap(
+  attackBoxes: ReturnType<typeof getPlayerAttackBoxes>,
+  bodyBoxes: ReturnType<typeof getPlayerBodyBoxes>,
+): { attackBoxIndex: number; bodyBoxIndex: number } | null {
+  for (let attackBoxIndex = 0; attackBoxIndex < attackBoxes.length; attackBoxIndex += 1) {
+    for (let bodyBoxIndex = 0; bodyBoxIndex < bodyBoxes.length; bodyBoxIndex += 1) {
+      if (anyIntersects([attackBoxes[attackBoxIndex]], [bodyBoxes[bodyBoxIndex]])) return { attackBoxIndex, bodyBoxIndex };
+    }
+  }
+  return null;
+}
+
+function formatOverlap(value: ReturnType<typeof findOverlap>): string {
+  return value ? `${value.attackBoxIndex}:${value.bodyBoxIndex}` : '-';
 }
 
 function markAttackerHit(player: PlayerState): PlayerState {

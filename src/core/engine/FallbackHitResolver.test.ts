@@ -251,11 +251,11 @@ damage = 37, 0
       ],
     }, air, false);
 
-    expect(next.hitEvents).toHaveLength(1);
+    expect(next.hitEvents).toHaveLength(0);
     expect(next.hitDiagnosticLines).toEqual([]);
   });
 
-  it('applies fallback hit when attack Clsn overlaps body Clsn', () => {
+  it('rejects overlapping Clsn when the attacker has no ActiveHitDef', () => {
     const state = createInitialGameState();
     const next = resolveFallbackHits(
       {
@@ -285,11 +285,24 @@ damage = 37, 0
       air,
     );
 
-    expect(next.hitEvents).toHaveLength(1);
-    expect(next.players[1].life).toBe(940);
-    expect(next.players[1].stateNo).toBe(5000);
-    expect(next.players[0].hitDefUsed).toBe(true);
-    expect(next.hitDiagnosticLines?.join('\n')).toContain('source=existing_fallback fallbackReason=active_hitdef_missing result=hit');
+    expect(next.hitEvents).toHaveLength(0);
+    expect(next.players[1].life).toBe(1000);
+    expect(next.hitDiagnosticLines?.join('\n')).toContain('clsn1=1 clsn2=1 result=rejected reason=active_hitdef_missing');
+  });
+
+  it('logs AIR animation, element, box counts, and overlapping indexes for an accepted hit', () => {
+    const hit = resolveConfiguredHit({ damage: 31, groundHitTime: 9 });
+    const lines = hit.hitDiagnosticLines?.join('\n') ?? '';
+    expect(hit.hitEvents).toHaveLength(1);
+    expect(lines).toContain('attackerAnim=200 attackerElem=0 defenderAnim=0 defenderElem=0 clsn1=1 clsn2=1');
+    expect(lines).toContain('overlap=0:0 damage=31,0 source=active_hitdef');
+  });
+
+  it('diagnoses missing Clsn1 and Clsn2 without fixed rectangles', () => {
+    const noAttackAir = { ...air, actions: air.actions.map((action) => action.actionNo === 200 ? { ...action, elements: action.elements.map((element) => ({ ...element, clsn1: [] })) } : action) };
+    const noBodyAir = { ...air, actions: air.actions.map((action) => action.actionNo === 0 ? { ...action, elements: action.elements.map((element) => ({ ...element, clsn2: [] })) } : action) };
+    expect(resolveConfiguredHit({ airDocument: noAttackAir }).hitDiagnosticLines?.join('\n')).toContain('reason=clsn1_missing');
+    expect(resolveConfiguredHit({ airDocument: noBodyAir }).hitDiagnosticLines?.join('\n')).toContain('reason=clsn2_missing');
   });
 
   it('does not hit twice while hitDefUsed is true', () => {

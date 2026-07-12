@@ -137,6 +137,8 @@ When Runtime Settings `Hit diagnostics` is enabled, AI runtime entries include a
 
 Each non-duplicate activation also emits `raw.hitdef_parameters` with the evaluated typed snapshot. `raw.hitdef_unapplied` lists parameters that were preserved but are not yet connected to combat behavior, and `raw.hitdef_invalid` lists parameters whose activation-frame expression could not be evaluated. These are event-driven activation records, not per-frame logs.
 
+`raw.hit_collision` records attacker/defender, ActiveHitDef id, both animation and element numbers, Clsn1/Clsn2 counts, overlapping attack/body box indexes, and an accepted/rejected reason. Missing ActiveHitDef, Clsn1, or Clsn2 rejects contact explicitly; the live path does not synthesize a fixed collision rectangle.
+
 While hit stun remains active, `raw.hitstun_tick` records independent elapsed/remaining time, current state, forced control state, control source, and state changes. Attempts to enable control, enter State 0/52 early, or take a State -1 input ChangeState are blocked and reported once per controller as `raw.hitstun_guard`. Unexpected early control or state exits are reported as `raw.hitstun_violation`.
 
 ## What to look for
