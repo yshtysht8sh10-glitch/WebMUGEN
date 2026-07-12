@@ -116,11 +116,13 @@ function resolveAttack(
       : active.groundHitTimeFallbackReason ?? 'missing_ground_hittime'
     : 'active_hitdef_missing';
   const selectedAnim = hitTimeKind === 'ground' ? groundHitAnim(active?.animType) : STAND_HIT_STATE;
+  const selectedVelocity = hitTimeKind === 'air' ? active.airVelocity : active.groundVelocity;
+  const appliedVelocity = { x: selectedVelocity.x * attacker.facing, y: selectedVelocity.y };
   const animType = active?.animType ?? 'Light';
   const animSource = active?.animTypeSource ?? 'existing_fallback';
   const animationExists = airDocumentHasAction(airDocument, selectedAnim);
   const hitAttacker = markAttackerHit(attacker, activeHitDefId, target.id);
-  const hitTarget = applyFallbackHit(target, hitAttacker, damage, selectedAnim, {
+  const hitTarget = applyFallbackHit(target, damage, selectedAnim, appliedVelocity, {
     activeHitDefId,
     selectedHitTime,
     kind: activeHitTime === undefined ? 'fallback' : hitTimeKind,
@@ -144,7 +146,7 @@ function resolveAttack(
     ] : []),
     `raw.hit_reaction target=p${target.id}`,
     `  state=${STAND_HIT_STATE} source=existing_fallback anim=${selectedAnim} source=${hitTimeKind === 'ground' ? animSource : 'existing_fallback'}`,
-    `  velocity=(${hitAttacker.facing * 4},0) source=existing_fallback pausetime=${DEFENDER_HIT_PAUSE} source=existing_fallback`,
+    `  velocity=(${appliedVelocity.x},${appliedVelocity.y}) source=active_hitdef velocityKind=${hitTimeKind} attackerFacing=${attacker.facing} pausetime=${DEFENDER_HIT_PAUSE} source=existing_fallback`,
     `  hittime=${selectedHitTime} source=${hitTimeSource} hittimeKind=${activeHitTime === undefined ? 'fallback' : hitTimeKind} targetStateTypeAtHit=${targetStateTypeAtHit}`,
     '  fall=0 source=existing_fallback',
     `raw.hitstun target=p${target.id}`,
@@ -194,9 +196,9 @@ function markAttackerHit(player: PlayerState, activeHitDefId: number | null, def
 
 function applyFallbackHit(
   defender: PlayerState,
-  attacker: PlayerState,
   damage: number,
   selectedAnim: number,
+  velocity: { x: number; y: number },
   hitStun: NonNullable<PlayerState['hitStun']>,
 ): PlayerState {
   return {
@@ -210,8 +212,8 @@ function applyFallbackHit(
     moveType: 'H',
     physics: 'N',
     ctrl: false,
-    vx: attacker.facing * 4,
-    vy: 0,
+    vx: velocity.x,
+    vy: velocity.y,
     hitPause: DEFENDER_HIT_PAUSE,
     hitDefUsed: false,
     activeHitDef: null,

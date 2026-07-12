@@ -66,6 +66,8 @@ Important interactions:
 - air physics may apply gravity;
 - ground checks may trigger landing state routes.
 
+On HitDef contact, the defender receives `ground.velocity` or `air.velocity` according to its StateType at contact. CNS X is attacker-facing-relative and is converted to world velocity once; Y remains in CNS/internal velocity coordinates. Physics does not clear velocity during hit pause and begins integrating it when pause ends. `guard.velocity` remains stored Partial behavior until guard contact exists.
+
 ## Movement debugging
 
 For movement bugs, inspect both state and physics lines.

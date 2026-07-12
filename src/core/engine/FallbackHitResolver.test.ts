@@ -5,6 +5,7 @@ import { resolveFallbackHits } from './FallbackHitResolver';
 import { parseCnsText } from '../../parser/cns/CnsParser';
 import { stepCnsStateRuntime } from '../cns/CnsStateRuntime';
 import { applyFallbackHitRecovery } from './FallbackHitRecovery';
+import { stepCnsPhysicsMotion } from '../cns/CnsPhysicsStep';
 
 const air = parseAirText(`
 [Begin Action 0]
@@ -28,6 +29,31 @@ Clsn1: 1
 `);
 
 describe('FallbackHitResolver', () => {
+  it.each([
+    [1, -6],
+    [-1, 6],
+  ] as const)('applies ground.velocity relative to attacker facing %i', (facing, expectedX) => {
+    const hit = resolveConfiguredHit({ groundVelocity: [-6, -2], attackerFacing: facing });
+    expect(hit.players[1]).toMatchObject({ vx: expectedX, vy: -2 });
+    expect(hit.hitDiagnosticLines?.join('\n')).toContain(`velocity=(${expectedX},-2) source=active_hitdef velocityKind=ground attackerFacing=${facing}`);
+  });
+
+  it('selects air.velocity from target StateType at contact', () => {
+    const hit = resolveConfiguredHit({ groundVelocity: [-3, 0], airVelocity: [-2.5, -7], targetStateType: 'A' });
+    expect(hit.players[1]).toMatchObject({ vx: -2.5, vy: -7 });
+    expect(hit.hitDiagnosticLines?.join('\n')).toContain('velocity=(-2.5,-7) source=active_hitdef velocityKind=air');
+  });
+
+  it('preserves an explicit zero velocity and moves only after hit pause ends', () => {
+    const stopped = resolveConfiguredHit({ groundVelocity: [0, 0] });
+    expect(stopped.players[1]).toMatchObject({ vx: 0, vy: 0 });
+
+    const moving = resolveConfiguredHit({ groundVelocity: [-4, -1] });
+    const targetBefore = { ...moving.players[1], hitPause: 0 };
+    const stepped = stepCnsPhysicsMotion({ ...moving, players: [moving.players[0], targetBefore] });
+    expect(stepped.players[1].x).toBe(targetBefore.x - 4);
+    expect(stepped.players[1].vx).not.toBe(0);
+  });
   it.each([
     ['Light', 5000],
     ['Medium', 5001],
@@ -429,6 +455,9 @@ function resolveConfiguredHit({
   attackerId = 1,
   animType,
   airDocument = air,
+  groundVelocity,
+  airVelocity,
+  attackerFacing,
 }: {
   damage?: number;
   groundHitTime?: number;
@@ -437,12 +466,19 @@ function resolveConfiguredHit({
   attackerId?: 1 | 2;
   animType?: string;
   airDocument?: typeof air;
+  groundVelocity?: [number, number];
+  airVelocity?: [number, number];
+  attackerFacing?: 1 | -1;
 }) {
   const hitTimeLines = [
     groundHitTime === undefined ? '' : `ground.hittime = ${groundHitTime}`,
     airHitTime === undefined ? '' : `air.hittime = ${airHitTime}`,
   ].filter(Boolean).join('\n');
   const animTypeLine = animType === undefined ? '' : `animtype = ${animType}`;
+  const velocityLines = [
+    groundVelocity ? `ground.velocity = ${groundVelocity.join(', ')}` : '',
+    airVelocity ? `air.velocity = ${airVelocity.join(', ')}` : '',
+  ].filter(Boolean).join('\n');
   const cns = parseCnsText(`
 [Statedef 0]
 type = ${targetStateType}
@@ -458,22 +494,24 @@ trigger1 = 1
 damage = ${damage}, 0
 ${hitTimeLines}
 ${animTypeLine}
+${velocityLines}
 `);
   const initial = createInitialGameState();
   const attackerIndex = attackerId - 1;
   const targetIndex = attackerId === 1 ? 1 : 0;
   const players = [...initial.players] as typeof initial.players;
+  const resolvedFacing = attackerFacing ?? (attackerId === 1 ? 1 : -1);
   players[attackerIndex] = {
     ...players[attackerIndex],
-    x: attackerId === 1 ? 240 : 290,
-    facing: attackerId === 1 ? 1 : -1,
+    x: resolvedFacing === 1 ? 240 : 290,
+    facing: resolvedFacing,
     stateNo: 200,
     animNo: 200,
     moveType: 'A',
   };
   players[targetIndex] = {
     ...players[targetIndex],
-    x: attackerId === 1 ? 290 : 240,
+    x: resolvedFacing === 1 ? 290 : 240,
     animNo: 0,
     stateType: targetStateType,
     physics: targetStateType === 'A' ? 'A' : 'S',
