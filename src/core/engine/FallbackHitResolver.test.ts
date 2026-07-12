@@ -85,6 +85,35 @@ physics = S
     expect(hit.players[1].hitFallVelocity).toEqual({ x: -1.5, y: -3 });
   });
 
+  it('consumes StateDef juggle only for an airborne target and rejects a new HitDef when points are insufficient', () => {
+    const first = resolveConfiguredHit({ targetStateType: 'A', juggle: 6, airJuggle: 10, pauseTime: [0, 0] });
+    expect(first.players[1]).toMatchObject({ life: 963, juggleMax: 10, juggleRemaining: 4 });
+    expect(first.hitDiagnosticLines?.join('\n')).toContain('cost=6 before=10 after=4 max=10 result=accepted');
+
+    const duplicate = resolveFallbackHits(first, air);
+    expect(duplicate.players[1].juggleRemaining).toBe(4);
+
+    const active = first.players[0].activeHitDef!;
+    const rejected = resolveFallbackHits({
+      ...first,
+      players: [
+        { ...first.players[0], hitPause: 0, hitDefUsed: false, hitTargets: [], activeHitDef: { ...active, diagnosticId: (active.diagnosticId ?? 0) + 1 } },
+        { ...first.players[1], hitPause: 0, animNo: 0 },
+      ],
+    }, air);
+    expect(rejected.hitEvents).toHaveLength(0);
+    expect(rejected.players[1]).toMatchObject({ life: 963, juggleRemaining: 4 });
+    expect(rejected.hitDiagnosticLines?.join('\n')).toContain('result=rejected reason=juggle_insufficient');
+  });
+
+  it('does not consume or reject juggle points for an ordinary grounded hit', () => {
+    const hit = resolveConfiguredHit({ targetStateType: 'S', juggle: 20, airJuggle: 10, pauseTime: [0, 0] });
+    expect(hit.hitEvents).toHaveLength(1);
+    expect(hit.players[1].life).toBe(963);
+    expect(hit.players[1].juggleRemaining).toBe(10);
+    expect(hit.hitDiagnosticLines?.join('\n')).not.toContain('raw.hit_juggle');
+  });
+
   it('freezes motion and timers for exactly the defender pausetime then resumes', () => {
     let state = resolveConfiguredHit({ pauseTime: [0, 2], groundVelocity: [-4, 0] });
     const targetAtHit = state.players[1];
@@ -606,6 +635,8 @@ function resolveConfiguredHit({
   fallRecoverTime,
   downVelocity,
   downHitTime,
+  juggle,
+  airJuggle,
 }: {
   damage?: number;
   groundHitTime?: number;
@@ -626,6 +657,8 @@ function resolveConfiguredHit({
   fallRecoverTime?: number;
   downVelocity?: [number, number];
   downHitTime?: number;
+  juggle?: number;
+  airJuggle?: number;
 }) {
   const hitTimeLines = [
     groundHitTime === undefined ? '' : `ground.hittime = ${groundHitTime}`,
@@ -648,6 +681,8 @@ function resolveConfiguredHit({
     downHitTime === undefined ? '' : `down.hittime = ${downHitTime}`,
   ].filter(Boolean).join('\n');
   const cns = parseCnsText(`
+[Data]
+airjuggle = ${airJuggle ?? 15}
 [Statedef 0]
 type = ${targetStateType}
 movetype = I
@@ -656,6 +691,7 @@ physics = ${targetStateType === 'A' ? 'A' : 'S'}
 type = S
 movetype = A
 physics = S
+${juggle === undefined ? '' : `juggle = ${juggle}`}
 [State 200, Hit]
 type = HitDef
 trigger1 = 1

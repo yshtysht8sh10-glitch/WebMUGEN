@@ -129,6 +129,8 @@ The currently connected subset requires an ActiveHitDef and AIR Clsn overlap, th
 
 Successful contacts are recorded by ActiveHitDef generation and defender id. Continued overlap with the same pair cannot apply damage, HitEvent, or hit stun again. A new ActiveHitDef generation can hit the defender again; state entry and `MoveHitReset` clear the relevant history. The current behavior is one hit per generation/defender regardless of the `hitonce` parameter, whose distinct 0/1 semantics remain Partial.
 
+For an airborne target, accepted contact also checks the attack StateDef `juggle` cost against the defender's remaining `[Data] airjuggle` pool (default 15 when omitted). A successful ActiveHitDef generation consumes the cost once; continued overlap does not consume again, while a new generation is rejected when the remaining pool is insufficient. Ordinary grounded hits do not use this check. Air/down states retain the pool and grounded controllable recovery resets it.
+
 Attacker move-result state separately tracks contact, hit, guarded, and State-local hit count for MoveContact/MoveHit/MoveGuarded/HitCount. New HitDef generations reset result flags but retain count; State changes clear all. `MoveHitReset` clears only result flags, preserving both duplicate-hit target history and count.
 
 Successful non-KO contact also registers a Target entry with player id, HitDef id, and ActiveHitDef generation. Entries persist independently of State transitions, support multiple targets, and are removed for KO/destroyed players or round restart. Connected Target controllers select these entries by optional HitDef `id` and apply changes to the registered player.

@@ -17,6 +17,7 @@ function formatPlayerPhysicsDebug(label: string, player: PlayerState): string {
     `facing=${player.facing}`,
     `power=${readPower(player)}`,
     `juggle=${readJuggle(player)}`,
+    `juggleRemaining=${player.juggleRemaining ?? '-'}/${player.juggleMax ?? '-'}`,
     `pos=(${formatNumber(player.x)},${formatNumber(player.y)})`,
     `vel=(${formatNumber(player.vx)},${formatNumber(player.vy)})`,
     `time=${player.stateTime}`,
@@ -29,7 +30,7 @@ function readPower(player: PlayerState): number {
 }
 
 function readJuggle(player: PlayerState): string {
-  const value = (player as PlayerState & { juggle?: number }).juggle;
+  const value = player.juggle;
   return value === undefined ? '-' : String(value);
 }
 

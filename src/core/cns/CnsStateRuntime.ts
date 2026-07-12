@@ -54,7 +54,6 @@ type ControllerExecutionResult = {
 
 type ExtendedPlayerState = PlayerState & {
   power?: number;
-  juggle?: number;
   hitCount?: number;
   attackMultiplier?: number;
   defenseMultiplier?: number;
@@ -141,7 +140,15 @@ function stepPlayer(
   commands?: ReadonlySet<string>,
 ): { player: PlayerState; trace: CnsRuntimeTrace; targetOperations: TargetOperation[] } {
   const originalStateNo = player.stateNo;
-  let next = { ...player, playerPush: true, hitDiagnosticLines: [] };
+  const juggleMax = player.juggleMax ?? readAirJuggle(cns);
+  const resetJuggle = player.stateType !== 'A' && player.stateType !== 'L' && player.moveType === 'I' && player.ctrl;
+  let next = {
+    ...player,
+    playerPush: true,
+    hitDiagnosticLines: [],
+    juggleMax,
+    juggleRemaining: resetJuggle ? juggleMax : player.juggleRemaining ?? juggleMax,
+  };
   const trace: CnsRuntimeTrace = {
     playerId,
     stateNo: player.stateNo,
@@ -357,6 +364,13 @@ function findState(cns: CnsDocument, stateNo: number): CnsStateDefinition | unde
   return cns.states.find((state) => state.stateNo === stateNo);
 }
 
+function readAirJuggle(cns: CnsDocument): number {
+  const data = cns.metadataSections.find((section) => section.name.trim().toLowerCase() === 'data');
+  const raw = data?.values.airjuggle;
+  const value = raw === undefined || Array.isArray(raw) ? null : Number(raw);
+  return value !== null && Number.isFinite(value) && value >= 0 ? value : 15;
+}
+
 function enterState(player: PlayerState, opponent: PlayerState, stateNo: number, cns: CnsDocument): PlayerState {
   const stateDef = findState(cns, stateNo);
   if (!stateDef) return { ...player, stateNo, stateTime: 0 };
@@ -410,7 +424,7 @@ function inferDefaultCtrl(stateNo: number, currentCtrl: boolean): boolean {
 
 function applyStateHeader(player: PlayerState, stateDef: CnsStateDefinition, resetAnimOnChange: boolean): PlayerState {
   const animNo = stateDef.initialAnim ?? player.animNo;
-  return { ...player, stateType: stateDef.stateType ?? player.stateType, moveType: stateDef.moveType ?? player.moveType, physics: stateDef.physics ?? player.physics, ctrl: stateDef.ctrl ?? player.ctrl, animNo, animTime: resetAnimOnChange && player.animNo !== animNo ? 0 : player.animTime };
+  return { ...player, stateType: stateDef.stateType ?? player.stateType, moveType: stateDef.moveType ?? player.moveType, physics: stateDef.physics ?? player.physics, ctrl: stateDef.ctrl ?? player.ctrl, juggle: stateDef.juggle ?? player.juggle, animNo, animTime: resetAnimOnChange && player.animNo !== animNo ? 0 : player.animTime };
 }
 
 function shouldRun(controller: CnsStateController, player: PlayerState, input: CnsRuntimeInput, commands?: ReadonlySet<string>, opponent?: PlayerState): boolean {

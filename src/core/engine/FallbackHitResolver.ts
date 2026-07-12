@@ -107,6 +107,21 @@ function resolveAttack(
     return { attacker, target, hitEvent: null, diagnosticLines };
   }
 
+  const isAirJuggle = target.stateType === 'A';
+  const juggleCost = Math.max(0, attacker.juggle ?? 0);
+  const juggleMax = target.juggleMax ?? 15;
+  const juggleBefore = target.juggleRemaining ?? juggleMax;
+  if (isAirJuggle && juggleCost > juggleBefore) {
+    if (diagnosticsEnabled) diagnosticLines.push(
+      `raw.hit_collision attacker=p${attacker.id} target=p${target.id}`,
+      `${collisionHeader} overlap=${formatOverlap(overlap)} result=rejected reason=juggle_insufficient`,
+      `raw.hit_juggle attacker=p${attacker.id} target=p${target.id}`,
+      `  activeHitDefId=${activeHitDefId ?? 'none'} state=${attacker.stateNo} cost=${juggleCost} before=${juggleBefore} after=${juggleBefore} max=${juggleMax} result=rejected reason=insufficient_points`,
+    );
+    return { attacker, target, hitEvent: null, diagnosticLines };
+  }
+  if (isAirJuggle) target = { ...target, juggleMax, juggleRemaining: juggleBefore - juggleCost };
+
   const lifeBefore = target.life;
   const targetStateTypeAtHit = target.stateType;
   const hitTimeKind = targetStateTypeAtHit === 'A' ? 'air' : 'ground';
@@ -159,6 +174,10 @@ function resolveAttack(
     `  activeHitDefId=${idText} hitDefId=${active.hitId ?? 0} targetLife=${hitTarget.life} registered=${hitTarget.life > 0 ? 1 : 0} reason=${hitTarget.life > 0 ? 'successful_hit' : 'target_ko'}`,
     `raw.hit_damage target=p${target.id}`,
     `  activeHitDefId=${idText} lifeBefore=${lifeBefore} appliedDamage=${damage} lifeAfter=${hitTarget.life} source=${source} ko=${hitTarget.life === 0 ? 1 : 0}`,
+    ...(isAirJuggle ? [
+      `raw.hit_juggle attacker=p${attacker.id} target=p${target.id}`,
+      `  activeHitDefId=${idText} state=${attacker.stateNo} cost=${juggleCost} before=${juggleBefore} after=${hitTarget.juggleRemaining ?? juggleBefore} max=${juggleMax} result=accepted`,
+    ] : []),
     `raw.hitpause attacker=p${attacker.id} target=p${target.id}`,
     `  activeHitDefId=${idText} event=start attackerFrames=${active.pauseTime.attacker} defenderFrames=${active.pauseTime.defender} source=active_hitdef`,
     `raw.gethitvar_snapshot target=p${target.id}`,

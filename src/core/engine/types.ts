@@ -117,6 +117,9 @@ export type PlayerState = {
   hitVelY?: number;
   hitFallVelocity?: { x: number; y: number };
   hitReactionElapsed?: number;
+  juggle?: number;
+  juggleMax?: number;
+  juggleRemaining?: number;
   moveContact?: {
     activeHitDefId: number;
     contact: boolean;

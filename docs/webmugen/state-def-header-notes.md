@@ -1,6 +1,6 @@
 # StateDef Header Compatibility Notes
 
-Updated: 2026-07-06
+Updated: 2026-07-12
 
 This document summarizes implementation notes for StateDef header fields. The compatibility matrix remains the source of truth:
 
@@ -19,7 +19,7 @@ Follow `docs/webmugen/development-policy.md`: do not modify `public/chars/common
 | `anim` | Complete | Parsed and applied as initial animation. Animless state preservation exists. | Rendering/animation availability should still be checked per character. |
 | `ctrl` | Complete | Parsed and applied as control flag. | State-specific control handoff still depends on controller flow. |
 | `poweradd` | Complete | Parsed and applied once on state entry. | Should not be re-applied while staying in the same state. |
-| `juggle` | Partial | Parsed and stored on state entry. | HitDef/juggle point consumption is not complete. |
+| `juggle` | Partial | Parsed as the active attack State cost and consumed from the airborne target's `[Data] airjuggle` pool on accepted HitDef contact. | Helper/projectile/team pools and advanced reset flags remain incomplete. |
 | `facep2` | Complete | Parsed and applied on state entry; Debug Overlay exposes facing. | Edge cases with custom states/helpers still need verification. |
 | `hitdefpersist` | Unsupported | Not implemented. | HitDef persistence requires fuller hit system compatibility. |
 | `movehitpersist` | Unsupported | Not implemented. | MoveContact/MoveHit persistence requires fuller hit system compatibility. |
@@ -43,4 +43,4 @@ Focused tests should verify:
 - staying in the same state does not reapply entry-only effects;
 - Debug Overlay exposes runtime values when useful.
 
-Good test assertions include `stateNo`, `stateType`, `moveType`, `physics`, `ctrl`, `animNo`, `facing`, `power`, and any stored compatibility field.
+Good test assertions include `stateNo`, `stateType`, `moveType`, `physics`, `ctrl`, `animNo`, `facing`, `power`, attack `juggle`, and defender `juggleRemaining`/`juggleMax`.

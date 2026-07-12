@@ -116,7 +116,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | anim | Initial animation | Complete | Parsed and applied. Animless state preservation exists. |
 | ctrl | Control flag | Complete | Parsed and applied. |
 | poweradd | Power gain on state entry | Complete | Parsed and applied once when entering a state. |
-| juggle | Juggle points | Partial | Parsed and stored on state entry; HitDef/juggle consumption is still incomplete. |
+| juggle | Juggle points | Partial | StateDef value is the air-hit cost; accepted new HitDef generations consume the target's `[Data] airjuggle` pool, insufficient hits are rejected, and grounded control recovery resets it. Helper/projectile/team semantics remain incomplete. |
 | facep2 | Face opponent on state entry | Complete | Parsed and applied when entering a state; Debug Overlay exposes facing. |
 | hitdefpersist | Keep HitDef on state change | Unsupported | Hit system compatibility. |
 | movehitpersist | Keep MoveHit info | Unsupported | Hit system compatibility. |

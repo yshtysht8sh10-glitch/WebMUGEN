@@ -1,0 +1,56 @@
+import { describe, expect, it } from 'vitest';
+import { parseCnsText } from '../../parser/cns/CnsParser';
+import { createInitialGameState } from '../engine/GameState';
+import { stepCnsStateRuntime } from './CnsStateRuntime';
+
+const cns = parseCnsText(`
+[Data]
+airjuggle = 12
+[Statedef 0]
+type = S
+movetype = I
+physics = S
+ctrl = 1
+[Statedef 200]
+type = S
+movetype = A
+physics = S
+juggle = 6
+[Statedef 5030]
+type = A
+movetype = H
+physics = N
+[Statedef 5110]
+type = L
+movetype = H
+physics = N
+`);
+
+describe('CNS juggle runtime state', () => {
+  it('loads Data airjuggle and the active StateDef juggle cost', () => {
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime({ ...state, players: [{ ...state.players[0], stateNo: 200 }, state.players[1]] }, cns);
+    expect(result.state.players[0]).toMatchObject({ juggle: 6, juggleMax: 12, juggleRemaining: 12 });
+  });
+
+  it('keeps remaining points through air/down states and resets after grounded control recovery', () => {
+    const state = createInitialGameState();
+    const air = stepCnsStateRuntime({
+      ...state,
+      players: [state.players[0], { ...state.players[1], stateNo: 5030, stateType: 'A', moveType: 'H', ctrl: false, juggleMax: 12, juggleRemaining: 3 }],
+    }, cns).state;
+    expect(air.players[1].juggleRemaining).toBe(3);
+
+    const down = stepCnsStateRuntime({
+      ...air,
+      players: [air.players[0], { ...air.players[1], stateNo: 5110, stateType: 'L', moveType: 'H', ctrl: false }],
+    }, cns).state;
+    expect(down.players[1].juggleRemaining).toBe(3);
+
+    const recovered = stepCnsStateRuntime({
+      ...down,
+      players: [down.players[0], { ...down.players[1], stateNo: 0, stateType: 'S', moveType: 'I', ctrl: true }],
+    }, cns).state;
+    expect(recovered.players[1].juggleRemaining).toBe(12);
+  });
+});
