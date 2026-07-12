@@ -83,6 +83,10 @@ Examples:
 
 These should generally remain Partial.
 
+## GetHitVar snapshot
+
+Successful HitDef contact stores numeric get-hit values on the defender so common get-hit states can read them after State changes. The current snapshot covers damage, selected hittime/slidetime/ctrltime, velocity values, type/animtype/airtype/groundtype codes, fall values, hit/chain id, guarded, and yaccel. It persists throughout hit stun and is cleared at recovery. Unsupported offset/fall-time keys return the existing safe zero and are listed in contact diagnostics; therefore GetHitVar remains Partial.
+
 ## Debug output
 
 For a route under investigation, expose:

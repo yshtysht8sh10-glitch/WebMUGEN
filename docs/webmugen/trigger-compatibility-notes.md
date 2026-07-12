@@ -34,6 +34,7 @@ Do not mark safe defaults as Complete.
 | `Time` | Complete | State time comparison. | Previous-state and transition timing still need broader route tests. |
 | `MoveContact` / `MoveHit` | Partial | Uses activeHitDef/hitDefUsed approximation. | Full HitDef/contact lifecycle is incomplete. |
 | `HitDefAttr` | Unsupported | Not implemented. | Required for many attack cancel/super routes. |
+| `GetHitVar` | Partial | Reads a contact snapshot for damage, hit/slide/control time, velocities, type/animation codes, fall values, ids, guarded, and yaccel across get-hit State changes. | Offset/fall-time keys and later guard/fall semantics still use diagnosed safe defaults. |
 | Projectile triggers | Partial / Unsupported | Some `Proj*Time` safe defaults exist; boolean projectile triggers are incomplete. | Requires projectile subsystem integration. |
 
 ## Trigger group policy

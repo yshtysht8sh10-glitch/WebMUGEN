@@ -177,6 +177,8 @@ ctrl = 1
           stateTime: 28,
           vx: 4,
           hitDefUsed: true,
+          getHitVars: { damage: 40 },
+          getHitVarUnsupportedKeys: ['xoff'],
         },
         state.players[1],
       ],
@@ -189,6 +191,8 @@ ctrl = 1
       ctrl: true,
       vx: 0,
       hitDefUsed: false,
+      getHitVars: undefined,
+      getHitVarUnsupportedKeys: undefined,
     });
   });
 });

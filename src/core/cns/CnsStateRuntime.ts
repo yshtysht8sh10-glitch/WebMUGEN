@@ -922,7 +922,7 @@ function evaluateHitDefSnapshot(
   if (noChainIds.some((value) => value === null)) invalidParameters.push('nochainid');
   const presentUnapplied = [
     'attr', 'air.animtype', 'fall.animtype', 'hitflag', 'guardflag', 'priority', 'guard.pausetime',
-    'ground.type', 'air.type', 'guard.hittime', 'ground.velocity', 'air.velocity', 'guard.velocity',
+    'ground.type', 'air.type', 'guard.hittime', 'ground.slidetime', 'guard.ctrltime', 'yaccel', 'ground.velocity', 'air.velocity', 'guard.velocity',
     'fall', 'fall.velocity', 'fall.xvelocity', 'fall.yvelocity', 'fall.recover', 'fall.recovertime',
     'fall.damage', 'fall.kill', 'id', 'chainid', 'nochainid',
   ].filter((key) => controller.params[key] !== undefined);
@@ -934,6 +934,7 @@ function evaluateHitDefSnapshot(
     airVelocity: { x: airVelocity[0] ?? -2.5, y: airVelocity[1] ?? -5.5 },
     attr: attrValues.length > 0 ? { stateType: attrValues[0].trim().toUpperCase(), attackTypes: attrValues.slice(1).map((value) => value.trim().toUpperCase()) } : undefined,
     airAnimType: textValue('air.animtype'),
+    groundAnimTypeRaw: textValue('animtype'),
     fallAnimType: textValue('fall.animtype'),
     hitFlag: textValue('hitflag')?.toUpperCase(),
     guardFlag: textValue('guardflag')?.toUpperCase(),
@@ -944,6 +945,9 @@ function evaluateHitDefSnapshot(
     groundHitTime: nonNegative(numValue('ground.hittime')),
     airHitTime: nonNegative(numValue('air.hittime')),
     guardHitTime: nonNegative(numValue('guard.hittime')),
+    groundSlideTime: nonNegative(numValue('ground.slidetime')),
+    controlTime: nonNegative(numValue('guard.ctrltime')),
+    yAcceleration: numValue('yaccel'),
     guardVelocity: guardVelocity[0] === undefined && guardVelocity[1] === undefined ? undefined : { x: guardVelocity[0] ?? 0, y: guardVelocity[1] ?? 0 },
     fall: {
       enabled: boolValue('fall'),

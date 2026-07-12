@@ -38,6 +38,7 @@ export type ActiveHitDef = {
   groundHitTimeFallbackReason?: string;
   airHitTimeFallbackReason?: string;
   animType?: 'Light' | 'Medium' | 'Hard';
+  groundAnimTypeRaw?: string;
   animTypeSource?: 'cns' | 'existing_fallback';
   snapshotSignature?: string;
   attr?: { stateType: string; attackTypes: string[] };
@@ -50,6 +51,9 @@ export type ActiveHitDef = {
   groundType?: string;
   airType?: string;
   guardHitTime?: number;
+  groundSlideTime?: number;
+  controlTime?: number;
+  yAcceleration?: number;
   guardVelocity?: { x: number; y: number };
   fall?: {
     enabled?: boolean;
@@ -102,6 +106,8 @@ export type PlayerState = {
   activeHitDef: ActiveHitDef | null;
   hitDefUsed: boolean;
   hitTargets?: Array<{ activeHitDefId: number; defenderId: number }>;
+  getHitVars?: Record<string, number>;
+  getHitVarUnsupportedKeys?: string[];
   playerPush?: boolean;
   hitDiagnosticLines?: string[];
   hitStun?: {

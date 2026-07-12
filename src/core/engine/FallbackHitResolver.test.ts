@@ -29,6 +29,44 @@ Clsn1: 1
 `);
 
 describe('FallbackHitResolver', () => {
+  it('stores the contact GetHitVar snapshot and uses it in later get-hit states', () => {
+    const hit = resolveConfiguredHit({ damage: 100, groundHitTime: 20, animType: 'Medium', groundVelocity: [-4, -1], pauseTime: [0, 0] });
+    expect(hit.players[1].getHitVars).toMatchObject({
+      damage: 100, hittime: 20, slidetime: 20, ctrltime: 20,
+      xveladd: -4, yveladd: -1, xvel: -4, yvel: -1,
+      type: 0, animtype: 1, airtype: 0, groundtype: 0,
+      fall: 0, 'fall.damage': 0, 'fall.recover': 1,
+      hitid: 0, chainid: -1, guarded: 0, yaccel: 0.6,
+    });
+    const cns = parseCnsText(`
+[Statedef 5000]
+type = S
+movetype = H
+physics = N
+[State 5000, Medium Anim]
+type = ChangeAnim
+trigger1 = GetHitVar(animtype) = 1
+value = 5001
+[State 5000, Continue]
+type = ChangeState
+trigger1 = GetHitVar(hittime) = 20
+value = 5001
+[Statedef 5001]
+type = S
+movetype = H
+physics = S
+`);
+    const stepped = stepCnsStateRuntime(hit, cns).state;
+    expect(stepped.players[1]).toMatchObject({ stateNo: 5001, animNo: 5001 });
+    expect(stepped.players[1].getHitVars).toEqual(hit.players[1].getHitVars);
+    expect(hit.hitDiagnosticLines?.join('\n')).toContain('raw.gethitvar_snapshot target=p2');
+  });
+
+  it('preserves out-of-scope Back as GetHitVar(animtype)=3 without changing Issue #1 fallback Anim', () => {
+    const hit = resolveConfiguredHit({ animType: 'Back' });
+    expect(hit.players[1].animNo).toBe(5000);
+    expect(hit.players[1].getHitVars?.animtype).toBe(3);
+  });
   it.each([
     [[2, 5] as [number, number], 2, 5],
     [[0, 0] as [number, number], 0, 0],

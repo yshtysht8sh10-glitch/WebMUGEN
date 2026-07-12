@@ -86,7 +86,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | 197 | Intro state | Unsupported | Round intro not implemented. |
 | 198 | Intro state | Unsupported | Round intro not implemented. |
 | 199 | Intro state | Unsupported | Round intro not implemented. |
-| 5000 | Common get-hit state | Partial | Fallback standing hit reaction enters State 5000, emits transient hit events, and recovers attack reuse; full WinMUGEN GetHitVar/common1 flow is incomplete. |
+| 5000 | Common get-hit state | Partial | Standing hit enters State 5000 with persistent GetHitVar snapshot, required Anim selection, independent hit-stun clock, and guarded internal transitions. Air/crouch/fall/guard branches remain incomplete. |
 | 5001 | Common get-hit state | Unsupported | Required for hit reactions. |
 | 5010 | Common get-hit state | Unsupported | Required for hit reactions. |
 | 5011 | Common get-hit state | Unsupported | Required for hit reactions. |
@@ -253,7 +253,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | FrontEdgeDist | Partial | Uses internal screen/player coordinate approximation. |
 | FVar | Partial | `fvar(n)` lookup supported with default 0. |
 | GameTime | Partial | Context/player fallback exists; real global frame integration needs audit. |
-| GetHitVar | Partial | Common get-hit vars return safe defaults. |
+| GetHitVar | Partial | Contact snapshot supplies damage, hit/slide/control time, velocity, type/anim codes, fall values, ids, guarded, and yaccel across get-hit State changes. Unsupported offset/fall-time keys are diagnosed safe defaults. |
 | HitCount | Partial | Safe default 0. |
 | HitDefAttr | Unsupported | HitDef attribute checks not implemented. |
 | HitFall | Partial | Optional player flag, default false. |

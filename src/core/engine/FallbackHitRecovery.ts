@@ -85,6 +85,8 @@ function recoverPlayer(player: PlayerState, diagnosticsEnabled: boolean): { play
     hitDefUsed: false,
     activeHitDef: null,
     hitStun: undefined,
+    getHitVars: undefined,
+    getHitVarUnsupportedKeys: undefined,
   }, diagnosticLines };
 }
 

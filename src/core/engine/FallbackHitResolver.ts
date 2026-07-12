@@ -130,7 +130,7 @@ function resolveAttack(
     lastStateNo: STAND_HIT_STATE,
     selectedAnim,
     ...(activeHitTime === undefined ? { fallbackReason: hitTimeFallbackReason } : {}),
-  });
+  }, createGetHitVarSnapshot(active, damage, selectedHitTime, hitTimeKind, selectedVelocity));
   const idText = activeHitDefId === null ? 'none' : String(activeHitDefId);
   const fallbackReason = '-';
   if (diagnosticsEnabled) diagnosticLines.push(
@@ -140,6 +140,8 @@ function resolveAttack(
     `  activeHitDefId=${idText} lifeBefore=${lifeBefore} appliedDamage=${damage} lifeAfter=${hitTarget.life} source=${source} ko=${hitTarget.life === 0 ? 1 : 0}`,
     `raw.hitpause attacker=p${attacker.id} target=p${target.id}`,
     `  activeHitDefId=${idText} event=start attackerFrames=${active.pauseTime.attacker} defenderFrames=${active.pauseTime.defender} source=active_hitdef`,
+    `raw.gethitvar_snapshot target=p${target.id}`,
+    `  activeHitDefId=${idText} keys=${Object.keys(hitTarget.getHitVars ?? {}).sort().join(',')} unsupportedKeys=${hitTarget.getHitVarUnsupportedKeys?.join(',') || '-'}`,
     ...(hitTimeKind === 'ground' ? [
       `raw.hit_anim_select target=p${target.id}`,
       `  activeHitDefId=${idText} animType=${animType} targetStateTypeAtHit=${targetStateTypeAtHit} requestedAnim=${selectedAnim} selectedAnim=${selectedAnim} animationExists=${animationExists ? 1 : 0} source=${animSource} fallbackReason=${animSource === 'cns' ? '-' : 'existing_fixed_5000'}${animationExists ? '' : ' warning=missing_required_animation'}`,
@@ -201,6 +203,7 @@ function applyFallbackHit(
   velocity: { x: number; y: number },
   pauseTime: number,
   hitStun: NonNullable<PlayerState['hitStun']>,
+  getHitVars: Record<string, number>,
 ): PlayerState {
   return {
     ...defender,
@@ -219,7 +222,56 @@ function applyFallbackHit(
     hitDefUsed: false,
     activeHitDef: null,
     hitStun,
+    getHitVars,
+    getHitVarUnsupportedKeys: ['fall.time', 'xoff', 'yoff', 'zoff'],
   };
+}
+
+function createGetHitVarSnapshot(
+  hitDef: NonNullable<PlayerState['activeHitDef']>,
+  damage: number,
+  hitTime: number,
+  hitTimeKind: 'ground' | 'air',
+  selectedVelocity: { x: number; y: number },
+): Record<string, number> {
+  const animType = hitAnimTypeCode(hitDef.groundAnimTypeRaw ?? hitDef.animType ?? 'Light');
+  const groundType = hitReactionTypeCode(hitDef.groundType);
+  const airType = hitReactionTypeCode(hitDef.airType ?? hitDef.groundType);
+  const fall = hitDef.fall ?? {};
+  return {
+    damage,
+    hittime: hitTime,
+    slidetime: hitDef.groundSlideTime ?? hitTime,
+    ctrltime: hitDef.controlTime ?? hitTime,
+    xveladd: selectedVelocity.x,
+    yveladd: selectedVelocity.y,
+    xvel: selectedVelocity.x,
+    yvel: selectedVelocity.y,
+    type: hitTimeKind === 'air' ? airType : groundType,
+    animtype: animType,
+    airtype: airType,
+    groundtype: groundType,
+    fall: fall.enabled ? 1 : 0,
+    'fall.damage': fall.damage ?? 0,
+    'fall.xvel': fall.xVelocity ?? 0,
+    'fall.yvel': fall.yVelocity ?? 0,
+    'fall.recover': fall.recover === false ? 0 : 1,
+    'fall.recovertime': fall.recoverTime ?? 0,
+    hitid: hitDef.hitId ?? 0,
+    chainid: hitDef.chainId ?? -1,
+    guarded: 0,
+    yaccel: hitDef.yAcceleration ?? 0.6,
+  };
+}
+
+function hitAnimTypeCode(value: string): number {
+  const codes: Record<string, number> = { light: 0, medium: 1, med: 1, hard: 2, heavy: 2, back: 3, up: 4, diagup: 5 };
+  return codes[value.trim().toLowerCase()] ?? 0;
+}
+
+function hitReactionTypeCode(value: string | undefined): number {
+  const codes: Record<string, number> = { none: 0, high: 1, low: 2, trip: 3 };
+  return value ? codes[value.trim().toLowerCase()] ?? 0 : 0;
 }
 
 function groundHitAnim(animType: NonNullable<PlayerState['activeHitDef']>['animType']): number {

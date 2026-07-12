@@ -149,6 +149,8 @@ While hit stun remains active, `raw.hitstun_tick` records independent elapsed/re
 
 `raw.hitstun_guard event=force_ctrl_off` records StateDef headers or allowed internal get-hit transitions that requested control during active hit stun. Internal State 5000/5001-style transitions remain permitted; only premature control is removed.
 
+`raw.gethitvar_snapshot` records the keys captured on contact and `unsupportedKeys` that will currently return safe defaults. The snapshot stays on the defender across get-hit State transitions and is cleared when recovery ends.
+
 ## What to look for
 
 | Symptom in history | Interpretation |
