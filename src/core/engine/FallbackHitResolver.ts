@@ -79,7 +79,10 @@ function resolveAttack(
   const guardDamage = active.damageValues?.[1] ?? 0;
   const source = 'active_hitdef';
 
-  if (attacker.hitDefUsed) {
+  const alreadyHitTarget = activeHitDefId !== null && (attacker.hitTargets ?? []).some(
+    (record) => record.activeHitDefId === activeHitDefId && record.defenderId === target.id,
+  );
+  if (alreadyHitTarget) {
     if (diagnosticsEnabled && collided && activeHitDefId !== null && !active?.rejectedLogged) {
       diagnosticLines.push(
         `raw.hit_collision attacker=p${attacker.id} target=p${target.id}`,
@@ -116,7 +119,7 @@ function resolveAttack(
   const animType = active?.animType ?? 'Light';
   const animSource = active?.animTypeSource ?? 'existing_fallback';
   const animationExists = airDocumentHasAction(airDocument, selectedAnim);
-  const hitAttacker = markAttackerHit(attacker);
+  const hitAttacker = markAttackerHit(attacker, activeHitDefId, target.id);
   const hitTarget = applyFallbackHit(target, hitAttacker, damage, selectedAnim, {
     activeHitDefId,
     selectedHitTime,
@@ -177,11 +180,15 @@ function formatOverlap(value: ReturnType<typeof findOverlap>): string {
   return value ? `${value.attackBoxIndex}:${value.bodyBoxIndex}` : '-';
 }
 
-function markAttackerHit(player: PlayerState): PlayerState {
+function markAttackerHit(player: PlayerState, activeHitDefId: number | null, defenderId: number): PlayerState {
   return {
     ...player,
     hitPause: ATTACKER_HIT_PAUSE,
     hitDefUsed: true,
+    hitTargets: activeHitDefId === null ? (player.hitTargets ?? []) : [
+      ...(player.hitTargets ?? []),
+      { activeHitDefId, defenderId },
+    ],
   };
 }
 

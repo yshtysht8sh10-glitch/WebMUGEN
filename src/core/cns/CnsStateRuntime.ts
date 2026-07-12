@@ -328,6 +328,7 @@ function enterState(player: PlayerState, opponent: PlayerState, stateNo: number,
     juggle: stateDef.juggle ?? powered.juggle,
     activeHitDef: null,
     hitDefUsed: false,
+    hitTargets: [],
     hitDiagnosticLines,
   } as PlayerState;
 }
@@ -612,6 +613,7 @@ function executeController(
   if (type === 'hitby') return withExtendedPlayer(player, { hitBy: str(controller, 'value') ?? str(controller, 'attr') }, 'HitBy');
   if (type === 'nothitby') return withExtendedPlayer(player, { notHitBy: str(controller, 'value') ?? str(controller, 'attr') }, 'NotHitBy');
   if (type === 'hitdef') return activateHitDef(player, controller, input, commands, opponent);
+  if (type === 'movehitreset') return withPlayer({ ...player, hitDefUsed: false, hitTargets: [] }, true, 'MoveHitReset');
   if (type === 'hitfallvel') return withPlayer({ ...player, vy: num(controller, 'y') ?? player.vy }, hasNum(controller, 'y'), 'HitFallVel');
   if (type === 'hitvelset') return withPlayer({ ...player, vx: num(controller, 'x', player, input, commands, opponent) ?? player.vx, vy: num(controller, 'y', player, input, commands, opponent) ?? player.vy }, hasNum(controller, 'x', player, input, commands, opponent) || hasNum(controller, 'y', player, input, commands, opponent), 'HitVelSet');
   if (type === 'hitfalldamage') return hitFallDamage(player, controller);

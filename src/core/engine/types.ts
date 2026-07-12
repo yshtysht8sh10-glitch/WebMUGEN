@@ -101,6 +101,7 @@ export type PlayerState = {
   hitPause: number;
   activeHitDef: ActiveHitDef | null;
   hitDefUsed: boolean;
+  hitTargets?: Array<{ activeHitDefId: number; defenderId: number }>;
   playerPush?: boolean;
   hitDiagnosticLines?: string[];
   hitStun?: {

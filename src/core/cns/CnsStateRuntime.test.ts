@@ -801,6 +801,24 @@ anim = 50
     expect(result.traces[0].executedControllers).toEqual(['VarSet', 'VelSet', 'ChangeState']);
   });
 
+  it('clears per-generation hit target history with MoveHitReset', () => {
+    const cns = parseCnsText(`
+[Statedef 200]
+type = S
+movetype = A
+[State 200, Reset]
+type = MoveHitReset
+trigger1 = 1
+`);
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime({
+      ...state,
+      players: [{ ...state.players[0], stateNo: 200, moveType: 'A', hitDefUsed: true, hitTargets: [{ activeHitDefId: 7, defenderId: 2 }] }, state.players[1]],
+    }, cns);
+    expect(result.state.players[0]).toMatchObject({ hitDefUsed: false, hitTargets: [] });
+    expect(result.traces[0].executedControllers).toContain('MoveHitReset');
+  });
+
   it('recognizes WinMUGEN state controllers that have runtime shims', () => {
     const controllerBlocks = recognizedControllerFixtures
       .map(({ type, params }) => `

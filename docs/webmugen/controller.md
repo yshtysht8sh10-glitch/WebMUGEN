@@ -127,6 +127,8 @@ If the controller only stores a field or is skipped safely, mark Partial.
 
 The currently connected subset requires an ActiveHitDef and an overlap between the attacker's current AIR Clsn1 and defender's current AIR Clsn2, then applies damage, selects ground/air hit time, and maps explicit ground `animtype` Light/Medium/Hard to required Anim 5000/5001/5002. Missing ActiveHitDef or Clsn boxes reject the hit instead of using fixed rectangles or damage. The animation is selected once at successful contact; a missing required animation is diagnosed without substitution. Air/crouch/guard/fall reactions, Back/Up/DiagUp behavior, pause, velocity, flags, priority, chain rules, targets, and broader combat semantics remain incomplete.
 
+Successful contacts are recorded by ActiveHitDef generation and defender id. Continued overlap with the same pair cannot apply damage, HitEvent, or hit stun again. A new ActiveHitDef generation can hit the defender again; state entry and `MoveHitReset` clear the relevant history. The current behavior is one hit per generation/defender regardless of the `hitonce` parameter, whose distinct 0/1 semantics remain Partial.
+
 During the selected hit time, the runtime keeps `ctrl = false`, blocks control-enabling `CtrlSet`, blocks early recovery to State 0/52, and ignores State -1 input ChangeState routes. Internal common get-hit transitions such as State 5000 to 5001 remain available. Hit-stun elapsed time is stored independently from `stateTime` so internal get-hit State changes do not shorten the configured duration.
 
 ## Debugging controller issues

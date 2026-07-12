@@ -355,6 +355,37 @@ damage = 37, 0
     expect(second.hitDiagnosticLines?.join('\n')).not.toContain('raw.hit_anim_select');
   });
 
+  it('records one hit for five overlapping frames per ActiveHitDef and defender', () => {
+    let state = resolveConfiguredHit({ damage: 25, groundHitTime: 7 });
+    const lifeAfterFirst = state.players[1].life;
+    let additionalEvents = 0;
+    for (let frame = 0; frame < 4; frame += 1) {
+      state = resolveFallbackHits({
+        ...state,
+        players: [{ ...state.players[0], hitPause: 0 }, { ...state.players[1], hitPause: 0, animNo: 0 }],
+      }, air);
+      additionalEvents += state.hitEvents.length;
+    }
+    expect(additionalEvents).toBe(0);
+    expect(state.players[1].life).toBe(lifeAfterFirst);
+    expect(state.players[0].hitTargets).toHaveLength(1);
+  });
+
+  it('allows the same defender to be hit by a new ActiveHitDef generation', () => {
+    const first = resolveConfiguredHit({ damage: 25 });
+    const previous = first.players[0].activeHitDef!;
+    const second = resolveFallbackHits({
+      ...first,
+      players: [{
+        ...first.players[0], hitPause: 0,
+        activeHitDef: { ...previous, diagnosticId: (previous.diagnosticId ?? 0) + 1, rejectedLogged: false },
+      }, { ...first.players[1], hitPause: 0, animNo: 0 }],
+    }, air);
+    expect(second.hitEvents).toHaveLength(1);
+    expect(second.players[1].life).toBe(first.players[1].life - 25);
+    expect(second.players[0].hitTargets).toHaveLength(2);
+  });
+
   it('does not keep stale hit events when no new contact occurs', () => {
     const state = createInitialGameState();
     const next = resolveFallbackHits(

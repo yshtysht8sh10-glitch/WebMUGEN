@@ -160,7 +160,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | Helper | Partial | Recognized safe no-op in CNS runtime; Helper system exists separately. |
 | HitAdd | Partial | Stores hit count field only. |
 | HitBy | Partial | Stores allowed-hit attribute string only. |
-| HitDef | Partial | A live hit requires ActiveHitDef plus overlapping current AIR Clsn1/Clsn2 world boxes; missing definitions reject with diagnostics and no fixed fallback. Logs include anim/elem, box counts, and overlap indexes. Damage, ground/air hittime, and grounded Light/Medium/Hard Anim are connected; many stored fields remain unapplied. |
+| HitDef | Partial | Hits require ActiveHitDef plus AIR Clsn overlap. Per-attacker `(activeHitDefId, defenderId)` history prevents repeated damage/HitEvent/hitStun; new generations, state entry, and MoveHitReset update history. `hitonce` 0/1 distinctions remain incomplete. |
 | HitFallDamage | Partial | Applies simple life reduction. Full fall damage semantics incomplete. |
 | HitFallSet | Partial | Recognized safe no-op. Fall flags not implemented. |
 | HitFallVel | Partial | Applies simple Y velocity. Full get-hit semantics incomplete. |
