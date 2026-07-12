@@ -153,6 +153,8 @@ While hit stun remains active, `raw.hitstun_tick` records independent elapsed/re
 
 `raw.move_contact` records generation id, contact/hit/guard flags, hit count, target, and accepted result. This is the source used by hit-confirm Trigger routes rather than the former ActiveHitDef/boolean approximation.
 
+`raw.target_register` records owner, target player id, HitDef id, ActiveHitDef generation, target life, registration result, and KO rejection reason.
+
 ## What to look for
 
 | Symptom in history | Interpretation |

@@ -1,5 +1,6 @@
 import type { PlayerState } from '../engine/types';
 import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
+import { selectTargets } from '../hitdef/TargetState';
 
 export type CnsRuntimeTriggerContext = {
   player: PlayerState;
@@ -253,6 +254,19 @@ function getNumberSource(rawName: string): NumberSource | null {
   const numProjIdMatch = name.match(/^numprojid\((\d+)\)$/);
   if (numProjIdMatch) return () => 0;
 
+  const targetMatch = name.match(/^(numtarget|targetid|targetstateno)(?:\((.+)\))?$/);
+  if (targetMatch) {
+    return (context) => {
+      const requestedId = targetMatch[2] === undefined ? undefined : readNumberExpression(targetMatch[2], context) ?? undefined;
+      const targets = selectTargets(context.player, requestedId);
+      if (targetMatch[1] === 'numtarget') return targets.length;
+      const selected = targets[0];
+      if (!selected) return targetMatch[1] === 'targetid' ? -1 : 0;
+      if (targetMatch[1] === 'targetid') return selected.playerId;
+      return context.opponent?.id === selected.playerId ? context.opponent.stateNo : 0;
+    };
+  }
+
   const animExistMatch = name.match(/^animexist\(([^)]+)\)$/);
   if (animExistMatch) {
     return (context) => {
@@ -314,7 +328,6 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'movehit': return (context) => context.player.moveContact?.hit ? 1 : 0;
     case 'moveguarded': return (context) => context.player.moveContact?.guarded ? 1 : 0;
     case 'numenemy': return (context) => (context.opponent ? 1 : 1);
-    case 'numtarget': return () => 0;
     case 'numhelper': return () => 0;
     case 'numproj': return () => 0;
     case 'numexplod': return () => 0;

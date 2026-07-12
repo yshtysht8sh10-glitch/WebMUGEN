@@ -35,6 +35,7 @@ Do not mark safe defaults as Complete.
 | `MoveContact` / `MoveHit` / `MoveGuarded` / `HitCount` | Partial | Reads ActiveHitDef-generation contact/hit/guard flags and State-local hit count; real hit-confirm cancel routes are tested. | Guarded contact is modeled but awaits the guard resolver; persist headers remain incomplete. |
 | `HitDefAttr` | Unsupported | Not implemented. | Required for many attack cancel/super routes. |
 | `GetHitVar` | Partial | Reads a contact snapshot for damage, hit/slide/control time, velocities, type/animation codes, fall values, ids, guarded, and yaccel across get-hit State changes. | Offset/fall-time keys and later guard/fall semantics still use diagnosed safe defaults. |
+| `NumTarget` / `TargetID` / `TargetStateNo` | Partial | Reads a multi-entry attacker Target list, supports HitDef id filtering, and returns current two-player target State. | Helper/multi-player lookup and Target redirect chains remain incomplete. |
 | Projectile triggers | Partial / Unsupported | Some `Proj*Time` safe defaults exist; boolean projectile triggers are incomplete. | Requires projectile subsystem integration. |
 
 ## Trigger group policy

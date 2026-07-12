@@ -6,6 +6,7 @@ import {
 } from '../collision/CollisionResolver';
 import type { GameState, HitEvent, PlayerState } from './types';
 import { recordMoveContact } from '../hitdef/MoveContactState';
+import { pruneTargets, registerTarget } from '../hitdef/TargetState';
 
 const STAND_HIT_STATE = 5000;
 
@@ -16,6 +17,8 @@ export function resolveFallbackHits(state: GameState, airDocument?: AirDocument 
 
   let p1 = state.players[0];
   let p2 = state.players[1];
+  p1 = pruneTargets(p1, [p2]);
+  p2 = pruneTargets(p2, [p1]);
   const hitEvents: HitEvent[] = [];
   const hitDiagnosticLines = diagnosticsEnabled ? [
     ...(p1.hitDiagnosticLines ?? []),
@@ -134,12 +137,17 @@ function resolveAttack(
     ...(activeHitTime === undefined ? { fallbackReason: hitTimeFallbackReason } : {}),
   }, createGetHitVarSnapshot(active, damage, selectedHitTime, hitTimeKind, selectedVelocity));
   const idText = activeHitDefId === null ? 'none' : String(activeHitDefId);
+  const targetedAttacker = activeHitDefId === null
+    ? contactedAttacker
+    : registerTarget(contactedAttacker, hitTarget, activeHitDefId, active.hitId ?? 0);
   const fallbackReason = '-';
   if (diagnosticsEnabled) diagnosticLines.push(
     `raw.hit_collision attacker=p${attacker.id} target=p${target.id}`,
     `${collisionHeader} overlap=${formatOverlap(overlap)} damage=${damage},${guardDamage} source=${source} fallbackReason=${fallbackReason} result=hit`,
     `raw.move_contact attacker=p${attacker.id} target=p${target.id}`,
-    `  activeHitDefId=${idText} contact=1 hit=1 guarded=0 hitCount=${contactedAttacker.moveContact?.hitCount ?? 0} result=accepted`,
+    `  activeHitDefId=${idText} contact=1 hit=1 guarded=0 hitCount=${targetedAttacker.moveContact?.hitCount ?? 0} result=accepted`,
+    `raw.target_register owner=p${attacker.id} target=p${target.id}`,
+    `  activeHitDefId=${idText} hitDefId=${active.hitId ?? 0} targetLife=${hitTarget.life} registered=${hitTarget.life > 0 ? 1 : 0} reason=${hitTarget.life > 0 ? 'successful_hit' : 'target_ko'}`,
     `raw.hit_damage target=p${target.id}`,
     `  activeHitDefId=${idText} lifeBefore=${lifeBefore} appliedDamage=${damage} lifeAfter=${hitTarget.life} source=${source} ko=${hitTarget.life === 0 ? 1 : 0}`,
     `raw.hitpause attacker=p${attacker.id} target=p${target.id}`,
@@ -165,7 +173,7 @@ function resolveAttack(
     );
   }
   return {
-    attacker: contactedAttacker,
+    attacker: targetedAttacker,
     target: hitTarget,
     hitEvent: { attackerId: attacker.id, defenderId: target.id, damage },
     diagnosticLines,

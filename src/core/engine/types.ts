@@ -115,6 +115,11 @@ export type PlayerState = {
     guarded: boolean;
     hitCount: number;
   };
+  targets?: Array<{
+    playerId: number;
+    hitDefId: number;
+    activeHitDefId: number;
+  }>;
   playerPush?: boolean;
   hitDiagnosticLines?: string[];
   hitStun?: {

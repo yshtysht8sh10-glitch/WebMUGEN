@@ -131,6 +131,8 @@ Successful contacts are recorded by ActiveHitDef generation and defender id. Con
 
 Attacker move-result state separately tracks contact, hit, guarded, and State-local hit count for MoveContact/MoveHit/MoveGuarded/HitCount. New HitDef generations reset result flags but retain count; State changes clear all. `MoveHitReset` clears only result flags, preserving both duplicate-hit target history and count.
 
+Successful non-KO contact also registers a Target entry with player id, HitDef id, and ActiveHitDef generation. Entries persist independently of State transitions, support multiple targets, and are removed for KO/destroyed players or round restart. Target controllers consume this foundation in the next compatibility phase.
+
 HitDef `pausetime` is applied as separate attacker/defender counters. Positive counters skip CNS controller execution and freeze physics/timers while input buffering continues; zero resumes without an extra frame. This hit pause is independent of the Partial SuperPause controller. `guard.pausetime` awaits guard contact.
 
 During the selected hit time, the runtime keeps `ctrl = false`, blocks control-enabling `CtrlSet`, blocks early recovery to State 0/52, and ignores State -1 input ChangeState routes. Internal common get-hit transitions such as State 5000 to 5001 remain available. Hit-stun elapsed time is stored independently from `stateTime` so internal get-hit State changes do not shorten the configured duration.

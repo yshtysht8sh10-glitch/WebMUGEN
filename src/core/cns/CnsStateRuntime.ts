@@ -236,7 +236,7 @@ function executeStateControllers(
     const triggerPlayer = negativeStateEntry && type !== 'changestate' && next.stateNo !== negativeStateEntry.stateNo
       ? withTriggerStateSnapshot(next, negativeStateEntry)
       : next;
-    const run = shouldRun(controller, triggerPlayer, input, commands);
+    const run = shouldRun(controller, triggerPlayer, input, commands, opponent);
     const debugLine = debugControllerCheck(stateDef, controller, triggerPlayer, input, commands, run);
     if (debugEnabled && debugLine) {
       pushDebug(debugLines, executedControllers, debugLine);
@@ -360,18 +360,20 @@ function applyStateHeader(player: PlayerState, stateDef: CnsStateDefinition, res
   return { ...player, stateType: stateDef.stateType ?? player.stateType, moveType: stateDef.moveType ?? player.moveType, physics: stateDef.physics ?? player.physics, ctrl: stateDef.ctrl ?? player.ctrl, animNo, animTime: resetAnimOnChange && player.animNo !== animNo ? 0 : player.animTime };
 }
 
-function shouldRun(controller: CnsStateController, player: PlayerState, input: CnsRuntimeInput, commands?: ReadonlySet<string>): boolean {
+function shouldRun(controller: CnsStateController, player: PlayerState, input: CnsRuntimeInput, commands?: ReadonlySet<string>, opponent?: PlayerState): boolean {
   if (controller.triggers.length === 0) return true;
-  return evaluateTriggerRecords(controller.triggers, createTriggerContext(player, input, commands));
+  return evaluateTriggerRecords(controller.triggers, createTriggerContext(player, input, commands, opponent));
 }
 
 function createTriggerContext(
   player: PlayerState,
   input: CnsRuntimeInput,
   commands?: ReadonlySet<string>,
+  opponent?: PlayerState,
 ): CnsRuntimeTriggerContext {
   return {
     player,
+    opponent,
     commands,
     animTime: mugenAnimTime(player, input),
     animElemNo: input.getAnimationElementNo?.(player.animNo, player.animTime) ?? undefined,

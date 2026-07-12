@@ -18,6 +18,7 @@ describe('RoundRestart', () => {
     expect(restarted.roundState.roundNo).toBe(2);
     expect(restarted.roundState.phase).toBe('intro');
     expect(restarted.gameState.players[0].life).toBe(1000);
+    expect(restarted.gameState.players[0].targets).toEqual([]);
     expect(restarted.hitFeedbackState).toEqual(createInitialHitFeedbackState());
   });
 });

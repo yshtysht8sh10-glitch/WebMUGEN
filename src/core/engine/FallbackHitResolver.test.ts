@@ -6,6 +6,7 @@ import { parseCnsText } from '../../parser/cns/CnsParser';
 import { stepCnsStateRuntime } from '../cns/CnsStateRuntime';
 import { applyFallbackHitRecovery } from './FallbackHitRecovery';
 import { stepCnsPhysicsMotion } from '../cns/CnsPhysicsStep';
+import { evaluateCnsRuntimeTrigger } from '../cns/CnsRuntimeTrigger';
 
 const air = parseAirText(`
 [Begin Action 0]
@@ -404,6 +405,37 @@ movetype = A
     expect(next.players[0].stateNo).toBe(300);
   });
 
+  it('registers a selectable Target and exposes NumTarget/TargetID/TargetStateNo', () => {
+    const hit = resolveConfiguredHit({ hitId: 42, pauseTime: [0, 0] });
+    expect(hit.players[0].targets).toEqual([{ playerId: 2, hitDefId: 42, activeHitDefId: hit.players[0].activeHitDef?.diagnosticId }]);
+    for (const expression of ['NumTarget = 1', 'NumTarget(42) = 1', 'TargetID(42) = 2', 'TargetStateNo(42) = 5000']) {
+      expect(evaluateCnsRuntimeTrigger(expression, { player: hit.players[0], opponent: hit.players[1] }), expression).toBe(true);
+    }
+    const cns = parseCnsText(`
+[Statedef 200]
+type = S
+movetype = A
+[State 200, Target confirmed]
+type = ChangeState
+trigger1 = NumTarget = 1
+trigger1 = NumTarget(42) = 1
+trigger1 = TargetID(42) = 2
+trigger1 = TargetStateNo(42) = 5000
+value = 301
+[Statedef 301]
+type = S
+movetype = A
+`);
+    expect(stepCnsStateRuntime(hit, cns).state.players[0].stateNo).toBe(301);
+  });
+
+  it('does not retain a Target when the hit KOs it', () => {
+    const hit = resolveConfiguredHit({ damage: 1000, hitId: 9 });
+    expect(hit.players[1].life).toBe(0);
+    expect(hit.players[0].targets).toEqual([]);
+    expect(hit.hitDiagnosticLines?.join('\n')).toContain('registered=0 reason=target_ko');
+  });
+
   it('diagnoses missing Clsn1 and Clsn2 without fixed rectangles', () => {
     const noAttackAir = { ...air, actions: air.actions.map((action) => action.actionNo === 200 ? { ...action, elements: action.elements.map((element) => ({ ...element, clsn1: [] })) } : action) };
     const noBodyAir = { ...air, actions: air.actions.map((action) => action.actionNo === 0 ? { ...action, elements: action.elements.map((element) => ({ ...element, clsn2: [] })) } : action) };
@@ -540,6 +572,7 @@ function resolveConfiguredHit({
   airVelocity,
   attackerFacing,
   pauseTime,
+  hitId,
 }: {
   damage?: number;
   groundHitTime?: number;
@@ -552,6 +585,7 @@ function resolveConfiguredHit({
   airVelocity?: [number, number];
   attackerFacing?: 1 | -1;
   pauseTime?: [number, number];
+  hitId?: number;
 }) {
   const hitTimeLines = [
     groundHitTime === undefined ? '' : `ground.hittime = ${groundHitTime}`,
@@ -563,6 +597,7 @@ function resolveConfiguredHit({
     airVelocity ? `air.velocity = ${airVelocity.join(', ')}` : '',
   ].filter(Boolean).join('\n');
   const pauseTimeLine = pauseTime ? `pausetime = ${pauseTime.join(', ')}` : '';
+  const hitIdLine = hitId === undefined ? '' : `id = ${hitId}`;
   const cns = parseCnsText(`
 [Statedef 0]
 type = ${targetStateType}
@@ -580,6 +615,7 @@ ${hitTimeLines}
 ${animTypeLine}
 ${velocityLines}
 ${pauseTimeLine}
+${hitIdLine}
 `);
   const initial = createInitialGameState();
   const attackerIndex = attackerId - 1;

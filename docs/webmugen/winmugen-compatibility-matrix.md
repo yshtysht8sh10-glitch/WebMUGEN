@@ -288,7 +288,9 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | NumPartner | Partial | Safe default 0. |
 | NumProj | Partial | Safe default 0. |
 | NumProjID | Partial | Safe default 0. |
-| NumTarget | Partial | Safe default 0. |
+| NumTarget | Partial | Counts registered HitDef targets with optional HitDef id filtering; Helper/multi-player lookup remains incomplete. |
+| TargetID | Partial | Returns the first registered target player id, optionally filtered by HitDef id. |
+| TargetStateNo | Partial | Returns current StateNo for the selected two-player target; Helper/multi-player lookup remains incomplete. |
 | P1Name | Unsupported | Alias not implemented. `Name` exists. |
 | P2BodyDist X | Partial | Uses opponent/player coordinate difference. |
 | P2BodyDist Y | Partial | Uses opponent/player coordinate difference. |

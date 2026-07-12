@@ -91,6 +91,10 @@ Successful HitDef contact stores numeric get-hit values on the defender so commo
 
 MoveContact, MoveHit, MoveGuarded, and HitCount read an attacker-side result owned by the current ActiveHitDef generation. A normal hit sets contact/hit and increments the State-local count; a guarded result can set contact/guarded through the same API. New HitDef activation clears result flags while retaining the State hit count, State change clears all, and MoveHitReset clears flags without erasing target hit history or count.
 
+## Target lookup
+
+Successful HitDef contact registers `{playerId, hitDefId, activeHitDefId}` on the attacker. NumTarget optionally filters by HitDef id; TargetID and TargetStateNo select the first matching entry. The storage permits multiple targets and is pruned for KO/destroyed players; round restart creates an empty list. Current TargetStateNo lookup is verified for the two-player runtime, while Helper/multi-player lookup remains Partial.
+
 ## Debug output
 
 For a route under investigation, expose:

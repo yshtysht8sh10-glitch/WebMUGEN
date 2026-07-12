@@ -29,5 +29,6 @@ function createPlayer(id: 1 | 2, x: number, y: number, facing: 1 | -1): PlayerSt
     hitPause: 0,
     activeHitDef: null,
     hitDefUsed: false,
+    targets: [],
   };
 }
