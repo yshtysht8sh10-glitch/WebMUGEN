@@ -74,6 +74,10 @@ export type ActiveHitDef = {
   damage: number;
   guardDamage: number;
   guardKill?: boolean;
+  p1StateNo?: number;
+  p2StateNo?: number;
+  p2GetP1State?: boolean;
+  forceStand?: boolean;
   pauseTime: {
     attacker: number;
     defender: number;
@@ -126,6 +130,8 @@ export type PlayerState = {
   guardCrouchIntent?: boolean;
   hitBy?: string;
   notHitBy?: string;
+  stateOwnerId?: number;
+  selfStateOwnerId?: number;
   moveContact?: {
     activeHitDefId: number;
     contact: boolean;

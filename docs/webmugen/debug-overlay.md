@@ -144,6 +144,8 @@ The physics line exposes the current attack StateDef `juggle` cost and the defen
 
 The same line exposes resolved guard intent as `guard=back`, `guard=back+down`, or `guard=-`. Guard acceptance/rejection details remain in the structured `raw.guard_check` history record.
 
+Custom-state ownership appears as `owner=current/self`, using stable player ids rather than P1/P2-specific branches. Borrowed-state entry, SelfState return, and missing owner State details are recorded by `raw.custom_state`.
+
 Canvas collision debug uses the same AIR world-coordinate boxes as the hit resolver. Labels identify attack/body kind, box index, default versus element source, animation number, and current element index; boundaries include player position, facing, and AIR element offsets.
 
 ## Minimum useful dump

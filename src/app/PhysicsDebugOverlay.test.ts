@@ -21,5 +21,6 @@ describe('PhysicsDebugOverlay', () => {
     expect(lines[1]).toContain('juggle=6');
     expect(lines[1]).toContain('juggleRemaining=4/15');
     expect(lines[1]).toContain('guard=back+down');
+    expect(lines[1]).toContain('owner=2/2');
   });
 });

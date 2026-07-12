@@ -113,5 +113,5 @@ HitDef activation evaluates its major numeric expressions and pairs into a typed
 - richer controller execution tables;
 - cleaner trigger group diagnostics;
 - previous-state tracking for `PrevStateNo` and related triggers;
-- better ownership semantics for `SelfState`, target states, and helpers;
+- Helper and animation ownership beyond the implemented HitDef/TargetState/SelfState CNS owner ids;
 - runtime events for HitDef/contact lifecycle.

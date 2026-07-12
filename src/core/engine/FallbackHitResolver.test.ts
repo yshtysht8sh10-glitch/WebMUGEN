@@ -231,6 +231,24 @@ physics = S
     expect(result.hitDiagnosticLines?.join('\n')).toContain('reason=equal_non_hit_miss');
   });
 
+  it('applies p1stateno and p2stateno with explicit custom-state ownership', () => {
+    const p1Only = resolveConfiguredHit({ p1StateNo: 300, pauseTime: [0, 0] });
+    expect(p1Only.players[0]).toMatchObject({ stateNo: 300, stateOwnerId: 1 });
+    expect(p1Only.players[1]).toMatchObject({ stateNo: 5000, stateOwnerId: 2 });
+
+    const selfOwned = resolveConfiguredHit({ p2StateNo: 700, p2GetP1State: false, pauseTime: [0, 0] });
+    expect(selfOwned.players[1]).toMatchObject({ stateNo: 700, stateOwnerId: 2 });
+
+    const borrowed = resolveConfiguredHit({ p2StateNo: 700, p2GetP1State: true, pauseTime: [0, 0] });
+    expect(borrowed.players[1]).toMatchObject({ stateNo: 700, stateOwnerId: 1 });
+    expect(borrowed.hitDiagnosticLines?.join('\n')).toContain('p2stateno=700 p2Owner=1 p2getp1state=1');
+  });
+
+  it('applies forcestand independently of custom-state ownership', () => {
+    const result = resolveConfiguredHit({ targetStateType: 'A', hitFlag: 'A', p2StateNo: 700, p2GetP1State: true, forceStand: true, pauseTime: [0, 0] });
+    expect(result.players[1]).toMatchObject({ stateNo: 700, stateOwnerId: 1, stateType: 'S' });
+  });
+
   it('freezes motion and timers for exactly the defender pausetime then resumes', () => {
     let state = resolveConfiguredHit({ pauseTime: [0, 2], groundVelocity: [-4, 0] });
     const targetAtHit = state.players[1];
@@ -769,6 +787,10 @@ function resolveConfiguredHit({
   targetHitBy,
   targetNotHitBy,
   targetMoveType = 'I',
+  p1StateNo,
+  p2StateNo,
+  p2GetP1State,
+  forceStand,
 }: {
   damage?: number;
   groundHitTime?: number;
@@ -806,6 +828,10 @@ function resolveConfiguredHit({
   targetHitBy?: string;
   targetNotHitBy?: string;
   targetMoveType?: 'I' | 'H';
+  p1StateNo?: number;
+  p2StateNo?: number;
+  p2GetP1State?: boolean;
+  forceStand?: boolean;
 }) {
   const hitTimeLines = [
     groundHitTime === undefined ? '' : `ground.hittime = ${groundHitTime}`,
@@ -836,6 +862,10 @@ function resolveConfiguredHit({
     guardDamage === undefined ? '' : `guard.damage = ${guardDamage}`,
     guardKill === undefined ? '' : `guard.kill = ${guardKill ? 1 : 0}`,
     guardControlTime === undefined ? '' : `guard.ctrltime = ${guardControlTime}`,
+    p1StateNo === undefined ? '' : `p1stateno = ${p1StateNo}`,
+    p2StateNo === undefined ? '' : `p2stateno = ${p2StateNo}`,
+    p2GetP1State === undefined ? '' : `p2getp1state = ${p2GetP1State ? 1 : 0}`,
+    forceStand === undefined ? '' : `forcestand = ${forceStand ? 1 : 0}`,
   ].filter(Boolean).join('\n');
   const cns = parseCnsText(`
 [Data]

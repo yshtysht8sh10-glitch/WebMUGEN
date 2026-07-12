@@ -27,6 +27,7 @@ export type CnsRuntimeInput = {
   getAnimationDuration?: (animNo: number) => number | null;
   getAnimationElementNo?: (animNo: number, animTime: number) => number | null;
   hitDiagnostics?: boolean;
+  getCnsDocumentForPlayer?: (playerId: number) => CnsDocument | null | undefined;
 };
 
 export type CnsRuntimeResult = { state: GameState; traces: CnsRuntimeTrace[] };
@@ -121,15 +122,26 @@ const RECOGNIZED_NO_OP_CONTROLLERS = new Map<string, string>([
 ]);
 
 let nextActiveHitDefDiagnosticId = 1;
+const EMPTY_CNS_DOCUMENT: CnsDocument = { states: [], metadataSections: [] };
 
 export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, input: CnsRuntimeInput = {}): CnsRuntimeResult {
   if (!cns) return { state, traces: [missingTrace(1, state.players[0], input), missingTrace(2, state.players[1], input)] };
 
-  const p1 = stepPlayer(state.players[0], state.players[1], 1, cns, input, input.p1Commands);
-  const p2 = stepPlayer(state.players[1], state.players[0], 2, cns, input, input.p2Commands);
+  const p1Cns = resolvePlayerCns(state.players[0], cns, input);
+  const p2Cns = resolvePlayerCns(state.players[1], cns, input);
+  const p1 = stepPlayer(state.players[0], state.players[1], 1, p1Cns, input, input.p1Commands);
+  const p2 = stepPlayer(state.players[1], state.players[0], 2, p2Cns, input, input.p2Commands);
 
-  const players = applyTargetOperations([p1.player, p2.player], [...p1.targetOperations, ...p2.targetOperations], cns);
+  const players = applyTargetOperations([p1.player, p2.player], [...p1.targetOperations, ...p2.targetOperations], cns, input);
   return { state: { ...state, players }, traces: [p1.trace, p2.trace] };
+}
+
+function resolvePlayerCns(player: PlayerState, fallback: CnsDocument, input: CnsRuntimeInput): CnsDocument {
+  return resolveCnsByOwner(player.stateOwnerId ?? player.selfStateOwnerId ?? player.id, fallback, input);
+}
+
+function resolveCnsByOwner(ownerId: number, fallback: CnsDocument, input: CnsRuntimeInput): CnsDocument {
+  return input.getCnsDocumentForPlayer ? input.getCnsDocumentForPlayer(ownerId) ?? EMPTY_CNS_DOCUMENT : fallback;
 }
 
 function stepPlayer(
@@ -200,7 +212,17 @@ function stepPlayer(
 
   const stateDef = findState(cns, next.stateNo);
   trace.stateFound = Boolean(stateDef);
-  if (!stateDef) return { ...finishTrace(next, trace), targetOperations };
+  if (!stateDef) {
+    next = {
+      ...next,
+      hitDiagnosticLines: input.hitDiagnostics === false ? next.hitDiagnosticLines : [
+        ...(next.hitDiagnosticLines ?? []),
+        `raw.custom_state player=p${next.id}`,
+        `  state=${next.stateNo} owner=${next.stateOwnerId ?? next.id} result=missing reason=state_not_found`,
+      ],
+    };
+    return { ...finishTrace(next, trace), targetOperations };
+  }
 
   if (debugEnabled) appendDebug(trace, `enter current S${stateDef.stateNo} state=${next.stateNo}`);
   if (debugEnabled) appendDebug(trace, formatStateDefOverview(stateDef));
@@ -314,13 +336,18 @@ function applyTargetOperations(
   initialPlayers: [PlayerState, PlayerState],
   operations: TargetOperation[],
   cns: CnsDocument,
+  input: CnsRuntimeInput,
 ): [PlayerState, PlayerState] {
   let players = initialPlayers;
   for (const operation of operations) {
     const owner = players.find((candidate) => candidate.id === operation.ownerId);
     players = players.map((player) => {
       if (!operation.targetIds.includes(player.id)) return player;
-      if (operation.kind === 'state' && operation.value !== undefined) return enterState(player, owner ?? player, operation.value, cns);
+      if (operation.kind === 'state' && operation.value !== undefined) {
+        const ownerId = owner?.id ?? operation.ownerId;
+        const ownerCns = resolveCnsByOwner(ownerId, cns, input);
+        return { ...enterState(player, owner ?? player, operation.value, ownerCns), stateOwnerId: ownerId };
+      }
       if (operation.kind === 'velSet') return { ...player, vx: operation.x ?? player.vx, vy: operation.y ?? player.vy };
       if (operation.kind === 'velAdd') return { ...player, vx: player.vx + (operation.x ?? 0), vy: player.vy + (operation.y ?? 0) };
       if (operation.kind === 'lifeAdd') return { ...player, life: Math.max(0, player.life + (operation.value ?? 0)) };
@@ -726,7 +753,10 @@ function executeController(
   if (type === 'superpause') return withExtendedPlayer(player, { superPauseTime: num(controller, 'time') ?? 0 }, 'SuperPause');
   if (type === 'selfstate') {
     const value = num(controller, 'value');
-    return value === null ? withPlayer(player, false, 'SelfState') : withPlayer(enterState(player, opponent, value, cns), true, 'SelfState');
+    if (value === null) return withPlayer(player, false, 'SelfState');
+    const selfOwnerId = player.selfStateOwnerId ?? player.id;
+    const selfCns = resolveCnsByOwner(selfOwnerId, cns, input);
+    return withPlayer({ ...enterState(player, opponent, value, selfCns), stateOwnerId: selfOwnerId }, true, 'SelfState');
   }
   if (type === 'turn') return withPlayer({ ...player, facing: player.facing === 1 ? -1 : 1 }, true, 'Turn');
   if (type === 'varset') return setVarController(player, controller, input, commands, opponent);
@@ -1001,6 +1031,7 @@ function activateHitDef(
     `  pausetime=${snapshot.pauseTime.attacker},${snapshot.pauseTime.defender} guard.pausetime=${formatPair(snapshot.guardPauseTime)} hittime=${groundHitTime ?? '-'},${airHitTime ?? '-'},${snapshot.guardHitTime ?? '-'}`,
     `  velocity=ground:${formatPair(snapshot.groundVelocity)},air:${formatPair(snapshot.airVelocity)},guard:${formatPair(snapshot.guardVelocity)} ids=${snapshot.hitId ?? '-'},${snapshot.chainId ?? '-'},${snapshot.noChainIds?.join('|') || '-'}`,
     `  fall=${formatFall(snapshot.fall)}`,
+    `  customState=p1:${snapshot.p1StateNo ?? '-'},p2:${snapshot.p2StateNo ?? '-'},p2getp1state:${formatOptionalBool(snapshot.p2GetP1State)},forcestand:${formatOptionalBool(snapshot.forceStand)}`,
     ...(snapshot.unappliedParameters.length > 0 ? [`raw.hitdef_unapplied activeHitDefId=${diagnosticId} params=${snapshot.unappliedParameters.join(',')} reason=stored_not_applied`] : []),
     ...(snapshot.invalidParameters.length > 0 ? [`raw.hitdef_invalid activeHitDefId=${diagnosticId} params=${snapshot.invalidParameters.join(',')} reason=evaluation_failed`] : []),
     `raw.hitdef_lifecycle activeHitDefId=${diagnosticId}`,
@@ -1097,6 +1128,10 @@ function evaluateHitDefSnapshot(
     damage: Math.max(0, damage[0] ?? 60),
     guardDamage: Math.max(0, numValue('guard.damage') ?? damage[1] ?? 0),
     guardKill: boolValue('guard.kill'),
+    p1StateNo: numValue('p1stateno'),
+    p2StateNo: numValue('p2stateno'),
+    p2GetP1State: boolValue('p2getp1state'),
+    forceStand: boolValue('forcestand'),
     pauseTime: { attacker: Math.max(0, pause[0] ?? 4), defender: Math.max(0, pause[1] ?? 8) },
     groundVelocity: { x: groundVelocity[0] ?? -3.5, y: groundVelocity[1] ?? 0 },
     airVelocity: { x: airVelocity[0] ?? -2.5, y: airVelocity[1] ?? -5.5 },
@@ -1153,6 +1188,10 @@ function formatAttr(value: ActiveHitDef['attr']): string {
 
 function formatPriority(value: ActiveHitDef['priority']): string {
   return value ? `${value.value},${value.type ?? '-'}` : '-';
+}
+
+function formatOptionalBool(value: boolean | undefined): string | number {
+  return value === undefined ? '-' : value ? 1 : 0;
 }
 
 function formatFall(value: ActiveHitDef['fall']): string {

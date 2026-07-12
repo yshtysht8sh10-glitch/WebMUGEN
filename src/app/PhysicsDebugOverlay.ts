@@ -19,6 +19,7 @@ function formatPlayerPhysicsDebug(label: string, player: PlayerState): string {
     `juggle=${readJuggle(player)}`,
     `juggleRemaining=${player.juggleRemaining ?? '-'}/${player.juggleMax ?? '-'}`,
     `guard=${player.guardIntent ? 'back' : '-'}${player.guardCrouchIntent ? '+down' : ''}`,
+    `owner=${player.stateOwnerId ?? player.id}/${player.selfStateOwnerId ?? player.id}`,
     `pos=(${formatNumber(player.x)},${formatNumber(player.y)})`,
     `vel=(${formatNumber(player.vx)},${formatNumber(player.vy)})`,
     `time=${player.stateTime}`,

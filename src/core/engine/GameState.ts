@@ -30,5 +30,7 @@ function createPlayer(id: 1 | 2, x: number, y: number, facing: 1 | -1): PlayerSt
     activeHitDef: null,
     hitDefUsed: false,
     targets: [],
+    stateOwnerId: id,
+    selfStateOwnerId: id,
   };
 }

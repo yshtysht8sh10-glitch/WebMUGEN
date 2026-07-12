@@ -51,7 +51,7 @@ Examples:
 
 These mutate state identity or state flags.
 
-`ChangeState` should use centralized state entry. `SelfState` remains Partial until custom-state ownership semantics are implemented.
+`ChangeState` preserves the current State owner. `SelfState` resolves the player's `selfStateOwnerId`, enters that owner's CNS document, and clears borrowed ownership. Helper/animation ownership remains Partial.
 
 ### Motion and position
 
@@ -102,7 +102,9 @@ Examples:
 
 The common Target controllers now resolve the attacker's registered Target entries, optionally filtered by HitDef `id`, and mutate the matching player rather than assuming P1/P2 roles. `TargetVelSet`, `TargetVelAdd`, `TargetLifeAdd`, `TargetPowerAdd`, `TargetFacing`, `TargetState`, `TargetBind`, and `TargetDrop` are connected. A missing target is a diagnosed safe no-op, and `TargetDrop` prevents later Target controllers in the same State pass from finding the removed entry.
 
-`TargetState` uses the currently loaded CNS document, but full custom-state ownership and animation ownership remain incomplete. `TargetBind` applies its position immediately and records duration/offset metadata; following-frame bind maintenance is not yet connected. Helper/multi-player targets and less common parameters such as TargetLifeAdd `kill` remain Partial.
+`TargetState` assigns the controller owner's stable player id as the target's State owner and resolves that owner's CNS document. This matches HitDef `p2stateno` with `p2getp1state = 1`; `SelfState` returns the target to its own document. Animation ownership, Helpers, and multi-player targets remain Partial. `TargetBind` applies its position immediately and records duration/offset metadata; following-frame bind maintenance is not yet connected.
+
+HitDef `p1stateno` enters an attacker-owned State. `p2stateno` enters a target-owned State by default; only explicit `p2getp1state = 1` borrows the attacker document. `forcestand` changes the target StateType without changing ownership. Missing owner documents or State numbers remain safe and produce `raw.custom_state` diagnostics instead of falling back to a different character's CNS.
 
 ### Visual/audio effects
 

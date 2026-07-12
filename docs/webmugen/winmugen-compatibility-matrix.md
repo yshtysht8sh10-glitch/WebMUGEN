@@ -160,7 +160,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | Helper | Partial | Recognized safe no-op in CNS runtime; Helper system exists separately. |
 | HitAdd | Partial | Stores hit count field only. |
 | HitBy | Partial | Normalized HitDef attr must match the stored allowed state/attack filter before live contact. Duration/stacking remains incomplete. |
-| HitDef | Partial | Live paths apply normal/guard reaction and filter H/L/A/F/D/M hitflag states, normalized HitBy/NotHitBy attr, and simultaneous priority. Equal Hit priority trades; higher numeric priority wins; equal Miss/Dodge produces no contact. Hitflag modifiers, mixed priority-type edge cases, priority/chain depth, and Helper/projectile parity remain incomplete. |
+| HitDef | Partial | Live paths filter hitflag/attr/priority, apply normal/guard reactions, and support p1stateno/p2stateno, explicit p2getp1state owner borrowing, and forcestand. Missing owner States are diagnosed. Modifiers, mixed priority types, chain depth, Helper/projectile/animation ownership remain incomplete. |
 | HitFallDamage | Partial | Applies simple life reduction. Full fall damage semantics incomplete. |
 | HitFallSet | Partial | Recognized safe no-op. Fall flags not implemented. |
 | HitFallVel | Partial | Restores the contact-snapshotted fall X/Y velocity for common bounce states. Full down-hit variants remain incomplete. |
@@ -190,7 +190,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | RemoveExplod | Partial | Recognized safe no-op. Explod removal not implemented here. |
 | ReversalDef | Partial | Recognized safe no-op. Reversal behavior not implemented. |
 | ScreenBound | Partial | Recognized safe no-op. Camera/screen bound behavior not implemented. |
-| SelfState | Partial | Basic state entry exists. Full custom-state ownership semantics incomplete. |
+| SelfState | Partial | Returns a borrowed player to `selfStateOwnerId` and executes that owner's CNS document. Helper/animation ownership remains incomplete. |
 | SndPan | Partial | Recognized safe no-op. Sound pan not implemented. |
 | SprPriority | Partial | Stores priority field only. Rendering priority needs audit. |
 | StateTypeSet | Complete | Basic implementation exists. |
@@ -201,7 +201,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | TargetFacing | Partial | Applies facing relative to the target owner for registered targets selected by optional HitDef id. Helper/multi-player behavior remains incomplete. |
 | TargetLifeAdd | Partial | Adds and clamps life on registered targets selected by optional HitDef id. Secondary `kill`/absolute semantics remain incomplete. |
 | TargetPowerAdd | Partial | Adds and lower-clamps power on registered targets selected by optional HitDef id. Full power-limit and Helper/multi-player semantics remain incomplete. |
-| TargetState | Partial | Enters the requested State on registered targets selected by optional HitDef id. Full custom-state and animation ownership remain incomplete. |
+| TargetState | Partial | Enters the requested State with the controller owner's CNS document; SelfState returns to the target owner. Helper/multi-player and animation ownership remain incomplete. |
 | TargetVelAdd | Partial | Adds evaluated X/Y velocity to registered targets selected by optional HitDef id. Helper/multi-player behavior remains incomplete. |
 | TargetVelSet | Partial | Sets evaluated X/Y velocity on registered targets selected by optional HitDef id. Helper/multi-player behavior remains incomplete. |
 | Trans | Partial | Stores transparency mode only. Rendering needs audit. |

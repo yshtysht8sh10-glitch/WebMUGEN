@@ -16,6 +16,10 @@ Do not replace, rewrite, minimize, or regenerate `public/chars/common1.cns` from
 
 The character loader may merge files, but it must preserve ownership boundaries:
 
+- runtime custom States retain a stable owner id even when State numbers overlap;
+- borrowed CNS lookup must not fall back to the current/common document when the owner document is missing;
+- SelfState resolves the original player's document rather than the borrowed State owner.
+
 | Asset | Owner | Loader behavior |
 |---|---|---|
 | Character `.cns` | Character | Load as the primary state source. |

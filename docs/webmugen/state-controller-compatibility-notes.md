@@ -22,7 +22,7 @@ Recognized safe no-ops are normally **Partial**, not Complete.
 
 | Family | Examples | Current note |
 |---|---|---|
-| State transition | `ChangeState`, `SelfState` | `ChangeState` is basic Complete. `SelfState` is Partial because full custom-state ownership semantics are incomplete. |
+| State transition | `ChangeState`, `SelfState` | `ChangeState` preserves current State ownership. `SelfState` returns borrowed players to their own CNS document. Helper and animation ownership remain Partial. |
 | Animation | `ChangeAnim`, `ChangeAnim2` | `ChangeAnim` is Complete for runtime animation selection and evaluates numeric `value` expressions with current player context. `ChangeAnim2` is a safe no-op/Partial until target/common animation behavior exists. |
 | Velocity/position | `VelSet`, `VelAdd`, `VelMul`, `PosSet`, `PosAdd` | `VelSet`/`VelAdd` X values are converted from facing-relative CNS coordinates to world velocity when applied. `VelMul` scales that stored world velocity without applying facing again. |
 | State flags | `CtrlSet`, `StateTypeSet`, `MoveTypeSet` | Basic behavior exists. |
@@ -30,7 +30,7 @@ Recognized safe no-ops are normally **Partial**, not Complete.
 | Life/power | `LifeAdd`, `LifeSet`, `PowerAdd`, `PowerSet` | Basic behavior exists. Header `poweradd` is tracked separately as a StateDef header field. |
 | Vars | `VarSet`, `VarAdd`, `VarRangeSet`, `VarRandom` | Integer vars exist. `VarRandom` is still a deterministic placeholder. |
 | Hit-related | `HitDef`, `HitBy`, `NotHitBy`, `HitVelSet`, `HitFallVel`, `HitFallDamage` | `HitDef` evaluates a typed activation snapshot for major fields. Normal and guard damage/pause/hit time/velocity, guard control/kill, ground/air reaction, fall/recover data, and basic down time reach live common-state paths. Advanced guard/fall/down behavior remains Partial. |
-| Target-related | `TargetState`, `TargetVelSet`, `TargetLifeAdd`, etc. | Registered targets are selected by optional HitDef `id`; state, velocity, life, power, facing, immediate bind position, and drop mutations reach the actual target. Missing targets emit a safe-no-op diagnostic. Custom-state ownership, persistent TargetBind maintenance, Helper/multi-player lookup, and secondary parameters remain incomplete. |
+| Target-related | `TargetState`, `TargetVelSet`, `TargetLifeAdd`, etc. | TargetState records the controller owner and executes that owner's CNS; SelfState can return the target. Other registered-target mutations remain connected. Persistent TargetBind, Helper/multi-player lookup, animation ownership, and secondary parameters remain incomplete. |
 | Helper/Projectile/Explod | `Helper`, `Projectile`, `Explod`, `ModifyExplod`, `RemoveExplod` | CNS runtime recognition exists as Partial; full subsystem behavior must be implemented separately. |
 | Visual/audio effects | `AfterImage`, `PalFX`, `EnvShake`, `PlaySnd`, `Trans`, `AngleDraw` | Mostly Partial safe no-op or field storage. Rendering/audio integration incomplete. |
 
