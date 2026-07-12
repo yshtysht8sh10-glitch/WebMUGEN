@@ -34,18 +34,41 @@ function stepPlayerCnsPhysics(player: PlayerState): PlayerState {
     };
   }
 
-  const usesAirPhysics = player.physics === 'A';
-  const nextVy = usesAirPhysics ? player.vy + AIR_GRAVITY : player.vy;
-  const nextVx = player.physics === 'S' || player.physics === 'C' ? player.vx * GROUND_FRICTION : player.vx;
+  const nextTime = {
+    stateTime: player.stateTime + 1,
+    animTime: player.animTime + 1,
+  };
 
+  if (player.physics === 'S' || player.physics === 'C') {
+    const nextVx = player.vx * GROUND_FRICTION;
+    return {
+      ...player,
+      x: player.x + player.vx,
+      y: DEFAULT_GROUND_Y,
+      vx: Math.abs(nextVx) < 0.01 ? 0 : nextVx,
+      vy: 0,
+      ...nextTime,
+    };
+  }
+
+  if (player.physics === 'A') {
+    const nextVy = player.vy + AIR_GRAVITY;
+    return {
+      ...player,
+      x: player.x + player.vx,
+      y: player.y + nextVy,
+      vy: nextVy,
+      ...nextTime,
+    };
+  }
+
+  // Physics=N disables the built-in gravity/friction, but explicit velocity
+  // controllers still move the player on both axes.
   return {
     ...player,
     x: player.x + player.vx,
-    y: player.y + nextVy,
-    vx: Math.abs(nextVx) < 0.01 ? 0 : nextVx,
-    vy: nextVy,
-    stateTime: player.stateTime + 1,
-    animTime: player.animTime + 1,
+    y: player.y + player.vy,
+    ...nextTime,
   };
 }
 
