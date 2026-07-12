@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createInitialGameState } from './GameState';
 import {
   createInitialHitFeedbackState,
+  getScreenShakeOffset,
   updateHitFeedback,
 } from './HitFeedback';
 
@@ -43,5 +44,32 @@ describe('HitFeedback', () => {
     const feedback = updateHitFeedback(initial, createInitialGameState());
 
     expect(feedback.sparks).toHaveLength(0);
+  });
+
+  it('uses requested spark coordinates, skips missing sparks, and exposes sound/shake effects', () => {
+    const gameState = {
+      ...createInitialGameState(),
+      hitEvents: [
+        {
+          attackerId: 1 as const, defenderId: 2 as const, damage: 10,
+          spark: { animNo: 5001, scope: 'attacker' as const, x: 300, y: 220, available: true },
+          sound: { group: 1, index: 2, scope: 'attacker' as const },
+          envShake: { time: 4, frequency: 90, amplitude: -4, phase: 90 },
+        },
+        {
+          attackerId: 1 as const, defenderId: 2 as const, damage: 10,
+          spark: { animNo: 9999, scope: 'attacker' as const, x: 0, y: 0, available: false },
+        },
+      ],
+    };
+    const feedback = updateHitFeedback(createInitialHitFeedbackState(), gameState);
+    expect(feedback.sparks).toHaveLength(1);
+    expect(feedback.sparks[0]).toMatchObject({ x: 300, y: 220, animNo: 5001, scope: 'attacker' });
+    expect(feedback.soundCues).toEqual([{ group: 1, index: 2, scope: 'attacker' }]);
+    expect(feedback.shake).toMatchObject({ remaining: 4, elapsed: 0 });
+    expect(getScreenShakeOffset(feedback).y).toBeCloseTo(-4);
+
+    const decayed = updateHitFeedback(feedback, createInitialGameState());
+    expect(decayed.shake).toMatchObject({ remaining: 3, elapsed: 1 });
   });
 });

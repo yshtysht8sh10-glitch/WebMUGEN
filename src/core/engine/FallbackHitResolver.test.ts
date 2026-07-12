@@ -249,6 +249,52 @@ physics = S
     expect(result.players[1]).toMatchObject({ stateNo: 700, stateOwnerId: 1, stateType: 'S' });
   });
 
+  it.each([
+    [1, 300],
+    [-1, 230],
+  ] as const)('generates one normal hit effect envelope at the Clsn contact with Facing %i', (attackerFacing, expectedX) => {
+    const result = resolveConfiguredHit({
+      attackerFacing, sparkNo: 'S5001', sparkXY: [10, -5], hitSound: 'S1, 2',
+      envShake: [6, 90, -4, 30], pauseTime: [0, 0],
+    });
+    expect(result.hitEvents).toHaveLength(1);
+    expect(result.hitEvents[0]).toMatchObject({
+      guarded: false,
+      spark: { animNo: 5001, scope: 'attacker', x: expectedX, y: 235, available: true },
+      sound: { group: 1, index: 2, scope: 'attacker' },
+      envShake: { time: 6, frequency: 90, amplitude: -4, phase: 30 },
+    });
+    expect(result.hitDiagnosticLines?.join('\n')).toContain('kind=hit spark=attacker:5001');
+
+    const duplicate = resolveFallbackHits({
+      ...result,
+      players: [{ ...result.players[0], hitPause: 0 }, { ...result.players[1], hitPause: 0, animNo: 0 }],
+    }, air);
+    expect(duplicate.hitEvents).toHaveLength(0);
+  });
+
+  it('separates guard spark/sound from normal hit effects', () => {
+    const result = resolveConfiguredHit({
+      guardFlag: 'H', targetCommands: new Set(['holdback']), guardDamage: 2,
+      sparkNo: 'S5001', guardSparkNo: 'S5002', hitSound: 'S1, 2', guardSound: 'S3, 4',
+      sparkXY: [0, 0], guardPauseTime: [0, 0],
+    });
+    expect(result.hitEvents[0]).toMatchObject({
+      guarded: true,
+      spark: { animNo: 5002, scope: 'attacker', available: true },
+      sound: { group: 3, index: 4, scope: 'attacker' },
+    });
+    expect(result.hitDiagnosticLines?.join('\n')).toContain('kind=guard spark=attacker:5002');
+  });
+
+  it('keeps missing effect assets safe and diagnoses unavailable animation/audio runtime', () => {
+    const result = resolveConfiguredHit({ sparkNo: 'S9999', hitSound: 'S99, 1', pauseTime: [0, 0] });
+    expect(result.hitEvents[0].spark).toMatchObject({ animNo: 9999, available: false });
+    const diagnostics = result.hitDiagnosticLines?.join('\n') ?? '';
+    expect(diagnostics).toContain('warning=missing_animation');
+    expect(diagnostics).toContain('limitation=audio_runtime_unavailable');
+  });
+
   it('freezes motion and timers for exactly the defender pausetime then resumes', () => {
     let state = resolveConfiguredHit({ pauseTime: [0, 2], groundVelocity: [-4, 0] });
     const targetAtHit = state.players[1];
@@ -791,6 +837,12 @@ function resolveConfiguredHit({
   p2StateNo,
   p2GetP1State,
   forceStand,
+  sparkNo,
+  guardSparkNo,
+  sparkXY,
+  hitSound,
+  guardSound,
+  envShake,
 }: {
   damage?: number;
   groundHitTime?: number;
@@ -832,6 +884,12 @@ function resolveConfiguredHit({
   p2StateNo?: number;
   p2GetP1State?: boolean;
   forceStand?: boolean;
+  sparkNo?: string | number;
+  guardSparkNo?: string | number;
+  sparkXY?: [number, number];
+  hitSound?: string;
+  guardSound?: string;
+  envShake?: [number, number, number, number];
 }) {
   const hitTimeLines = [
     groundHitTime === undefined ? '' : `ground.hittime = ${groundHitTime}`,
@@ -866,6 +924,12 @@ function resolveConfiguredHit({
     p2StateNo === undefined ? '' : `p2stateno = ${p2StateNo}`,
     p2GetP1State === undefined ? '' : `p2getp1state = ${p2GetP1State ? 1 : 0}`,
     forceStand === undefined ? '' : `forcestand = ${forceStand ? 1 : 0}`,
+    sparkNo === undefined ? '' : `sparkno = ${sparkNo}`,
+    guardSparkNo === undefined ? '' : `guard.sparkno = ${guardSparkNo}`,
+    sparkXY === undefined ? '' : `sparkxy = ${sparkXY.join(', ')}`,
+    hitSound === undefined ? '' : `hitsound = ${hitSound}`,
+    guardSound === undefined ? '' : `guardsound = ${guardSound}`,
+    envShake === undefined ? '' : `envshake.time = ${envShake[0]}\nenvshake.freq = ${envShake[1]}\nenvshake.ampl = ${envShake[2]}\nenvshake.phase = ${envShake[3]}`,
   ].filter(Boolean).join('\n');
   const cns = parseCnsText(`
 [Data]

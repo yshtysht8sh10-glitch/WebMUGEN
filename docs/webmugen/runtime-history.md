@@ -153,6 +153,8 @@ For air contact, `raw.hit_reaction` also records State 5020, the selected air an
 
 `raw.custom_state` records HitDef/TargetState p1/p2 State numbers, current/self owner ids, p2getp1state, forcestand, applied ownership, and missing owner-State rejection. The runtime does not substitute the currently loaded or common CNS when an explicit owner lookup fails.
 
+`raw.hit_effect` records hit/guard selection, scoped spark animation, AIR availability, Clsn/Facing-adjusted position, scoped sound sample, audio availability, and envshake parameters. Missing attacker AIR actions add `warning=missing_animation`; sound cues add `limitation=audio_runtime_unavailable` until owner SND playback is connected. Duplicate contact produces no second effect event.
+
 `raw.hitpause` records the event-time attacker and defender counters from ActiveHitDef. Live physics and `raw.hitstun_tick` expose the remaining counter; duplicate contact rejection does not reset it.
 
 While hit stun remains active, `raw.hitstun_tick` records independent elapsed/remaining time, current state, forced control state, control source, and state changes. Attempts to enable control, enter State 0/52 early, or take a State -1 input ChangeState are blocked and reported once per controller as `raw.hitstun_guard`. Unexpected early control or state exits are reported as `raw.hitstun_violation`.

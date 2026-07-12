@@ -160,7 +160,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | Helper | Partial | Recognized safe no-op in CNS runtime; Helper system exists separately. |
 | HitAdd | Partial | Stores hit count field only. |
 | HitBy | Partial | Normalized HitDef attr must match the stored allowed state/attack filter before live contact. Duration/stacking remains incomplete. |
-| HitDef | Partial | Live paths filter hitflag/attr/priority, apply normal/guard reactions, and support p1stateno/p2stateno, explicit p2getp1state owner borrowing, and forcestand. Missing owner States are diagnosed. Modifiers, mixed priority types, chain depth, Helper/projectile/animation ownership remain incomplete. |
+| HitDef | Partial | Live paths filter contact, apply reactions/custom States, and emit separate hit/guard spark, sound cue, and envshake envelopes once per generation. Spark position uses Clsn contact/Facing and attacker AIR availability; full fightfx sprite animation and SND playback remain Partial. Modifiers, mixed priority types, chain depth, Helper/projectile ownership remain incomplete. |
 | HitFallDamage | Partial | Applies simple life reduction. Full fall damage semantics incomplete. |
 | HitFallSet | Partial | Recognized safe no-op. Fall flags not implemented. |
 | HitFallVel | Partial | Restores the contact-snapshotted fall X/Y velocity for common bounce states. Full down-hit variants remain incomplete. |

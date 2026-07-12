@@ -36,6 +36,7 @@ This document is a high-level inventory of WebMUGEN implementation areas. It is 
 | CNS debug | Runtime traces expose state/animation/controller execution. |
 | Physics debug | Post-physics state, velocity, facing, power, juggle pool, guard intent, and current/self State owner ids are visible. |
 | Runtime history | Snapshot-based history exists for copyable debugging. |
+| Hit effects | Contact envelopes feed positioned spark feedback and envshake offsets; scoped sound cue generation exists but audio playback is Partial. |
 | Static debug | Character load, StateDef list, command routes, and coverage are visible. |
 
 ## Documentation layer

@@ -173,6 +173,7 @@ function resolveAttack(
       ...(active.guardHitTime === undefined ? { fallbackReason: 'missing_guard_hittime' } : {}),
     }, createGetHitVarSnapshot(active, guardDamage, guardHitTime, target.stateType === 'A' ? 'air' : 'ground', guardVelocity)), active, attacker.id);
     const idText = activeHitDefId === null ? 'none' : String(activeHitDefId);
+    const hitEvent = createContactHitEvent(attacker, target, active, true, guardDamage, overlap, attackBoxes, bodyBoxes, airDocument);
     if (diagnosticsEnabled) diagnosticLines.push(
       `raw.hit_collision attacker=p${attacker.id} target=p${target.id}`,
       `${collisionHeader} overlap=${formatOverlap(overlap)} damage=${damage},${guardDamage} source=${source} result=guarded`,
@@ -185,11 +186,12 @@ function resolveAttack(
       `raw.guard_reaction target=p${target.id}`,
       `  activeHitDefId=${idText} state=${guardState} kind=${guardKind} velocity=(${appliedGuardVelocity.x},${appliedGuardVelocity.y}) damage=${guardDamage} kill=${active.guardKill === false ? 0 : 1} hittime=${guardHitTime} ctrltime=${active.controlTime ?? guardHitTime} pausetime=${guardPause.defender}`,
       ...formatRequestedStateDiagnostics(attacker, target, active, contactedAttacker, guardedTarget),
+      ...formatHitEffectDiagnostics(hitEvent, activeHitDefId),
     );
     return {
       attacker: contactedAttacker,
       target: guardedTarget,
-      hitEvent: { attackerId: attacker.id, defenderId: target.id, damage: guardDamage },
+      hitEvent,
       diagnosticLines,
     };
   }
@@ -260,6 +262,7 @@ function resolveAttack(
     ? contactedAttacker
     : registerTarget(contactedAttacker, hitTarget, activeHitDefId, active.hitId ?? 0);
   const fallbackReason = '-';
+  const hitEvent = createContactHitEvent(attacker, target, active, false, damage, overlap, attackBoxes, bodyBoxes, airDocument);
   if (diagnosticsEnabled) diagnosticLines.push(
     `raw.hit_collision attacker=p${attacker.id} target=p${target.id}`,
     `${collisionHeader} overlap=${formatOverlap(overlap)} damage=${damage},${guardDamage} source=${source} fallbackReason=${fallbackReason} result=hit`,
@@ -289,6 +292,7 @@ function resolveAttack(
     `raw.hitstun target=p${target.id}`,
     `  activeHitDefId=${idText} event=start selectedHitTime=${selectedHitTime} kind=${activeHitTime === undefined ? 'fallback' : hitTimeKind} remaining=${selectedHitTime} source=${hitTimeSource}${activeHitTime === undefined ? ` fallbackReason=${hitTimeFallbackReason}` : ''}`,
     ...formatRequestedStateDiagnostics(attacker, target, active, contactedAttacker, hitTarget),
+    ...formatHitEffectDiagnostics(hitEvent, activeHitDefId),
   );
   if (diagnosticsEnabled && activeHitDefId !== null) {
     diagnosticLines.push(
@@ -299,7 +303,7 @@ function resolveAttack(
   return {
     attacker: targetedAttacker,
     target: hitTarget,
-    hitEvent: { attackerId: attacker.id, defenderId: target.id, damage },
+    hitEvent,
     diagnosticLines,
   };
 }
@@ -319,6 +323,66 @@ function isPriorityCandidate(
     && !alreadyConsumed
     && findOverlap(attackBoxes, bodyBoxes) !== null
     && evaluateHitEligibility(attacker.activeHitDef!, target).accepted;
+}
+
+function createContactHitEvent(
+  attacker: PlayerState,
+  target: PlayerState,
+  hitDef: NonNullable<PlayerState['activeHitDef']>,
+  guarded: boolean,
+  damage: number,
+  overlap: ReturnType<typeof findOverlap>,
+  attackBoxes: ReturnType<typeof getPlayerAttackBoxes>,
+  bodyBoxes: ReturnType<typeof getPlayerBodyBoxes>,
+  airDocument: AirDocument,
+): HitEvent {
+  const contact = calculateContactPoint(overlap, attackBoxes, bodyBoxes, attacker, target);
+  const sparkRef = guarded ? hitDef.guardSpark : hitDef.spark;
+  const offset = hitDef.sparkOffset ?? { x: 0, y: 0 };
+  const sparkAvailable = sparkRef?.scope === 'attacker'
+    ? airDocument.actions.some((action) => action.actionNo === sparkRef.animNo)
+    : undefined;
+  const soundRef = guarded ? hitDef.guardSound : hitDef.hitSound;
+  return {
+    attackerId: attacker.id,
+    defenderId: target.id,
+    damage,
+    guarded,
+    ...(sparkRef ? { spark: {
+      ...sparkRef,
+      x: contact.x + offset.x * attacker.facing,
+      y: contact.y + offset.y,
+      available: sparkAvailable,
+    } } : {}),
+    ...(soundRef ? { sound: { ...soundRef } } : {}),
+    ...(hitDef.envShake && hitDef.envShake.time > 0 ? { envShake: hitDef.envShake } : {}),
+  };
+}
+
+function calculateContactPoint(
+  overlap: ReturnType<typeof findOverlap>,
+  attackBoxes: ReturnType<typeof getPlayerAttackBoxes>,
+  bodyBoxes: ReturnType<typeof getPlayerBodyBoxes>,
+  attacker: PlayerState,
+  target: PlayerState,
+): { x: number; y: number } {
+  if (!overlap) return { x: (attacker.x + target.x) / 2, y: Math.min(attacker.y, target.y) - 52 };
+  const attack = attackBoxes[overlap.attackBoxIndex];
+  const body = bodyBoxes[overlap.bodyBoxIndex];
+  const left = Math.max(attack.x, body.x);
+  const right = Math.min(attack.x + attack.width, body.x + body.width);
+  const top = Math.max(attack.y, body.y);
+  const bottom = Math.min(attack.y + attack.height, body.y + body.height);
+  return { x: (left + right) / 2, y: (top + bottom) / 2 };
+}
+
+function formatHitEffectDiagnostics(event: HitEvent, activeHitDefId: number | null): string[] {
+  if (!event.spark && !event.sound && !event.envShake) return [];
+  const sparkAvailability = event.spark?.available === false ? 'missing' : event.spark?.available === true ? 'available' : 'unknown';
+  return [
+    `raw.hit_effect attacker=p${event.attackerId} target=p${event.defenderId}`,
+    `  activeHitDefId=${activeHitDefId ?? 'none'} kind=${event.guarded ? 'guard' : 'hit'} spark=${event.spark ? `${event.spark.scope}:${event.spark.animNo}` : '-'} sparkAvailable=${sparkAvailability} sparkPos=${event.spark ? `${event.spark.x},${event.spark.y}` : '-'} sound=${event.sound ? `${event.sound.scope}:${event.sound.group},${event.sound.index}` : '-'} soundAvailable=${event.sound ? 'unknown' : '-'} envshake=${event.envShake ? `${event.envShake.time},${event.envShake.frequency},${event.envShake.amplitude},${event.envShake.phase}` : '-'} result=generated${event.spark?.available === false ? ' warning=missing_animation' : ''}${event.sound ? ' limitation=audio_runtime_unavailable' : ''}`,
+  ];
 }
 
 function applyAttackerRequestedState(attacker: PlayerState, hitDef: NonNullable<PlayerState['activeHitDef']>): PlayerState {

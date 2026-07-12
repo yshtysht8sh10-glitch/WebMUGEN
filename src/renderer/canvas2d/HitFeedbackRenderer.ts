@@ -30,7 +30,7 @@ export class HitFeedbackRenderer {
 
     ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
     ctx.font = 'bold 14px monospace';
-    ctx.fillText(`-${spark.damage}`, 12, -12);
+    ctx.fillText(`${spark.animNo === undefined ? '' : `${spark.scope === 'attacker' ? 'S' : ''}${spark.animNo} `}-${spark.damage}`, 12, -12);
 
     ctx.restore();
   }

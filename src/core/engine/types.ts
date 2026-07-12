@@ -78,6 +78,12 @@ export type ActiveHitDef = {
   p2StateNo?: number;
   p2GetP1State?: boolean;
   forceStand?: boolean;
+  spark?: { animNo: number; scope: 'common' | 'attacker' };
+  guardSpark?: { animNo: number; scope: 'common' | 'attacker' };
+  sparkOffset?: { x: number; y: number };
+  hitSound?: { group: number; index: number; scope: 'common' | 'attacker' };
+  guardSound?: { group: number; index: number; scope: 'common' | 'attacker' };
+  envShake?: { time: number; frequency: number; amplitude: number; phase: number };
   pauseTime: {
     attacker: number;
     defender: number;
@@ -181,6 +187,10 @@ export type HitEvent = {
   attackerId: 1 | 2;
   defenderId: 1 | 2;
   damage: number;
+  guarded?: boolean;
+  spark?: { animNo: number; scope: 'common' | 'attacker'; x: number; y: number; available?: boolean };
+  sound?: { group: number; index: number; scope: 'common' | 'attacker'; available?: boolean };
+  envShake?: { time: number; frequency: number; amplitude: number; phase: number };
 };
 
 export type GameState = {

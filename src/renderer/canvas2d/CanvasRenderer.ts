@@ -11,7 +11,7 @@ import { findSprite } from '../../core/sprite/SpritePackLoader';
 import type { SpritePack } from '../../core/sprite/SpriteTypes';
 import type { ImageDataSpritePack } from '../../core/sprite/ImageDataSpriteTypes';
 import { ImageDataSpriteRenderer } from './ImageDataSpriteRenderer';
-import type { HitFeedbackState } from '../../core/engine/HitFeedback';
+import { getScreenShakeOffset, type HitFeedbackState } from '../../core/engine/HitFeedback';
 import { HitFeedbackRenderer } from './HitFeedbackRenderer';
 import type { RoundState } from '../../core/engine/RoundState';
 import type { RoundScore } from '../../core/engine/RoundScore';
@@ -42,6 +42,9 @@ export class CanvasRenderer {
   ): void {
     const ctx = this.context;
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    const shake = getScreenShakeOffset(hitFeedback);
+    ctx.save();
+    ctx.translate(shake.x, shake.y);
     this.drawStage(ctx);
     this.drawLifeBars(ctx, state);
     if (roundState) this.roundStateRenderer.render(ctx, roundState, roundScore);
@@ -52,6 +55,7 @@ export class CanvasRenderer {
     this.drawDebugBoxes(ctx, state.players[0]);
     this.drawDebugBoxes(ctx, state.players[1]);
     this.drawProjectileDebugBoxes(ctx, state.projectiles);
+    ctx.restore();
   }
 
   private drawStage(ctx: CanvasRenderingContext2D): void {

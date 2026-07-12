@@ -15,7 +15,7 @@ describe('Phase71 HitDefCoverage', () => {
     expect(summarizeHitDefCoverage(['attr', 'hitflag', 'envshake.time'])).toEqual([
       { name: 'attr', status: 'partial' },
       { name: 'hitflag', status: 'partial' },
-      { name: 'envshake.time', status: 'unsupported' },
+      { name: 'envshake.time', status: 'partial' },
     ]);
   });
 });

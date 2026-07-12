@@ -87,4 +87,6 @@ When debugging animation, expose:
 
 ## Compatibility caution
 
+HitDef spark events carry common or attacker scope and the requested animation number into HitFeedback. Attacker-scoped `S` actions are validated against AIR; missing actions are diagnosed and not rendered. The Canvas renderer currently visualizes the requested id at the contact position rather than rendering full fightfx/character sprite animation frames, so spark rendering remains Partial.
+
 Do not promote animation triggers to Complete just because a simple KFM action works. Full AIR timing, loop behavior, and target/common animation ownership need broader verification.

@@ -10,6 +10,7 @@ const HITDEF_SUPPORTED_PARAMS = new Set([
   'air.hittime',
   'sparkno',
   'guardsparkno',
+  'guard.sparkno',
 ]);
 
 const HITDEF_PARTIAL_PARAMS = new Set([
@@ -31,6 +32,13 @@ const HITDEF_PARTIAL_PARAMS = new Set([
   'p2stateno',
   'p2getp1state',
   'forcestand',
+  'sparkxy',
+  'hitsound',
+  'guardsound',
+  'envshake.time',
+  'envshake.freq',
+  'envshake.ampl',
+  'envshake.phase',
   'ground.velocity',
   'air.velocity',
   'guard.velocity',

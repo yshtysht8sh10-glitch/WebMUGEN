@@ -1032,6 +1032,7 @@ function activateHitDef(
     `  velocity=ground:${formatPair(snapshot.groundVelocity)},air:${formatPair(snapshot.airVelocity)},guard:${formatPair(snapshot.guardVelocity)} ids=${snapshot.hitId ?? '-'},${snapshot.chainId ?? '-'},${snapshot.noChainIds?.join('|') || '-'}`,
     `  fall=${formatFall(snapshot.fall)}`,
     `  customState=p1:${snapshot.p1StateNo ?? '-'},p2:${snapshot.p2StateNo ?? '-'},p2getp1state:${formatOptionalBool(snapshot.p2GetP1State)},forcestand:${formatOptionalBool(snapshot.forceStand)}`,
+    `  effects=spark:${formatEffectAnimation(snapshot.spark)},guardSpark:${formatEffectAnimation(snapshot.guardSpark)},sparkxy:${snapshot.sparkOffset?.x ?? 0},${snapshot.sparkOffset?.y ?? 0},hitsound:${formatEffectSound(snapshot.hitSound)},guardsound:${formatEffectSound(snapshot.guardSound)},envshake:${snapshot.envShake?.time ?? 0},${snapshot.envShake?.frequency ?? '-'},${snapshot.envShake?.amplitude ?? '-'},${snapshot.envShake?.phase ?? '-'}`,
     ...(snapshot.unappliedParameters.length > 0 ? [`raw.hitdef_unapplied activeHitDefId=${diagnosticId} params=${snapshot.unappliedParameters.join(',')} reason=stored_not_applied`] : []),
     ...(snapshot.invalidParameters.length > 0 ? [`raw.hitdef_invalid activeHitDefId=${diagnosticId} params=${snapshot.invalidParameters.join(',')} reason=evaluation_failed`] : []),
     `raw.hitdef_lifecycle activeHitDefId=${diagnosticId}`,
@@ -1115,6 +1116,7 @@ function evaluateHitDefSnapshot(
   if (attrValues.length > 0 && !normalizedAttr) invalidParameters.push('attr');
   const fallVelocity = pairValue('fall.velocity');
   const downVelocity = pairValue('down.velocity');
+  const sparkOffset = pairValue('sparkxy');
   const noChainRaw = controller.params.nochainid;
   const noChainParts = Array.isArray(noChainRaw) ? noChainRaw : noChainRaw === undefined ? [] : [noChainRaw];
   const noChainIds = noChainParts.map((value) => cnsValueToNumber(value, player, input, commands, opponent));
@@ -1132,6 +1134,17 @@ function evaluateHitDefSnapshot(
     p2StateNo: numValue('p2stateno'),
     p2GetP1State: boolValue('p2getp1state'),
     forceStand: boolValue('forcestand'),
+    spark: parseEffectAnimation(controller.params.sparkno),
+    guardSpark: parseEffectAnimation(controller.params['guard.sparkno'] ?? controller.params.guardsparkno),
+    sparkOffset: { x: sparkOffset[0] ?? 0, y: sparkOffset[1] ?? 0 },
+    hitSound: parseEffectSound(controller.params.hitsound),
+    guardSound: parseEffectSound(controller.params.guardsound),
+    envShake: {
+      time: Math.max(0, numValue('envshake.time') ?? 0),
+      frequency: numValue('envshake.freq') ?? 60,
+      amplitude: numValue('envshake.ampl') ?? -4,
+      phase: numValue('envshake.phase') ?? 90,
+    },
     pauseTime: { attacker: Math.max(0, pause[0] ?? 4), defender: Math.max(0, pause[1] ?? 8) },
     groundVelocity: { x: groundVelocity[0] ?? -3.5, y: groundVelocity[1] ?? 0 },
     airVelocity: { x: airVelocity[0] ?? -2.5, y: airVelocity[1] ?? -5.5 },
@@ -1192,6 +1205,37 @@ function formatPriority(value: ActiveHitDef['priority']): string {
 
 function formatOptionalBool(value: boolean | undefined): string | number {
   return value === undefined ? '-' : value ? 1 : 0;
+}
+
+function parseEffectAnimation(value: CnsValue | undefined): ActiveHitDef['spark'] {
+  if (value === undefined) return undefined;
+  const raw = Array.isArray(value) ? value[0] : value;
+  const parsed = parseScopedNumber(raw);
+  return parsed ? { animNo: parsed.value, scope: parsed.scope } : undefined;
+}
+
+function formatEffectAnimation(value: ActiveHitDef['spark']): string {
+  return value ? `${value.scope}:${value.animNo}` : '-';
+}
+
+function formatEffectSound(value: ActiveHitDef['hitSound']): string {
+  return value ? `${value.scope}:${value.group},${value.index}` : '-';
+}
+
+function parseEffectSound(value: CnsValue | undefined): ActiveHitDef['hitSound'] {
+  if (value === undefined) return undefined;
+  const parts = Array.isArray(value) ? value : String(value).split(',');
+  const group = parseScopedNumber(parts[0]);
+  const index = Number(String(parts[1] ?? '').trim());
+  if (!group || !Number.isFinite(index)) return undefined;
+  return { group: group.value, index, scope: group.scope };
+}
+
+function parseScopedNumber(value: string | number | boolean): { value: number; scope: 'common' | 'attacker' } | null {
+  const raw = String(value).trim();
+  const attackerScoped = /^s/i.test(raw);
+  const parsed = Number(attackerScoped ? raw.slice(1) : raw);
+  return Number.isFinite(parsed) ? { value: parsed, scope: attackerScoped ? 'attacker' : 'common' } : null;
 }
 
 function formatFall(value: ActiveHitDef['fall']): string {

@@ -72,6 +72,8 @@ raw.sound_play_rejected owner=p1 sample=2,5 reason=sample_not_found
 
 Other expected rejection reasons include `audio_locked`, `decode_failed`, and `sound_asset_missing`.
 
+HitDef `hitsound`/`guardsound` now generate owner-scoped sound cues on accepted normal/guard contact and diagnose `audio_runtime_unavailable`. They share the future owner SND lookup requirement described here; cue generation is implemented, decoding/playback is not.
+
 ## Completion criteria
 
 `PlaySnd` is not complete until:
