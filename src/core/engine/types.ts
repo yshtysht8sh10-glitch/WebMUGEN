@@ -120,6 +120,7 @@ export type PlayerState = {
     hitDefId: number;
     activeHitDefId: number;
   }>;
+  targetBind?: { ownerId: number; remaining: number; offsetX: number; offsetY: number };
   playerPush?: boolean;
   hitDiagnosticLines?: string[];
   hitStun?: {

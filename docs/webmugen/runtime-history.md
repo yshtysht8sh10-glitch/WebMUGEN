@@ -155,6 +155,8 @@ While hit stun remains active, `raw.hitstun_tick` records independent elapsed/re
 
 `raw.target_register` records owner, target player id, HitDef id, ActiveHitDef generation, target life, registration result, and KO rejection reason.
 
+`raw.target_controller` records the owner, controller, optional HitDef id filter, selected player ids, and whether the operation was queued, dropped, or safely skipped because no target matched.
+
 ## What to look for
 
 | Symptom in history | Interpretation |

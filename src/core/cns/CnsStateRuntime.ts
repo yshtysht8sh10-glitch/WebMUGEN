@@ -3,6 +3,7 @@ import type { ActiveHitDef, GameState, PlayerState } from '../engine/types';
 import { calculateMugenAnimTime } from '../animation/AnimationDuration';
 import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 import { activateMoveContact, resetMoveContact } from '../hitdef/MoveContactState';
+import { removeTarget, selectTargets } from '../hitdef/TargetState';
 import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, readNumberExpression, type CnsRuntimeTriggerContext } from './CnsRuntimeTrigger';
 
 export type CnsRuntimeTrace = {
@@ -29,12 +30,26 @@ export type CnsRuntimeInput = {
 
 export type CnsRuntimeResult = { state: GameState; traces: CnsRuntimeTrace[] };
 
-type ControllerResult = { player: PlayerState; executed: boolean; name: string };
+type TargetOperation = {
+  kind: 'state' | 'velSet' | 'velAdd' | 'lifeAdd' | 'powerAdd' | 'bind' | 'facing';
+  ownerId: number;
+  targetIds: number[];
+  value?: number;
+  x?: number;
+  y?: number;
+  time?: number;
+  ownerX?: number;
+  ownerY?: number;
+  ownerFacing?: 1 | -1;
+};
+
+type ControllerResult = { player: PlayerState; executed: boolean; name: string; targetOperation?: TargetOperation };
 
 type ControllerExecutionResult = {
   player: PlayerState;
   executedControllers: string[];
   debugLines: string[];
+  targetOperations: TargetOperation[];
 };
 
 type ExtendedPlayerState = PlayerState & {
@@ -102,14 +117,6 @@ const RECOGNIZED_NO_OP_CONTROLLERS = new Map<string, string>([
   ['screenbound', 'ScreenBound'],
   ['stopsnd', 'StopSnd'],
   ['sndpan', 'SndPan'],
-  ['targetbind', 'TargetBind'],
-  ['targetdrop', 'TargetDrop'],
-  ['targetfacing', 'TargetFacing'],
-  ['targetlifeadd', 'TargetLifeAdd'],
-  ['targetpoweradd', 'TargetPowerAdd'],
-  ['targetstate', 'TargetState'],
-  ['targetveladd', 'TargetVelAdd'],
-  ['targetvelset', 'TargetVelSet'],
   ['zoom', 'Zoom'],
 ]);
 
@@ -121,7 +128,8 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
   const p1 = stepPlayer(state.players[0], state.players[1], 1, cns, input, input.p1Commands);
   const p2 = stepPlayer(state.players[1], state.players[0], 2, cns, input, input.p2Commands);
 
-  return { state: { ...state, players: [p1.player, p2.player] }, traces: [p1.trace, p2.trace] };
+  const players = applyTargetOperations([p1.player, p2.player], [...p1.targetOperations, ...p2.targetOperations], cns);
+  return { state: { ...state, players }, traces: [p1.trace, p2.trace] };
 }
 
 function stepPlayer(
@@ -131,7 +139,7 @@ function stepPlayer(
   cns: CnsDocument,
   input: CnsRuntimeInput,
   commands?: ReadonlySet<string>,
-): { player: PlayerState; trace: CnsRuntimeTrace } {
+): { player: PlayerState; trace: CnsRuntimeTrace; targetOperations: TargetOperation[] } {
   const originalStateNo = player.stateNo;
   let next = { ...player, playerPush: true, hitDiagnosticLines: [] };
   const trace: CnsRuntimeTrace = {
@@ -147,11 +155,12 @@ function stepPlayer(
     executedControllers: [],
     debugLines: [],
   };
+  const targetOperations: TargetOperation[] = [];
 
   const debugEnabled = shouldDebugRuntime(commands);
   if (player.hitPause > 0) {
     trace.debugLines.push(`hitpause skip remaining=${player.hitPause}`);
-    return finishTrace(next, trace);
+    return { ...finishTrace(next, trace), targetOperations };
   }
   if (debugEnabled) {
     appendDebug(trace, `scan ${stateScanSummary(cns)} cmds=${formatCommands(commands)}`);
@@ -171,6 +180,7 @@ function stepPlayer(
     next = result.player;
     trace.executedControllers.push(...result.executedControllers);
     trace.debugLines.push(...result.debugLines);
+    targetOperations.push(...result.targetOperations);
     if (debugEnabled) appendDebug(trace, `leave S${negativeStateNo} state=${next.stateNo}`);
     if (next.stateNo !== originalStateNo) {
       if (debugEnabled) appendDebug(trace, `negative changed original=${originalStateNo} current=${next.stateNo}`);
@@ -180,7 +190,7 @@ function stepPlayer(
 
   const stateDef = findState(cns, next.stateNo);
   trace.stateFound = Boolean(stateDef);
-  if (!stateDef) return finishTrace(next, trace);
+  if (!stateDef) return { ...finishTrace(next, trace), targetOperations };
 
   if (debugEnabled) appendDebug(trace, `enter current S${stateDef.stateNo} state=${next.stateNo}`);
   if (debugEnabled) appendDebug(trace, formatStateDefOverview(stateDef));
@@ -191,6 +201,7 @@ function stepPlayer(
   next = result.player;
   trace.executedControllers.push(...result.executedControllers);
   trace.debugLines.push(...result.debugLines);
+  targetOperations.push(...result.targetOperations);
   if (next.stateNo !== stateDef.stateNo && next.stateTime === 0) {
     const enteredState = findState(cns, next.stateNo);
     if (enteredState) {
@@ -200,12 +211,13 @@ function stepPlayer(
       next = enteredResult.player;
       trace.executedControllers.push(...enteredResult.executedControllers);
       trace.debugLines.push(...enteredResult.debugLines);
+      targetOperations.push(...enteredResult.targetOperations);
       if (debugEnabled) appendDebug(trace, `leave target S${enteredState.stateNo} state=${next.stateNo}`);
     }
   }
   if (debugEnabled) appendDebug(trace, `leave current S${stateDef.stateNo} state=${next.stateNo}`);
 
-  return finishTrace(next, trace);
+  return { ...finishTrace(next, trace), targetOperations };
 }
 
 function finishTrace(player: PlayerState, trace: CnsRuntimeTrace): { player: PlayerState; trace: CnsRuntimeTrace } {
@@ -230,6 +242,7 @@ function executeStateControllers(
   let next = player;
   const executedControllers: string[] = [];
   const debugLines: string[] = [];
+  const targetOperations: TargetOperation[] = [];
 
   for (const controller of stateDef.controllers) {
     const type = controller.type.toLowerCase();
@@ -270,6 +283,7 @@ function executeStateControllers(
     const beforeStateNo = next.stateNo;
     const result = executeController(next, opponent, controller, cns, input, commands);
     next = result.player;
+    if (result.targetOperation) targetOperations.push(result.targetOperation);
     next = forceHitStunControl(next, `controller:${stateDef.stateNo}:${controller.type}:${controller.sourceLine ?? '-'}`, input.hitDiagnostics !== false);
     if (debugEnabled && debugLine) {
       pushDebug(debugLines, executedControllers, `pipe after S${stateDef.stateNo} ${controller.type} executed=${result.executed ? 1 : 0} before=${beforeStateNo} after=${next.stateNo}`);
@@ -283,7 +297,46 @@ function executeStateControllers(
   }
 
   if (debugEnabled) pushDebug(debugLines, executedControllers, `return S${stateDef.stateNo} state=${next.stateNo}`);
-  return { player: next, executedControllers, debugLines };
+  return { player: next, executedControllers, debugLines, targetOperations };
+}
+
+function applyTargetOperations(
+  initialPlayers: [PlayerState, PlayerState],
+  operations: TargetOperation[],
+  cns: CnsDocument,
+): [PlayerState, PlayerState] {
+  let players = initialPlayers;
+  for (const operation of operations) {
+    const owner = players.find((candidate) => candidate.id === operation.ownerId);
+    players = players.map((player) => {
+      if (!operation.targetIds.includes(player.id)) return player;
+      if (operation.kind === 'state' && operation.value !== undefined) return enterState(player, owner ?? player, operation.value, cns);
+      if (operation.kind === 'velSet') return { ...player, vx: operation.x ?? player.vx, vy: operation.y ?? player.vy };
+      if (operation.kind === 'velAdd') return { ...player, vx: player.vx + (operation.x ?? 0), vy: player.vy + (operation.y ?? 0) };
+      if (operation.kind === 'lifeAdd') return { ...player, life: Math.max(0, player.life + (operation.value ?? 0)) };
+      if (operation.kind === 'powerAdd') {
+        const extended = player as ExtendedPlayerState;
+        return { ...player, power: Math.max(0, (extended.power ?? 0) + (operation.value ?? 0)) } as PlayerState;
+      }
+      if (operation.kind === 'facing') {
+        const ownerFacing = operation.ownerFacing ?? owner?.facing ?? 1;
+        return { ...player, facing: (ownerFacing * ((operation.value ?? 1) < 0 ? -1 : 1)) as 1 | -1 };
+      }
+      if (operation.kind === 'bind') {
+        const ownerFacing = operation.ownerFacing ?? owner?.facing ?? 1;
+        const offsetX = operation.x ?? 0;
+        const offsetY = operation.y ?? 0;
+        return {
+          ...player,
+          x: (operation.ownerX ?? owner?.x ?? player.x) + offsetX * ownerFacing,
+          y: (operation.ownerY ?? owner?.y ?? player.y) + offsetY,
+          targetBind: { ownerId: operation.ownerId, remaining: operation.time ?? 1, offsetX, offsetY },
+        };
+      }
+      return player;
+    }) as [PlayerState, PlayerState];
+  }
+  return players;
 }
 
 function withTriggerStateSnapshot(player: PlayerState, snapshot: PlayerState): PlayerState {
@@ -644,6 +697,7 @@ function executeController(
   if (type === 'nothitby') return withExtendedPlayer(player, { notHitBy: str(controller, 'value') ?? str(controller, 'attr') }, 'NotHitBy');
   if (type === 'hitdef') return activateHitDef(player, controller, input, commands, opponent);
   if (type === 'movehitreset') return withPlayer(resetMoveContact(player), true, 'MoveHitReset');
+  if (type.startsWith('target')) return executeTargetController(player, opponent, controller, input, commands);
   if (type === 'hitfallvel') return withPlayer({ ...player, vy: num(controller, 'y') ?? player.vy }, hasNum(controller, 'y'), 'HitFallVel');
   if (type === 'hitvelset') return withPlayer({ ...player, vx: num(controller, 'x', player, input, commands, opponent) ?? player.vx, vy: num(controller, 'y', player, input, commands, opponent) ?? player.vy }, hasNum(controller, 'x', player, input, commands, opponent) || hasNum(controller, 'y', player, input, commands, opponent), 'HitVelSet');
   if (type === 'hitfalldamage') return hitFallDamage(player, controller);
@@ -670,6 +724,75 @@ function executeController(
   if (noOpName) return withPlayer(player, true, noOpName);
 
   return withPlayer(player, false, controller.type);
+}
+
+function executeTargetController(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const type = controller.type.toLowerCase();
+  const names: Record<string, string> = {
+    targetbind: 'TargetBind', targetdrop: 'TargetDrop', targetfacing: 'TargetFacing', targetlifeadd: 'TargetLifeAdd',
+    targetpoweradd: 'TargetPowerAdd', targetstate: 'TargetState', targetveladd: 'TargetVelAdd', targetvelset: 'TargetVelSet',
+  };
+  const name = names[type];
+  if (!name) return withPlayer(player, false, controller.type);
+  const id = num(controller, 'id', player, input, commands, opponent);
+  const selected = selectTargets(player, id ?? undefined);
+  const diagnostic = [
+    ...(player.hitDiagnosticLines ?? []),
+    `raw.target_controller owner=p${player.id} controller=${name}`,
+    `  id=${id ?? 'all'} targets=${selected.map((entry) => entry.playerId).join(',') || 'none'} result=${selected.length > 0 ? (type === 'targetdrop' ? 'dropped' : 'queued') : 'noop'}${selected.length > 0 ? '' : ' reason=target_not_found'}`,
+  ];
+  let next = { ...player, hitDiagnosticLines: input.hitDiagnostics === false ? player.hitDiagnosticLines : diagnostic };
+  if (type === 'targetdrop') {
+    for (const target of selected) next = removeTarget(next, target.playerId);
+    return withPlayer(next, true, name);
+  }
+  if (selected.length === 0) return withPlayer(next, true, name);
+
+  const kinds: Record<string, TargetOperation['kind']> = {
+    targetbind: 'bind', targetfacing: 'facing', targetlifeadd: 'lifeAdd', targetpoweradd: 'powerAdd',
+    targetstate: 'state', targetveladd: 'velAdd', targetvelset: 'velSet',
+  };
+  const [posX, posY] = readControllerPair(controller, 'pos', player, input, commands, opponent);
+  return {
+    player: next,
+    executed: true,
+    name,
+    targetOperation: {
+      kind: kinds[type],
+      ownerId: player.id,
+      targetIds: selected.map((entry) => entry.playerId),
+      value: num(controller, 'value', player, input, commands, opponent) ?? undefined,
+      x: type === 'targetbind' ? posX : num(controller, 'x', player, input, commands, opponent) ?? undefined,
+      y: type === 'targetbind' ? posY : num(controller, 'y', player, input, commands, opponent) ?? undefined,
+      time: num(controller, 'time', player, input, commands, opponent) ?? undefined,
+      ownerX: player.x,
+      ownerY: player.y,
+      ownerFacing: player.facing,
+    },
+  };
+}
+
+function readControllerPair(
+  controller: CnsStateController,
+  key: string,
+  player: PlayerState,
+  input: CnsRuntimeInput,
+  commands: ReadonlySet<string> | undefined,
+  opponent: PlayerState,
+): [number | undefined, number | undefined] {
+  const raw = controller.params[key];
+  if (raw === undefined) return [undefined, undefined];
+  const parts = Array.isArray(raw) ? raw : String(raw).split(',');
+  return [
+    cnsValueToNumber(parts[0], player, input, commands, opponent) ?? undefined,
+    cnsValueToNumber(parts[1], player, input, commands, opponent) ?? undefined,
+  ];
 }
 
 function changeAnim(

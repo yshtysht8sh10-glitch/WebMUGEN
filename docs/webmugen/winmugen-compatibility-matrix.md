@@ -196,14 +196,14 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | StateTypeSet | Complete | Basic implementation exists. |
 | StopSnd | Partial | Recognized safe no-op. Sound stopping not implemented. |
 | SuperPause | Partial | Stores super pause time field only. Full superpause behavior incomplete. |
-| TargetBind | Partial | Recognized safe no-op. Target binding not implemented. |
-| TargetDrop | Partial | Recognized safe no-op. Target list not implemented. |
-| TargetFacing | Partial | Recognized safe no-op. Target mutation not implemented. |
-| TargetLifeAdd | Partial | Recognized safe no-op. Target mutation not implemented. |
-| TargetPowerAdd | Partial | Recognized safe no-op. Target mutation not implemented. |
-| TargetState | Partial | Recognized safe no-op. Target custom state transition not implemented. |
-| TargetVelAdd | Partial | Recognized safe no-op. Target velocity mutation not implemented. |
-| TargetVelSet | Partial | Recognized safe no-op. Target velocity mutation not implemented. |
+| TargetBind | Partial | Selects registered targets by optional HitDef id, applies `pos` immediately, and stores time/offset metadata. Following-frame bind maintenance and full coordinate semantics remain incomplete. |
+| TargetDrop | Partial | Removes registered targets selected by optional HitDef id; later controllers safely see no target. `excludeid` and Helper/multi-player behavior remain incomplete. |
+| TargetFacing | Partial | Applies facing relative to the target owner for registered targets selected by optional HitDef id. Helper/multi-player behavior remains incomplete. |
+| TargetLifeAdd | Partial | Adds and clamps life on registered targets selected by optional HitDef id. Secondary `kill`/absolute semantics remain incomplete. |
+| TargetPowerAdd | Partial | Adds and lower-clamps power on registered targets selected by optional HitDef id. Full power-limit and Helper/multi-player semantics remain incomplete. |
+| TargetState | Partial | Enters the requested State on registered targets selected by optional HitDef id. Full custom-state and animation ownership remain incomplete. |
+| TargetVelAdd | Partial | Adds evaluated X/Y velocity to registered targets selected by optional HitDef id. Helper/multi-player behavior remains incomplete. |
+| TargetVelSet | Partial | Sets evaluated X/Y velocity on registered targets selected by optional HitDef id. Helper/multi-player behavior remains incomplete. |
 | Trans | Partial | Stores transparency mode only. Rendering needs audit. |
 | Turn | Complete | Flips facing. |
 | VarAdd | Complete | Basic implementation exists. |

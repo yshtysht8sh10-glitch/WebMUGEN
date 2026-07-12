@@ -30,7 +30,7 @@ Recognized safe no-ops are normally **Partial**, not Complete.
 | Life/power | `LifeAdd`, `LifeSet`, `PowerAdd`, `PowerSet` | Basic behavior exists. Header `poweradd` is tracked separately as a StateDef header field. |
 | Vars | `VarSet`, `VarAdd`, `VarRangeSet`, `VarRandom` | Integer vars exist. `VarRandom` is still a deterministic placeholder. |
 | Hit-related | `HitDef`, `HitBy`, `NotHitBy`, `HitVelSet`, `HitFallVel`, `HitFallDamage` | `HitDef` evaluates a typed activation snapshot for major attr/damage/animation/flag/priority/pause/type/hittime/velocity/fall/id/chain fields. Damage, ground/air hit time, and initial grounded Light/Medium/Hard Anim selection reach the live collision path; most other stored fields remain unapplied Partial behavior. Other hit-related controllers are mostly Partial. |
-| Target-related | `TargetState`, `TargetVelSet`, `TargetLifeAdd`, etc. | Mostly recognized safe no-ops. True target list and custom-state mutation are incomplete. |
+| Target-related | `TargetState`, `TargetVelSet`, `TargetLifeAdd`, etc. | Registered targets are selected by optional HitDef `id`; state, velocity, life, power, facing, immediate bind position, and drop mutations reach the actual target. Missing targets emit a safe-no-op diagnostic. Custom-state ownership, persistent TargetBind maintenance, Helper/multi-player lookup, and secondary parameters remain incomplete. |
 | Helper/Projectile/Explod | `Helper`, `Projectile`, `Explod`, `ModifyExplod`, `RemoveExplod` | CNS runtime recognition exists as Partial; full subsystem behavior must be implemented separately. |
 | Visual/audio effects | `AfterImage`, `PalFX`, `EnvShake`, `PlaySnd`, `Trans`, `AngleDraw` | Mostly Partial safe no-op or field storage. Rendering/audio integration incomplete. |
 

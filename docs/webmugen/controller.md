@@ -100,9 +100,9 @@ Examples:
 - `Projectile`
 - `Explod`
 
-Recognizing these as no-ops is useful to keep characters from crashing, but it is not full behavior.
+The common Target controllers now resolve the attacker's registered Target entries, optionally filtered by HitDef `id`, and mutate the matching player rather than assuming P1/P2 roles. `TargetVelSet`, `TargetVelAdd`, `TargetLifeAdd`, `TargetPowerAdd`, `TargetFacing`, `TargetState`, `TargetBind`, and `TargetDrop` are connected. A missing target is a diagnosed safe no-op, and `TargetDrop` prevents later Target controllers in the same State pass from finding the removed entry.
 
-These remain Partial or Unsupported depending on whether the runtime has a meaningful shim.
+`TargetState` uses the currently loaded CNS document, but full custom-state ownership and animation ownership remain incomplete. `TargetBind` applies its position immediately and records duration/offset metadata; following-frame bind maintenance is not yet connected. Helper/multi-player targets and less common parameters such as TargetLifeAdd `kill` remain Partial.
 
 ### Visual/audio effects
 
@@ -131,7 +131,7 @@ Successful contacts are recorded by ActiveHitDef generation and defender id. Con
 
 Attacker move-result state separately tracks contact, hit, guarded, and State-local hit count for MoveContact/MoveHit/MoveGuarded/HitCount. New HitDef generations reset result flags but retain count; State changes clear all. `MoveHitReset` clears only result flags, preserving both duplicate-hit target history and count.
 
-Successful non-KO contact also registers a Target entry with player id, HitDef id, and ActiveHitDef generation. Entries persist independently of State transitions, support multiple targets, and are removed for KO/destroyed players or round restart. Target controllers consume this foundation in the next compatibility phase.
+Successful non-KO contact also registers a Target entry with player id, HitDef id, and ActiveHitDef generation. Entries persist independently of State transitions, support multiple targets, and are removed for KO/destroyed players or round restart. Connected Target controllers select these entries by optional HitDef `id` and apply changes to the registered player.
 
 HitDef `pausetime` is applied as separate attacker/defender counters. Positive counters skip CNS controller execution and freeze physics/timers while input buffering continues; zero resumes without an extra frame. This hit pause is independent of the Partial SuperPause controller. `guard.pausetime` awaits guard contact.
 
