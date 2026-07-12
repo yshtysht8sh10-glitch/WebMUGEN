@@ -142,6 +142,15 @@ function applyStateDefValue(state: CnsStateDefinition, key: string, value: CnsVa
     case 'facep2':
       state.faceP2 = Number(value) !== 0;
       break;
+    case 'hitdefpersist':
+      state.hitDefPersist = Number(value) !== 0;
+      break;
+    case 'movehitpersist':
+      state.moveHitPersist = Number(value) !== 0;
+      break;
+    case 'hitcountpersist':
+      state.hitCountPersist = Number(value) !== 0;
+      break;
     default:
       break;
   }

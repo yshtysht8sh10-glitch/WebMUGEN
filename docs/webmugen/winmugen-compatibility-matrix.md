@@ -118,9 +118,9 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | poweradd | Power gain on state entry | Complete | Parsed and applied once when entering a state. |
 | juggle | Juggle points | Partial | StateDef value is the air-hit cost; accepted new HitDef generations consume the target's `[Data] airjuggle` pool, insufficient hits are rejected, and grounded control recovery resets it. Helper/projectile/team semantics remain incomplete. |
 | facep2 | Face opponent on state entry | Complete | Parsed and applied when entering a state; Debug Overlay exposes facing. |
-| hitdefpersist | Keep HitDef on state change | Unsupported | Hit system compatibility. |
-| movehitpersist | Keep MoveHit info | Unsupported | Hit system compatibility. |
-| hitcountpersist | Keep hit count | Unsupported | Hit system compatibility. |
+| hitdefpersist | Keep HitDef on state change | Partial | Entered-State value 1 preserves ActiveHitDef, used state, and consumed-target history; 0 discards them. Helper/projectile/team ownership remains incomplete. |
+| movehitpersist | Keep MoveHit info | Partial | Entered-State value 1 preserves MoveContact/MoveHit/MoveGuarded flags independently of hit count; 0 resets them. MoveReversed/team semantics remain incomplete. |
+| hitcountpersist | Keep hit count | Partial | Entered-State value 1 preserves HitCount independently of result flags; 0 resets it. UniqHitCount and full team/combo semantics remain incomplete. |
 | sprpriority | Sprite priority | Partial | Runtime field exists; rendering needs audit. |
 
 ## State Controller Compatibility
@@ -160,7 +160,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | Helper | Partial | Recognized safe no-op in CNS runtime; Helper system exists separately. |
 | HitAdd | Partial | Stores hit count field only. |
 | HitBy | Partial | Normalized HitDef attr must match the stored allowed state/attack filter before live contact. Duration/stacking remains incomplete. |
-| HitDef | Partial | Live paths filter contact, apply reactions/custom States, and emit separate hit/guard spark, sound cue, and envshake envelopes once per generation. Spark position uses Clsn contact/Facing and attacker AIR availability; full fightfx sprite animation and SND playback remain Partial. Modifiers, mixed priority types, chain depth, Helper/projectile ownership remain incomplete. |
+| HitDef | Partial | Live paths filter contact, apply reactions/custom States, and emit effects once per generation. Last attacker/id history drives chainid/nochainid including third-party interruption, `hitonce` limits a generation to one target, and StateDef persistence controls ActiveHitDef/result/count retention. Team validation, modifiers, mixed priority types, full fightfx/SND, and Helper/projectile ownership remain incomplete. |
 | HitFallDamage | Partial | Applies simple life reduction. Full fall damage semantics incomplete. |
 | HitFallSet | Partial | Recognized safe no-op. Fall flags not implemented. |
 | HitFallVel | Partial | Restores the contact-snapshotted fall X/Y velocity for common bounce states. Full down-hit variants remain incomplete. |
@@ -254,7 +254,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | FVar | Partial | `fvar(n)` lookup supported with default 0. |
 | GameTime | Partial | Context/player fallback exists; real global frame integration needs audit. |
 | GetHitVar | Partial | Contact snapshot supplies damage, hit/slide/control time, velocity, type/anim codes, fall values, ids, guarded, and yaccel across get-hit State changes. Unsupported offset/fall-time keys are diagnosed safe defaults. |
-| HitCount | Partial | Counts accepted hits across ActiveHitDef generations within the current State; persist headers and full multi-target semantics remain incomplete. |
+| HitCount | Partial | Counts accepted hits across ActiveHitDef generations; `hitcountpersist` independently preserves or resets it on State entry. UniqHitCount and full multi-target semantics remain incomplete. |
 | HitDefAttr | Partial | Compares State and attack categories against the same normalized attr snapshot used by live HitBy/NotHitBy filtering. Redirect and malformed-attr edge cases remain incomplete. |
 | HitFall | Partial | Reads the contact-snapshotted HitDef fall flag through common air get-hit states. Guard/projectile parity remains incomplete. |
 | HitOver | Partial | Safe default true. |
@@ -276,7 +276,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | LoseTime | Unsupported | Round result not implemented. |
 | MatchNo | Unsupported | Match metadata not implemented. |
 | MatchOver | Unsupported | Match flow not implemented. |
-| MoveContact | Partial | Reads real hit or guarded contact state for the current ActiveHitDef generation; persistence integration remains incomplete. |
+| MoveContact | Partial | Reads real hit or guarded contact state for the current ActiveHitDef generation; `movehitpersist` independently preserves or resets result flags on State entry. MoveReversed/team semantics remain incomplete. |
 | MoveGuarded | Partial | Guardflag-approved live contact sets guarded without setting MoveHit; persist headers remain incomplete. |
 | MoveHit | Partial | Reads accepted-hit state and drives tested hit-confirm cancel routes; persistence remains incomplete. |
 | MoveReversed | Unsupported | Reversal/contact state not implemented. |

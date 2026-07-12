@@ -21,9 +21,9 @@ Follow `docs/webmugen/development-policy.md`: do not modify `public/chars/common
 | `poweradd` | Complete | Parsed and applied once on state entry. | Should not be re-applied while staying in the same state. |
 | `juggle` | Partial | Parsed as the active attack State cost and consumed from the airborne target's `[Data] airjuggle` pool on accepted HitDef contact. | Helper/projectile/team pools and advanced reset flags remain incomplete. |
 | `facep2` | Complete | Parsed and applied on state entry; Debug Overlay exposes facing. | Edge cases with custom states/helpers still need verification. |
-| `hitdefpersist` | Unsupported | Not implemented. | HitDef persistence requires fuller hit system compatibility. |
-| `movehitpersist` | Unsupported | Not implemented. | MoveContact/MoveHit persistence requires fuller hit system compatibility. |
-| `hitcountpersist` | Unsupported | Not implemented. | Hit counter persistence requires fuller combo/hit tracking. |
+| `hitdefpersist` | Partial | Entering a State with value 1 preserves the ActiveHitDef, its consumed-target generation history, and used flag; value 0 discards them. | Helper/projectile and multi-player HitDef ownership remain incomplete. |
+| `movehitpersist` | Partial | Entering a State with value 1 preserves MoveContact/MoveHit/MoveGuarded result flags; value 0 resets them independently of the hit count. | MoveReversed and multi-player result semantics remain incomplete. |
+| `hitcountpersist` | Partial | Entering a State with value 1 preserves HitCount; value 0 resets it independently of the move-contact result. | UniqHitCount and full team/combo-counter semantics remain incomplete. |
 | `sprpriority` | Partial | Runtime field exists. | Rendering order still needs audit. |
 
 ## Implementation guidance

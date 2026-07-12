@@ -39,6 +39,7 @@ const HITDEF_PARTIAL_PARAMS = new Set([
   'envshake.freq',
   'envshake.ampl',
   'envshake.phase',
+  'hitonce',
   'ground.velocity',
   'air.velocity',
   'guard.velocity',

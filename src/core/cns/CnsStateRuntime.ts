@@ -410,10 +410,12 @@ function enterState(player: PlayerState, opponent: PlayerState, stateNo: number,
   const animChanged = player.animNo !== animNo;
   const powered = player as ExtendedPlayerState;
   const power = Math.max(0, (powered.power ?? 0) + (stateDef.powerAdd ?? 0));
+  const preserveHitDef = stateDef.hitDefPersist === true;
+  const preservedMoveContact = preserveMoveContact(player, stateDef.moveHitPersist === true, stateDef.hitCountPersist === true);
   const hitDiagnosticLines = player.activeHitDef?.diagnosticId ? [
     ...(player.hitDiagnosticLines ?? []),
     `raw.hitdef_lifecycle activeHitDefId=${player.activeHitDef.diagnosticId}`,
-    `  event=discard reason=state_change hitCount=${player.hitDefUsed ? 1 : 0}`,
+    `  event=${preserveHitDef ? 'preserve' : 'discard'} reason=state_change hitdefpersist=${preserveHitDef ? 1 : 0} movehitpersist=${stateDef.moveHitPersist ? 1 : 0} hitcountpersist=${stateDef.hitCountPersist ? 1 : 0} hitCount=${player.moveContact?.hitCount ?? 0}`,
   ] : player.hitDiagnosticLines;
 
   return {
@@ -430,10 +432,10 @@ function enterState(player: PlayerState, opponent: PlayerState, stateNo: number,
     facing: stateDef.faceP2 ? faceToward(player, opponent) : player.facing,
     power,
     juggle: stateDef.juggle ?? powered.juggle,
-    activeHitDef: null,
-    hitDefUsed: false,
-    hitTargets: [],
-    moveContact: undefined,
+    activeHitDef: preserveHitDef ? player.activeHitDef : null,
+    hitDefUsed: preserveHitDef ? player.hitDefUsed : false,
+    hitTargets: preserveHitDef ? player.hitTargets ?? [] : [],
+    moveContact: preservedMoveContact,
     hitDiagnosticLines,
   } as PlayerState;
 }
@@ -1121,10 +1123,12 @@ function evaluateHitDefSnapshot(
   const noChainParts = Array.isArray(noChainRaw) ? noChainRaw : noChainRaw === undefined ? [] : [noChainRaw];
   const noChainIds = noChainParts.map((value) => cnsValueToNumber(value, player, input, commands, opponent));
   if (noChainIds.some((value) => value === null)) invalidParameters.push('nochainid');
+  const hitId = numValue('id');
+  const chainId = numValue('chainid');
   const presentUnapplied = [
     'fall.animtype',
     'ground.slidetime', 'guard.ctrltime',
-    'fall.damage', 'fall.kill', 'chainid', 'nochainid',
+    'fall.damage', 'fall.kill',
   ].filter((key) => controller.params[key] !== undefined);
   return {
     damage: Math.max(0, damage[0] ?? 60),
@@ -1145,6 +1149,7 @@ function evaluateHitDefSnapshot(
       amplitude: numValue('envshake.ampl') ?? -4,
       phase: numValue('envshake.phase') ?? 90,
     },
+    hitOnce: boolValue('hitonce') ?? normalizedAttr?.attackTypes.some((value) => value.endsWith('T')) ?? false,
     pauseTime: { attacker: Math.max(0, pause[0] ?? 4), defender: Math.max(0, pause[1] ?? 8) },
     groundVelocity: { x: groundVelocity[0] ?? -3.5, y: groundVelocity[1] ?? 0 },
     airVelocity: { x: airVelocity[0] ?? -2.5, y: airVelocity[1] ?? -5.5 },
@@ -1178,9 +1183,9 @@ function evaluateHitDefSnapshot(
       damage: nonNegative(numValue('fall.damage')),
       kill: boolValue('fall.kill'),
     },
-    hitId: numValue('id'),
-    chainId: numValue('chainid'),
-    noChainIds: noChainIds.filter((value): value is number => value !== null),
+    hitId: hitId !== undefined && hitId >= 1 ? hitId : undefined,
+    chainId: chainId !== undefined && chainId >= 1 ? chainId : undefined,
+    noChainIds: noChainIds.filter((value): value is number => value !== null && value >= 1).slice(0, 2),
     unappliedParameters: presentUnapplied,
     invalidParameters: Array.from(new Set(invalidParameters)),
   };
@@ -1201,6 +1206,19 @@ function formatAttr(value: ActiveHitDef['attr']): string {
 
 function formatPriority(value: ActiveHitDef['priority']): string {
   return value ? `${value.value},${value.type ?? '-'}` : '-';
+}
+
+function preserveMoveContact(player: PlayerState, preserveResult: boolean, preserveCount: boolean): PlayerState['moveContact'] {
+  const current = player.moveContact;
+  if (!current) return undefined;
+  if (!preserveResult && !preserveCount) return undefined;
+  return {
+    activeHitDefId: current.activeHitDefId,
+    contact: preserveResult ? current.contact : false,
+    hit: preserveResult ? current.hit : false,
+    guarded: preserveResult ? current.guarded : false,
+    hitCount: preserveCount ? current.hitCount : 0,
+  };
 }
 
 function formatOptionalBool(value: boolean | undefined): string | number {

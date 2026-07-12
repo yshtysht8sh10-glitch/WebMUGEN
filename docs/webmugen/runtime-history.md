@@ -139,7 +139,9 @@ Each non-duplicate activation also emits `raw.hitdef_parameters` with the evalua
 
 `raw.hit_collision` records attacker/defender, ActiveHitDef id, both animation and element numbers, Clsn1/Clsn2 counts, overlapping attack/body box indexes, and an accepted/rejected reason. Missing ActiveHitDef, Clsn1, or Clsn2 rejects contact explicitly; the live path does not synthesize a fixed collision rectangle.
 
-Repeated overlap for an already recorded `(activeHitDefId, defenderId)` pair is rejected as `hitonce_already_consumed`. The history is per attacker and generation rather than a global boolean, allowing later multiple-target support and a new generation to hit again.
+Repeated overlap for an already recorded `(activeHitDefId, defenderId)` pair is rejected as `hitonce_already_consumed`. The record also carries HitDef `id`; a new generation can hit again with the same or a different id. With `hitonce = 1`, any successful target record for that generation rejects a different target as well.
+
+`raw.hit_chain` records the current `id`, `chainid`, `nochainid`, defender's previous HitDef id for this attacker, `hitonce`, and the accepted/rejected reason (`no_constraint`, `chainid_match`, `chainid_mismatch`, or `nochainid_match`). The check occurs after confirmed Clsn overlap and before damage/guard resolution.
 
 `raw.hit_reaction` reports the applied velocity, `source=active_hitdef`, ground/air selection kind, and attacker facing. This distinguishes the stored CNS pair from its facing-converted world X value.
 
@@ -164,6 +166,8 @@ While hit stun remains active, `raw.hitstun_tick` records independent elapsed/re
 `raw.gethitvar_snapshot` records the keys captured on contact and `unsupportedKeys` that will currently return safe defaults. The snapshot stays on the defender across get-hit State transitions and is cleared when recovery ends.
 
 `raw.move_contact` records generation id, contact/hit/guard flags, hit count, target, and accepted result. This is the source used by hit-confirm Trigger routes rather than the former ActiveHitDef/boolean approximation.
+
+On State entry, `raw.hitdef_lifecycle` reports preserve/discard together with `hitdefpersist`, `movehitpersist`, `hitcountpersist`, and the prior hit count. This makes independent ActiveHitDef, result-flag, and count retention visible across State transitions.
 
 `raw.target_register` records owner, target player id, HitDef id, ActiveHitDef generation, target life, registration result, and KO rejection reason.
 

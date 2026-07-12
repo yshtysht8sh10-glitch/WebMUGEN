@@ -84,6 +84,7 @@ export type ActiveHitDef = {
   hitSound?: { group: number; index: number; scope: 'common' | 'attacker' };
   guardSound?: { group: number; index: number; scope: 'common' | 'attacker' };
   envShake?: { time: number; frequency: number; amplitude: number; phase: number };
+  hitOnce?: boolean;
   pauseTime: {
     attacker: number;
     defender: number;
@@ -119,7 +120,9 @@ export type PlayerState = {
   hitPause: number;
   activeHitDef: ActiveHitDef | null;
   hitDefUsed: boolean;
-  hitTargets?: Array<{ activeHitDefId: number; defenderId: number }>;
+  hitTargets?: Array<{ activeHitDefId: number; defenderId: number; hitDefId?: number }>;
+  lastHitDefByAttacker?: Record<number, number>;
+  lastHitAttackerId?: number;
   getHitVars?: Record<string, number>;
   getHitVarUnsupportedKeys?: string[];
   hitFall?: boolean;

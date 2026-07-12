@@ -100,9 +100,7 @@ function resolveAttack(
   const guardDamage = active.damageValues?.[1] ?? 0;
   const source = 'active_hitdef';
 
-  const alreadyHitTarget = activeHitDefId !== null && (attacker.hitTargets ?? []).some(
-    (record) => record.activeHitDefId === activeHitDefId && record.defenderId === target.id,
-  );
+  const alreadyHitTarget = hasConsumedHitTarget(attacker, target, active);
   if (alreadyHitTarget) {
     if (diagnosticsEnabled && collided && activeHitDefId !== null && !active?.rejectedLogged) {
       diagnosticLines.push(
@@ -124,6 +122,16 @@ function resolveAttack(
     }
     return { attacker, target, hitEvent: null, diagnosticLines };
   }
+
+  const previousHitDefId = target.lastHitAttackerId === attacker.id
+    ? target.lastHitDefByAttacker?.[attacker.id]
+    : undefined;
+  const chainDecision = evaluateHitChain(active, previousHitDefId);
+  if (diagnosticsEnabled) diagnosticLines.push(
+    `raw.hit_chain attacker=p${attacker.id} target=p${target.id}`,
+    `  activeHitDefId=${activeHitDefId ?? 'none'} id=${active.hitId ?? '-'} chainid=${active.chainId ?? '-'} nochainid=${active.noChainIds?.join('|') || '-'} previous=${previousHitDefId ?? '-'} hitonce=${active.hitOnce === false ? 0 : 1} result=${chainDecision.accepted ? 'accepted' : 'rejected'} reason=${chainDecision.reason}`,
+  );
+  if (!chainDecision.accepted) return { attacker, target, hitEvent: null, diagnosticLines };
 
   const eligibility = evaluateHitEligibility(active, target);
   if (!eligibility.accepted) {
@@ -156,7 +164,7 @@ function resolveAttack(
     const guardHitTime = active.guardHitTime ?? active.groundHitTime ?? 12;
     const guardState = guardKind === 'stand' ? 150 : guardKind === 'crouch' ? 152 : 154;
     const lifeBefore = target.life;
-    const guardedAttacker = markAttackerHit(attacker, activeHitDefId, target.id, guardPause.attacker);
+    const guardedAttacker = markAttackerHit(attacker, activeHitDefId, target.id, active.hitId, guardPause.attacker);
     const contactedAttacker = applyAttackerRequestedState(
       activeHitDefId === null ? guardedAttacker : recordMoveContact(guardedAttacker, activeHitDefId, 'guarded'),
       active,
@@ -237,7 +245,7 @@ function resolveAttack(
   const animType = active?.animType ?? 'Light';
   const animSource = active?.animTypeSource ?? 'existing_fallback';
   const animationExists = airDocumentHasAction(airDocument, selectedAnim);
-  const hitAttacker = markAttackerHit(attacker, activeHitDefId, target.id, active.pauseTime.attacker);
+  const hitAttacker = markAttackerHit(attacker, activeHitDefId, target.id, active.hitId, active.pauseTime.attacker);
   const contactedAttacker = applyAttackerRequestedState(
     activeHitDefId === null ? hitAttacker : recordMoveContact(hitAttacker, activeHitDefId, 'hit'),
     active,
@@ -246,7 +254,7 @@ function resolveAttack(
     x: (active.fall?.xVelocity ?? active.downVelocity?.x ?? 0) * attacker.facing,
     y: active.fall?.yVelocity ?? active.downVelocity?.y ?? 0,
   };
-  const hitTarget = applyTargetRequestedState(applyFallbackHit(target, damage, reactionState, selectedAnim, appliedVelocity, fallVelocity, active.pauseTime.defender, {
+  const hitTarget = rememberHitDefId(applyTargetRequestedState(applyFallbackHit(target, damage, reactionState, selectedAnim, appliedVelocity, fallVelocity, active.pauseTime.defender, {
     activeHitDefId,
     selectedHitTime,
     kind: activeHitTime === undefined ? 'fallback' : hitTimeKind,
@@ -256,7 +264,7 @@ function resolveAttack(
     lastStateNo: reactionState,
     selectedAnim,
     ...(activeHitTime === undefined ? { fallbackReason: hitTimeFallbackReason } : {}),
-  }, createGetHitVarSnapshot(active, damage, selectedHitTime, hitTimeKind, selectedVelocity)), active, attacker.id);
+  }, createGetHitVarSnapshot(active, damage, selectedHitTime, hitTimeKind, selectedVelocity)), active, attacker.id), attacker.id, active.hitId);
   const idText = activeHitDefId === null ? 'none' : String(activeHitDefId);
   const targetedAttacker = activeHitDefId === null
     ? contactedAttacker
@@ -297,7 +305,7 @@ function resolveAttack(
   if (diagnosticsEnabled && activeHitDefId !== null) {
     diagnosticLines.push(
       `raw.hitdef_lifecycle activeHitDefId=${activeHitDefId}`,
-      '  event=consume reason=successful_hit hitCount=1',
+      `  event=consume reason=successful_hit hitCount=${targetedAttacker.moveContact?.hitCount ?? 1}`,
     );
   }
   return {
@@ -314,8 +322,8 @@ function isPriorityCandidate(
   attackBoxes: ReturnType<typeof getPlayerAttackBoxes>,
   bodyBoxes: ReturnType<typeof getPlayerBodyBoxes>,
 ): boolean {
-  const activeId = attacker.activeHitDef?.diagnosticId;
-  const alreadyConsumed = activeId !== undefined && (attacker.hitTargets ?? []).some((record) => record.activeHitDefId === activeId && record.defenderId === target.id);
+  const active = attacker.activeHitDef;
+  const alreadyConsumed = active ? hasConsumedHitTarget(attacker, target, active) : false;
   return attacker.moveType === 'A'
     && attacker.hitPause <= 0
     && target.hitPause <= 0
@@ -502,6 +510,11 @@ function mergeCombatRoles(attackerResult: PlayerState, targetResult: PlayerState
     hitTargets: attackerResult.hitTargets,
     moveContact: attackerResult.moveContact,
     targets: attackerResult.targets,
+    lastHitDefByAttacker: {
+      ...(attackerResult.lastHitDefByAttacker ?? {}),
+      ...(targetResult.lastHitDefByAttacker ?? {}),
+    },
+    lastHitAttackerId: targetResult.lastHitAttackerId ?? attackerResult.lastHitAttackerId,
   };
 }
 
@@ -521,15 +534,58 @@ function formatOverlap(value: ReturnType<typeof findOverlap>): string {
   return value ? `${value.attackBoxIndex}:${value.bodyBoxIndex}` : '-';
 }
 
-function markAttackerHit(player: PlayerState, activeHitDefId: number | null, defenderId: number, pauseTime: number): PlayerState {
+function markAttackerHit(
+  player: PlayerState,
+  activeHitDefId: number | null,
+  defenderId: number,
+  hitDefId: number | undefined,
+  pauseTime: number,
+): PlayerState {
   return {
     ...player,
     hitPause: pauseTime,
     hitDefUsed: true,
     hitTargets: activeHitDefId === null ? (player.hitTargets ?? []) : [
       ...(player.hitTargets ?? []),
-      { activeHitDefId, defenderId },
+      { activeHitDefId, defenderId, hitDefId },
     ],
+  };
+}
+
+function hasConsumedHitTarget(
+  attacker: PlayerState,
+  target: PlayerState,
+  hitDef: NonNullable<PlayerState['activeHitDef']>,
+): boolean {
+  const currentGeneration = (attacker.hitTargets ?? []).filter(
+    (record) => record.activeHitDefId === hitDef.diagnosticId,
+  );
+  return currentGeneration.some((record) => record.defenderId === target.id)
+    || (hitDef.hitOnce === true && currentGeneration.length > 0);
+}
+
+function evaluateHitChain(
+  hitDef: NonNullable<PlayerState['activeHitDef']>,
+  previousHitDefId: number | undefined,
+): { accepted: boolean; reason: 'no_constraint' | 'chainid_match' | 'chainid_mismatch' | 'nochainid_match' } {
+  if (hitDef.noChainIds?.includes(previousHitDefId as number)) return { accepted: false, reason: 'nochainid_match' };
+  if (hitDef.chainId !== undefined) {
+    return previousHitDefId === hitDef.chainId
+      ? { accepted: true, reason: 'chainid_match' }
+      : { accepted: false, reason: 'chainid_mismatch' };
+  }
+  return { accepted: true, reason: 'no_constraint' };
+}
+
+function rememberHitDefId(player: PlayerState, attackerId: number, hitDefId: number | undefined): PlayerState {
+  if (hitDefId === undefined) return player;
+  return {
+    ...player,
+    lastHitDefByAttacker: {
+      ...(player.lastHitDefByAttacker ?? {}),
+      [attackerId]: hitDefId,
+    },
+    lastHitAttackerId: attackerId,
   };
 }
 

@@ -761,6 +761,94 @@ movetype = A
     expect(second.players[0].moveContact?.hitCount).toBe(2);
   });
 
+  it('allows new ActiveHitDef generations with the same or different HitDef id', () => {
+    const first = resolveConfiguredHit({ damage: 25, hitId: 10, pauseTime: [0, 0] });
+    const previous = first.players[0].activeHitDef!;
+    const sameId = resolveFallbackHits({
+      ...first,
+      players: [{
+        ...first.players[0],
+        activeHitDef: { ...previous, diagnosticId: (previous.diagnosticId ?? 0) + 1, rejectedLogged: false },
+      }, { ...first.players[1], hitPause: 0, animNo: 0 }],
+    }, air);
+    expect(sameId.hitEvents).toHaveLength(1);
+    expect(sameId.players[1].life).toBe(first.players[1].life - 25);
+
+    const differentId = resolveFallbackHits({
+      ...first,
+      players: [{
+        ...first.players[0],
+        activeHitDef: { ...previous, hitId: 11, diagnosticId: (previous.diagnosticId ?? 0) + 2, rejectedLogged: false },
+      }, { ...first.players[1], hitPause: 0, animNo: 0 }],
+    }, air);
+    expect(differentId.hitEvents).toHaveLength(1);
+    expect(differentId.players[1].life).toBe(first.players[1].life - 25);
+  });
+
+  it('uses hitonce only to prevent one generation from affecting another target', () => {
+    const hitOnce = resolveConfiguredHit({ damage: 25, hitId: 10, hitOnce: true, pauseTime: [0, 0] });
+    const active = hitOnce.players[0].activeHitDef!;
+    const consumedElsewhere: ReturnType<typeof resolveConfiguredHit> = {
+      ...hitOnce,
+      players: [{
+        ...hitOnce.players[0],
+        hitTargets: [{ activeHitDefId: active.diagnosticId!, defenderId: 99, hitDefId: 10 }],
+      }, { ...hitOnce.players[1], hitPause: 0, animNo: 0 }],
+    };
+    const rejected = resolveFallbackHits(consumedElsewhere, air);
+    expect(rejected.hitEvents).toHaveLength(0);
+    expect(rejected.hitDiagnosticLines?.join('\n')).toContain('reason=hitonce_already_consumed');
+
+    const multiTarget = resolveFallbackHits({
+      ...consumedElsewhere,
+      players: [{
+        ...consumedElsewhere.players[0],
+        activeHitDef: { ...active, hitOnce: false, rejectedLogged: false },
+      }, consumedElsewhere.players[1]],
+    }, air);
+    expect(multiTarget.hitEvents).toHaveLength(1);
+  });
+
+  it('accepts only matching chainid history and rejects nochainid history', () => {
+    const first = resolveConfiguredHit({ damage: 25, hitId: 10, pauseTime: [0, 0] });
+    const previous = first.players[0].activeHitDef!;
+    const tryChain = (chainId: number | undefined, noChainIds: number[] = []) => resolveFallbackHits({
+      ...first,
+      players: [{
+        ...first.players[0],
+        activeHitDef: {
+          ...previous, hitId: 20, chainId, noChainIds,
+          diagnosticId: (previous.diagnosticId ?? 0) + 1, rejectedLogged: false,
+        },
+      }, { ...first.players[1], hitPause: 0, animNo: 0 }],
+    }, air);
+
+    const matching = tryChain(10);
+    expect(matching.hitEvents).toHaveLength(1);
+    expect(matching.hitDiagnosticLines?.join('\n')).toContain('previous=10 hitonce=0 result=accepted reason=chainid_match');
+
+    const mismatch = tryChain(9);
+    expect(mismatch.hitEvents).toHaveLength(0);
+    expect(mismatch.hitDiagnosticLines?.join('\n')).toContain('result=rejected reason=chainid_mismatch');
+
+    const excluded = tryChain(undefined, [10]);
+    expect(excluded.hitEvents).toHaveLength(0);
+    expect(excluded.hitDiagnosticLines?.join('\n')).toContain('result=rejected reason=nochainid_match');
+
+    const afterThirdParty = resolveFallbackHits({
+      ...first,
+      players: [{
+        ...first.players[0],
+        activeHitDef: {
+          ...previous, hitId: 20, noChainIds: [10],
+          diagnosticId: (previous.diagnosticId ?? 0) + 2, rejectedLogged: false,
+        },
+      }, { ...first.players[1], hitPause: 0, animNo: 0, lastHitAttackerId: 99 }],
+    }, air);
+    expect(afterThirdParty.hitEvents).toHaveLength(1);
+    expect(afterThirdParty.hitDiagnosticLines?.join('\n')).toContain('nochainid=10 previous=-');
+  });
+
   it('does not keep stale hit events when no new contact occurs', () => {
     const state = createInitialGameState();
     const next = resolveFallbackHits(
@@ -809,6 +897,7 @@ function resolveConfiguredHit({
   attackerFacing,
   pauseTime,
   hitId,
+  hitOnce,
   airAnimType,
   fall,
   fallVelocity,
@@ -856,6 +945,7 @@ function resolveConfiguredHit({
   attackerFacing?: 1 | -1;
   pauseTime?: [number, number];
   hitId?: number;
+  hitOnce?: boolean;
   airAnimType?: string;
   fall?: boolean;
   fallVelocity?: [number, number];
@@ -902,6 +992,7 @@ function resolveConfiguredHit({
   ].filter(Boolean).join('\n');
   const pauseTimeLine = pauseTime ? `pausetime = ${pauseTime.join(', ')}` : '';
   const hitIdLine = hitId === undefined ? '' : `id = ${hitId}`;
+  const hitOnceLine = hitOnce === undefined ? '' : `hitonce = ${hitOnce ? 1 : 0}`;
   const fallLines = [
     airAnimType === undefined ? '' : `air.animtype = ${airAnimType}`,
     fall === undefined ? '' : `fall = ${fall ? 1 : 0}`,
@@ -954,6 +1045,7 @@ ${animTypeLine}
 ${velocityLines}
 ${pauseTimeLine}
 ${hitIdLine}
+${hitOnceLine}
 ${fallLines}
 ${guardLines}
 `);

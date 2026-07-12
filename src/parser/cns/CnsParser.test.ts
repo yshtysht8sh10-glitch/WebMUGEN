@@ -157,6 +157,20 @@ juggle = 6
     expect(doc.states[0].juggle).toBe(6);
   });
 
+  it('parses StateDef HitDef and move-hit persistence flags', () => {
+    const doc = parseCnsText(`
+[Statedef 200]
+hitdefpersist = 1
+movehitpersist = 0
+hitcountpersist = 1
+`);
+    expect(doc.states[0]).toMatchObject({
+      hitDefPersist: true,
+      moveHitPersist: false,
+      hitCountPersist: true,
+    });
+  });
+
   it('keeps commas inside HitDef expressions while splitting parameter pairs', () => {
     const doc = parseCnsText(`
 [StateDef 200]

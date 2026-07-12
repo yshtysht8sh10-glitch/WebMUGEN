@@ -966,6 +966,7 @@ fall.kill = 0
 id = var(5) + 100
 chainid = 9
 nochainid = 3, 4
+hitonce = 1
 `);
     const initial = createInitialGameState();
     const activated = stepCnsStateRuntime({
@@ -986,7 +987,7 @@ nochainid = 3, 4
       groundType: 'High', airType: 'Low', groundHitTime: 15, airHitTime: 17, guardHitTime: 8,
       groundVelocity: { x: -4, y: -1 }, airVelocity: { x: -2.5, y: -5.5 }, guardVelocity: { x: -3, y: 0 },
       fall: { enabled: true, animType: 'Up', xVelocity: 1.5, yVelocity: -6, recover: false, recoverTime: 35, damage: 12, kill: false },
-      hitId: 106, chainId: 9, noChainIds: [3, 4],
+      hitId: 106, chainId: 9, noChainIds: [3, 4], hitOnce: true,
     });
     expect(activated.players[0].hitDiagnosticLines?.join('\n')).toContain('raw.hitdef_parameters');
     expect(activated.players[0].hitDiagnosticLines?.join('\n')).toContain('raw.hitdef_unapplied');

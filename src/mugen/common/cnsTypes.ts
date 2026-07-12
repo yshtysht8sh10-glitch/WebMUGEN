@@ -27,6 +27,9 @@ export type CnsStateDefinition = {
   powerAdd?: number;
   juggle?: number;
   faceP2?: boolean;
+  hitDefPersist?: boolean;
+  moveHitPersist?: boolean;
+  hitCountPersist?: boolean;
   controllers: CnsStateController[];
 };
 
