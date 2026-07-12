@@ -51,6 +51,12 @@ function evaluateBooleanExpression(expression: string, context: CnsRuntimeTrigge
 }
 
 function evaluateComparison(expression: string, context: CnsRuntimeTriggerContext): boolean {
+  const timeModMatch = expression.match(/^timemod\s*(=|!=|>=|<=|>|<)\s*(-?\d+)\s*,\s*(-?\d+)$/i);
+  if (timeModMatch) {
+    const divisor = Number(timeModMatch[2]);
+    if (divisor <= 0) return false;
+    return compareNumber(context.player.stateTime % divisor, timeModMatch[1], Number(timeModMatch[3]));
+  }
   const hitDefAttrMatch = expression.match(/^hitdefattr\s*(=|!=)\s*([^,]+)\s*,\s*(.+)$/i);
   if (hitDefAttrMatch) {
     const attackTypes = hitDefAttrMatch[3].split(',');
@@ -299,7 +305,8 @@ function getNumberSource(rawName: string): NumberSource | null {
   switch (name) {
     case 'e': return () => Math.E;
     case 'pi': return () => Math.PI;
-    case 'time': return (context) => context.player.stateTime;
+    case 'time':
+    case 'statetime': return (context) => context.player.stateTime;
     case 'gametime': return (context) => context.gameTime ?? readOptionalNumber(context.player, 'gameTime', 0);
     case 'tickspersecond': return () => 60;
     case 'animtime': return (context) => context.animTime ?? context.player.animTime;

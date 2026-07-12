@@ -183,6 +183,7 @@ const PARTIAL_TRIGGER_NAMES = new Set([
   'projhit',
   'projhittime',
   'root',
+  'statetime',
   'target',
   'teammode',
   'timemod',

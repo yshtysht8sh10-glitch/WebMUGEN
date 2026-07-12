@@ -73,3 +73,7 @@ A good trigger test includes:
 - at least one negative assertion for approximated triggers.
 
 For animation-related triggers, tests should include both existing and missing animation/action cases.
+
+## Three-character audit
+
+The 2026-07-13 KFM/T-H-M-A/Yes030_e-rada audit checks every observed trigger classification against both Matrix mirrors. It exposed missing rows for `BackEdgeBodyDist`, `FrontEdgeBodyDist`, `StateTime`, and `TimeMod`; they are now tracked individually. A T-H-M-A `TimeMod = 7, 3` route produced a focused regression failure, so `TimeMod` and the observed `StateTime` alias were connected with positive/negative tests and remain Partial pending wider syntax/version verification. See `hitdef-real-character-regression.md` for the command and scope.

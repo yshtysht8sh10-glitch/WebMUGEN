@@ -124,6 +124,12 @@ Use explicit overrides for:
 
 Keep the override note honest and update it when the underlying implementation changes.
 
+## Real-character audit gate
+
+A broad HitDef audit requires at least three structurally different WinMUGEN characters. Run `RealCharacterHitDefRegression.test.ts` with `WEBMUGEN_REAL_CHARACTER_DEFS`; do not count the sample character or multiple files from one character as separate characters.
+
+Every controller and HitDef parameter observed by the configured characters must have its own row in both Matrix mirrors. A parsed-but-unused field is Unsupported; recognized safe no-op, stored-only data, approximations, or incomplete renderer/runtime connections are Partial. Real-character presence alone never promotes an item to Complete. Record the character set, trace scenarios, results, and known limitations in `hitdef-real-character-regression.md`.
+
 ## One item per row
 
 Do not combine multiple triggers, controllers, states, operators, redirects, or CMD features into one matrix item.

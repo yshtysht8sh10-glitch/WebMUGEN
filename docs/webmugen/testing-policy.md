@@ -80,3 +80,9 @@ For game-screen checks, use Debug Overlay to compare:
 9. Rendering
 
 If the screen behavior and UnitTest result disagree, treat that as an integration bug and add a new test at the layer where the mismatch occurs.
+
+## External real-character regression
+
+The repository bundles fewer than three independent characters, so the optional `RealCharacterHitDefRegression.test.ts` suite accepts external `.def` paths through `WEBMUGEN_REAL_CHARACTER_DEFS`. It must be run with at least three structurally different WinMUGEN characters before a broad HitDef compatibility audit is considered complete. External character assets are not copied into the repository.
+
+The suite uses production loading, real CNS HitDef parameter maps, and real AIR collision elements, while forcing the selected controller trigger for deterministic isolation. It must cover both player roles, both Facing directions, ground/air/guard/KO/edge contact, recovery diagnostics, and Matrix presence for every observed controller and HitDef parameter. See `hitdef-real-character-regression.md` for the current evidence and limitations.

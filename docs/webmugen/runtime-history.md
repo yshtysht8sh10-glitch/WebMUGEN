@@ -177,6 +177,10 @@ On State entry, `raw.hitdef_lifecycle` reports preserve/discard together with `h
 
 `raw.target_controller` records the owner, controller, optional HitDef id filter, selected player ids, and whether the operation was queued, dropped, or safely skipped because no target matched.
 
+## Real-character trace audit
+
+The optional three-character regression harness asserts a continuous event chain for ground, air, guard, KO, edge, both Facing directions, and both player roles. Its current evidence and reproduction command are recorded in `hitdef-real-character-regression.md`.
+
 ## What to look for
 
 | Symptom in history | Interpretation |

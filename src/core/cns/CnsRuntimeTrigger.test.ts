@@ -4,6 +4,14 @@ import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, readNumberExpression } from './CnsRuntimeTrigger';
 
 describe('CnsRuntimeTrigger', () => {
+  it('evaluates real-character StateTime and TimeMod compatibility syntax', () => {
+    const player = { ...createInitialGameState().players[0], stateTime: 10 };
+    expect(evaluateCnsRuntimeTrigger('StateTime = 10', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('StateTime != 10', { player })).toBe(false);
+    expect(evaluateCnsRuntimeTrigger('TimeMod = 7, 3', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('TimeMod = 7, 2', { player })).toBe(false);
+    expect(evaluateCnsRuntimeTrigger('TimeMod = 0, 0', { player })).toBe(false);
+  });
   it('evaluates command comparisons as numeric terms in common-state arithmetic', () => {
     const state = createInitialGameState();
     expect(readNumberExpression('151 + 2*(command = "holddown")', {

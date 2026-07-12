@@ -91,6 +91,10 @@ Successful HitDef contact stores numeric get-hit values on the defender so commo
 
 `HitDefAttr = SCA, NA, SA` compares the current ActiveHitDef's normalized attack State and attack categories. It uses the same normalization and matching rules as live `HitBy`/`NotHitBy`, preventing Trigger and collision filtering from disagreeing. Missing or malformed attr does not match.
 
+## Real-character audit findings
+
+The three-character HitDef audit observed `BackEdgeBodyDist`, `FrontEdgeBodyDist`, `ScreenPos`, `StateTime`, and `TimeMod`. Body-edge distance uses the existing fixed fallback stage bounds/player center and remains Partial. ScreenPos X/Y uses runtime player coordinates and remains Partial. `StateTime` now aliases current `Time`, and `TimeMod = divisor, remainder` evaluates State-time modulo for a positive divisor; both remain Partial pending broader WinMUGEN-version syntax audit. These names have separate Matrix rows so their presence in real CNS files is not hidden by a generic safe default.
+
 ## Move contact results
 
 MoveContact, MoveHit, MoveGuarded, and HitCount read an attacker-side result owned by the current ActiveHitDef generation. A normal hit sets contact/hit and increments the State-local count; a live guardflag-approved contact sets contact/guarded without MoveHit or hit-count increment. New HitDef activation clears result flags while retaining the State hit count. On State entry, `movehitpersist` controls result preservation and `hitcountpersist` controls count preservation independently. `MoveHitReset` clears flags without erasing target hit history or count.

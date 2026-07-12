@@ -1,6 +1,6 @@
 # WebMUGEN WinMUGEN Compatibility Matrix
 
-Updated: 2026-06-28
+Updated: 2026-07-13
 
 This document is the working compatibility checklist for WebMUGEN. Every compatibility item is tracked on its own row. Do not combine multiple triggers, controllers, states, operators, redirects, or CMD features into a single matrix item.
 
@@ -154,6 +154,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | EnvShake | Partial | Recognized safe no-op. Screen shake not implemented. |
 | Explod | Partial | Recognized safe no-op in CNS runtime; Explod system exists separately. |
 | ExplodBindTime | Partial | Recognized safe no-op. Explod binding not implemented here. |
+| FallEnvShake | Partial | Recognized safe no-op. Landing shake parameters are not connected to HitFeedback. |
 | ForceFeedback | Partial | Recognized safe no-op. Input device feedback not implemented. |
 | GameMakeAnim | Partial | Recognized safe no-op. Global animation effect not implemented. |
 | Gravity | Partial | Recognized safe no-op. Physics layer applies gravity separately. |
@@ -220,8 +221,46 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 
 | Parameter | Status | Notes |
 |---|---|---|
+| affectteam | Unsupported | Parsed as controller data but not used by live target eligibility. |
+| air.fall | Unsupported | Separate air-fall override is not applied; the basic fall flag remains Partial. |
+| air.hittime | Partial | Selects airborne hit-stun time at contact; advanced air recovery branches remain incomplete. |
+| air.type | Partial | Snapshotted into GetHitVar and reaction selection; uncommon branches remain incomplete. |
+| air.velocity | Partial | Applies airborne reaction velocity with Facing conversion; projectile parity remains incomplete. |
+| airground.velocity | Unsupported | Legacy air-to-ground velocity override is not applied. |
+| airguard.velocity | Unsupported | Legacy air-guard alias is not applied; `guard.velocity` is the connected path. |
+| animtype | Partial | Light/Medium/Hard ground reactions are connected; Back/Up/DiagUp and missing animation behavior remain Partial. |
+| attr | Partial | Normalized State/attack categories drive HitBy/NotHitBy/HitDefAttr; throw/projectile edges remain incomplete. |
+| damage | Partial | Normal and guarded values reach live contact with KO rules; scaling/projectile parity remains incomplete. |
+| down.hittime | Partial | Schedules common liedown/getup timing; advanced down branches remain incomplete. |
+| down.velocity | Partial | Snapshotted for common down/fall paths; bounce variants remain incomplete. |
+| envshake.ampl | Partial | Stored in the accepted-contact shake envelope and Canvas feedback. |
+| envshake.freq | Partial | Stored in the accepted-contact shake envelope and Canvas feedback. |
+| envshake.phase | Partial | Stored in the accepted-contact shake envelope and Canvas feedback. |
+| envshake.time | Partial | Starts accepted-contact Canvas shake; fight-wide effect parity remains incomplete. |
+| fall | Partial | Drives common air-fall routing and GetHitVar; advanced variants remain incomplete. |
+| fall.animtype | Partial | Snapshotted and diagnosed; full fall animation selection remains incomplete. |
+| fall.recover | Partial | Controls common air recovery eligibility. |
+| fall.recovertime | Partial | Controls common air recovery timing. |
+| ground.hittime | Partial | Selects grounded hit-stun time; advanced common reactions remain incomplete. |
+| ground.slidetime | Partial | Snapshotted into GetHitVar; complete sliding semantics remain incomplete. |
+| ground.type | Partial | Snapshotted into GetHitVar/reaction metadata; uncommon branches remain incomplete. |
+| ground.velocity | Partial | Applies grounded reaction velocity with Facing conversion. |
+| groundguard.velocity | Unsupported | Legacy ground-guard alias is not applied; `guard.velocity` is the connected path. |
+| guard.ctrltime | Partial | Delays control restoration on live guard routes. |
+| guard.dist | Partial | Gates guard intent by attacker/target center distance; width/camera precision remains incomplete. |
+| guard.hittime | Partial | Selects live guard stun time. |
 | kill | Partial | Normal contact honors 0 by clamping the defender to one Life and honors 1/default by permitting KO. Projectile parity remains incomplete. |
 | guard.kill | Partial | Guard contact independently clamps chip damage at one Life when 0. Projectile parity remains incomplete. |
+| guard.pausetime | Partial | Applies separate attacker/defender guard pause counters. |
+| guard.slidetime | Unsupported | Guard slide timing is not independently applied. |
+| guard.sparkno | Partial | Selects the guard spark effect envelope; full fightfx animation remains incomplete. |
+| guard.sparkxy | Unsupported | Legacy guard-only spark offset is not applied; common `sparkxy` is connected. |
+| guard.velocity | Partial | Applies live guard recoil with Facing conversion. |
+| guardflag | Partial | Selects standing/crouching/air guard eligibility. |
+| guardpausetime | Unsupported | Unprefixed legacy alias is not applied; `guard.pausetime` is connected. |
+| guardsound | Partial | Selects scoped guard sound cue; SND playback remains unavailable. |
+| hitflag | Partial | H/L/M/A/F/D target classes are connected; `+`/`-` modifiers remain unsupported. |
+| hitsound | Partial | Selects scoped hit sound cue; SND playback remains unavailable. |
 | fall.kill | Partial | Snapshotted into GetHitVar and honored by common-State HitFallDamage independently of normal/guard kill. Projectile parity remains incomplete. |
 | getpower | Partial | Explicit hit/guard values are applied once to the attacker and clamped to 0..3000. mugen.cfg-derived omitted defaults remain unavailable. |
 | givepower | Partial | Explicit hit/guard values are applied once to the defender and clamped to 0..3000. mugen.cfg-derived omitted defaults remain unavailable. |
@@ -234,6 +273,18 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | snap | Partial | Sets target X/Y from attacker position with X transformed by attacker Facing. Stage/camera clamping occurs in the existing later stage pass. |
 | p1sprpriority | Partial | Applies attacker runtime sprite priority on accepted hit or guard; Canvas draws higher priority later. Projectile/effect layering remains incomplete. |
 | p2sprpriority | Partial | Applies defender runtime sprite priority on accepted hit or guard; Canvas draws higher priority later. Projectile/effect layering remains incomplete. |
+| p1facing | Unsupported | HitDef-specific attacker Facing override is not applied. |
+| p1stateno | Partial | Enters attacker-owned custom State on accepted contact. |
+| p2facing | Unsupported | HitDef-specific defender Facing override is not applied. |
+| palfx.add | Unsupported | HitDef defender palette add effect is not applied. |
+| palfx.time | Unsupported | HitDef defender palette effect duration is not applied. |
+| pausemovetime | Unsupported | HitDef-specific pause move-time override is not applied. |
+| pausetime | Partial | Applies separate attacker/defender hit-pause counters. |
+| priority | Partial | Numeric priority and Hit/Miss/Dodge equal-clash behavior are connected; mixed-type edges remain incomplete. |
+| sparkno | Partial | Selects scoped hit spark envelope; full sprite animation remains incomplete. |
+| sparkxy | Partial | Applies Facing-relative offset to the Clsn contact point. |
+| supermovetime | Unsupported | HitDef-specific super-pause move-time override is not applied. |
+| yaccel | Partial | Snapshotted into GetHitVar for common air reaction logic. |
 
 ## Trigger Compatibility
 
@@ -253,6 +304,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | ATan | Complete | Numeric math function supported in runtime trigger evaluator. |
 | AuthorName | Partial | String source exists; metadata currently defaults empty. |
 | BackEdge | Unsupported | Screen/camera edge value not implemented. |
+| BackEdgeBodyDist | Partial | Uses fixed fallback stage bounds and player center; camera/body-width precision remains incomplete. |
 | BackEdgeDist | Partial | Uses internal screen/player coordinate approximation. |
 | BodyDist X | Partial | Evaluates opponent center distance like P2BodyDist X; precise body edge width is still incomplete. |
 | BodyDist Y | Partial | Evaluates opponent/player Y coordinate difference like P2BodyDist Y; precise body edge height is still incomplete. |
@@ -269,6 +321,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | Facing | Complete | Numeric comparison. |
 | Floor | Complete | `Floor(...)` supported for numeric expressions. |
 | FrontEdge | Unsupported | Screen/camera edge value not implemented. |
+| FrontEdgeBodyDist | Partial | Uses fixed fallback stage bounds and player center; camera/body-width precision remains incomplete. |
 | FrontEdgeDist | Partial | Uses internal screen/player coordinate approximation. |
 | FVar | Partial | `fvar(n)` lookup supported with default 0. |
 | GameTime | Partial | Context/player fallback exists; real global frame integration needs audit. |
@@ -350,6 +403,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | SelfAnimExist | Partial | Evaluates through runtime self-animation lookup when provided; redirect-specific AIR ownership still needs audit. |
 | Sin | Complete | Numeric math function supported in runtime trigger evaluator. |
 | StateNo | Complete | Numeric comparison. |
+| StateTime | Partial | Real-character compatibility alias reads the same current State time as `Time`; WinMUGEN-version provenance remains under audit. |
 | StateType | Complete | Basic support. |
 | SysFVar | Unsupported | System float vars not implemented. |
 | SysVar | Complete | Basic numeric comparison. |
@@ -358,6 +412,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | TeamSide | Partial | Context/player id fallback. |
 | TicksPerSecond | Complete | Constant 60. |
 | Time | Complete | State time comparison. |
+| TimeMod | Partial | Evaluates State time modulo a positive divisor against the requested remainder; invalid divisors fail safely. `%` remains the preferred equivalent. |
 | UniqHitCount | Unsupported | Hit counter not implemented. |
 | Var | Complete | Basic numeric comparison. |
 | Vel X | Complete | Exposes world X velocity relative to the player's facing. |
