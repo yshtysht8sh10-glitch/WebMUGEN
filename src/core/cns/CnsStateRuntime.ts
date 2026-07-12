@@ -4,6 +4,7 @@ import { calculateMugenAnimTime } from '../animation/AnimationDuration';
 import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 import { activateMoveContact, resetMoveContact } from '../hitdef/MoveContactState';
 import { removeTarget, selectTargets } from '../hitdef/TargetState';
+import { normalizeHitAttribute } from '../hitdef/HitAttribute';
 import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, readNumberExpression, type CnsRuntimeTriggerContext } from './CnsRuntimeTrigger';
 
 export type CnsRuntimeTrace = {
@@ -1079,6 +1080,8 @@ function evaluateHitDefSnapshot(
   if (priorityValues.length > 0 && priorityValue === null) invalidParameters.push('priority');
   const attrParts = controller.params.attr;
   const attrValues = Array.isArray(attrParts) ? attrParts.map(String) : attrParts === undefined ? [] : String(attrParts).split(',');
+  const normalizedAttr = attrValues.length > 0 ? normalizeHitAttribute(attrValues[0], attrValues.slice(1)) : undefined;
+  if (attrValues.length > 0 && !normalizedAttr) invalidParameters.push('attr');
   const fallVelocity = pairValue('fall.velocity');
   const downVelocity = pairValue('down.velocity');
   const noChainRaw = controller.params.nochainid;
@@ -1086,7 +1089,7 @@ function evaluateHitDefSnapshot(
   const noChainIds = noChainParts.map((value) => cnsValueToNumber(value, player, input, commands, opponent));
   if (noChainIds.some((value) => value === null)) invalidParameters.push('nochainid');
   const presentUnapplied = [
-    'attr', 'fall.animtype', 'hitflag', 'priority',
+    'fall.animtype',
     'ground.slidetime', 'guard.ctrltime',
     'fall.damage', 'fall.kill', 'chainid', 'nochainid',
   ].filter((key) => controller.params[key] !== undefined);
@@ -1099,13 +1102,13 @@ function evaluateHitDefSnapshot(
     airVelocity: { x: airVelocity[0] ?? -2.5, y: airVelocity[1] ?? -5.5 },
     downVelocity: { x: downVelocity[0] ?? 0, y: downVelocity[1] ?? 0 },
     downHitTime: nonNegative(numValue('down.hittime')),
-    attr: attrValues.length > 0 ? { stateType: attrValues[0].trim().toUpperCase(), attackTypes: attrValues.slice(1).map((value) => value.trim().toUpperCase()) } : undefined,
+    attr: normalizedAttr,
     airAnimType: textValue('air.animtype'),
     groundAnimTypeRaw: textValue('animtype'),
     fallAnimType: textValue('fall.animtype'),
-    hitFlag: textValue('hitflag')?.toUpperCase(),
+    hitFlag: textValue('hitflag')?.toUpperCase() ?? 'MAF',
     guardFlag: textValue('guardflag')?.toUpperCase(),
-    priority: priorityValue === null ? undefined : { value: priorityValue, ...(priorityValues[1] === undefined ? {} : { type: String(priorityValues[1]).trim() }) },
+    priority: { value: priorityValue ?? 4, type: priorityValues[1] === undefined ? 'Hit' : String(priorityValues[1]).trim() },
     guardPauseTime: guardPause[0] === undefined && guardPause[1] === undefined ? undefined : { attacker: Math.max(0, guardPause[0] ?? 0), defender: Math.max(0, guardPause[1] ?? 0) },
     groundType: textValue('ground.type'),
     airType: textValue('air.type'),

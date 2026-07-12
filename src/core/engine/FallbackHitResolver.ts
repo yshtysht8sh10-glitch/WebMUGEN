@@ -7,9 +7,21 @@ import {
 import type { GameState, HitEvent, PlayerState } from './types';
 import { recordMoveContact } from '../hitdef/MoveContactState';
 import { pruneTargets, registerTarget } from '../hitdef/TargetState';
+import { hitAttributeMatchesFilter } from '../hitdef/HitAttribute';
 
 const STAND_HIT_STATE = 5000;
 const AIR_HIT_SHAKE_STATE = 5020;
+
+type PriorityDecision = {
+  allowed: boolean;
+  reason: 'no_clash' | 'higher_priority' | 'lower_priority' | 'equal_hit_trade' | 'equal_non_hit_miss' | 'unsupported_priority_type';
+  own: number;
+  opponent: number;
+  ownType: string;
+  opponentType: string;
+};
+
+type HitEligibility = { accepted: boolean; reason: string; targetClass: string };
 
 export function resolveFallbackHits(state: GameState, airDocument?: AirDocument | null, diagnosticsEnabled = true): GameState {
   if (!airDocument) {
@@ -31,17 +43,22 @@ export function resolveFallbackHits(state: GameState, airDocument?: AirDocument 
   const p2Attack = getPlayerAttackBoxes(p2, airDocument);
   const p2Body = getPlayerBodyBoxes(p2, airDocument);
 
-  const p1Result = resolveAttack(p1, p2, p1Attack, p2Body, airDocument, diagnosticsEnabled);
-  p1 = p1Result.attacker;
-  p2 = p1Result.target;
+  const p1PriorityCandidate = isPriorityCandidate(p1, p2, p1Attack, p2Body);
+  const p2PriorityCandidate = isPriorityCandidate(p2, p1, p2Attack, p1Body);
+  const priority = resolvePriorityClash(p1, p2, p1PriorityCandidate && p2PriorityCandidate);
+
+  const originalP1 = p1;
+  const originalP2 = p2;
+  const p1Result = resolveAttack(originalP1, originalP2, p1Attack, p2Body, airDocument, diagnosticsEnabled, priority.p1);
   hitDiagnosticLines.push(...p1Result.diagnosticLines);
   if (p1Result.hitEvent) hitEvents.push(p1Result.hitEvent);
 
-  const p2Result = resolveAttack(p2, p1, p2Attack, p1Body, airDocument, diagnosticsEnabled);
-  p2 = p2Result.attacker;
-  p1 = p2Result.target;
+  const p2Result = resolveAttack(originalP2, originalP1, p2Attack, p1Body, airDocument, diagnosticsEnabled, priority.p2);
   hitDiagnosticLines.push(...p2Result.diagnosticLines);
   if (p2Result.hitEvent) hitEvents.push(p2Result.hitEvent);
+
+  p1 = mergeCombatRoles(p1Result.attacker, p2Result.target, Boolean(p2Result.hitEvent));
+  p2 = mergeCombatRoles(p2Result.attacker, p1Result.target, Boolean(p1Result.hitEvent));
 
   return {
     ...state,
@@ -58,6 +75,7 @@ function resolveAttack(
   bodyBoxes: ReturnType<typeof getPlayerBodyBoxes>,
   airDocument: AirDocument,
   diagnosticsEnabled: boolean,
+  priorityDecision: PriorityDecision = { allowed: true, reason: 'no_clash', own: 4, opponent: 4, ownType: 'Hit', opponentType: 'Hit' },
 ): { attacker: PlayerState; target: PlayerState; hitEvent: HitEvent | null; diagnosticLines: string[] } {
   const diagnosticLines: string[] = [];
   if (attacker.moveType !== 'A' || attacker.hitPause > 0) {
@@ -106,6 +124,27 @@ function resolveAttack(
     }
     return { attacker, target, hitEvent: null, diagnosticLines };
   }
+
+  const eligibility = evaluateHitEligibility(active, target);
+  if (!eligibility.accepted) {
+    if (diagnosticsEnabled) diagnosticLines.push(
+      `raw.hit_collision attacker=p${attacker.id} target=p${target.id}`,
+      `${collisionHeader} overlap=${formatOverlap(overlap)} result=rejected reason=${eligibility.reason}`,
+      `raw.hit_eligibility attacker=p${attacker.id} target=p${target.id}`,
+      `  activeHitDefId=${activeHitDefId ?? 'none'} hitflag=${active.hitFlag ?? '-'} targetClass=${eligibility.targetClass} stateType=${target.stateType} moveType=${target.moveType} attr=${formatActiveAttr(active)} hitBy=${target.hitBy ?? '-'} notHitBy=${target.notHitBy ?? '-'} result=rejected reason=${eligibility.reason}`,
+    );
+    return { attacker, target, hitEvent: null, diagnosticLines };
+  }
+  if (diagnosticsEnabled) diagnosticLines.push(
+    `raw.hit_eligibility attacker=p${attacker.id} target=p${target.id}`,
+    `  activeHitDefId=${activeHitDefId ?? 'none'} hitflag=${active.hitFlag ?? '-'} targetClass=${eligibility.targetClass} stateType=${target.stateType} moveType=${target.moveType} attr=${formatActiveAttr(active)} hitBy=${target.hitBy ?? '-'} notHitBy=${target.notHitBy ?? '-'} result=accepted`,
+  );
+
+  if (priorityDecision.reason !== 'no_clash' && diagnosticsEnabled) diagnosticLines.push(
+    `raw.hit_priority attacker=p${attacker.id} target=p${target.id}`,
+    `  own=${priorityDecision.own},${priorityDecision.ownType} opponent=${priorityDecision.opponent},${priorityDecision.opponentType} result=${priorityDecision.allowed ? 'accepted' : 'rejected'} reason=${priorityDecision.reason}`,
+  );
+  if (!priorityDecision.allowed) return { attacker, target, hitEvent: null, diagnosticLines };
 
   const guardKind = selectGuardKind(target, active.guardFlag);
   const guardDistance = active.guardDistance ?? 160;
@@ -187,7 +226,8 @@ function resolveAttack(
   const selectedVelocity = hitTimeKind === 'air' ? active.airVelocity : active.groundVelocity;
   // WinMUGEN HitDef X velocity is expressed in the defender's reaction direction:
   // the commonly used negative value must send the target away from the attacker.
-  const appliedVelocity = { x: selectedVelocity.x * -attacker.facing, y: selectedVelocity.y };
+  const worldHitVelocityX = selectedVelocity.x * -attacker.facing;
+  const appliedVelocity = { x: Object.is(worldHitVelocityX, -0) ? 0 : worldHitVelocityX, y: selectedVelocity.y };
   const animType = active?.animType ?? 'Light';
   const animSource = active?.animTypeSource ?? 'existing_fallback';
   const animationExists = airDocumentHasAction(airDocument, selectedAnim);
@@ -253,6 +293,100 @@ function resolveAttack(
     target: hitTarget,
     hitEvent: { attackerId: attacker.id, defenderId: target.id, damage },
     diagnosticLines,
+  };
+}
+
+function isPriorityCandidate(
+  attacker: PlayerState,
+  target: PlayerState,
+  attackBoxes: ReturnType<typeof getPlayerAttackBoxes>,
+  bodyBoxes: ReturnType<typeof getPlayerBodyBoxes>,
+): boolean {
+  const activeId = attacker.activeHitDef?.diagnosticId;
+  const alreadyConsumed = activeId !== undefined && (attacker.hitTargets ?? []).some((record) => record.activeHitDefId === activeId && record.defenderId === target.id);
+  return attacker.moveType === 'A'
+    && attacker.hitPause <= 0
+    && target.hitPause <= 0
+    && Boolean(attacker.activeHitDef)
+    && !alreadyConsumed
+    && findOverlap(attackBoxes, bodyBoxes) !== null
+    && evaluateHitEligibility(attacker.activeHitDef!, target).accepted;
+}
+
+function resolvePriorityClash(p1: PlayerState, p2: PlayerState, clashes: boolean): { p1: PriorityDecision; p2: PriorityDecision } {
+  const p1Priority = p1.activeHitDef?.priority?.value ?? 4;
+  const p2Priority = p2.activeHitDef?.priority?.value ?? 4;
+  const p1Type = p1.activeHitDef?.invalidParameters?.includes('priority') ? 'Unsupported' : normalizePriorityType(p1.activeHitDef?.priority?.type);
+  const p2Type = p2.activeHitDef?.invalidParameters?.includes('priority') ? 'Unsupported' : normalizePriorityType(p2.activeHitDef?.priority?.type);
+  const decision = (allowed: boolean, reason: PriorityDecision['reason'], own: number, opponent: number, ownType: string, opponentType: string): PriorityDecision =>
+    ({ allowed, reason, own, opponent, ownType, opponentType });
+  if (!clashes) return {
+    p1: decision(true, 'no_clash', p1Priority, p2Priority, p1Type, p2Type),
+    p2: decision(true, 'no_clash', p2Priority, p1Priority, p2Type, p1Type),
+  };
+  if (p1Type === 'Unsupported' || p2Type === 'Unsupported') return {
+    p1: decision(false, 'unsupported_priority_type', p1Priority, p2Priority, p1Type, p2Type),
+    p2: decision(false, 'unsupported_priority_type', p2Priority, p1Priority, p2Type, p1Type),
+  };
+  if (p1Priority > p2Priority) return {
+    p1: decision(true, 'higher_priority', p1Priority, p2Priority, p1Type, p2Type),
+    p2: decision(false, 'lower_priority', p2Priority, p1Priority, p2Type, p1Type),
+  };
+  if (p2Priority > p1Priority) return {
+    p1: decision(false, 'lower_priority', p1Priority, p2Priority, p1Type, p2Type),
+    p2: decision(true, 'higher_priority', p2Priority, p1Priority, p2Type, p1Type),
+  };
+  const trades = p1Type === 'Hit' && p2Type === 'Hit';
+  return {
+    p1: decision(trades, trades ? 'equal_hit_trade' : 'equal_non_hit_miss', p1Priority, p2Priority, p1Type, p2Type),
+    p2: decision(trades, trades ? 'equal_hit_trade' : 'equal_non_hit_miss', p2Priority, p1Priority, p2Type, p1Type),
+  };
+}
+
+function normalizePriorityType(value: string | undefined): 'Hit' | 'Miss' | 'Dodge' | 'Unsupported' {
+  const normalized = value?.trim().toLowerCase() ?? 'hit';
+  if (normalized === 'hit') return 'Hit';
+  if (normalized === 'miss') return 'Miss';
+  if (normalized === 'dodge') return 'Dodge';
+  return 'Unsupported';
+}
+
+function evaluateHitEligibility(hitDef: NonNullable<PlayerState['activeHitDef']>, target: PlayerState): HitEligibility {
+  const targetClass = classifyHitTarget(target);
+  const hitFlag = (hitDef.hitFlag ?? 'MAF').replace(/\s+/g, '').toUpperCase();
+  if (!/^[HLAFDM+-]+$/.test(hitFlag)) return { accepted: false, reason: 'unsupported_hitflag', targetClass };
+  if (/[+-]/.test(hitFlag)) return { accepted: false, reason: 'unsupported_hitflag_modifier', targetClass };
+  const requiredFlag = targetClass === 'stand' ? ['H', 'M']
+    : targetClass === 'crouch' ? ['L', 'M']
+      : targetClass === 'air' ? ['A']
+        : targetClass === 'fall' ? ['F']
+          : ['D'];
+  if (!requiredFlag.some((flag) => hitFlag.includes(flag))) return { accepted: false, reason: 'hitflag_state_mismatch', targetClass };
+  if (hitDef.invalidParameters?.includes('attr')) return { accepted: false, reason: 'invalid_attr', targetClass };
+  if (target.hitBy && !hitAttributeMatchesFilter(hitDef.attr, target.hitBy)) return { accepted: false, reason: 'attr_not_allowed', targetClass };
+  if (target.notHitBy && hitAttributeMatchesFilter(hitDef.attr, target.notHitBy)) return { accepted: false, reason: 'attr_blocked', targetClass };
+  return { accepted: true, reason: 'accepted', targetClass };
+}
+
+function classifyHitTarget(target: PlayerState): 'stand' | 'crouch' | 'air' | 'fall' | 'down' {
+  if (target.stateType === 'L') return 'down';
+  if (target.stateType === 'A') return target.moveType === 'H' ? 'fall' : 'air';
+  if (target.stateType === 'C') return 'crouch';
+  return 'stand';
+}
+
+function formatActiveAttr(hitDef: NonNullable<PlayerState['activeHitDef']>): string {
+  return hitDef.attr ? `${hitDef.attr.stateType},${hitDef.attr.attackTypes.join('|')}` : '-';
+}
+
+function mergeCombatRoles(attackerResult: PlayerState, targetResult: PlayerState, wasTargeted: boolean): PlayerState {
+  if (!wasTargeted) return attackerResult;
+  return {
+    ...targetResult,
+    hitPause: Math.max(attackerResult.hitPause, targetResult.hitPause),
+    hitTargets: attackerResult.hitTargets,
+    moveContact: attackerResult.moveContact,
+    targets: attackerResult.targets,
   };
 }
 

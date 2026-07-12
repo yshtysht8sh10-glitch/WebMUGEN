@@ -149,6 +149,8 @@ For air contact, `raw.hit_reaction` also records State 5020, the selected air an
 
 `raw.guard_check` records guardflag, Facing-relative holdback intent, crouch intent, StateType, selected stand/crouch/air kind, distance/guard distance, and accepted or mismatch/range rejection. `raw.guard_reaction` records common GuardHit State, guard damage/kill, velocity, hit/control time, and pause. Guarded `raw.move_contact` has `contact=1 hit=0 guarded=1`; `raw.hit_damage source=guard_damage` records chip Life and KO outcome.
 
+`raw.hit_eligibility` records hitflag, classified target state, StateType/MoveType, normalized attr, HitBy/NotHitBy filters, and accepted/rejected reason. `raw.hit_priority` records both numeric priorities and types plus higher/lower, equal trade, equal non-Hit miss, or unsupported-type outcome. Priority diagnostics are produced from the original simultaneous frame snapshot.
+
 `raw.hitpause` records the event-time attacker and defender counters from ActiveHitDef. Live physics and `raw.hitstun_tick` expose the remaining counter; duplicate contact rejection does not reset it.
 
 While hit stun remains active, `raw.hitstun_tick` records independent elapsed/remaining time, current state, forced control state, control source, and state changes. Attempts to enable control, enter State 0/52 early, or take a State -1 input ChangeState are blocked and reported once per controller as `raw.hitstun_guard`. Unexpected early control or state exits are reported as `raw.hitstun_violation`.

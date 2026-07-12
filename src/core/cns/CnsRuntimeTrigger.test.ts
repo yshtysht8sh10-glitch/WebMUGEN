@@ -13,6 +13,18 @@ describe('CnsRuntimeTrigger', () => {
       player: state.players[0], commands: new Set(['holdback']),
     })).toBe(151);
   });
+
+  it('matches HitDefAttr against the normalized active HitDef state and attack types', () => {
+    const state = createInitialGameState();
+    const player = { ...state.players[0], activeHitDef: {
+      diagnosticId: 1, attr: { stateType: 'S', attackTypes: ['NA', 'SA'] }, damage: 10, guardDamage: 0,
+      pauseTime: { attacker: 0, defender: 0 }, groundVelocity: { x: 0, y: 0 }, airVelocity: { x: 0, y: 0 },
+    } };
+    expect(evaluateCnsRuntimeTrigger('HitDefAttr = S, NA', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('HitDefAttr = SCA, HA, SA', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('HitDefAttr = A, NA', { player })).toBe(false);
+    expect(evaluateCnsRuntimeTrigger('HitDefAttr != S, NP', { player })).toBe(true);
+  });
   const player = {
     ...createInitialGameState().players[0],
     stateTime: 6,

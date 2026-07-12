@@ -1,6 +1,7 @@
 import type { PlayerState } from '../engine/types';
 import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 import { selectTargets } from '../hitdef/TargetState';
+import { hitDefAttrMatches } from '../hitdef/HitAttribute';
 
 export type CnsRuntimeTriggerContext = {
   player: PlayerState;
@@ -50,6 +51,13 @@ function evaluateBooleanExpression(expression: string, context: CnsRuntimeTrigge
 }
 
 function evaluateComparison(expression: string, context: CnsRuntimeTriggerContext): boolean {
+  const hitDefAttrMatch = expression.match(/^hitdefattr\s*(=|!=)\s*([^,]+)\s*,\s*(.+)$/i);
+  if (hitDefAttrMatch) {
+    const attackTypes = hitDefAttrMatch[3].split(',');
+    const matches = hitDefAttrMatches(context.player.activeHitDef?.attr, hitDefAttrMatch[2], attackTypes);
+    return hitDefAttrMatch[1] === '=' ? matches : !matches;
+  }
+
   const rangeMatch = expression.match(/^(.+?)\s*(=|!=)\s*\[\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]$/);
   if (rangeMatch) {
     const actual = readNumberExpression(rangeMatch[1], context);

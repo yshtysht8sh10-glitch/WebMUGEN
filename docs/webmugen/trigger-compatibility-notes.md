@@ -33,7 +33,7 @@ Do not mark safe defaults as Complete.
 | `Ctrl` | Complete | Basic control-flag comparison. | Control handoff semantics depend on state/controller flow. |
 | `Time` | Complete | State time comparison. | Previous-state and transition timing still need broader route tests. |
 | `MoveContact` / `MoveHit` / `MoveGuarded` / `HitCount` | Partial | Reads ActiveHitDef-generation contact/hit/guard flags and State-local hit count; live normal and guarded routes are tested. | Persist headers and Helper/projectile parity remain incomplete. |
-| `HitDefAttr` | Unsupported | Not implemented. | Required for many attack cancel/super routes. |
+| `HitDefAttr` | Partial | Compares requested State/category sets with the normalized ActiveHitDef attr shared by HitBy/NotHitBy collision filtering. | Redirect and malformed multi-attr edge cases remain incomplete. |
 | `GetHitVar` | Partial | Reads a contact snapshot for damage, hit/slide/control time, velocities, type/animation codes, fall values, ids, guarded, and yaccel across get-hit State changes. | Offset/fall-time keys and later guard/fall semantics still use diagnosed safe defaults. |
 | `NumTarget` / `TargetID` / `TargetStateNo` | Partial | Reads a multi-entry attacker Target list, supports HitDef id filtering, and returns current two-player target State. | Helper/multi-player lookup and Target redirect chains remain incomplete. |
 | Projectile triggers | Partial / Unsupported | Some `Proj*Time` safe defaults exist; boolean projectile triggers are incomplete. | Requires projectile subsystem integration. |

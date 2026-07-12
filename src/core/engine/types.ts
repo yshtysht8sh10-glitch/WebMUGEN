@@ -124,6 +124,8 @@ export type PlayerState = {
   juggleRemaining?: number;
   guardIntent?: boolean;
   guardCrouchIntent?: boolean;
+  hitBy?: string;
+  notHitBy?: string;
   moveContact?: {
     activeHitDefId: number;
     contact: boolean;

@@ -171,6 +171,66 @@ physics = S
     expect(lethalGuard.players[1].life).toBe(0);
   });
 
+  it.each([
+    ['S', 'I', 'H', true], ['S', 'I', 'L', false],
+    ['C', 'I', 'L', true], ['C', 'I', 'H', false],
+    ['A', 'I', 'A', true], ['A', 'I', 'M', false],
+    ['A', 'H', 'F', true], ['A', 'H', 'A', false],
+    ['L', 'H', 'D', true], ['L', 'H', 'M', false],
+  ] as const)('matches hitflag for StateType=%s MoveType=%s flag=%s', (targetStateType, targetMoveType, hitFlag, accepted) => {
+    const result = resolveConfiguredHit({ targetStateType, targetMoveType, hitFlag, pauseTime: [0, 0] });
+    expect(result.hitEvents.length > 0).toBe(accepted);
+    expect(result.players[1].life).toBe(accepted ? 963 : 1000);
+    if (!accepted) expect(result.hitDiagnosticLines?.join('\n')).toContain('reason=hitflag_state_mismatch');
+  });
+
+  it('rejects unsupported hitflag modifiers instead of treating them as always-hit', () => {
+    const result = resolveConfiguredHit({ hitFlag: 'M-', pauseTime: [0, 0] });
+    expect(result.hitEvents).toHaveLength(0);
+    expect(result.hitDiagnosticLines?.join('\n')).toContain('reason=unsupported_hitflag_modifier');
+  });
+
+  it('uses normalized attr for HitBy/NotHitBy filtering and rejects invalid attr', () => {
+    const allowed = resolveConfiguredHit({ attr: 'S, NA', targetHitBy: 'SCA, NA', pauseTime: [0, 0] });
+    expect(allowed.hitEvents).toHaveLength(1);
+
+    const notAllowed = resolveConfiguredHit({ attr: 'S, SA', targetHitBy: 'SCA, NA', pauseTime: [0, 0] });
+    expect(notAllowed.hitEvents).toHaveLength(0);
+    expect(notAllowed.hitDiagnosticLines?.join('\n')).toContain('reason=attr_not_allowed');
+
+    const blocked = resolveConfiguredHit({ attr: 'A, NP', targetNotHitBy: 'SCA, NP, SP', pauseTime: [0, 0] });
+    expect(blocked.hitEvents).toHaveLength(0);
+    expect(blocked.hitDiagnosticLines?.join('\n')).toContain('reason=attr_blocked');
+
+    const invalid = resolveConfiguredHit({ attr: 'X, ???', pauseTime: [0, 0] });
+    expect(invalid.hitEvents).toHaveLength(0);
+    expect(invalid.hitDiagnosticLines?.join('\n')).toContain('reason=invalid_attr');
+  });
+
+  it('allows an equal Hit-priority trade and resolves unequal priorities without P1 order bias', () => {
+    const trade = resolveSimultaneousHits([4, 'Hit'], [4, 'Hit']);
+    expect(trade.hitEvents).toHaveLength(2);
+    expect(trade.players.map((player) => player.life)).toEqual([963, 963]);
+    expect(trade.players.every((player) => player.moveContact?.hit)).toBe(true);
+    expect(trade.hitDiagnosticLines?.join('\n')).toContain('reason=equal_hit_trade');
+
+    const p1Wins = resolveSimultaneousHits([5, 'Hit'], [3, 'Hit']);
+    expect(p1Wins.hitEvents).toHaveLength(1);
+    expect(p1Wins.players.map((player) => player.life)).toEqual([1000, 963]);
+    expect(p1Wins.hitDiagnosticLines?.join('\n')).toContain('reason=higher_priority');
+
+    const p2Wins = resolveSimultaneousHits([2, 'Hit'], [6, 'Hit']);
+    expect(p2Wins.hitEvents).toHaveLength(1);
+    expect(p2Wins.players.map((player) => player.life)).toEqual([963, 1000]);
+  });
+
+  it.each(['Miss', 'Dodge'])('diagnoses equal %s priority types as no-contact instead of silently hitting', (type) => {
+    const result = resolveSimultaneousHits([4, type], [4, type]);
+    expect(result.hitEvents).toHaveLength(0);
+    expect(result.players.map((player) => player.life)).toEqual([1000, 1000]);
+    expect(result.hitDiagnosticLines?.join('\n')).toContain('reason=equal_non_hit_miss');
+  });
+
   it('freezes motion and timers for exactly the defender pausetime then resumes', () => {
     let state = resolveConfiguredHit({ pauseTime: [0, 2], groundVelocity: [-4, 0] });
     const targetAtHit = state.players[1];
@@ -179,13 +239,13 @@ physics = S
     state = stepCnsPhysicsMotion(state);
     expect(state.players[1]).toMatchObject({ x: targetAtHit.x, stateTime: targetAtHit.stateTime, animTime: targetAtHit.animTime, hitPause: 0 });
     state = stepCnsPhysicsMotion(state);
-    expect(state.players[1].x).toBe(targetAtHit.x - 4);
+    expect(state.players[1].x).toBe(targetAtHit.x + 4);
     expect(state.players[1].stateTime).toBe(targetAtHit.stateTime + 1);
     expect(state.players[1].animTime).toBe(targetAtHit.animTime + 1);
   });
   it.each([
-    [1, -6],
-    [-1, 6],
+      [1, 6],
+      [-1, -6],
   ] as const)('applies ground.velocity relative to attacker facing %i', (facing, expectedX) => {
     const hit = resolveConfiguredHit({ groundVelocity: [-6, -2], attackerFacing: facing });
     expect(hit.players[1]).toMatchObject({ vx: expectedX, vy: -2 });
@@ -194,8 +254,8 @@ physics = S
 
   it('selects air.velocity from target StateType at contact', () => {
     const hit = resolveConfiguredHit({ groundVelocity: [-3, 0], airVelocity: [-2.5, -7], targetStateType: 'A' });
-    expect(hit.players[1]).toMatchObject({ vx: -2.5, vy: -7 });
-    expect(hit.hitDiagnosticLines?.join('\n')).toContain('velocity=(-2.5,-7) source=active_hitdef velocityKind=air');
+    expect(hit.players[1]).toMatchObject({ vx: 2.5, vy: -7 });
+    expect(hit.hitDiagnosticLines?.join('\n')).toContain('velocity=(2.5,-7) source=active_hitdef velocityKind=air');
   });
 
   it('preserves an explicit zero velocity and moves only after hit pause ends', () => {
@@ -205,7 +265,7 @@ physics = S
     const moving = resolveConfiguredHit({ groundVelocity: [-4, -1] });
     const targetBefore = { ...moving.players[1], hitPause: 0 };
     const stepped = stepCnsPhysicsMotion({ ...moving, players: [moving.players[0], targetBefore] });
-    expect(stepped.players[1].x).toBe(targetBefore.x - 4);
+    expect(stepped.players[1].x).toBe(targetBefore.x + 4);
     expect(stepped.players[1].vx).not.toBe(0);
   });
   it.each([
@@ -255,8 +315,8 @@ physics = S
   });
 
   it.each([
-    [1, -3],
-    [-1, 3],
+      [1, 3],
+      [-1, -3],
   ] as const)('applies air.animtype, air velocity, and fall data with attacker facing %i', (attackerFacing, expectedX) => {
     const hit = resolveConfiguredHit({
       targetStateType: 'A', airAnimType: 'Hard', airHitTime: 17, airVelocity: [-3, -6],
@@ -704,11 +764,16 @@ function resolveConfiguredHit({
   guardDistance,
   targetCommands,
   targetLife,
+  hitFlag,
+  attr,
+  targetHitBy,
+  targetNotHitBy,
+  targetMoveType = 'I',
 }: {
   damage?: number;
   groundHitTime?: number;
   airHitTime?: number;
-  targetStateType?: 'S' | 'C' | 'A';
+  targetStateType?: 'S' | 'C' | 'A' | 'L';
   attackerId?: 1 | 2;
   animType?: string;
   airDocument?: typeof air;
@@ -736,6 +801,11 @@ function resolveConfiguredHit({
   guardDistance?: number;
   targetCommands?: ReadonlySet<string>;
   targetLife?: number;
+  hitFlag?: string;
+  attr?: string;
+  targetHitBy?: string;
+  targetNotHitBy?: string;
+  targetMoveType?: 'I' | 'H';
 }) {
   const hitTimeLines = [
     groundHitTime === undefined ? '' : `ground.hittime = ${groundHitTime}`,
@@ -772,7 +842,7 @@ function resolveConfiguredHit({
 airjuggle = ${airJuggle ?? 15}
 [Statedef 0]
 type = ${targetStateType}
-movetype = I
+movetype = ${targetMoveType}
 physics = ${targetStateType === 'A' ? 'A' : 'S'}
 [Statedef 200]
 type = S
@@ -782,6 +852,8 @@ ${juggle === undefined ? '' : `juggle = ${juggle}`}
 [State 200, Hit]
 type = HitDef
 trigger1 = 1
+${attr === undefined ? '' : `attr = ${attr}`}
+${hitFlag === undefined ? '' : `hitflag = ${hitFlag}`}
 damage = ${damage}, 0
 ${hitTimeLines}
 ${animTypeLine}
@@ -809,9 +881,49 @@ ${guardLines}
     x: resolvedFacing === 1 ? 290 : 240,
     animNo: 0,
     life: targetLife ?? players[targetIndex].life,
+    hitBy: targetHitBy,
+    notHitBy: targetNotHitBy,
     stateType: targetStateType,
     physics: targetStateType === 'A' ? 'A' : targetStateType === 'C' ? 'C' : 'S',
   };
   const runtime = stepCnsStateRuntime({ ...initial, players }, cns, attackerId === 1 ? { p2Commands: targetCommands } : { p1Commands: targetCommands }).state;
   return resolveFallbackHits(runtime, airDocument);
+}
+
+function resolveSimultaneousHits(p1Priority: [number, string], p2Priority: [number, string]) {
+  const cns = parseCnsText(`
+[Statedef 200]
+type = S
+movetype = A
+physics = S
+[State 200, P1 Hit]
+type = HitDef
+trigger1 = 1
+attr = S, NA
+hitflag = MAF
+damage = 37, 0
+pausetime = 0, 0
+priority = ${p1Priority[0]}, ${p1Priority[1]}
+[Statedef 201]
+type = S
+movetype = A
+physics = S
+[State 201, P2 Hit]
+type = HitDef
+trigger1 = 1
+attr = S, NA
+hitflag = MAF
+damage = 37, 0
+pausetime = 0, 0
+priority = ${p2Priority[0]}, ${p2Priority[1]}
+`);
+  const initial = createInitialGameState();
+  const runtime = stepCnsStateRuntime({
+    ...initial,
+    players: [
+      { ...initial.players[0], x: 240, stateNo: 200, animNo: 200, moveType: 'A' },
+      { ...initial.players[1], x: 290, stateNo: 201, animNo: 200, moveType: 'A' },
+    ],
+  }, cns).state;
+  return resolveFallbackHits(runtime, air);
 }

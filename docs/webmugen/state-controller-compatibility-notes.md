@@ -54,7 +54,7 @@ Good TypeScript controller logic should:
 
 `AfterImage` should remain Partial if it is only recognized and skipped, because the visual effect is not implemented.
 
-`HitDef` remains Partial: major parameters are evaluated once into `ActiveHitDef`, with unapplied and invalid fields diagnosed rather than silently dropped. The live runtime applies damage; selects `ground.hittime`/`air.hittime`, animation, and velocity; and connects air contact to common State 5020. `fall`, fall velocity/recovery/time, and basic `down.hittime` then drive the tested common fall/down/getup path. Required animations are not substituted when absent. Guard, advanced animation branches, full down velocity, priority/flags, chain rules, and broader get-hit integration remain incomplete.
+`HitDef` remains Partial: major parameters are evaluated once into `ActiveHitDef`, with unapplied and invalid fields diagnosed rather than silently dropped. The live runtime applies normal/guard reactions, H/L/M/A/F/D target filtering, normalized HitBy/NotHitBy attr, and simultaneous priority before entering common ground/air/fall/down states. Required animations are not substituted when absent. Hitflag modifiers, mixed priority-type edges, advanced animation/down behavior, chain rules, and broader get-hit integration remain incomplete.
 
 ## Test expectations
 

@@ -159,8 +159,8 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | Gravity | Partial | Recognized safe no-op. Physics layer applies gravity separately. |
 | Helper | Partial | Recognized safe no-op in CNS runtime; Helper system exists separately. |
 | HitAdd | Partial | Stores hit count field only. |
-| HitBy | Partial | Stores allowed-hit attribute string only. |
-| HitDef | Partial | Live paths apply normal or guard damage, pause, hit/control time, Facing-relative velocity, guard kill, ground/air/fall/down reactions, duplicate/juggle limits, contact triggers, targets, and diagnostics. Advanced guard flags, priority/chain, Helper/projectile parity, and uncommon fall/down behavior remain incomplete. |
+| HitBy | Partial | Normalized HitDef attr must match the stored allowed state/attack filter before live contact. Duration/stacking remains incomplete. |
+| HitDef | Partial | Live paths apply normal/guard reaction and filter H/L/A/F/D/M hitflag states, normalized HitBy/NotHitBy attr, and simultaneous priority. Equal Hit priority trades; higher numeric priority wins; equal Miss/Dodge produces no contact. Hitflag modifiers, mixed priority-type edge cases, priority/chain depth, and Helper/projectile parity remain incomplete. |
 | HitFallDamage | Partial | Applies simple life reduction. Full fall damage semantics incomplete. |
 | HitFallSet | Partial | Recognized safe no-op. Fall flags not implemented. |
 | HitFallVel | Partial | Restores the contact-snapshotted fall X/Y velocity for common bounce states. Full down-hit variants remain incomplete. |
@@ -172,7 +172,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | ModifyExplod | Partial | Recognized safe no-op. Explod mutation not implemented here. |
 | MoveHitReset | Complete | Clears current generation contact/hit/guard flags while preserving hit count and duplicate-target history; focused tests cover reset semantics. |
 | MoveTypeSet | Complete | Basic implementation exists. |
-| NotHitBy | Partial | Stores not-hit attribute string only. |
+| NotHitBy | Partial | Matching normalized HitDef state/attack attr rejects live contact. Duration/stacking remains incomplete. |
 | Null | Complete | Explicit no-op. |
 | Offset | Partial | Stores draw offset field only. Rendering needs audit. |
 | PalFX | Partial | Recognized safe no-op. Palette effect not implemented. |
@@ -255,7 +255,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | GameTime | Partial | Context/player fallback exists; real global frame integration needs audit. |
 | GetHitVar | Partial | Contact snapshot supplies damage, hit/slide/control time, velocity, type/anim codes, fall values, ids, guarded, and yaccel across get-hit State changes. Unsupported offset/fall-time keys are diagnosed safe defaults. |
 | HitCount | Partial | Counts accepted hits across ActiveHitDef generations within the current State; persist headers and full multi-target semantics remain incomplete. |
-| HitDefAttr | Unsupported | HitDef attribute checks not implemented. |
+| HitDefAttr | Partial | Compares State and attack categories against the same normalized attr snapshot used by live HitBy/NotHitBy filtering. Redirect and malformed-attr edge cases remain incomplete. |
 | HitFall | Partial | Reads the contact-snapshotted HitDef fall flag through common air get-hit states. Guard/projectile parity remains incomplete. |
 | HitOver | Partial | Safe default true. |
 | HitPauseTime | Complete | Reads player hitPause. |
