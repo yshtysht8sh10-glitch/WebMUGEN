@@ -151,6 +151,8 @@ While hit stun remains active, `raw.hitstun_tick` records independent elapsed/re
 
 `raw.gethitvar_snapshot` records the keys captured on contact and `unsupportedKeys` that will currently return safe defaults. The snapshot stays on the defender across get-hit State transitions and is cleared when recovery ends.
 
+`raw.move_contact` records generation id, contact/hit/guard flags, hit count, target, and accepted result. This is the source used by hit-confirm Trigger routes rather than the former ActiveHitDef/boolean approximation.
+
 ## What to look for
 
 | Symptom in history | Interpretation |

@@ -170,7 +170,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | LifeSet | Complete | Basic implementation exists. |
 | MakeDust | Partial | Recognized safe no-op. Dust rendering not implemented. |
 | ModifyExplod | Partial | Recognized safe no-op. Explod mutation not implemented here. |
-| MoveHitReset | Partial | Recognized safe no-op. Move contact reset incomplete. |
+| MoveHitReset | Complete | Clears current generation contact/hit/guard flags while preserving hit count and duplicate-target history; focused tests cover reset semantics. |
 | MoveTypeSet | Complete | Basic implementation exists. |
 | NotHitBy | Partial | Stores not-hit attribute string only. |
 | Null | Complete | Explicit no-op. |
@@ -254,7 +254,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | FVar | Partial | `fvar(n)` lookup supported with default 0. |
 | GameTime | Partial | Context/player fallback exists; real global frame integration needs audit. |
 | GetHitVar | Partial | Contact snapshot supplies damage, hit/slide/control time, velocity, type/anim codes, fall values, ids, guarded, and yaccel across get-hit State changes. Unsupported offset/fall-time keys are diagnosed safe defaults. |
-| HitCount | Partial | Safe default 0. |
+| HitCount | Partial | Counts accepted hits across ActiveHitDef generations within the current State; persist headers and full multi-target semantics remain incomplete. |
 | HitDefAttr | Unsupported | HitDef attribute checks not implemented. |
 | HitFall | Partial | Optional player flag, default false. |
 | HitOver | Partial | Safe default true. |
@@ -276,9 +276,9 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | LoseTime | Unsupported | Round result not implemented. |
 | MatchNo | Unsupported | Match metadata not implemented. |
 | MatchOver | Unsupported | Match flow not implemented. |
-| MoveContact | Partial | Uses activeHitDef/hitDefUsed approximation. |
-| MoveGuarded | Partial | Safe default false. |
-| MoveHit | Partial | Uses activeHitDef/hitDefUsed approximation. |
+| MoveContact | Partial | Reads real contact state for the current ActiveHitDef generation; guard and persistence integration remain incomplete. |
+| MoveGuarded | Partial | Reads guarded-contact state from the shared result model; guard resolver connection is pending. |
+| MoveHit | Partial | Reads accepted-hit state and drives tested hit-confirm cancel routes; persistence remains incomplete. |
 | MoveReversed | Unsupported | Reversal/contact state not implemented. |
 | MoveType | Complete | Basic support. |
 | Name | Partial | String source exists; metadata defaults empty. |

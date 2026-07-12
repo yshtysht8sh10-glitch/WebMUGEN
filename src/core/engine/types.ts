@@ -108,6 +108,13 @@ export type PlayerState = {
   hitTargets?: Array<{ activeHitDefId: number; defenderId: number }>;
   getHitVars?: Record<string, number>;
   getHitVarUnsupportedKeys?: string[];
+  moveContact?: {
+    activeHitDefId: number;
+    contact: boolean;
+    hit: boolean;
+    guarded: boolean;
+    hitCount: number;
+  };
   playerPush?: boolean;
   hitDiagnosticLines?: string[];
   hitStun?: {

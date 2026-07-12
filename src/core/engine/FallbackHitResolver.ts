@@ -5,6 +5,7 @@ import {
   getPlayerBodyBoxes,
 } from '../collision/CollisionResolver';
 import type { GameState, HitEvent, PlayerState } from './types';
+import { recordMoveContact } from '../hitdef/MoveContactState';
 
 const STAND_HIT_STATE = 5000;
 
@@ -120,6 +121,7 @@ function resolveAttack(
   const animSource = active?.animTypeSource ?? 'existing_fallback';
   const animationExists = airDocumentHasAction(airDocument, selectedAnim);
   const hitAttacker = markAttackerHit(attacker, activeHitDefId, target.id, active.pauseTime.attacker);
+  const contactedAttacker = activeHitDefId === null ? hitAttacker : recordMoveContact(hitAttacker, activeHitDefId, 'hit');
   const hitTarget = applyFallbackHit(target, damage, selectedAnim, appliedVelocity, active.pauseTime.defender, {
     activeHitDefId,
     selectedHitTime,
@@ -136,6 +138,8 @@ function resolveAttack(
   if (diagnosticsEnabled) diagnosticLines.push(
     `raw.hit_collision attacker=p${attacker.id} target=p${target.id}`,
     `${collisionHeader} overlap=${formatOverlap(overlap)} damage=${damage},${guardDamage} source=${source} fallbackReason=${fallbackReason} result=hit`,
+    `raw.move_contact attacker=p${attacker.id} target=p${target.id}`,
+    `  activeHitDefId=${idText} contact=1 hit=1 guarded=0 hitCount=${contactedAttacker.moveContact?.hitCount ?? 0} result=accepted`,
     `raw.hit_damage target=p${target.id}`,
     `  activeHitDefId=${idText} lifeBefore=${lifeBefore} appliedDamage=${damage} lifeAfter=${hitTarget.life} source=${source} ko=${hitTarget.life === 0 ? 1 : 0}`,
     `raw.hitpause attacker=p${attacker.id} target=p${target.id}`,
@@ -161,7 +165,7 @@ function resolveAttack(
     );
   }
   return {
-    attacker: hitAttacker,
+    attacker: contactedAttacker,
     target: hitTarget,
     hitEvent: { attackerId: attacker.id, defenderId: target.id, damage },
     diagnosticLines,

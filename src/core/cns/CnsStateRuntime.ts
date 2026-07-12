@@ -2,6 +2,7 @@ import type { CnsDocument, CnsStateController, CnsStateDefinition, CnsTrigger, C
 import type { ActiveHitDef, GameState, PlayerState } from '../engine/types';
 import { calculateMugenAnimTime } from '../animation/AnimationDuration';
 import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
+import { activateMoveContact, resetMoveContact } from '../hitdef/MoveContactState';
 import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, readNumberExpression, type CnsRuntimeTriggerContext } from './CnsRuntimeTrigger';
 
 export type CnsRuntimeTrace = {
@@ -335,6 +336,7 @@ function enterState(player: PlayerState, opponent: PlayerState, stateNo: number,
     activeHitDef: null,
     hitDefUsed: false,
     hitTargets: [],
+    moveContact: undefined,
     hitDiagnosticLines,
   } as PlayerState;
 }
@@ -639,7 +641,7 @@ function executeController(
   if (type === 'hitby') return withExtendedPlayer(player, { hitBy: str(controller, 'value') ?? str(controller, 'attr') }, 'HitBy');
   if (type === 'nothitby') return withExtendedPlayer(player, { notHitBy: str(controller, 'value') ?? str(controller, 'attr') }, 'NotHitBy');
   if (type === 'hitdef') return activateHitDef(player, controller, input, commands, opponent);
-  if (type === 'movehitreset') return withPlayer({ ...player, hitDefUsed: false, hitTargets: [] }, true, 'MoveHitReset');
+  if (type === 'movehitreset') return withPlayer(resetMoveContact(player), true, 'MoveHitReset');
   if (type === 'hitfallvel') return withPlayer({ ...player, vy: num(controller, 'y') ?? player.vy }, hasNum(controller, 'y'), 'HitFallVel');
   if (type === 'hitvelset') return withPlayer({ ...player, vx: num(controller, 'x', player, input, commands, opponent) ?? player.vx, vy: num(controller, 'y', player, input, commands, opponent) ?? player.vy }, hasNum(controller, 'x', player, input, commands, opponent) || hasNum(controller, 'y', player, input, commands, opponent), 'HitVelSet');
   if (type === 'hitfalldamage') return hitFallDamage(player, controller);
@@ -842,8 +844,9 @@ function activateHitDef(
     `raw.hitdef_lifecycle activeHitDefId=${diagnosticId}`,
     `  event=${action} reason=controller_execute hitCount=${player.hitDefUsed ? 1 : 0}`,
   ];
+  const activatedPlayer = activateMoveContact(player, diagnosticId);
   return withPlayer({
-    ...player,
+    ...activatedPlayer,
     hitDiagnosticLines,
     activeHitDef: {
       ...snapshot,

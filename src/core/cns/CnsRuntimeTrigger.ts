@@ -131,9 +131,9 @@ function getBooleanSource(name: string): BooleanSource | null {
     case 'hitfall': return (context) => readOptionalBool(context.player, 'hitFall', false);
     case 'canrecover': return () => true;
     case 'inguarddist': return (context) => Math.abs((context.opponent?.x ?? context.player.x + 999) - context.player.x) < 80;
-    case 'movecontact': return (context) => hasMoveContact(context.player);
-    case 'movehit': return (context) => hasMoveContact(context.player);
-    case 'moveguarded': return () => false;
+    case 'movecontact': return (context) => context.player.moveContact?.contact === true;
+    case 'movehit': return (context) => context.player.moveContact?.hit === true;
+    case 'moveguarded': return (context) => context.player.moveContact?.guarded === true;
     case 'win': return () => false;
     case 'lose': return () => false;
     case 'drawgame': return () => false;
@@ -308,11 +308,11 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'hitvely':
     case 'hitvel y': return (context) => readOptionalNumber(context.player, 'hitVelY', 0);
     case 'hitpausetime': return (context) => context.player.hitPause;
-    case 'hitcount': return () => 0;
+    case 'hitcount': return (context) => context.player.moveContact?.hitCount ?? 0;
     case 'hitfall': return (context) => readOptionalBool(context.player, 'hitFall', false) ? 1 : 0;
-    case 'movecontact': return (context) => hasMoveContact(context.player) ? 1 : 0;
-    case 'movehit': return (context) => hasMoveContact(context.player) ? 1 : 0;
-    case 'moveguarded': return () => 0;
+    case 'movecontact': return (context) => context.player.moveContact?.contact ? 1 : 0;
+    case 'movehit': return (context) => context.player.moveContact?.hit ? 1 : 0;
+    case 'moveguarded': return (context) => context.player.moveContact?.guarded ? 1 : 0;
     case 'numenemy': return (context) => (context.opponent ? 1 : 1);
     case 'numtarget': return () => 0;
     case 'numhelper': return () => 0;
@@ -562,10 +562,6 @@ function compareString(actual: string, operator: string, expected: string): bool
     case '!=': return actual.toUpperCase() !== expected.toUpperCase();
     default: return false;
   }
-}
-
-function hasMoveContact(player: PlayerState): boolean {
-  return Boolean(player.activeHitDef) || player.hitDefUsed;
 }
 
 function readOptionalNumber(player: PlayerState | undefined, key: string, fallback: number): number {

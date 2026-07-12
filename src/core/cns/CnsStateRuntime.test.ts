@@ -813,9 +813,17 @@ trigger1 = 1
     const state = createInitialGameState();
     const result = stepCnsStateRuntime({
       ...state,
-      players: [{ ...state.players[0], stateNo: 200, moveType: 'A', hitDefUsed: true, hitTargets: [{ activeHitDefId: 7, defenderId: 2 }] }, state.players[1]],
+      players: [{
+        ...state.players[0], stateNo: 200, moveType: 'A', hitDefUsed: true,
+        hitTargets: [{ activeHitDefId: 7, defenderId: 2 }],
+        moveContact: { activeHitDefId: 7, contact: true, hit: true, guarded: false, hitCount: 2 },
+      }, state.players[1]],
     }, cns);
-    expect(result.state.players[0]).toMatchObject({ hitDefUsed: false, hitTargets: [] });
+    expect(result.state.players[0]).toMatchObject({
+      hitDefUsed: true,
+      hitTargets: [{ activeHitDefId: 7, defenderId: 2 }],
+      moveContact: { activeHitDefId: 7, contact: false, hit: false, guarded: false, hitCount: 2 },
+    });
     expect(result.traces[0].executedControllers).toContain('MoveHitReset');
   });
 

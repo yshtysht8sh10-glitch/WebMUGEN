@@ -32,7 +32,7 @@ Do not mark safe defaults as Complete.
 | `StateType` | Complete | Basic S/C/A/L comparison. | State header correctness still matters. |
 | `Ctrl` | Complete | Basic control-flag comparison. | Control handoff semantics depend on state/controller flow. |
 | `Time` | Complete | State time comparison. | Previous-state and transition timing still need broader route tests. |
-| `MoveContact` / `MoveHit` | Partial | Uses activeHitDef/hitDefUsed approximation. | Full HitDef/contact lifecycle is incomplete. |
+| `MoveContact` / `MoveHit` / `MoveGuarded` / `HitCount` | Partial | Reads ActiveHitDef-generation contact/hit/guard flags and State-local hit count; real hit-confirm cancel routes are tested. | Guarded contact is modeled but awaits the guard resolver; persist headers remain incomplete. |
 | `HitDefAttr` | Unsupported | Not implemented. | Required for many attack cancel/super routes. |
 | `GetHitVar` | Partial | Reads a contact snapshot for damage, hit/slide/control time, velocities, type/animation codes, fall values, ids, guarded, and yaccel across get-hit State changes. | Offset/fall-time keys and later guard/fall semantics still use diagnosed safe defaults. |
 | Projectile triggers | Partial / Unsupported | Some `Proj*Time` safe defaults exist; boolean projectile triggers are incomplete. | Requires projectile subsystem integration. |

@@ -87,6 +87,10 @@ These should generally remain Partial.
 
 Successful HitDef contact stores numeric get-hit values on the defender so common get-hit states can read them after State changes. The current snapshot covers damage, selected hittime/slidetime/ctrltime, velocity values, type/animtype/airtype/groundtype codes, fall values, hit/chain id, guarded, and yaccel. It persists throughout hit stun and is cleared at recovery. Unsupported offset/fall-time keys return the existing safe zero and are listed in contact diagnostics; therefore GetHitVar remains Partial.
 
+## Move contact results
+
+MoveContact, MoveHit, MoveGuarded, and HitCount read an attacker-side result owned by the current ActiveHitDef generation. A normal hit sets contact/hit and increments the State-local count; a guarded result can set contact/guarded through the same API. New HitDef activation clears result flags while retaining the State hit count, State change clears all, and MoveHitReset clears flags without erasing target hit history or count.
+
 ## Debug output
 
 For a route under investigation, expose:

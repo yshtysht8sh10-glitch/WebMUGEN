@@ -382,6 +382,26 @@ damage = 37, 0
     expect(hit.hitEvents).toHaveLength(1);
     expect(lines).toContain('attackerAnim=200 attackerElem=0 defenderAnim=0 defenderElem=0 clsn1=1 clsn2=1');
     expect(lines).toContain('overlap=0:0 damage=31,0 source=active_hitdef');
+    expect(hit.players[0].moveContact).toMatchObject({ contact: true, hit: true, guarded: false, hitCount: 1 });
+  });
+
+  it('drives a MoveHit cancel route from real contact state', () => {
+    const hit = resolveConfiguredHit({ pauseTime: [0, 0] });
+    const cns = parseCnsText(`
+[Statedef 200]
+type = S
+movetype = A
+[State 200, Hit confirm]
+type = ChangeState
+trigger1 = MoveContact && MoveHit && !MoveGuarded
+trigger1 = HitCount = 1
+value = 300
+[Statedef 300]
+type = S
+movetype = A
+`);
+    const next = stepCnsStateRuntime(hit, cns).state;
+    expect(next.players[0].stateNo).toBe(300);
   });
 
   it('diagnoses missing Clsn1 and Clsn2 without fixed rectangles', () => {
@@ -470,6 +490,7 @@ damage = 37, 0
     expect(second.hitEvents).toHaveLength(1);
     expect(second.players[1].life).toBe(first.players[1].life - 25);
     expect(second.players[0].hitTargets).toHaveLength(2);
+    expect(second.players[0].moveContact?.hitCount).toBe(2);
   });
 
   it('does not keep stale hit events when no new contact occurs', () => {
