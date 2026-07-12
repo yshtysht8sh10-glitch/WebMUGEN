@@ -36,7 +36,7 @@ function stepPlayerCnsPhysics(player: PlayerState): PlayerState {
 
   const usesAirPhysics = player.physics === 'A';
   const nextVy = usesAirPhysics ? player.vy + AIR_GRAVITY : player.vy;
-  const nextVx = usesAirPhysics ? player.vx : player.vx * GROUND_FRICTION;
+  const nextVx = player.physics === 'S' || player.physics === 'C' ? player.vx * GROUND_FRICTION : player.vx;
 
   return {
     ...player,
@@ -51,6 +51,10 @@ function stepPlayerCnsPhysics(player: PlayerState): PlayerState {
 
 function clampPlayerAfterCnsPhysics(player: PlayerState): PlayerState {
   if (player.y < DEFAULT_GROUND_Y) {
+    return player;
+  }
+
+  if (player.stateType === 'A' && player.moveType === 'H') {
     return player;
   }
 

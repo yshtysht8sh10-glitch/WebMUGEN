@@ -77,7 +77,7 @@ Safe defaults are useful but should not be overclaimed.
 
 Examples:
 
-- `CanRecover` may return a safe value before full get-hit recovery exists;
+- `CanRecover` reads snapshotted `fall.recover` and `fall.recovertime` during an air-fall reaction;
 - `NumHelper` may return 0 before Helper lookup exists;
 - projectile contact time may return -1 before projectile contact is integrated.
 
@@ -85,7 +85,7 @@ These should generally remain Partial.
 
 ## GetHitVar snapshot
 
-Successful HitDef contact stores numeric get-hit values on the defender so common get-hit states can read them after State changes. The current snapshot covers damage, selected hittime/slidetime/ctrltime, velocity values, type/animtype/airtype/groundtype codes, fall values, hit/chain id, guarded, and yaccel. It persists throughout hit stun and is cleared at recovery. Unsupported offset/fall-time keys return the existing safe zero and are listed in contact diagnostics; therefore GetHitVar remains Partial.
+Successful HitDef contact stores numeric get-hit values on the defender so common get-hit states can read them after State changes. The current snapshot covers damage, selected hittime/slidetime/ctrltime, velocity values, type/animtype/airtype/groundtype codes, fall values, basic down velocity/hittime, hit/chain id, guarded, and yaccel. It persists through the air fall/down path and is cleared after leaving get-hit states. Unsupported offset/fall-time keys return the existing safe zero and are listed in contact diagnostics; therefore GetHitVar remains Partial.
 
 ## Move contact results
 

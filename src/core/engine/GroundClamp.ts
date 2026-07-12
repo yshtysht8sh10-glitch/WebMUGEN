@@ -20,6 +20,13 @@ export function clampPlayerToGround(player: PlayerState, groundY: number = DEFAU
     return player;
   }
 
+  // Air get-hit common states detect landing from Pos Y/Vel Y and choose
+  // recover, fall, or down routes themselves. Clamping here would erase that
+  // observable crossing before the CNS controllers can evaluate it.
+  if (player.stateType === 'A' && player.moveType === 'H') {
+    return player;
+  }
+
   const landedFromAir = player.stateType === 'A' || player.physics === 'A' || player.vy > 0;
 
   return {

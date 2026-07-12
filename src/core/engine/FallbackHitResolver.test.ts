@@ -78,6 +78,13 @@ physics = S
     expect(hit.hitDiagnosticLines?.join('\n')).toContain(`attackerFrames=${attackerFrames} defenderFrames=${defenderFrames} source=active_hitdef`);
   });
 
+  it('snapshots down.velocity and down.hittime for the common down path', () => {
+    const hit = resolveConfiguredHit({ targetStateType: 'A', fall: true, downVelocity: [-1.5, -3], downHitTime: 11 });
+    expect(hit.players[0].activeHitDef).toMatchObject({ downVelocity: { x: -1.5, y: -3 }, downHitTime: 11 });
+    expect(hit.players[1].getHitVars).toMatchObject({ 'down.xvel': -1.5, 'down.yvel': -3, 'down.hittime': 11 });
+    expect(hit.players[1].hitFallVelocity).toEqual({ x: -1.5, y: -3 });
+  });
+
   it('freezes motion and timers for exactly the defender pausetime then resumes', () => {
     let state = resolveConfiguredHit({ pauseTime: [0, 2], groundVelocity: [-4, 0] });
     const targetAtHit = state.players[1];
@@ -152,11 +159,30 @@ physics = S
     expect(hit.players[0].activeHitDef?.animTypeSource).toBe('existing_fallback');
   });
 
-  it('does not apply grounded animtype selection to an airborne target', () => {
+  it('routes an airborne target through State 5020 without applying grounded animtype', () => {
     const hit = resolveConfiguredHit({ animType: 'Hard', targetStateType: 'A' });
     expect(hit.players[1].animNo).toBe(5000);
+    expect(hit.players[1].stateNo).toBe(5020);
+    expect(hit.players[1].stateType).toBe('A');
     expect(hit.players[1].hitStun?.targetStateTypeAtHit).toBe('A');
-    expect(hit.hitDiagnosticLines?.join('\n')).not.toContain('raw.hit_anim_select');
+    expect(hit.hitDiagnosticLines?.join('\n')).toContain('fallbackReason=missing_air_animtype');
+  });
+
+  it.each([
+    [1, -3],
+    [-1, 3],
+  ] as const)('applies air.animtype, air velocity, and fall data with attacker facing %i', (attackerFacing, expectedX) => {
+    const hit = resolveConfiguredHit({
+      targetStateType: 'A', airAnimType: 'Hard', airHitTime: 17, airVelocity: [-3, -6],
+      fall: true, fallVelocity: [-2, -4], fallRecover: false, fallRecoverTime: 9, attackerFacing,
+    });
+    expect(hit.players[1]).toMatchObject({
+      stateNo: 5020, stateType: 'A', animNo: 5002, vx: expectedX, vy: -6,
+      hitVelX: expectedX, hitVelY: -6, hitFall: true, fallRecover: false, fallRecoverTime: 9,
+    });
+    expect(hit.players[1].hitFallVelocity).toEqual({ x: attackerFacing * -2, y: -4 });
+    expect(hit.players[1].hitStun).toMatchObject({ selectedHitTime: 17, kind: 'air' });
+    expect(hit.hitDiagnosticLines?.join('\n')).toContain('state=5020 source=air_common_state');
   });
   it.each([7, 20])('uses ground.hittime=%i for a grounded target', (hitTime) => {
     const hit = resolveConfiguredHit({ damage: 37, groundHitTime: hitTime });
@@ -573,6 +599,13 @@ function resolveConfiguredHit({
   attackerFacing,
   pauseTime,
   hitId,
+  airAnimType,
+  fall,
+  fallVelocity,
+  fallRecover,
+  fallRecoverTime,
+  downVelocity,
+  downHitTime,
 }: {
   damage?: number;
   groundHitTime?: number;
@@ -586,6 +619,13 @@ function resolveConfiguredHit({
   attackerFacing?: 1 | -1;
   pauseTime?: [number, number];
   hitId?: number;
+  airAnimType?: string;
+  fall?: boolean;
+  fallVelocity?: [number, number];
+  fallRecover?: boolean;
+  fallRecoverTime?: number;
+  downVelocity?: [number, number];
+  downHitTime?: number;
 }) {
   const hitTimeLines = [
     groundHitTime === undefined ? '' : `ground.hittime = ${groundHitTime}`,
@@ -598,6 +638,15 @@ function resolveConfiguredHit({
   ].filter(Boolean).join('\n');
   const pauseTimeLine = pauseTime ? `pausetime = ${pauseTime.join(', ')}` : '';
   const hitIdLine = hitId === undefined ? '' : `id = ${hitId}`;
+  const fallLines = [
+    airAnimType === undefined ? '' : `air.animtype = ${airAnimType}`,
+    fall === undefined ? '' : `fall = ${fall ? 1 : 0}`,
+    fallVelocity ? `fall.velocity = ${fallVelocity.join(', ')}` : '',
+    fallRecover === undefined ? '' : `fall.recover = ${fallRecover ? 1 : 0}`,
+    fallRecoverTime === undefined ? '' : `fall.recovertime = ${fallRecoverTime}`,
+    downVelocity ? `down.velocity = ${downVelocity.join(', ')}` : '',
+    downHitTime === undefined ? '' : `down.hittime = ${downHitTime}`,
+  ].filter(Boolean).join('\n');
   const cns = parseCnsText(`
 [Statedef 0]
 type = ${targetStateType}
@@ -616,6 +665,7 @@ ${animTypeLine}
 ${velocityLines}
 ${pauseTimeLine}
 ${hitIdLine}
+${fallLines}
 `);
   const initial = createInitialGameState();
   const attackerIndex = attackerId - 1;

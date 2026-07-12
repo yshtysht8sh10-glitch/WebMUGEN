@@ -90,17 +90,17 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | 5001 | Common get-hit state | Unsupported | Required for hit reactions. |
 | 5010 | Common get-hit state | Unsupported | Required for hit reactions. |
 | 5011 | Common get-hit state | Unsupported | Required for hit reactions. |
-| 5020 | Common get-hit state | Unsupported | Required for hit reactions. |
-| 5030 | Fall state | Unsupported | Required for knockdown. |
-| 5035 | Fall state | Unsupported | Required for knockdown. |
-| 5040 | Fall state | Unsupported | Required for knockdown. |
-| 5050 | Fall state | Unsupported | Required for knockdown. |
+| 5020 | Common get-hit state | Partial | Air contact enters the unmodified common state with air animtype/hittime/velocity snapshot data. Guard and uncommon animation branches remain incomplete. |
+| 5030 | Fall state | Partial | Common air hit velocity/gravity and HitFall routing are covered by runtime integration tests. |
+| 5035 | Fall state | Partial | Common transition participates in tested air-hit recovery/fall paths; animation completeness varies by character. |
+| 5040 | Fall state | Partial | Non-fall air recovery and landing are connected; full KO and animation behavior remains incomplete. |
+| 5050 | Fall state | Partial | Fall/recover/recovertime routes and landing detection are connected; recovery state details remain Partial. |
 | 5060 | Fall state | Unsupported | Required for knockdown. |
 | 5070 | Fall state | Unsupported | Required for knockdown. |
 | 5080 | Fall recovery state | Unsupported | Required for recovery. |
 | 5090 | Fall recovery state | Unsupported | Required for recovery. |
-| 5100 | Down state | Unsupported | Required for knockdown. |
-| 5110 | Down state | Unsupported | Required for knockdown. |
+| 5100 | Down state | Partial | Falling contact can enter the common bounce/down path without ground clamping hiding the crossing. Effects and full bounce variants remain incomplete. |
+| 5110 | Down state | Partial | Common liedown path is reachable and `down.hittime` schedules State 5120. Full down velocity and animation variants remain incomplete. |
 | 5120 | Recovery state | Unsupported | Required for recovery. |
 | 5150 | Dead state | Unsupported | Required for KO behavior. |
 | 5200 | Lie dead state | Unsupported | Required for KO behavior. |
@@ -163,9 +163,9 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | HitDef | Partial | Ground/air hittime selects at contact and uses independent hit-stun elapsed across internal get-hit State changes. CtrlSet, StateDef/ChangeState ctrl, early State 0/52, and State -1 input are suppressed until expiry; internal 5000/5001 transitions remain allowed. Full GetHitVar branching remains Partial. |
 | HitFallDamage | Partial | Applies simple life reduction. Full fall damage semantics incomplete. |
 | HitFallSet | Partial | Recognized safe no-op. Fall flags not implemented. |
-| HitFallVel | Partial | Applies simple Y velocity. Full get-hit semantics incomplete. |
+| HitFallVel | Partial | Restores the contact-snapshotted fall X/Y velocity for common bounce states. Full down-hit variants remain incomplete. |
 | HitOverride | Partial | Recognized safe no-op. Override table not implemented. |
-| HitVelSet | Partial | Applies simple velocity set. Full get-hit semantics incomplete. |
+| HitVelSet | Partial | Treats X/Y as component flags and restores facing-converted contact velocity from the GetHitVar snapshot. Guard velocity remains incomplete. |
 | LifeAdd | Complete | Basic implementation exists. |
 | LifeSet | Complete | Basic implementation exists. |
 | MakeDust | Partial | Recognized safe no-op. Dust rendering not implemented. |
@@ -237,7 +237,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | BackEdgeDist | Partial | Uses internal screen/player coordinate approximation. |
 | BodyDist X | Partial | Evaluates opponent center distance like P2BodyDist X; precise body edge width is still incomplete. |
 | BodyDist Y | Partial | Evaluates opponent/player Y coordinate difference like P2BodyDist Y; precise body edge height is still incomplete. |
-| CanRecover | Partial | Safe default currently returns true. |
+| CanRecover | Partial | Reads fall.recover and fall.recovertime during the common air-fall path. Broader recovery command/state behavior remains incomplete. |
 | Ceil | Complete | `Ceil(...)` supported for numeric expressions. |
 | Command | Complete | Basic command set matching. |
 | Cond | Complete | Numeric conditional function supported in runtime trigger evaluator. |
@@ -256,7 +256,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | GetHitVar | Partial | Contact snapshot supplies damage, hit/slide/control time, velocity, type/anim codes, fall values, ids, guarded, and yaccel across get-hit State changes. Unsupported offset/fall-time keys are diagnosed safe defaults. |
 | HitCount | Partial | Counts accepted hits across ActiveHitDef generations within the current State; persist headers and full multi-target semantics remain incomplete. |
 | HitDefAttr | Unsupported | HitDef attribute checks not implemented. |
-| HitFall | Partial | Optional player flag, default false. |
+| HitFall | Partial | Reads the contact-snapshotted HitDef fall flag through common air get-hit states. Guard/projectile parity remains incomplete. |
 | HitOver | Partial | Safe default true. |
 | HitPauseTime | Complete | Reads player hitPause. |
 | HitShakeOver | Partial | Safe default true. |

@@ -9,6 +9,7 @@ import { recordMoveContact } from '../hitdef/MoveContactState';
 import { pruneTargets, registerTarget } from '../hitdef/TargetState';
 
 const STAND_HIT_STATE = 5000;
+const AIR_HIT_SHAKE_STATE = 5020;
 
 export function resolveFallbackHits(state: GameState, airDocument?: AirDocument | null, diagnosticsEnabled = true): GameState {
   if (!airDocument) {
@@ -117,7 +118,9 @@ function resolveAttack(
       ? active.airHitTimeFallbackReason ?? 'missing_air_hittime'
       : active.groundHitTimeFallbackReason ?? 'missing_ground_hittime'
     : 'active_hitdef_missing';
-  const selectedAnim = hitTimeKind === 'ground' ? groundHitAnim(active?.animType) : STAND_HIT_STATE;
+  const reactionState = hitTimeKind === 'air' ? AIR_HIT_SHAKE_STATE : STAND_HIT_STATE;
+  const selectedAnimType = hitTimeKind === 'air' ? active.airAnimType ?? 'Light' : active.animType;
+  const selectedAnim = hitTimeKind === 'ground' ? groundHitAnim(active?.animType) : airHitAnim(selectedAnimType, active.airType);
   const selectedVelocity = hitTimeKind === 'air' ? active.airVelocity : active.groundVelocity;
   // WinMUGEN HitDef X velocity is expressed in the defender's reaction direction:
   // the commonly used negative value must send the target away from the attacker.
@@ -127,14 +130,18 @@ function resolveAttack(
   const animationExists = airDocumentHasAction(airDocument, selectedAnim);
   const hitAttacker = markAttackerHit(attacker, activeHitDefId, target.id, active.pauseTime.attacker);
   const contactedAttacker = activeHitDefId === null ? hitAttacker : recordMoveContact(hitAttacker, activeHitDefId, 'hit');
-  const hitTarget = applyFallbackHit(target, damage, selectedAnim, appliedVelocity, active.pauseTime.defender, {
+  const fallVelocity = {
+    x: (active.fall?.xVelocity ?? active.downVelocity?.x ?? 0) * attacker.facing,
+    y: active.fall?.yVelocity ?? active.downVelocity?.y ?? 0,
+  };
+  const hitTarget = applyFallbackHit(target, damage, reactionState, selectedAnim, appliedVelocity, fallVelocity, active.pauseTime.defender, {
     activeHitDefId,
     selectedHitTime,
     kind: activeHitTime === undefined ? 'fallback' : hitTimeKind,
     source: hitTimeSource,
     targetStateTypeAtHit,
     elapsed: 0,
-    lastStateNo: STAND_HIT_STATE,
+    lastStateNo: reactionState,
     selectedAnim,
     ...(activeHitTime === undefined ? { fallbackReason: hitTimeFallbackReason } : {}),
   }, createGetHitVarSnapshot(active, damage, selectedHitTime, hitTimeKind, selectedVelocity));
@@ -156,15 +163,15 @@ function resolveAttack(
     `  activeHitDefId=${idText} event=start attackerFrames=${active.pauseTime.attacker} defenderFrames=${active.pauseTime.defender} source=active_hitdef`,
     `raw.gethitvar_snapshot target=p${target.id}`,
     `  activeHitDefId=${idText} keys=${Object.keys(hitTarget.getHitVars ?? {}).sort().join(',')} unsupportedKeys=${hitTarget.getHitVarUnsupportedKeys?.join(',') || '-'}`,
-    ...(hitTimeKind === 'ground' ? [
+    ...[
       `raw.hit_anim_select target=p${target.id}`,
-      `  activeHitDefId=${idText} animType=${animType} targetStateTypeAtHit=${targetStateTypeAtHit} requestedAnim=${selectedAnim} selectedAnim=${selectedAnim} animationExists=${animationExists ? 1 : 0} source=${animSource} fallbackReason=${animSource === 'cns' ? '-' : 'existing_fixed_5000'}${animationExists ? '' : ' warning=missing_required_animation'}`,
-    ] : []),
+      `  activeHitDefId=${idText} animType=${String(selectedAnimType ?? animType)} targetStateTypeAtHit=${targetStateTypeAtHit} requestedAnim=${selectedAnim} selectedAnim=${selectedAnim} animationExists=${animationExists ? 1 : 0} source=${hitTimeKind === 'air' && active.airAnimType ? 'cns_air' : animSource} fallbackReason=${hitTimeKind === 'ground' && animSource !== 'cns' ? 'existing_fixed_5000' : hitTimeKind === 'air' && !active.airAnimType ? 'missing_air_animtype' : '-'}${animationExists ? '' : ' warning=missing_required_animation'}`,
+    ],
     `raw.hit_reaction target=p${target.id}`,
-    `  state=${STAND_HIT_STATE} source=existing_fallback anim=${selectedAnim} source=${hitTimeKind === 'ground' ? animSource : 'existing_fallback'}`,
+    `  state=${reactionState} source=${hitTimeKind === 'air' ? 'air_common_state' : 'ground_common_state'} anim=${selectedAnim} source=${hitTimeKind === 'ground' ? animSource : active.airAnimType ? 'cns_air' : 'existing_default'}`,
     `  velocity=(${appliedVelocity.x},${appliedVelocity.y}) source=active_hitdef velocityKind=${hitTimeKind} attackerFacing=${attacker.facing} pausetime=${active.pauseTime.defender} source=active_hitdef`,
     `  hittime=${selectedHitTime} source=${hitTimeSource} hittimeKind=${activeHitTime === undefined ? 'fallback' : hitTimeKind} targetStateTypeAtHit=${targetStateTypeAtHit}`,
-    '  fall=0 source=existing_fallback',
+    `  fall=${active.fall?.enabled ? 1 : 0} fallVelocity=(${fallVelocity.x},${fallVelocity.y}) recover=${active.fall?.recover === false ? 0 : 1} recoverTime=${active.fall?.recoverTime ?? 0} source=active_hitdef`,
     `raw.hitstun target=p${target.id}`,
     `  activeHitDefId=${idText} event=start selectedHitTime=${selectedHitTime} kind=${activeHitTime === undefined ? 'fallback' : hitTimeKind} remaining=${selectedHitTime} source=${hitTimeSource}${activeHitTime === undefined ? ` fallbackReason=${hitTimeFallbackReason}` : ''}`,
   );
@@ -213,8 +220,10 @@ function markAttackerHit(player: PlayerState, activeHitDefId: number | null, def
 function applyFallbackHit(
   defender: PlayerState,
   damage: number,
+  stateNo: number,
   selectedAnim: number,
   velocity: { x: number; y: number },
+  fallVelocity: { x: number; y: number },
   pauseTime: number,
   hitStun: NonNullable<PlayerState['hitStun']>,
   getHitVars: Record<string, number>,
@@ -222,16 +231,22 @@ function applyFallbackHit(
   return {
     ...defender,
     life: Math.max(0, defender.life - damage),
-    stateNo: STAND_HIT_STATE,
+    stateNo,
     animNo: selectedAnim,
     stateTime: 0,
     animTime: 0,
-    stateType: 'S',
+    stateType: stateNo === AIR_HIT_SHAKE_STATE ? 'A' : 'S',
     moveType: 'H',
     physics: 'N',
     ctrl: false,
     vx: velocity.x,
     vy: velocity.y,
+    hitVelX: velocity.x,
+    hitVelY: velocity.y,
+    hitFall: getHitVars.fall !== 0,
+    fallRecover: getHitVars['fall.recover'] !== 0,
+    fallRecoverTime: getHitVars['fall.recovertime'],
+    hitFallVelocity: fallVelocity,
     hitPause: pauseTime,
     hitDefUsed: false,
     activeHitDef: null,
@@ -248,7 +263,9 @@ function createGetHitVarSnapshot(
   hitTimeKind: 'ground' | 'air',
   selectedVelocity: { x: number; y: number },
 ): Record<string, number> {
-  const animType = hitAnimTypeCode(hitDef.groundAnimTypeRaw ?? hitDef.animType ?? 'Light');
+  const animType = hitAnimTypeCode(hitTimeKind === 'air'
+    ? hitDef.airAnimType ?? 'Light'
+    : hitDef.groundAnimTypeRaw ?? hitDef.animType ?? 'Light');
   const groundType = hitReactionTypeCode(hitDef.groundType);
   const airType = hitReactionTypeCode(hitDef.airType ?? hitDef.groundType);
   const fall = hitDef.fall ?? {};
@@ -275,6 +292,9 @@ function createGetHitVarSnapshot(
     chainid: hitDef.chainId ?? -1,
     guarded: 0,
     yaccel: hitDef.yAcceleration ?? 0.6,
+    'down.xvel': hitDef.downVelocity?.x ?? 0,
+    'down.yvel': hitDef.downVelocity?.y ?? 0,
+    'down.hittime': hitDef.downHitTime ?? 20,
   };
 }
 
@@ -292,6 +312,12 @@ function groundHitAnim(animType: NonNullable<PlayerState['activeHitDef']>['animT
   if (animType === 'Medium') return 5001;
   if (animType === 'Hard') return 5002;
   return 5000;
+}
+
+function airHitAnim(value: string | undefined, airType: string | undefined): number {
+  const code = hitAnimTypeCode(value ?? 'Light');
+  if (code >= 3) return code === 3 ? 5030 : 5047 + code;
+  return (airType?.trim().toLowerCase() === 'low' ? 5010 : 5000) + code;
 }
 
 function airDocumentHasAction(document: AirDocument | null, actionNo: number): boolean {

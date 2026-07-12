@@ -84,6 +84,8 @@ export type ActiveHitDef = {
     x: number;
     y: number;
   };
+  downVelocity?: { x: number; y: number };
+  downHitTime?: number;
 };
 
 export type PlayerState = {
@@ -108,6 +110,13 @@ export type PlayerState = {
   hitTargets?: Array<{ activeHitDefId: number; defenderId: number }>;
   getHitVars?: Record<string, number>;
   getHitVarUnsupportedKeys?: string[];
+  hitFall?: boolean;
+  fallRecover?: boolean;
+  fallRecoverTime?: number;
+  hitVelX?: number;
+  hitVelY?: number;
+  hitFallVelocity?: { x: number; y: number };
+  hitReactionElapsed?: number;
   moveContact?: {
     activeHitDefId: number;
     contact: boolean;

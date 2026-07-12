@@ -698,8 +698,8 @@ function executeController(
   if (type === 'hitdef') return activateHitDef(player, controller, input, commands, opponent);
   if (type === 'movehitreset') return withPlayer(resetMoveContact(player), true, 'MoveHitReset');
   if (type.startsWith('target')) return executeTargetController(player, opponent, controller, input, commands);
-  if (type === 'hitfallvel') return withPlayer({ ...player, vy: num(controller, 'y') ?? player.vy }, hasNum(controller, 'y'), 'HitFallVel');
-  if (type === 'hitvelset') return withPlayer({ ...player, vx: num(controller, 'x', player, input, commands, opponent) ?? player.vx, vy: num(controller, 'y', player, input, commands, opponent) ?? player.vy }, hasNum(controller, 'x', player, input, commands, opponent) || hasNum(controller, 'y', player, input, commands, opponent), 'HitVelSet');
+  if (type === 'hitfallvel') return hitFallVel(player);
+  if (type === 'hitvelset') return hitVelSet(player, controller);
   if (type === 'hitfalldamage') return hitFallDamage(player, controller);
   if (type === 'pause') return withExtendedPlayer(player, { pauseTime: num(controller, 'time') ?? 0 }, 'Pause');
   if (type === 'superpause') return withExtendedPlayer(player, { superPauseTime: num(controller, 'time') ?? 0 }, 'SuperPause');
@@ -811,6 +811,22 @@ function changeAnim(
     `  activeHitDefId=${player.hitStun?.activeHitDefId ?? 'none'} from=${player.animNo} to=${value} state=${player.stateNo} controller=ChangeAnim reason=common_state_transition`,
   ] : player.hitDiagnosticLines;
   return withPlayer({ ...player, hitDiagnosticLines, animNo: value, animTime: player.animNo === value ? player.animTime : 0 }, true, 'ChangeAnim');
+}
+
+function hitVelSet(player: PlayerState, controller: CnsStateController): ControllerResult {
+  const setX = (num(controller, 'x') ?? 0) !== 0;
+  const setY = (num(controller, 'y') ?? 0) !== 0;
+  return withPlayer({
+    ...player,
+    vx: setX ? player.hitVelX ?? player.vx : player.vx,
+    vy: setY ? player.hitVelY ?? player.vy : player.vy,
+  }, setX || setY, 'HitVelSet');
+}
+
+function hitFallVel(player: PlayerState): ControllerResult {
+  const velocity = player.hitFallVelocity;
+  if (!velocity) return withPlayer(player, true, 'HitFallVel');
+  return withPlayer({ ...player, vx: velocity.x, vy: velocity.y }, true, 'HitFallVel');
 }
 
 function velMul(player: PlayerState, controller: CnsStateController): ControllerResult {
@@ -1044,15 +1060,15 @@ function evaluateHitDefSnapshot(
   const attrParts = controller.params.attr;
   const attrValues = Array.isArray(attrParts) ? attrParts.map(String) : attrParts === undefined ? [] : String(attrParts).split(',');
   const fallVelocity = pairValue('fall.velocity');
+  const downVelocity = pairValue('down.velocity');
   const noChainRaw = controller.params.nochainid;
   const noChainParts = Array.isArray(noChainRaw) ? noChainRaw : noChainRaw === undefined ? [] : [noChainRaw];
   const noChainIds = noChainParts.map((value) => cnsValueToNumber(value, player, input, commands, opponent));
   if (noChainIds.some((value) => value === null)) invalidParameters.push('nochainid');
   const presentUnapplied = [
-    'attr', 'air.animtype', 'fall.animtype', 'hitflag', 'guardflag', 'priority', 'guard.pausetime',
-    'ground.type', 'air.type', 'guard.hittime', 'ground.slidetime', 'guard.ctrltime', 'yaccel', 'ground.velocity', 'air.velocity', 'guard.velocity',
-    'fall', 'fall.velocity', 'fall.xvelocity', 'fall.yvelocity', 'fall.recover', 'fall.recovertime',
-    'fall.damage', 'fall.kill', 'id', 'chainid', 'nochainid',
+    'attr', 'fall.animtype', 'hitflag', 'guardflag', 'priority', 'guard.pausetime',
+    'guard.hittime', 'ground.slidetime', 'guard.ctrltime', 'guard.velocity',
+    'fall.damage', 'fall.kill', 'chainid', 'nochainid',
   ].filter((key) => controller.params[key] !== undefined);
   return {
     damage: Math.max(0, damage[0] ?? 60),
@@ -1060,6 +1076,8 @@ function evaluateHitDefSnapshot(
     pauseTime: { attacker: Math.max(0, pause[0] ?? 4), defender: Math.max(0, pause[1] ?? 8) },
     groundVelocity: { x: groundVelocity[0] ?? -3.5, y: groundVelocity[1] ?? 0 },
     airVelocity: { x: airVelocity[0] ?? -2.5, y: airVelocity[1] ?? -5.5 },
+    downVelocity: { x: downVelocity[0] ?? 0, y: downVelocity[1] ?? 0 },
+    downHitTime: nonNegative(numValue('down.hittime')),
     attr: attrValues.length > 0 ? { stateType: attrValues[0].trim().toUpperCase(), attackTypes: attrValues.slice(1).map((value) => value.trim().toUpperCase()) } : undefined,
     airAnimType: textValue('air.animtype'),
     groundAnimTypeRaw: textValue('animtype'),

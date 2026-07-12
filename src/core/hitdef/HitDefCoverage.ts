@@ -35,6 +35,8 @@ const HITDEF_PARTIAL_PARAMS = new Set([
   'fall.recovertime',
   'fall.damage',
   'fall.kill',
+  'down.velocity',
+  'down.hittime',
   'id',
   'chainid',
   'nochainid',

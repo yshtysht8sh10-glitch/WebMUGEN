@@ -127,10 +127,11 @@ function getBooleanSource(name: string): BooleanSource | null {
   switch (normalizeName(name)) {
     case 'ctrl': return (context) => context.player.ctrl;
     case 'alive': return (context) => context.player.life > 0;
-    case 'hitover': return () => true;
-    case 'hitshakeover': return () => true;
+    case 'hitover': return (context) => !context.player.hitStun || context.player.hitStun.elapsed >= context.player.hitStun.selectedHitTime;
+    case 'hitshakeover': return (context) => context.player.hitPause <= 0;
     case 'hitfall': return (context) => readOptionalBool(context.player, 'hitFall', false);
-    case 'canrecover': return () => true;
+    case 'canrecover': return (context) => context.player.fallRecover !== false
+      && (context.player.hitStun?.elapsed ?? context.player.hitReactionElapsed ?? context.player.stateTime) >= (context.player.fallRecoverTime ?? 0);
     case 'inguarddist': return (context) => Math.abs((context.opponent?.x ?? context.player.x + 999) - context.player.x) < 80;
     case 'movecontact': return (context) => context.player.moveContact?.contact === true;
     case 'movehit': return (context) => context.player.moveContact?.hit === true;

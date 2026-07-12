@@ -19,6 +19,33 @@ export function applyFallbackHitRecovery(state: GameState, diagnosticsEnabled = 
 }
 
 function recoverPlayer(player: PlayerState, diagnosticsEnabled: boolean): { player: PlayerState; diagnosticLines: string[] } {
+  if (!player.hitStun && player.hitReactionElapsed !== undefined) {
+    if (player.moveType === 'H' || player.stateType === 'A' || player.stateType === 'L') {
+      const downHitTime = player.getHitVars?.['down.hittime'];
+      if (player.stateType === 'L' && downHitTime !== undefined && player.stateTime >= downHitTime) {
+        return {
+          player: { ...player, stateNo: 5120, stateTime: 0, moveType: 'I', ctrl: false },
+          diagnosticLines: diagnosticsEnabled ? [
+            `raw.hit_down target=p${player.id}`,
+            `  event=getup downHitTime=${downHitTime} state=5120 source=active_hitdef`,
+          ] : [],
+        };
+      }
+      return { player: { ...player, hitReactionElapsed: player.hitReactionElapsed + 1 }, diagnosticLines: [] };
+    }
+    return { player: {
+      ...player,
+      hitReactionElapsed: undefined,
+      hitFall: undefined,
+      fallRecover: undefined,
+      fallRecoverTime: undefined,
+      hitFallVelocity: undefined,
+      hitVelX: undefined,
+      hitVelY: undefined,
+      getHitVars: undefined,
+      getHitVarUnsupportedKeys: undefined,
+    }, diagnosticLines: [] };
+  }
   if (!player.hitStun && !isFallbackHitState(player)) {
     return { player, diagnosticLines: [] };
   }
@@ -70,6 +97,14 @@ function recoverPlayer(player: PlayerState, diagnosticsEnabled: boolean): { play
     `raw.hitstun target=p${player.id}`,
     `  activeHitDefId=${player.hitStun.activeHitDefId ?? 'none'} event=end selectedHitTime=${selectedHitTime} elapsed=${elapsed} recoveryPath=existing`,
   ] : [];
+  if (player.hitStun?.targetStateTypeAtHit === 'A') {
+    return { player: {
+      ...player,
+      ctrl: false,
+      hitStun: undefined,
+      hitReactionElapsed: elapsed,
+    }, diagnosticLines: diagnosticLines.map((line) => line.replace('recoveryPath=existing', 'recoveryPath=common_air')) };
+  }
   return { player: {
     ...player,
     stateNo: 0,
@@ -87,6 +122,12 @@ function recoverPlayer(player: PlayerState, diagnosticsEnabled: boolean): { play
     hitStun: undefined,
     getHitVars: undefined,
     getHitVarUnsupportedKeys: undefined,
+    hitFall: undefined,
+    fallRecover: undefined,
+    fallRecoverTime: undefined,
+    hitFallVelocity: undefined,
+    hitVelX: undefined,
+    hitVelY: undefined,
   }, diagnosticLines };
 }
 

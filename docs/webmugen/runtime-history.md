@@ -143,6 +143,8 @@ Repeated overlap for an already recorded `(activeHitDefId, defenderId)` pair is 
 
 `raw.hit_reaction` reports the applied velocity, `source=active_hitdef`, ground/air selection kind, and attacker facing. This distinguishes the stored CNS pair from its facing-converted world X value.
 
+For air contact, `raw.hit_reaction` also records State 5020, the selected air animation source, fall flag, fall velocity, recovery permission, and recovery time. `raw.hit_down` records the `down.hittime`-driven transition from liedown to common getup State 5120.
+
 `raw.hitpause` records the event-time attacker and defender counters from ActiveHitDef. Live physics and `raw.hitstun_tick` expose the remaining counter; duplicate contact rejection does not reset it.
 
 While hit stun remains active, `raw.hitstun_tick` records independent elapsed/remaining time, current state, forced control state, control source, and state changes. Attempts to enable control, enter State 0/52 early, or take a State -1 input ChangeState are blocked and reported once per controller as `raw.hitstun_guard`. Unexpected early control or state exits are reported as `raw.hitstun_violation`.
