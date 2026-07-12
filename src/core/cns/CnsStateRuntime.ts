@@ -184,6 +184,7 @@ function stepPlayer(
   if (debugEnabled) appendDebug(trace, `enter current S${stateDef.stateNo} state=${next.stateNo}`);
   if (debugEnabled) appendDebug(trace, formatStateDefOverview(stateDef));
   next = applyStateHeader(next, stateDef, false);
+  next = forceHitStunControl(next, `statedef:${stateDef.stateNo}`, input.hitDiagnostics !== false);
   if (debugEnabled) appendDebug(trace, `after header S${stateDef.stateNo} state=${next.stateNo} type=${next.stateType} ctrl=${next.ctrl ? 1 : 0}`);
   const result = executeStateControllers(next, opponent, stateDef, cns, input, commands, debugEnabled);
   next = result.player;
@@ -268,6 +269,7 @@ function executeStateControllers(
     const beforeStateNo = next.stateNo;
     const result = executeController(next, opponent, controller, cns, input, commands);
     next = result.player;
+    next = forceHitStunControl(next, `controller:${stateDef.stateNo}:${controller.type}:${controller.sourceLine ?? '-'}`, input.hitDiagnostics !== false);
     if (debugEnabled && debugLine) {
       pushDebug(debugLines, executedControllers, `pipe after S${stateDef.stateNo} ${controller.type} executed=${result.executed ? 1 : 0} before=${beforeStateNo} after=${next.stateNo}`);
     }
@@ -425,6 +427,26 @@ function getHitStunControllerBlock(
     return { key: `recovery:${stateDef.stateNo}:${controller.sourceLine ?? '-'}:${value}`, value, reason: 'early_recovery_state_during_hitstun' };
   }
   return null;
+}
+
+function forceHitStunControl(player: PlayerState, source: string, diagnosticsEnabled: boolean): PlayerState {
+  if (!player.hitStun || !player.ctrl) return player;
+  const key = `ctrl-force:${source}`;
+  const blockedEvents = player.hitStun.blockedEvents ?? [];
+  const firstOccurrence = !blockedEvents.includes(key);
+  return {
+    ...player,
+    ctrl: false,
+    hitStun: {
+      ...player.hitStun,
+      blockedEvents: firstOccurrence ? [...blockedEvents, key] : blockedEvents,
+    },
+    hitDiagnosticLines: diagnosticsEnabled && firstOccurrence ? [
+      ...(player.hitDiagnosticLines ?? []),
+      `raw.hitstun_guard target=p${player.id}`,
+      `  activeHitDefId=${player.hitStun.activeHitDefId ?? 'none'} event=force_ctrl_off source=${source} reason=hitstun_active`,
+    ] : player.hitDiagnosticLines,
+  };
 }
 
 function debugControllerCheck(

@@ -147,6 +147,8 @@ Repeated overlap for an already recorded `(activeHitDefId, defenderId)` pair is 
 
 While hit stun remains active, `raw.hitstun_tick` records independent elapsed/remaining time, current state, forced control state, control source, and state changes. Attempts to enable control, enter State 0/52 early, or take a State -1 input ChangeState are blocked and reported once per controller as `raw.hitstun_guard`. Unexpected early control or state exits are reported as `raw.hitstun_violation`.
 
+`raw.hitstun_guard event=force_ctrl_off` records StateDef headers or allowed internal get-hit transitions that requested control during active hit stun. Internal State 5000/5001-style transitions remain permitted; only premature control is removed.
+
 ## What to look for
 
 | Symptom in history | Interpretation |

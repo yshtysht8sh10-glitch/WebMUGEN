@@ -839,6 +839,35 @@ x = 99
     expect(result.traces[0].debugLines).toContain('hitpause skip remaining=2');
   });
 
+  it('forces StateDef and internal ChangeState ctrl off during hit stun', () => {
+    const cns = parseCnsText(`
+[Statedef 5000]
+type = S
+movetype = H
+ctrl = 1
+[State 5000, Internal transition]
+type = ChangeState
+trigger1 = 1
+value = 5001
+ctrl = 1
+[Statedef 5001]
+type = S
+movetype = H
+ctrl = 1
+`);
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime({
+      ...state,
+      players: [{
+        ...state.players[0], stateNo: 5000, moveType: 'H', ctrl: false,
+        hitStun: { activeHitDefId: 91, selectedHitTime: 20, kind: 'ground', source: 'active_hitdef', targetStateTypeAtHit: 'S', elapsed: 1, lastStateNo: 5000 },
+      }, state.players[1]],
+    }, cns, { hitDiagnostics: true });
+    expect(result.state.players[0]).toMatchObject({ stateNo: 5001, ctrl: false });
+    expect(result.state.players[0].hitDiagnosticLines?.join('\n')).toContain('event=force_ctrl_off');
+    expect(result.state.players[0].hitDiagnosticLines?.join('\n')).toContain('reason=hitstun_active');
+  });
+
   it('recognizes WinMUGEN state controllers that have runtime shims', () => {
     const controllerBlocks = recognizedControllerFixtures
       .map(({ type, params }) => `
