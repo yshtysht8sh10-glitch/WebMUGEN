@@ -1,4 +1,4 @@
-export type CnsValue = string | number | boolean | Array<string | number>;
+export type CnsValue = string | number | boolean | Array<string | number | boolean>;
 
 export type CnsTrigger = {
   name: string;

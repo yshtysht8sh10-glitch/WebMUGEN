@@ -39,6 +39,33 @@ export type ActiveHitDef = {
   airHitTimeFallbackReason?: string;
   animType?: 'Light' | 'Medium' | 'Hard';
   animTypeSource?: 'cns' | 'existing_fallback';
+  snapshotSignature?: string;
+  attr?: { stateType: string; attackTypes: string[] };
+  airAnimType?: string;
+  fallAnimType?: string;
+  hitFlag?: string;
+  guardFlag?: string;
+  priority?: { value: number; type?: string };
+  guardPauseTime?: { attacker: number; defender: number };
+  groundType?: string;
+  airType?: string;
+  guardHitTime?: number;
+  guardVelocity?: { x: number; y: number };
+  fall?: {
+    enabled?: boolean;
+    animType?: string;
+    xVelocity?: number;
+    yVelocity?: number;
+    recover?: boolean;
+    recoverTime?: number;
+    damage?: number;
+    kill?: boolean;
+  };
+  hitId?: number;
+  chainId?: number;
+  noChainIds?: number[];
+  unappliedParameters?: string[];
+  invalidParameters?: string[];
   damage: number;
   guardDamage: number;
   pauseTime: {

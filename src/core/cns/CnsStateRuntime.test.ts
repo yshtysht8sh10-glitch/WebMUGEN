@@ -854,6 +854,99 @@ value = 5010
     expect(result.state.players[0].hitDiagnosticLines?.join('\n')).toContain('raw.hit_anim_change target=p1');
     expect(result.state.players[0].hitDiagnosticLines?.join('\n')).toContain('activeHitDefId=77 from=5001 to=5010 state=5000 controller=ChangeAnim reason=common_state_transition');
   });
+
+  it('evaluates and freezes the major HitDef parameter snapshot at activation', () => {
+    const cns = parseCnsText(`
+[Statedef 200]
+type = S
+movetype = A
+physics = S
+[State 200, Structured HitDef]
+type = HitDef
+trigger1 = 1
+attr = S, NA, SA
+damage = ifelse(var(0) = 1, 80, 40), var(1) + 5
+animtype = Medium
+air.animtype = Back
+fall.animtype = Up
+hitflag = MAF
+guardflag = HA
+priority = var(2) + 2, Hit
+pausetime = var(3) + 1, 9
+guard.pausetime = 2, 6
+ground.type = High
+air.type = Low
+ground.hittime = var(4) + 10
+air.hittime = 17
+guard.hittime = 8
+ground.velocity = ifelse(facing = 1, -4, 4), -1
+air.velocity = -2.5, -5.5
+guard.velocity = -3, 0
+fall = 1
+fall.velocity = 1.5, -6
+fall.recover = 0
+fall.recovertime = 35
+fall.damage = 12
+fall.kill = 0
+id = var(5) + 100
+chainid = 9
+nochainid = 3, 4
+`);
+    const initial = createInitialGameState();
+    const activated = stepCnsStateRuntime({
+      ...initial,
+      players: [{
+        ...initial.players[0], stateNo: 200, moveType: 'A',
+        vars: { 0: 1, 1: 2, 2: 3, 3: 4, 4: 5, 5: 6 },
+      } as typeof initial.players[0], initial.players[1]],
+    }, cns).state;
+    const hitDef = activated.players[0].activeHitDef;
+
+    expect(hitDef).toMatchObject({
+      attr: { stateType: 'S', attackTypes: ['NA', 'SA'] },
+      damage: 80, guardDamage: 7,
+      animType: 'Medium', airAnimType: 'Back', fallAnimType: 'Up',
+      hitFlag: 'MAF', guardFlag: 'HA', priority: { value: 5, type: 'Hit' },
+      pauseTime: { attacker: 5, defender: 9 }, guardPauseTime: { attacker: 2, defender: 6 },
+      groundType: 'High', airType: 'Low', groundHitTime: 15, airHitTime: 17, guardHitTime: 8,
+      groundVelocity: { x: -4, y: -1 }, airVelocity: { x: -2.5, y: -5.5 }, guardVelocity: { x: -3, y: 0 },
+      fall: { enabled: true, animType: 'Up', xVelocity: 1.5, yVelocity: -6, recover: false, recoverTime: 35, damage: 12, kill: false },
+      hitId: 106, chainId: 9, noChainIds: [3, 4],
+    });
+    expect(activated.players[0].hitDiagnosticLines?.join('\n')).toContain('raw.hitdef_parameters');
+    expect(activated.players[0].hitDiagnosticLines?.join('\n')).toContain('raw.hitdef_unapplied');
+
+    const afterHit = stepCnsStateRuntime({
+      ...activated,
+      players: [{
+        ...activated.players[0], hitDefUsed: true,
+        vars: { 0: 0, 1: 100, 2: 100, 3: 100, 4: 100, 5: 100 },
+      } as typeof activated.players[0], activated.players[1]],
+    }, cns).state;
+    expect(afterHit.players[0].activeHitDef).toEqual(hitDef);
+  });
+
+  it('diagnoses invalid evaluated HitDef parameters without discarding their names', () => {
+    const cns = parseCnsText(`
+[Statedef 200]
+type = S
+movetype = A
+[State 200, Invalid HitDef]
+type = HitDef
+trigger1 = 1
+priority = unsupported expression, Hit
+guard.hittime = unknown value
+`);
+    const initial = createInitialGameState();
+    const result = stepCnsStateRuntime({
+      ...initial,
+      players: [{ ...initial.players[0], stateNo: 200, moveType: 'A' }, initial.players[1]],
+    }, cns).state;
+
+    expect(result.players[0].activeHitDef?.invalidParameters).toEqual(expect.arrayContaining(['priority', 'guard.hittime']));
+    expect(result.players[0].hitDiagnosticLines?.join('\n')).toContain('raw.hitdef_invalid');
+    expect(result.players[0].hitDiagnosticLines?.join('\n')).toContain('reason=evaluation_failed');
+  });
 });
 
 const recognizedControllerFixtures: { type: string; traceName: string; params?: string }[] = [

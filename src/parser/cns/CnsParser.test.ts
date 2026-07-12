@@ -157,6 +157,21 @@ juggle = 6
     expect(doc.states[0].juggle).toBe(6);
   });
 
+  it('keeps commas inside HitDef expressions while splitting parameter pairs', () => {
+    const doc = parseCnsText(`
+[StateDef 200]
+type = S
+[State 200, Hit]
+type = HitDef
+trigger1 = 1
+damage = ifelse(var(0), 80, 40), var(1) + 5
+ground.velocity = ifelse(facing = 1, -4, 4), -2
+`);
+
+    expect(doc.states[0].controllers[0].params.damage).toEqual(['ifelse(var(0), 80, 40)', 'var(1) + 5']);
+    expect(doc.states[0].controllers[0].params['ground.velocity']).toEqual(['ifelse(facing = 1, -4, 4)', -2]);
+  });
+
   it('records source file and line numbers when provided', () => {
     const doc = parseCnsText(`
 [StateDef 240]

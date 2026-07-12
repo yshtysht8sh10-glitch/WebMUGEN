@@ -106,6 +106,8 @@ When a route can be represented in `common.cmd`, prefer `common.cmd`.
 
 When a behavior depends on a future subsystem, implement the safest observable partial behavior and keep the matrix status Partial.
 
+HitDef activation evaluates its major numeric expressions and pairs into a typed `ActiveHitDef` snapshot. Collision and later hit processing consume that snapshot instead of re-reading the originating controller after a hit. Parameters that are stored for later HitDef phases but not yet behaviorally connected are emitted in activation diagnostics and remain Partial.
+
 ## Good next runtime improvements
 
 - richer controller execution tables;

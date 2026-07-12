@@ -188,6 +188,8 @@ function splitCommaValues(valueText: string): string[] {
   const parts: string[] = [];
   let current = '';
   let inQuote = false;
+  let parenthesisDepth = 0;
+  let bracketDepth = 0;
 
   for (const char of valueText) {
     if (char === '"') {
@@ -196,7 +198,12 @@ function splitCommaValues(valueText: string): string[] {
       continue;
     }
 
-    if (char === ',' && !inQuote) {
+    if (!inQuote && char === '(') parenthesisDepth += 1;
+    if (!inQuote && char === ')') parenthesisDepth = Math.max(0, parenthesisDepth - 1);
+    if (!inQuote && char === '[') bracketDepth += 1;
+    if (!inQuote && char === ']') bracketDepth = Math.max(0, bracketDepth - 1);
+
+    if (char === ',' && !inQuote && parenthesisDepth === 0 && bracketDepth === 0) {
       parts.push(current.trim());
       current = '';
       continue;

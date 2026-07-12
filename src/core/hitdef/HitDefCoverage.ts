@@ -4,25 +4,40 @@ export type HitDefCoverageItem = {
 };
 
 const HITDEF_SUPPORTED_PARAMS = new Set([
-  'attr',
   'damage',
-  'pausetime',
-  'ground.velocity',
-  'guard.velocity',
-  'priority',
+  'animtype',
+  'ground.hittime',
+  'air.hittime',
   'sparkno',
   'guardsparkno',
 ]);
 
 const HITDEF_PARTIAL_PARAMS = new Set([
-  'animtype',
+  'attr',
   'air.animtype',
-  'ground.type',
-  'air.type',
-  'fall',
-  'fall.recover',
+  'fall.animtype',
   'hitflag',
   'guardflag',
+  'priority',
+  'pausetime',
+  'guard.pausetime',
+  'ground.type',
+  'air.type',
+  'guard.hittime',
+  'ground.velocity',
+  'air.velocity',
+  'guard.velocity',
+  'fall',
+  'fall.velocity',
+  'fall.xvelocity',
+  'fall.yvelocity',
+  'fall.recover',
+  'fall.recovertime',
+  'fall.damage',
+  'fall.kill',
+  'id',
+  'chainid',
+  'nochainid',
 ]);
 
 export function classifyHitDefParam(name: string): HitDefCoverageItem {

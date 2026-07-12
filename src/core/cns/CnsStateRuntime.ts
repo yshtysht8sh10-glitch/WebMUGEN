@@ -763,35 +763,30 @@ function activateHitDef(
   commands: ReadonlySet<string> | undefined,
   opponent: PlayerState,
 ): ControllerResult {
-  const damageParam = controller.params.damage;
-  const damageParts = Array.isArray(damageParam) ? damageParam : damageParam === undefined ? [] : [damageParam];
-  const evaluatedHitDamage = cnsValueToNumber(damageParts[0], player, input, commands, opponent);
-  const evaluatedGuardDamage = cnsValueToNumber(damageParts[1], player, input, commands, opponent);
-  const damage = evaluatedHitDamage ?? 60;
-  const guardDamage = evaluatedGuardDamage ?? 0;
-  const groundHitTimeParam = controller.params['ground.hittime'];
-  const airHitTimeParam = controller.params['air.hittime'];
-  const evaluatedGroundHitTime = cnsValueToNumber(groundHitTimeParam, player, input, commands, opponent);
-  const evaluatedAirHitTime = cnsValueToNumber(airHitTimeParam, player, input, commands, opponent);
-  const groundHitTime = evaluatedGroundHitTime === null ? undefined : Math.max(0, evaluatedGroundHitTime);
-  const airHitTime = evaluatedAirHitTime === null ? undefined : Math.max(0, evaluatedAirHitTime);
+  const controllerKey = [player.id, player.stateNo, controller.sourceFile ?? '-', controller.sourceLine ?? '-'].join(':');
+  const existing = player.activeHitDef;
+  if (player.hitDefUsed && existing?.controllerKey === controllerKey) {
+    return withPlayer(player, true, 'HitDef');
+  }
+  const snapshot = evaluateHitDefSnapshot(controller, player, input, commands, opponent);
+  const damage = snapshot.damage;
+  const guardDamage = snapshot.guardDamage;
+  const groundHitTime = snapshot.groundHitTime;
+  const airHitTime = snapshot.airHitTime;
   const animTypeParam = controller.params.animtype;
   const animType = readGroundAnimType(animTypeParam);
   const animTypeSource = animTypeParam === undefined || animType === null ? 'existing_fallback' : 'cns';
   const selectedAnimType = animType ?? 'Light';
   const groundHitTimeFallbackReason = groundHitTime === undefined
-    ? groundHitTimeParam === undefined ? 'missing_ground_hittime' : 'invalid_ground_hittime'
+    ? controller.params['ground.hittime'] === undefined ? 'missing_ground_hittime' : 'invalid_ground_hittime'
     : undefined;
   const airHitTimeFallbackReason = airHitTime === undefined
-    ? airHitTimeParam === undefined ? 'missing_air_hittime' : 'invalid_air_hittime'
+    ? controller.params['air.hittime'] === undefined ? 'missing_air_hittime' : 'invalid_air_hittime'
     : undefined;
-  const damageSource = evaluatedHitDamage === null ? 'existing_fallback' : 'cns';
-  const controllerKey = [player.id, player.stateNo, controller.sourceFile ?? '-', controller.sourceLine ?? '-'].join(':');
-  const existing = player.activeHitDef;
+  const damageSource = controller.params.damage === undefined || snapshot.invalidParameters.includes('damage') ? 'existing_fallback' : 'cns';
   const sameController = existing?.controllerKey === controllerKey;
-  const sameValues = sameController && existing.damageValues?.[0] === damage && existing.damageValues?.[1] === guardDamage
-    && existing.groundHitTime === groundHitTime && existing.airHitTime === airHitTime
-    && existing.animType === selectedAnimType && existing.animTypeSource === animTypeSource;
+  const snapshotSignature = JSON.stringify({ ...snapshot, animType: selectedAnimType, animTypeSource });
+  const sameValues = sameController && existing.snapshotSignature === snapshotSignature;
   const diagnosticId = sameController && existing?.diagnosticId ? existing.diagnosticId : nextActiveHitDefDiagnosticId++;
   const action = sameController ? 'update' : 'create';
   const diagnosticsEnabled = input.hitDiagnostics !== false;
@@ -808,6 +803,14 @@ function activateHitDef(
     `  groundHitTime=${groundHitTime ?? 28} source=${groundHitTime === undefined ? 'hardcoded' : 'cns'}${groundHitTimeFallbackReason ? ` fallbackReason=${groundHitTimeFallbackReason}` : ''}`,
     `  airHitTime=${airHitTime ?? 28} source=${airHitTime === undefined ? 'hardcoded' : 'cns'}${airHitTimeFallbackReason ? ` fallbackReason=${airHitTimeFallbackReason}` : ''}`,
     `  animType=${selectedAnimType} source=${animTypeSource}`,
+    `raw.hitdef_parameters activeHitDefId=${diagnosticId}`,
+    `  attr=${formatAttr(snapshot.attr)} hitflag=${snapshot.hitFlag ?? '-'} guardflag=${snapshot.guardFlag ?? '-'} priority=${formatPriority(snapshot.priority)}`,
+    `  animtypes=ground:${selectedAnimType},air:${snapshot.airAnimType ?? '-'},fall:${snapshot.fallAnimType ?? '-'} types=ground:${snapshot.groundType ?? '-'},air:${snapshot.airType ?? '-'}`,
+    `  pausetime=${snapshot.pauseTime.attacker},${snapshot.pauseTime.defender} guard.pausetime=${formatPair(snapshot.guardPauseTime)} hittime=${groundHitTime ?? '-'},${airHitTime ?? '-'},${snapshot.guardHitTime ?? '-'}`,
+    `  velocity=ground:${formatPair(snapshot.groundVelocity)},air:${formatPair(snapshot.airVelocity)},guard:${formatPair(snapshot.guardVelocity)} ids=${snapshot.hitId ?? '-'},${snapshot.chainId ?? '-'},${snapshot.noChainIds?.join('|') || '-'}`,
+    `  fall=${formatFall(snapshot.fall)}`,
+    ...(snapshot.unappliedParameters.length > 0 ? [`raw.hitdef_unapplied activeHitDefId=${diagnosticId} params=${snapshot.unappliedParameters.join(',')} reason=stored_not_applied`] : []),
+    ...(snapshot.invalidParameters.length > 0 ? [`raw.hitdef_invalid activeHitDefId=${diagnosticId} params=${snapshot.invalidParameters.join(',')} reason=evaluation_failed`] : []),
     `raw.hitdef_lifecycle activeHitDefId=${diagnosticId}`,
     `  event=${action} reason=controller_execute hitCount=${player.hitDefUsed ? 1 : 0}`,
   ];
@@ -815,12 +818,12 @@ function activateHitDef(
     ...player,
     hitDiagnosticLines,
     activeHitDef: {
-      damage: Math.max(0, damage),
-      guardDamage: Math.max(0, guardDamage),
+      ...snapshot,
       diagnosticId,
       controllerKey,
       damageValues: [Math.max(0, damage), Math.max(0, guardDamage)],
       damageSource,
+      snapshotSignature,
       groundHitTime,
       airHitTime,
       groundHitTimeSource: groundHitTime === undefined ? 'hardcoded' : 'cns',
@@ -832,11 +835,126 @@ function activateHitDef(
       missLogged: sameController ? existing?.missLogged : false,
       rejectedLogged: sameController ? existing?.rejectedLogged : false,
       duplicateLogged: diagnosticsEnabled && sameValues ? true : false,
-      pauseTime: { attacker: 4, defender: 8 },
-      groundVelocity: { x: -3.5, y: 0 },
-      airVelocity: { x: -2.5, y: -5.5 },
     },
   }, true, 'HitDef');
+}
+
+type EvaluatedHitDefSnapshot = Pick<ActiveHitDef, 'damage' | 'guardDamage' | 'pauseTime' | 'groundVelocity' | 'airVelocity'> &
+  Partial<ActiveHitDef> & { unappliedParameters: string[]; invalidParameters: string[] };
+
+function evaluateHitDefSnapshot(
+  controller: CnsStateController,
+  player: PlayerState,
+  input: CnsRuntimeInput,
+  commands: ReadonlySet<string> | undefined,
+  opponent: PlayerState,
+): EvaluatedHitDefSnapshot {
+  const invalidParameters: string[] = [];
+  const numValue = (key: string): number | undefined => {
+    const raw = controller.params[key];
+    if (raw === undefined) return undefined;
+    const value = cnsValueToNumber(raw, player, input, commands, opponent);
+    if (value === null) invalidParameters.push(key);
+    return value ?? undefined;
+  };
+  const pairValue = (key: string): [number | undefined, number | undefined] => {
+    const raw = controller.params[key];
+    if (raw === undefined) return [undefined, undefined];
+    const parts = Array.isArray(raw) ? raw : [raw];
+    const first = cnsValueToNumber(parts[0], player, input, commands, opponent);
+    const second = cnsValueToNumber(parts[1], player, input, commands, opponent);
+    if (first === null || (parts.length > 1 && second === null)) invalidParameters.push(key);
+    return [first ?? undefined, second ?? undefined];
+  };
+  const textValue = (key: string): string | undefined => {
+    const raw = controller.params[key];
+    if (raw === undefined) return undefined;
+    return (Array.isArray(raw) ? raw.map(String).join(',') : String(raw)).trim();
+  };
+  const boolValue = (key: string): boolean | undefined => {
+    const value = numValue(key);
+    return value === undefined ? undefined : value !== 0;
+  };
+  const damage = pairValue('damage');
+  const pause = pairValue('pausetime');
+  const guardPause = pairValue('guard.pausetime');
+  const groundVelocity = pairValue('ground.velocity');
+  const airVelocity = pairValue('air.velocity');
+  const guardVelocity = pairValue('guard.velocity');
+  const priorityParts = controller.params.priority;
+  const priorityValues = Array.isArray(priorityParts) ? priorityParts : priorityParts === undefined ? [] : [priorityParts];
+  const priorityValue = priorityValues.length > 0 ? cnsValueToNumber(priorityValues[0], player, input, commands, opponent) : null;
+  if (priorityValues.length > 0 && priorityValue === null) invalidParameters.push('priority');
+  const attrParts = controller.params.attr;
+  const attrValues = Array.isArray(attrParts) ? attrParts.map(String) : attrParts === undefined ? [] : String(attrParts).split(',');
+  const fallVelocity = pairValue('fall.velocity');
+  const noChainRaw = controller.params.nochainid;
+  const noChainParts = Array.isArray(noChainRaw) ? noChainRaw : noChainRaw === undefined ? [] : [noChainRaw];
+  const noChainIds = noChainParts.map((value) => cnsValueToNumber(value, player, input, commands, opponent));
+  if (noChainIds.some((value) => value === null)) invalidParameters.push('nochainid');
+  const presentUnapplied = [
+    'attr', 'air.animtype', 'fall.animtype', 'hitflag', 'guardflag', 'priority', 'guard.pausetime',
+    'ground.type', 'air.type', 'guard.hittime', 'ground.velocity', 'air.velocity', 'guard.velocity',
+    'fall', 'fall.velocity', 'fall.xvelocity', 'fall.yvelocity', 'fall.recover', 'fall.recovertime',
+    'fall.damage', 'fall.kill', 'id', 'chainid', 'nochainid',
+  ].filter((key) => controller.params[key] !== undefined);
+  return {
+    damage: Math.max(0, damage[0] ?? 60),
+    guardDamage: Math.max(0, damage[1] ?? 0),
+    pauseTime: { attacker: Math.max(0, pause[0] ?? 4), defender: Math.max(0, pause[1] ?? 8) },
+    groundVelocity: { x: groundVelocity[0] ?? -3.5, y: groundVelocity[1] ?? 0 },
+    airVelocity: { x: airVelocity[0] ?? -2.5, y: airVelocity[1] ?? -5.5 },
+    attr: attrValues.length > 0 ? { stateType: attrValues[0].trim().toUpperCase(), attackTypes: attrValues.slice(1).map((value) => value.trim().toUpperCase()) } : undefined,
+    airAnimType: textValue('air.animtype'),
+    fallAnimType: textValue('fall.animtype'),
+    hitFlag: textValue('hitflag')?.toUpperCase(),
+    guardFlag: textValue('guardflag')?.toUpperCase(),
+    priority: priorityValue === null ? undefined : { value: priorityValue, ...(priorityValues[1] === undefined ? {} : { type: String(priorityValues[1]).trim() }) },
+    guardPauseTime: guardPause[0] === undefined && guardPause[1] === undefined ? undefined : { attacker: Math.max(0, guardPause[0] ?? 0), defender: Math.max(0, guardPause[1] ?? 0) },
+    groundType: textValue('ground.type'),
+    airType: textValue('air.type'),
+    groundHitTime: nonNegative(numValue('ground.hittime')),
+    airHitTime: nonNegative(numValue('air.hittime')),
+    guardHitTime: nonNegative(numValue('guard.hittime')),
+    guardVelocity: guardVelocity[0] === undefined && guardVelocity[1] === undefined ? undefined : { x: guardVelocity[0] ?? 0, y: guardVelocity[1] ?? 0 },
+    fall: {
+      enabled: boolValue('fall'),
+      animType: textValue('fall.animtype'),
+      xVelocity: numValue('fall.xvelocity') ?? fallVelocity[0],
+      yVelocity: numValue('fall.yvelocity') ?? fallVelocity[1],
+      recover: boolValue('fall.recover'),
+      recoverTime: nonNegative(numValue('fall.recovertime')),
+      damage: nonNegative(numValue('fall.damage')),
+      kill: boolValue('fall.kill'),
+    },
+    hitId: numValue('id'),
+    chainId: numValue('chainid'),
+    noChainIds: noChainIds.filter((value): value is number => value !== null),
+    unappliedParameters: presentUnapplied,
+    invalidParameters: Array.from(new Set(invalidParameters)),
+  };
+}
+
+function nonNegative(value: number | undefined): number | undefined {
+  return value === undefined ? undefined : Math.max(0, value);
+}
+
+function formatPair(value: { x: number; y: number } | { attacker: number; defender: number } | undefined): string {
+  if (!value) return '-';
+  return 'x' in value ? `${value.x},${value.y}` : `${value.attacker},${value.defender}`;
+}
+
+function formatAttr(value: ActiveHitDef['attr']): string {
+  return value ? `${value.stateType},${value.attackTypes.join('|')}` : '-';
+}
+
+function formatPriority(value: ActiveHitDef['priority']): string {
+  return value ? `${value.value},${value.type ?? '-'}` : '-';
+}
+
+function formatFall(value: ActiveHitDef['fall']): string {
+  if (!value) return '-';
+  return `enabled:${value.enabled ?? '-'},anim:${value.animType ?? '-'},velocity:${value.xVelocity ?? '-'},${value.yVelocity ?? '-'},recover:${value.recover ?? '-'},recovertime:${value.recoverTime ?? '-'},damage:${value.damage ?? '-'},kill:${value.kill ?? '-'}`;
 }
 
 function readGroundAnimType(value: CnsValue | undefined): ActiveHitDef['animType'] | null {
