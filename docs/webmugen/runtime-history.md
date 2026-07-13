@@ -163,6 +163,8 @@ For air contact, `raw.hit_reaction` also records State 5020, the selected air an
 
 `raw.explod_step` records age, animation time/element, bind remainder and position for retained entries. Removal records `removetime_zero`, `removetime`, or `animtime_zero`; no later render/draw line is emitted for that internal id.
 
+`raw.explod_modify` records the owner, requested MUGEN id, number of exact owner/id matches, changed fields, and affected internal ids. Missing explicit ids use `reason=not_found`; omitted ids use `reason=id_missing`. The following same-frame `raw.explod_step`, `raw.explod_render`, and `raw.explod_draw` lines expose the resulting lifecycle, position, scale, priority, and ontop values.
+
 Browser audio foundation diagnostics use `audio_unsupported`, `audio_locked`, `audio_unlocked`, `decode_failed`, `playback_started`, `playback_stopped`, and `audio_closed`. They distinguish browser/autoplay/decode failures from missing character assets. PlaySnd-specific owner/channel diagnostics are added in Issues #28-#29/#40.
 
 `raw.sound_play` records the owner, scope, group/index, channel, volume/volumescale, resolved pan, frequency multiplier, loop, and queued result. `raw.sound_play_rejected` uses `sound_asset_missing`, `sample_not_found`, `common_sound_unavailable`, or `audio_locked`. The subsequent Browser Audio diagnostic proves playback start or decode failure.
@@ -171,7 +173,7 @@ Browser audio foundation diagnostics use `audio_unsupported`, `audio_locked`, `a
 
 `raw.sound_pan` records owner/channel, relative or absolute mode, raw pixel value, normalized value, and `result=updated`. Missing/ended channels, missing required parameters, and adapters without pan support are explicit no-ops with `channel_not_found`, `channel_missing`, `pan_missing`, or `unsupported` reasons.
 
-`raw.explod_create` records owner, internal runtime id, duplicate-capable MUGEN id, animation scope/number, postype, raw offset, resolved world/screen position, Facing/vfacing, bindtime, removetime, sprite priority, and ontop. `raw.explod_create_rejected` identifies missing or invalid `anim`. These records prove production GameState creation only; render and lifecycle evidence begins with #31/#32.
+`raw.explod_create` records owner, internal runtime id, duplicate-capable MUGEN id, animation scope/number, postype, raw offset, resolved world/screen position, Facing/vfacing, bindtime, removetime, sprite priority, and ontop. `raw.explod_create_rejected` identifies missing or invalid `anim`. Rendering/lifecycle evidence follows in `raw.explod_step`, `raw.explod_render`, and `raw.explod_draw`; Issue #33 modifications are correlated through `raw.explod_modify` and the same internal ids.
 
 `raw.hit_power` records selected hit/guard `getpower` and `givepower`, both gauges before/after clamping, and proves the mutation occurred once for the accepted contact. `raw.hit_cornerpush` records contact class, edge condition, selected velocity offset, Facing, before/after attacker velocity, and applied/skipped reason. `raw.hit_snap` records Facing-relative offset and target before/after position. `raw.hit_sprpriority` records applied P1/P2 priorities.
 

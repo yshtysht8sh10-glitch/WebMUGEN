@@ -1,0 +1,112 @@
+[Statedef 900]
+type = S
+movetype = I
+physics = N
+anim = 100
+
+[State 900, Create first]
+type = Explod
+trigger1 = time = 0
+anim = 100
+id = 77
+pos = 5, -10
+postype = p1
+vel = 1, 2
+accel = .1, .2
+random = 3, 4
+removetime = 30
+scale = 1, 1
+trans = addalpha
+alpha = 200, 56
+
+[State 900, Create duplicate]
+type = Explod
+trigger1 = time = 0
+anim = 100
+id = 77
+pos = 10, -20
+postype = p1
+removetime = 40
+trans = addalpha
+alpha = 200, 56
+
+[State 900, Modify explicit id]
+type = ModifyExplod
+trigger1 = time = 0
+id = 77
+pos = 40, -50
+postype = p2
+facing = -1
+vfacing = -1
+bindtime = 5
+vel = 6, 7
+accel = .6, .7
+random = 8, 9
+removetime = 12
+supermovetime = 10
+pausemovetime = 11
+scale = 2, 3
+sprpriority = 7
+ontop = 1
+shadow = 4, 5, 6
+ownpal = 1
+removeongethit = 1
+
+[State 900, Missing id]
+type = ModifyExplod
+trigger1 = time = 0
+id = 999
+pos = 999, 999
+
+[State 900, Omitted id]
+type = ModifyExplod
+trigger1 = time = 0
+pos = 888, 888
+
+[Statedef 901]
+type = S
+movetype = I
+physics = N
+anim = 100
+
+[State 901, Trigger false]
+type = ModifyExplod
+trigger1 = 0
+id = 77
+pos = 777, 777
+
+[Statedef 902]
+type = S
+movetype = I
+physics = N
+anim = 100
+
+[State 902, Change animation]
+type = ModifyExplod
+trigger1 = time = 0
+id = 77
+anim = 101
+
+[Statedef 903]
+type = S
+movetype = I
+physics = N
+anim = 100
+
+[State 903, Reset removetime]
+type = ModifyExplod
+trigger1 = time = 0
+id = 77
+removetime = 3
+
+[Statedef 904]
+type = S
+movetype = I
+physics = N
+anim = 100
+
+[State 904, Keep animation progress]
+type = ModifyExplod
+trigger1 = time = 0
+id = 77
+anim = 100

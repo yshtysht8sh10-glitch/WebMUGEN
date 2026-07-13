@@ -82,11 +82,11 @@ function withEntries(entries: ExplodRuntimeEntry[]): GameState {
 function entry(overrides: Partial<ExplodRuntimeEntry> = {}): ExplodRuntimeEntry {
   return {
     runtimeId: 1, mugenId: 1, owner: { entityId: 1, rootPlayerId: 1 }, animationOwner: { entityId: 1, rootPlayerId: 1 },
-    animationSource: 'owner', animNo: 100, animTime: 0, animElement: 0, creationFrame: 0, age: 0,
+    animationSource: 'owner', animNo: 100, animTime: 0, animElement: 0, creationFrame: 0, age: 0, removeTimeElapsed: 0, removeTimeStartFrame: 0,
     position: { x: 100, y: 200 }, offset: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, acceleration: { x: 0, y: 0 },
     facing: 1, verticalFacing: 1, postype: 'p1', coordinateSpace: 'stage', bind: null, removeTime: null, removalReason: null,
     spritePriority: 0, onTop: false, pauseMoveTime: 0, superMoveTime: 0, removeOnGetHit: false, random: { x: 0, y: 0 },
-    render: { transparency: null, alpha: null, scaleX: 1, scaleY: 1, ownPalette: false, shadow: 0 },
+    render: { transparency: null, alpha: null, scaleX: 1, scaleY: 1, ownPalette: false, shadow: { red: 0, green: 0, blue: 0 } },
     ...overrides,
   };
 }

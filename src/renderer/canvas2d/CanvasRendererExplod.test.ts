@@ -61,10 +61,10 @@ function air(actionNo: number, groupNo: number, imageNo: number): AirDocument {
 function entry(): ExplodRuntimeEntry {
   return {
     runtimeId: 9, mugenId: 90, owner: { entityId: 2, rootPlayerId: 2 }, animationOwner: { entityId: 2, rootPlayerId: 2 },
-    animationSource: 'owner', animNo: 200, animTime: 0, animElement: 0, creationFrame: 0, age: 0,
+    animationSource: 'owner', animNo: 200, animTime: 0, animElement: 0, creationFrame: 0, age: 0, removeTimeElapsed: 0, removeTimeStartFrame: 0,
     position: { x: 320, y: 240 }, offset: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, acceleration: { x: 0, y: 0 },
     facing: -1, verticalFacing: -1, postype: 'p2', coordinateSpace: 'stage', bind: null, removeTime: null, removalReason: null,
     spritePriority: 2, onTop: false, pauseMoveTime: 0, superMoveTime: 0, removeOnGetHit: false, random: { x: 0, y: 0 },
-    render: { transparency: null, alpha: null, scaleX: 1, scaleY: 1, ownPalette: false, shadow: 0 },
+    render: { transparency: null, alpha: null, scaleX: 1, scaleY: 1, ownPalette: false, shadow: { red: 0, green: 0, blue: 0 } },
   };
 }

@@ -171,7 +171,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | LifeAdd | Complete | Basic implementation exists. |
 | LifeSet | Complete | Basic implementation exists. |
 | MakeDust | Partial | Recognized safe no-op. Dust rendering not implemented. |
-| ModifyExplod | Partial | Recognized safe no-op. Issue #25 defines owner-scoped selection and separate runtime/MUGEN ids; implementation is scheduled for #33. |
+| ModifyExplod | Partial | Issue #33: the normal CNS/app/GameState/Canvas path partially updates every explicit owner/id match. Supported fields are anim, pos/postype, facing/vfacing, bindtime, vel/accel/random, removetime, pause/supermovetime, scale, sprpriority/ontop, shadow/ownpal/removeongethit; omitted values persist, coordinates/render update in-frame, and removetime restarts from that frame. Duplicate ids and owner isolation are tested. Omitted `id` remains a diagnosed safe no-op because its selection boundary is not established. Movement/pause consumption and broader Helper/fightfx semantics remain Partial. |
 | MoveHitReset | Complete | Clears current generation contact/hit/guard flags while preserving hit count and duplicate-target history; focused tests cover reset semantics. |
 | MoveTypeSet | Complete | Basic implementation exists. |
 | NotHitBy | Partial | Matching normalized HitDef state/attack attr rejects live contact. Duration/stacking remains incomplete. |

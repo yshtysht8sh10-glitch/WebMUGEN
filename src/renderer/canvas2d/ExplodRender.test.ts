@@ -70,6 +70,8 @@ function entry(overrides: Partial<ExplodRuntimeEntry> = {}): ExplodRuntimeEntry 
     animElement: 0,
     creationFrame: 0,
     age: 0,
+    removeTimeElapsed: 0,
+    removeTimeStartFrame: 0,
     position: { x: 100, y: 200 },
     offset: { x: 0, y: 0 },
     velocity: { x: 0, y: 0 },
@@ -87,7 +89,7 @@ function entry(overrides: Partial<ExplodRuntimeEntry> = {}): ExplodRuntimeEntry 
     superMoveTime: 0,
     removeOnGetHit: false,
     random: { x: 0, y: 0 },
-    render: { transparency: null, alpha: null, scaleX: 1, scaleY: 1, ownPalette: false, shadow: 0 },
+    render: { transparency: null, alpha: null, scaleX: 1, scaleY: 1, ownPalette: false, shadow: { red: 0, green: 0, blue: 0 } },
     ...overrides,
   };
 }

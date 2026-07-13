@@ -46,7 +46,7 @@ supermovetime = 4
         facing: -1, verticalFacing: -1, bind: { targetEntityId: 1, remaining: 3 }, removeTime: 12,
         spritePriority: 4, onTop: true, velocity: { x: -2, y: -3 }, acceleration: { x: -0.5, y: 0.25 },
         pauseMoveTime: 2, superMoveTime: 4, removeOnGetHit: true, random: { x: 6, y: 8 },
-        render: { transparency: 'addalpha', alpha: { source: 200, destination: 56 }, scaleX: 0.75, scaleY: 1.25, ownPalette: true, shadow: 1 },
+        render: { transparency: 'addalpha', alpha: { source: 200, destination: 56 }, scaleX: 0.75, scaleY: 1.25, ownPalette: true, shadow: { red: 1, green: 0, blue: 0 } },
       },
     });
   });

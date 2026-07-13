@@ -2,7 +2,7 @@
 
 Updated: 2026-07-13
 
-This document records the Issue #25 audit and the integration contract for the Explod roadmap. Issue #30 connects creation, Issue #31 connects owner AIR/SFF frame rendering, and Issue #32 connects baseline animation/removetime/bind lifecycle.
+This document records the Issue #25 audit and the integration contract for the Explod roadmap. Issue #30 connects creation, Issue #31 connects owner AIR/SFF frame rendering, Issue #32 connects baseline animation/removetime/bind lifecycle, and Issue #33 connects explicit-ID modification.
 
 ## Issue #30 implementation status
 
@@ -10,20 +10,20 @@ Production `GameState` owns an `ExplodRuntimeState` with a monotonically allocat
 
 The snapshot includes owner/animation source, anim, postype, resolved initial stage or screen position, Facing/vfacing, bind/removetime metadata, draw order, and the movement/render/pause fields scheduled for later Issues. P1/P2 ownership, duplicate MUGEN ids, expressions, all legacy postypes, invalid anim, round reset, and bundled KFM State 191 are covered by focused tests.
 
-Issue #31 resolves each visible entry through its owner-scoped AIR/SFF assets, applies world/screen conversion and Facing/vfacing once, and submits regular or `ontop` draw layers. Issue #32 advances age/AnimElem/time, implements exact creation-tick counting for removetime 0/positive/-1/-2, follows bind owners for the configured tick count, releases to the last world position, and removes entries before rendering. Missing AIR actions or sprites are hidden with diagnostics. Velocity/acceleration remain #34 responsibilities; Pause/SuperPause gating remains #35. `random`, non-zero camera runtime, Helper/orphan ownership, fightfx asset loading, generic controller `persistent`, and `NumExplod` remain Partial.
+Issue #31 resolves each visible entry through its owner-scoped AIR/SFF assets, applies world/screen conversion and Facing/vfacing once, and submits regular or `ontop` draw layers. Issue #32 advances age/AnimElem/time, implements exact creation-tick counting for removetime 0/positive/-1/-2, follows bind owners for the configured tick count, releases to the last world position, and removes entries before rendering. Issue #33 evaluates `ModifyExplod` through the normal CNS context and partially updates every explicit owner/id match. Position/postype and render fields reach Canvas in the modification frame; a changed animation restarts only when its number or source changes; a changed removetime starts a new clock on that frame. Missing ids are diagnosed safe no-ops. Missing AIR actions or sprites remain hidden with diagnostics. Velocity/acceleration stepping remains #34; Pause/SuperPause gating remains #35. Omitted ModifyExplod id semantics, `random`, non-zero camera runtime, Helper/orphan ownership, fightfx asset loading, generic controller `persistent`, and `NumExplod` remain Partial.
 
 ## Audited implementation inventory
 
 | Existing code | What works | Production status | Decision |
 |---|---|---|---|
-| `core/explod/ExplodSystem.ts` | Owner-scoped production runtime entries, separate runtime/MUGEN ids, creation application, and diagnostics. | Connected to `GameState`, normal CNS creation, and the app coordinator by #30; render/step remain pending. | Use as the durable model for #31 onward. |
+| `core/explod/ExplodSystem.ts` | Owner-scoped production runtime entries, separate runtime/MUGEN ids, creation/modification application, lifecycle, and diagnostics. | Connected to `GameState`, normal CNS create/modify controllers, the app coordinator, lifecycle, and renderer by #30-#33. | Use as the durable model for #34 onward. |
 | `core/runtime/RuntimeEventQueue.ts` | Defines prototype `explod` and `removeExplod` events. | No queue is owned or drained by the production CNS/game loop. Events lack owner identity and coordinate/animation ownership. | Reuse the event boundary concept. Replace the Explod payload with an owner-scoped request. |
 | `core/cns/CnsRuntimeEventAdapter.ts` | Converts literal `Explod`/`RemoveExplod` parameters in isolation. | Not called by `CnsStateRuntime`; does not use the normal CNS expression context. | Do not connect directly. Move parameter evaluation into the normal controller executor and emit the shared request type. |
 | `core/cns/CnsRuntimeSideEffectsPhase55.ts` | Recognizes Explod and emits an untyped command payload. | Not called by `CnsStateRuntime`; duplicates the event adapter. | Deprecation candidate after the production controller path exists. Keep until replacement tests cover its useful cases. |
 | `core/runtime/RuntimeExplodIntegration.ts` | Applies prototype add/remove events relative to one supplied owner. | Not called by the app; assumes one external owner and conflates ids. | Reuse coordinate conversion test ideas, not the current public signature. |
 | `core/hitdef/HitRuntimeEvents.ts` | Can describe a hit spark as the prototype Explod event. | The production HitDef path uses `HitEvent.spark`/`HitFeedback`, not this event path. | Keep separate until Issue #36 deliberately selects the shared effect path. Do not silently reroute hit sparks in Issue #30. |
 | `CanvasRenderer` | Resolves AIR animation elements and draws player/projectile sprites. | Issue #31 adds an explicit Explod effect layer with owner asset selection, priority/ontop ordering, and diagnostics. | Keep lifecycle mutation outside the renderer; it consumes immutable runtime entries. |
-| CNS compatibility shims | `Explod`, `ModifyExplod`, `RemoveExplod`, and `ExplodBindTime` are recognized. `NumExplod` returns zero. | Safe no-op only; no game-state effect. | Keep Matrix status honest until each production path is connected and tested. |
+| CNS compatibility shims | `RemoveExplod` and `ExplodBindTime` are recognized; `NumExplod` returns zero. | These remaining operations are safe no-ops with no game-state effect. | Keep Matrix status honest until each production path is connected and tested. |
 
 No current file needs immediate deletion. `CnsRuntimeSideEffectsPhase55` and the Explod branches of `CnsRuntimeEventAdapter` become removal candidates only after the production controller-to-request path has equivalent focused coverage.
 
@@ -73,7 +73,7 @@ type ExplodRuntimeState = {
 };
 ```
 
-`runtimeId` and `mugenId` must never be aliases. `ModifyExplod`, `RemoveExplod`, `ExplodBindTime`, and `NumExplod` select entries by owner scope plus optional MUGEN id; internal code uses `runtimeId` for one exact entry. Duplicate MUGEN ids remain representable.
+`runtimeId` and `mugenId` must never be aliases. Explicit-ID `ModifyExplod` selects every entry in the exact owner scope with the matching MUGEN id; internal code still uses `runtimeId` for one exact entry. Duplicate MUGEN ids remain representable. Omitted-ID ModifyExplod selection is intentionally a diagnosed safe no-op until a reliable WinMUGEN boundary rule is established. RemoveExplod, ExplodBindTime, and NumExplod selection are implemented in their later Issues.
 
 `GameState` will own one `explods: ExplodRuntimeState`. Round creation/restart creates an empty state. Character State changes do not delete owned Explods unless a controller parameter or WinMUGEN lifecycle rule requests it. Destroyed Helper cleanup removes or detaches its entries according to the later owner-removal compatibility decision.
 
@@ -82,8 +82,8 @@ type ExplodRuntimeState = {
 ```text
 CNS controller trigger passes
   -> controller executor evaluates parameters with the normal CNS context
-  -> owner-scoped Explod request is appended to the frame result
-  -> game coordinator applies requests to GameState.explods
+  -> owner-scoped Explod create/modify request is appended to the frame result
+  -> game coordinator applies create then explicit-ID partial updates to GameState.explods
   -> Explod step resolves bind, animation and removal (#32), then movement (#34)
   -> Canvas effect layer resolves animation through animationOwner AIR
   -> sprite renderer draws at the resolved stage/screen coordinate
@@ -99,6 +99,8 @@ The request queue is frame-local output from CNS execution, not durable state. T
 - Owner binding stores an offset and duration. It does not overwrite the Explod's MUGEN id.
 - `animationOwner` selects AIR/SFF resources. Initially it equals the creating entity; common fightfx and custom-State animation ownership remain explicit later scopes.
 - Renderer receives an already resolved world/screen origin plus the AIR element offset. It must not mutate runtime position.
+- ModifyExplod preserves every omitted parameter. Changing `pos` or `postype` re-resolves position and bind metadata immediately; changing `anim` restarts progress only when the animation number/source differs.
+- Changing `removetime` resets its independent elapsed clock on the modification frame. This does not reset Explod age or unchanged animation progress.
 
 ## Pause, stepping, and cleanup contract
 
@@ -113,10 +115,11 @@ The request queue is frame-local output from CNS execution, not durable state. T
 1. **#30**: completed owner-scoped runtime model in `GameState`, expression-aware CNS creation, separate runtime/MUGEN ids, round cleanup, and Runtime History diagnostics; no renderer claim.
 2. **#31**: resolve owner AIR animation, position, Facing, and render layer in Canvas.
 3. **#32**: animation progression, `removetime`, bind lifecycle, and pause-independent baseline stepping. Implemented with finite/loop/infinite AIR boundary coverage and real-character evidence.
-4. **#33/#38/#39**: owner-scoped Modify, Remove, and ExplodBindTime selection semantics.
-5. **#34**: transparency, scale, ownpal, velocity, and acceleration.
-6. **#35**: Pause/SuperPause move-time integration.
-7. **#36**: deliberately converge HitDef spark/sound effects with the completed runtime where compatible.
+4. **#33**: completed owner-scoped explicit-ID ModifyExplod partial updates, duplicate selection, same-frame coordinate/render reflection, and independent removetime reset. Omitted-ID selection remains a documented limitation.
+5. **#38/#39**: owner-scoped Remove and ExplodBindTime selection semantics.
+6. **#34**: transparency, scale, ownpal, velocity, and acceleration.
+7. **#35**: Pause/SuperPause move-time integration.
+8. **#36**: deliberately converge HitDef spark/sound effects with the completed runtime where compatible.
 
 Issue #30 must not absorb #31-#36. Its minimum visible evidence is production `GameState` creation and Runtime History, while visual confirmation begins in #31.
 
@@ -133,6 +136,8 @@ Each implementation Issue adds focused tests at its boundary and a production-lo
 - animation/removetime/bind lifecycle has zero/one/off-by-one coverage;
 - Pause/SuperPause movement allowances are tested independently;
 - renderer consumes resolved coordinates without changing runtime state;
+- explicit-ID ModifyExplod preserves omitted values, updates all owner-scoped duplicates, and cannot mutate the other owner;
+- missing and omitted ModifyExplod ids are diagnosed safe no-ops;
 - real-character CNS data is exercised before any controller row becomes Complete.
 
 Standalone `ExplodSystem` tests are not sufficient evidence for Matrix promotion. A feature is Complete only after its CNS controller, `GameState`, step, renderer or other required consumer, diagnostics, focused tests, and real game path are connected.

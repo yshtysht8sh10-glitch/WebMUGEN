@@ -191,8 +191,10 @@ export class CanvasRenderer {
       currentElement.element.flip,
       frame.assets,
       entry.verticalFacing,
+      entry.render.scaleX,
+      entry.render.scaleY,
     );
-    return `raw.explod_draw internalId=${entry.runtimeId} mugenId=${entry.mugenId} anim=${entry.animationSource === 'fightfx' ? 'F' : ''}${entry.animNo} elem=${currentElement.elementIndex + 1} screen=(${frame.screenX},${frame.screenY}) facing=${entry.facing} vfacing=${entry.verticalFacing} result=${drawn ? 'drawn' : 'hidden'}${drawn ? '' : ' reason=sprite_not_found'}`;
+    return `raw.explod_draw internalId=${entry.runtimeId} mugenId=${entry.mugenId} anim=${entry.animationSource === 'fightfx' ? 'F' : ''}${entry.animNo} elem=${currentElement.elementIndex + 1} screen=(${frame.screenX},${frame.screenY}) facing=${entry.facing} vfacing=${entry.verticalFacing} scale=(${entry.render.scaleX},${entry.render.scaleY}) sprpriority=${entry.spritePriority} ontop=${entry.onTop ? 1 : 0} result=${drawn ? 'drawn' : 'hidden'}${drawn ? '' : ' reason=sprite_not_found'}`;
   }
 
   private drawSpriteByElement(
@@ -207,6 +209,8 @@ export class CanvasRenderer {
     flip = '',
     assets: CharacterRenderAssets = this.defaultAssets(),
     verticalFacing: 1 | -1 = 1,
+    scaleX = 1,
+    scaleY = 1,
   ): boolean {
     const flipX = flip.toUpperCase().includes('H');
     const key = spriteKey(groupNo, imageNo);
@@ -218,7 +222,7 @@ export class CanvasRenderer {
 
       ctx.save();
       ctx.translate(x, y);
-      ctx.scale(facing * (flipX ? -1 : 1), verticalFacing);
+      ctx.scale(facing * (flipX ? -1 : 1) * scaleX, verticalFacing * scaleY);
       ctx.drawImage(canvas, -imageDataSprite.xAxis + offsetX, -imageDataSprite.yAxis + offsetY);
       ctx.restore();
       return true;
@@ -228,7 +232,7 @@ export class CanvasRenderer {
     if (sprite) {
       ctx.save();
       ctx.translate(x, y);
-      ctx.scale(facing * (flipX ? -1 : 1), verticalFacing);
+      ctx.scale(facing * (flipX ? -1 : 1) * scaleX, verticalFacing * scaleY);
       ctx.drawImage(sprite.image, -sprite.xAxis + offsetX, -sprite.yAxis + offsetY);
       ctx.restore();
       return true;
