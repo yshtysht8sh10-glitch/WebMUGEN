@@ -167,6 +167,8 @@ For air contact, `raw.hit_reaction` also records State 5020, the selected air an
 
 `raw.explod_remove` records the owner, requested MUGEN id, number of exact owner/id matches, affected internal ids, and `reason=removeexplod`. Missing explicit ids use `reason=not_found`; omitted ids use `reason=id_missing`. Removed internal ids have no later same-frame step/render/draw record.
 
+`raw.explod_bindtime` records owner, requested MUGEN id, match count, and one indented `internalId`, old duration, and new duration line per duplicate. Missing id/time uses `id_missing`, `not_found`, or `time_missing`. Following `raw.explod_step` lines show the same-frame bind remainder, owner-relative position, follow, and release result.
+
 Browser audio foundation diagnostics use `audio_unsupported`, `audio_locked`, `audio_unlocked`, `decode_failed`, `playback_started`, `playback_stopped`, and `audio_closed`. They distinguish browser/autoplay/decode failures from missing character assets. PlaySnd-specific owner/channel diagnostics are added in Issues #28-#29/#40.
 
 `raw.sound_play` records the owner, scope, group/index, channel, volume/volumescale, resolved pan, frequency multiplier, loop, and queued result. `raw.sound_play_rejected` uses `sound_asset_missing`, `sample_not_found`, `common_sound_unavailable`, or `audio_locked`. The subsequent Browser Audio diagnostic proves playback start or decode failure.

@@ -10,6 +10,7 @@ import type { SoundPanEvent, SoundPlayEvent, SoundStopEvent } from '../audio/Sou
 import {
   normalizeExplodFacing,
   resolveExplodOrigin,
+  type ExplodBindTimeEvent,
   type ExplodCreateEvent,
   type ExplodCreateRequest,
   type ExplodModifyEvent,
@@ -46,6 +47,7 @@ export type CnsRuntimeInput = {
   onExplodCreate?: (event: ExplodCreateEvent) => void;
   onExplodModify?: (event: ExplodModifyEvent) => void;
   onExplodRemove?: (event: ExplodRemoveEvent) => void;
+  onExplodBindTime?: (event: ExplodBindTimeEvent) => void;
   screenWidth?: number;
 };
 
@@ -113,7 +115,6 @@ const RECOGNIZED_NO_OP_CONTROLLERS = new Map<string, string>([
   ['displaytoclipboard', 'DisplayToClipboard'],
   ['envcolor', 'EnvColor'],
   ['envshake', 'EnvShake'],
-  ['explodbindtime', 'ExplodBindTime'],
   ['fallenvshake', 'FallEnvShake'],
   ['forcefeedback', 'ForceFeedback'],
   ['gamemakeanim', 'GameMakeAnim'],
@@ -775,6 +776,7 @@ function executeController(
   if (type === 'explod') return createExplod(player, opponent, controller, input, commands);
   if (type === 'modifyexplod') return modifyExplod(player, opponent, controller, input, commands);
   if (type === 'removeexplod') return removeExplod(player, opponent, controller, input, commands);
+  if (type === 'explodbindtime') return setExplodBindTime(player, opponent, controller, input, commands);
   if (type === 'selfstate') {
     const value = num(controller, 'value');
     if (value === null) return withPlayer(player, false, 'SelfState');
@@ -1243,6 +1245,25 @@ function removeExplod(
     mugenId: requestedId === null ? null : Math.trunc(requestedId),
   });
   return withPlayer(player, true, 'RemoveExplod');
+}
+
+function setExplodBindTime(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const requestedId = optionalNum(controller, 'id', player, input, commands, opponent);
+  const requestedTime = optionalNum(controller, 'time', player, input, commands, opponent);
+  input.onExplodBindTime?.({
+    type: 'bindtime',
+    owner: { entityId: player.id, rootPlayerId: player.id },
+    mugenId: requestedId === null ? null : Math.trunc(requestedId),
+    time: requestedTime === null ? null : Math.trunc(requestedTime),
+    screenWidth: input.screenWidth ?? 640,
+  });
+  return withPlayer(player, true, 'ExplodBindTime');
 }
 
 function normalizeExplodPostype(value: string | null): ExplodPostype {

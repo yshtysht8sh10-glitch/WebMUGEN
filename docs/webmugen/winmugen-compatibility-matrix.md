@@ -154,7 +154,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | EnvColor | Partial | Recognized safe no-op. Screen color flash not implemented. |
 | EnvShake | Partial | Recognized safe no-op. Screen shake not implemented. |
 | Explod | Partial | Issues #30-#32: production entries create, render owner AIR/SFF, advance age/AnimElem/time, distinguish removetime 0/positive/-1/-2 with finite/loop/infinite AIR, follow/release binds, and filter removal before Canvas. Separate ids, P1/P2 asset scope, coordinates/Facing/order, diagnostics, round cleanup, focused tests, and real-character evidence exist. Movement/render extensions, Pause/SuperPause, fightfx, non-zero camera exactness, Helper ownership, `persistent`, and `NumExplod` remain incomplete. |
-| ExplodBindTime | Partial | Recognized safe no-op. Issue #25 defines owner-scoped id/bind selection; runtime behavior is scheduled for #39 after #30-#32. |
+| ExplodBindTime | Partial | Issue #39: normal CNS/app/GameState lifecycle updates every explicit owner/id duplicate in controller order. `time=0`, finite positive, indefinite negative, unbound P1/P2 rebind, owner following, release/position hold, removal ordering, missing fields, and same-frame Renderer evidence are tested. Omitted `id`, non-player owner disappearance/reload, and non-binding postype edge rules remain Partial. |
 | FallEnvShake | Partial | Recognized safe no-op. Landing shake parameters are not connected to HitFeedback. |
 | ForceFeedback | Partial | Recognized safe no-op. Input device feedback not implemented. |
 | GameMakeAnim | Partial | Recognized safe no-op. Global animation effect not implemented. |

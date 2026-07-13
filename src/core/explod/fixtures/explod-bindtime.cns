@@ -1,0 +1,133 @@
+[Statedef 920]
+type = S
+movetype = I
+physics = N
+anim = 100
+
+[State 920, Create first]
+type = Explod
+trigger1 = time = 0
+anim = 100
+id = 90
+pos = 5, -5
+postype = p1
+bindtime = 1
+removetime = -1
+
+[State 920, Create duplicate]
+type = Explod
+trigger1 = time = 0
+anim = 100
+id = 90
+pos = 10, -10
+postype = p1
+bindtime = 1
+removetime = -1
+
+[State 920, Extend duplicates]
+type = ExplodBindTime
+trigger1 = time = 0
+id = 90
+time = 3
+
+[State 920, Missing id]
+type = ExplodBindTime
+trigger1 = time = 0
+id = 999
+time = 3
+
+[State 920, Omitted id]
+type = ExplodBindTime
+trigger1 = time = 0
+time = 3
+
+[Statedef 921]
+type = S
+movetype = I
+physics = N
+anim = 100
+
+[State 921, Trigger false]
+type = ExplodBindTime
+trigger1 = 0
+id = 90
+time = 5
+
+[Statedef 922]
+type = S
+movetype = I
+physics = N
+anim = 100
+
+[State 922, Create]
+type = Explod
+trigger1 = time = 0
+anim = 100
+id = 90
+bindtime = -1
+removetime = -1
+
+[State 922, Unbind]
+type = ExplodBindTime
+trigger1 = time = 0
+id = 90
+time = 0
+
+[Statedef 923]
+type = S
+movetype = I
+physics = N
+anim = 100
+
+[State 923, Bind indefinitely]
+type = ExplodBindTime
+trigger1 = time = 0
+id = 90
+time = -1
+
+[Statedef 924]
+type = S
+movetype = I
+physics = N
+anim = 100
+
+[State 924, Rebind finite]
+type = ExplodBindTime
+trigger1 = time = 0
+id = 90
+time = 2
+
+[Statedef 925]
+type = S
+movetype = I
+physics = N
+anim = 100
+
+[State 925, Missing time]
+type = ExplodBindTime
+trigger1 = time = 0
+id = 90
+
+[Statedef 926]
+type = S
+movetype = I
+physics = N
+anim = 100
+
+[State 926, Create]
+type = Explod
+trigger1 = time = 0
+anim = 100
+id = 90
+removetime = -1
+
+[State 926, Remove]
+type = RemoveExplod
+trigger1 = time = 0
+id = 90
+
+[State 926, Bind removed entry]
+type = ExplodBindTime
+trigger1 = time = 0
+id = 90
+time = 5

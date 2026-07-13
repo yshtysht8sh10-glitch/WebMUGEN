@@ -393,6 +393,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             onExplodCreate: (event) => explodRuntimeEvents.push(event),
             onExplodModify: (event) => explodRuntimeEvents.push(event),
             onExplodRemove: (event) => explodRuntimeEvents.push(event),
+            onExplodBindTime: (event) => explodRuntimeEvents.push(event),
             screenWidth: canvas.width,
           });
           nextState = cnsResult.state;

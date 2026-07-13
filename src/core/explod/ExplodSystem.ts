@@ -95,7 +95,15 @@ export type ExplodRemoveEvent = {
   mugenId: number | null;
 };
 
-export type ExplodControllerEvent = ExplodCreateEvent | ExplodModifyEvent | ExplodRemoveEvent;
+export type ExplodBindTimeEvent = {
+  type: 'bindtime';
+  owner: RuntimeEntityRef;
+  mugenId: number | null;
+  time: number | null;
+  screenWidth: number;
+};
+
+export type ExplodControllerEvent = ExplodCreateEvent | ExplodModifyEvent | ExplodRemoveEvent | ExplodBindTimeEvent;
 
 export type ExplodCreateRejection = {
   type: 'rejected';
@@ -195,10 +203,49 @@ export function applyExplodRemoveEvents(gameState: GameState, events: readonly E
   return { ...gameState, explods: { ...gameState.explods, entries }, hitDiagnosticLines: diagnosticLines };
 }
 
+export function applyExplodBindTimeEvents(gameState: GameState, events: readonly ExplodBindTimeEvent[]): GameState {
+  let entries = gameState.explods.entries;
+  const diagnosticLines = [...(gameState.hitDiagnosticLines ?? [])];
+
+  for (const event of events) {
+    if (event.mugenId === null) {
+      diagnosticLines.push(`raw.explod_bindtime owner=p${event.owner.rootPlayerId} id=- matched=0 reason=id_missing`);
+      continue;
+    }
+    if (event.time === null) {
+      diagnosticLines.push(`raw.explod_bindtime owner=p${event.owner.rootPlayerId} id=${event.mugenId} matched=0 reason=time_missing`);
+      continue;
+    }
+
+    const owner = gameState.players.find((player) => player.id === event.owner.entityId);
+    const opponent = gameState.players.find((player) => player.id !== event.owner.rootPlayerId) ?? gameState.players[1];
+    const changes: string[] = [];
+    entries = entries.map((entry) => {
+      if (!sameRuntimeOwner(entry.owner, event.owner) || entry.mugenId !== event.mugenId) return entry;
+      const oldTime = entry.bind?.remaining ?? 0;
+      const resolved = owner
+        ? resolveExplodOrigin(entry.postype, owner, opponent, entry.offset.x, entry.offset.y, event.screenWidth)
+        : null;
+      const bind = event.time !== 0 && resolved?.bindTargetEntityId !== null && resolved?.bindTargetEntityId !== undefined
+        ? { targetEntityId: resolved.bindTargetEntityId, remaining: event.time, offsetX: entry.offset.x, offsetY: entry.offset.y }
+        : null;
+      changes.push(`internalId=${entry.runtimeId} old=${oldTime} new=${bind?.remaining ?? 0}`);
+      return { ...entry, bind };
+    });
+    diagnosticLines.push(
+      `raw.explod_bindtime owner=p${event.owner.rootPlayerId} id=${event.mugenId} matched=${changes.length}${changes.length === 0 ? ' reason=not_found' : ''}`,
+      ...changes.map((change) => `  ${change}`),
+    );
+  }
+
+  return { ...gameState, explods: { ...gameState.explods, entries }, hitDiagnosticLines: diagnosticLines };
+}
+
 export function applyExplodControllerEvents(gameState: GameState, events: readonly ExplodControllerEvent[]): GameState {
   return events.reduce((state, event) => {
     if (event.type === 'modify') return applyExplodModifyEvents(state, [event]);
     if (event.type === 'remove') return applyExplodRemoveEvents(state, [event]);
+    if (event.type === 'bindtime') return applyExplodBindTimeEvents(state, [event]);
     return applyExplodCreateEvents(state, [event]);
   }, gameState);
 }
