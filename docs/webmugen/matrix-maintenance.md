@@ -1,6 +1,6 @@
 # Compatibility Matrix Maintenance
 
-Updated: 2026-07-12
+Updated: 2026-07-13
 
 This document defines how to maintain the WebMUGEN compatibility matrix.
 
@@ -8,9 +8,11 @@ This document defines how to maintain the WebMUGEN compatibility matrix.
 
 `docs/webmugen/winmugen-compatibility-matrix.html` is the canonical checklist.
 
-`docs/webmugen/winmugen-compatibility-matrix.md` is the row inventory and human-readable evidence mirror. The HTML reads the Markdown inventory and adds the detailed status model, explicit overrides, progress badges, filters, and summaries.
+`docs/webmugen/winmugen-compatibility-matrix.md` is the row inventory and human-readable evidence mirror. Every Markdown row stores the same explicit canonical status and progress shown by the HTML. The HTML reads that inventory for normal browser use and retains its audited fallback inventory so the checklist remains diagnosable if the mirror request fails.
 
 Update both whenever compatibility behavior changes. When a row needs a special classification or progress value, update the HTML override table and the Markdown note together.
+
+Run `npm run matrix:check` after every Matrix edit. Use `node scripts/compatibility-matrix.mjs --write` only to migrate legacy four-status rows; normal edits must state the seven-status value directly in both files.
 
 ## Status meanings
 
@@ -174,6 +176,7 @@ Before committing a Matrix update, verify:
 - every `Safe no-op` note says that no game effect occurs;
 - Fallback is not used merely because a feature is incomplete;
 - Complete rows have focused-test or confirmed-runtime evidence;
+- HTML and Markdown contain the same 414 row identities and canonical status/progress values;
 - HTML loads and parses the Markdown inventory;
 - search, section filter, and status filter still work;
 - `public/chars/common1.cns` is unchanged.
@@ -200,4 +203,4 @@ When a change affects an area, update the corresponding topic note:
 
 If `npm run build` fails because of known TypeScript configuration issues, report it separately from compatibility work.
 
-Still run `npm test -- --run` for compatibility implementation changes. A documentation-only Matrix taxonomy update should at minimum validate that the HTML script has no syntax error and that the Markdown file is reachable from the HTML location.
+Still run `npm test -- --run` for compatibility implementation changes. A documentation-only Matrix taxonomy update must run `npm run matrix:check` and the focused Matrix test, and must confirm in a served browser that the Markdown inventory loads, renders, and filters correctly.
