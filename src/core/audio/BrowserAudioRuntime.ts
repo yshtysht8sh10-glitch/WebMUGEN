@@ -16,6 +16,9 @@ export type AudioRuntimeDiagnostic = {
 export type AudioPlaybackOptions = {
   loop?: boolean;
   volume?: number;
+  pan?: number;
+  playbackRate?: number;
+  channelKey?: string;
 };
 
 export type AudioPlaybackHandle = { stop(): void };
@@ -35,6 +38,7 @@ export class BrowserAudioRuntime {
   private adapter: AudioAdapter | null | undefined;
   private readonly decodeCache = new Map<string, Promise<unknown>>();
   private readonly activeHandles = new Set<AudioPlaybackHandle>();
+  private readonly channelHandles = new Map<string, AudioPlaybackHandle>();
   private unlocked = false;
   private muted = false;
   private masterVolume = 1;
@@ -81,6 +85,14 @@ export class BrowserAudioRuntime {
         this.decodeCache.set(sampleKey, decoded);
       }
       const handle = adapter.play(await decoded, options);
+      if (options.channelKey) {
+        const previous = this.channelHandles.get(options.channelKey);
+        if (previous) {
+          previous.stop();
+          this.activeHandles.delete(previous);
+        }
+        this.channelHandles.set(options.channelKey, handle);
+      }
       this.activeHandles.add(handle);
       this.emit('playback_started', 'Audio sample playback started.', sampleKey);
       return true;
@@ -105,6 +117,7 @@ export class BrowserAudioRuntime {
     for (const handle of this.activeHandles) handle.stop();
     if (this.activeHandles.size > 0) this.emit('playback_stopped', 'All active audio sources were stopped.');
     this.activeHandles.clear();
+    this.channelHandles.clear();
   }
 
   async cleanup(): Promise<void> {
@@ -147,11 +160,19 @@ export function createWebAudioAdapter(): AudioAdapter | null {
     play(decoded, options) {
       const source = context.createBufferSource();
       const gain = context.createGain();
+      const panner = typeof context.createStereoPanner === 'function' ? context.createStereoPanner() : null;
       source.buffer = decoded as AudioBuffer;
       source.loop = options.loop ?? false;
+      source.playbackRate.value = Math.max(0.01, options.playbackRate ?? 1);
       gain.gain.value = clamp(options.volume ?? 1, 0, 1);
       source.connect(gain);
-      gain.connect(master);
+      if (panner) {
+        panner.pan.value = clamp(options.pan ?? 0, -1, 1);
+        gain.connect(panner);
+        panner.connect(master);
+      } else {
+        gain.connect(master);
+      }
       source.start();
       return { stop: () => { try { source.stop(); } catch { /* already stopped */ } } };
     },

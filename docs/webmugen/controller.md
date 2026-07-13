@@ -121,7 +121,7 @@ Examples:
 
 CharacterLoader now exposes parsed SND v1 samples by group/index without depending on browser audio. This satisfies the asset prerequisite only: `PlaySnd`, `StopSnd`, and `SndPan` remain runtime safe no-ops until Issues #27-#29/#40 connect decoding, playback, channels, and pan.
 
-The shared browser adapter now supports user-gesture AudioContext unlock, decode caching, master gain/mute, stop, cleanup, and safe diagnostics; see `audio.md`. Controller-to-channel requests remain the responsibility of #28/#29/#40, so this foundation does not promote those controller rows to Complete.
+The shared browser adapter supports user-gesture AudioContext unlock, decode caching, master gain/mute, stop, cleanup, and safe diagnostics; see `audio.md`. `PlaySnd` now emits firing-frame owner-scoped events, resolves character SND samples, and supports channel replacement, volume scaling, pan, playback rate, and loop. Common `F` sound scope and advanced ownership remain unsupported, so PlaySnd stays Partial. StopSnd/SndPan remain #29/#40.
 
 If the controller only stores a field or is skipped safely, mark Partial.
 

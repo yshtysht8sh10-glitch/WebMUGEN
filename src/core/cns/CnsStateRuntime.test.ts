@@ -1091,7 +1091,7 @@ const recognizedControllerFixtures: { type: string; traceName: string; params?: 
   { type: 'ParentVarSet', traceName: 'ParentVarSet' },
   { type: 'Pause', traceName: 'Pause', params: 'time = 1' },
   { type: 'PlayerPush', traceName: 'PlayerPush', params: 'value = 1' },
-  { type: 'PlaySnd', traceName: 'PlaySnd' },
+  { type: 'PlaySnd', traceName: 'PlaySnd', params: 'value = 0,0' },
   { type: 'PosAdd', traceName: 'PosAdd', params: 'x = 0\ny = 0' },
   { type: 'PosFreeze', traceName: 'PosFreeze' },
   { type: 'PosSet', traceName: 'PosSet', params: 'x = 220\ny = 0' },

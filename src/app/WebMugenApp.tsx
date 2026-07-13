@@ -5,8 +5,9 @@ import type { GameState } from '../core/engine/types';
 import { createSampleCharacterAssets, loadAppCharacter } from './AppCharacterLoader';
 import type { CharacterSourceFile } from '../core/character/CharacterTypes';
 import type { SndDocument } from '../parser/snd/SndTypes';
-import { sndSampleKey } from '../parser/snd/SndTypes';
+import { findSndSample, sndSampleKey } from '../parser/snd/SndTypes';
 import { BrowserAudioRuntime, type AudioRuntimeDiagnostic } from '../core/audio/BrowserAudioRuntime';
+import type { SoundPlayEvent } from '../core/audio/SoundEvent';
 import type { AirAction, AirDocument, AirElement } from '../parser/air/AirTypes';
 import type { ImageDataSpritePack } from '../core/sprite/ImageDataSpriteTypes';
 import { spriteKey } from '../core/sprite/SpritePackLoader';
@@ -369,6 +370,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             nextState = applyFallbackControls(nextState, p1Input, p2Input);
           }
 
+          const soundEvents: SoundPlayEvent[] = [];
           const cnsResult = stepCnsStateRuntime(nextState, character.cns, {
             p1Commands,
             p2Commands,
@@ -378,8 +380,30 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
               return element ? element.elementIndex + 1 : null;
             },
             hitDiagnostics: runtimeSettingsRef.current.hitDiagnostics,
+            onSoundPlay: (event) => soundEvents.push(event),
           });
           nextState = cnsResult.state;
+          if (soundEvents.length > 0) {
+            const soundLines = soundEvents.map((event) => {
+              if (event.scope === 'common') return `raw.sound_play_rejected owner=${event.ownerId} sample=F${event.group},${event.index} reason=common_sound_unavailable`;
+              const sample = character.sounds ? findSndSample(character.sounds, event.group, event.index) : null;
+              if (!character.sounds) return `raw.sound_play_rejected owner=${event.ownerId} sample=${event.group},${event.index} reason=sound_asset_missing`;
+              if (!sample) return `raw.sound_play_rejected owner=${event.ownerId} sample=${event.group},${event.index} reason=sample_not_found`;
+              const volume = Math.min(1, Math.max(0, (event.volume / 100) * (event.volumeScale / 100)));
+              const pan = Math.min(1, Math.max(-1, event.pan / 100));
+              const runtime = audioRuntimeRef.current;
+              if (!runtime || runtime.status !== 'unlocked') return `raw.sound_play_rejected owner=${event.ownerId} sample=${event.group},${event.index} reason=audio_locked`;
+              void runtime.playSample(`${event.ownerId}:${sndSampleKey(event.group, event.index)}`, sample.bytes, {
+                channelKey: event.channel === null ? undefined : `${event.ownerId}:${Math.trunc(event.channel)}`,
+                volume,
+                pan,
+                playbackRate: event.frequencyMultiplier,
+                loop: event.loop,
+              });
+              return `raw.sound_play owner=${event.ownerId} scope=${event.scope} sample=${event.group},${event.index} channel=${event.channel ?? '-'} volume=${event.volume} volumescale=${event.volumeScale} pan=${event.pan} freqmul=${event.frequencyMultiplier} loop=${event.loop ? 1 : 0} result=queued`;
+            });
+            nextState = { ...nextState, hitDiagnosticLines: [...(nextState.hitDiagnosticLines ?? []), ...soundLines] };
+          }
           nextReadableHistoryState = cnsResult.state;
           nextCnsTraces = cnsResult.traces;
 

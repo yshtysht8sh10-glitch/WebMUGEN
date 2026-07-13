@@ -1,89 +1,49 @@
 # PlaySnd
 
-`PlaySnd` is the WinMUGEN CNS state controller used to play a sound sample from a character SND archive.
+`PlaySnd` plays a sample from a WinMUGEN character SND archive.
 
 ## Current status
 
-**Issue ready — implementation has not started yet.**
+**Partial - production character SND playback is connected.**
 
-The CNS runtime currently recognizes `PlaySnd` as a safe no-op. The controller can be parsed without crashing, but it does not load or play audio yet.
+The CNS runtime evaluates parameters on every firing frame and emits an owner-scoped event. The app resolves the owner's character SND and plays it through the shared Browser Audio runtime.
 
-- Compatibility Matrix: [WinMUGEN Compatibility Matrix](../winmugen-compatibility-matrix.html)
-- Implementation Issue: [#28 Controller: PlaySnd を本格実装する](https://github.com/yshtysht8sh10-glitch/WebMUGEN/issues/28)
-- Prerequisite Issue: [#26 SND v1 parserとCharacterLoader統合](https://github.com/yshtysht8sh10-glitch/WebMUGEN/issues/26)
-- Prerequisite Issue: [#27 Browser Audio runtimeとAudioContext unlock](https://github.com/yshtysht8sh10-glitch/WebMUGEN/issues/27)
-
-## Intended syntax
+## Supported syntax
 
 ```ini
 [State 200, Voice]
 type = PlaySnd
 trigger1 = Time = 0
-value = 2, 5
+value = S2, 5
 channel = 0
 volume = 100
+volumescale = 100
 pan = 0
 freqmul = 1.0
 loop = 0
 ```
 
-## Parameters to support
+| Parameter | Current behavior |
+|---|---|
+| `value = group, index` | Expressions are evaluated on the firing frame. Unprefixed and `S` values select the owner character SND. `F` common scope is diagnosed unavailable. |
+| `channel` | Replaces the previous voice only in the same owner/channel. Omission creates an independent voice. |
+| `volume` / `volumescale` | Multiplicative gain with 100 as unity for each value. |
+| `pan` | Partial relative pan: -100..100 maps to stereo -1..1 and mirrors with Facing. |
+| `abspan` | Partial absolute pan, takes precedence over `pan`. |
+| `freqmul` | Positive Web Audio playback rate. |
+| `loop` | Loops until channel replacement, runtime cleanup, or later StopSnd support. |
 
-| Parameter | Purpose | Current status |
-|---|---|---|
-| `value = group, index` | Selects a sample from the owner character's SND archive. | Not implemented |
-| `channel` | Selects an owner-scoped playback channel and replaces the previous sound on that channel. | Not implemented |
-| `volume` | Controls playback volume. | Not implemented |
-| `volumescale` | Scales the effective volume. | Not implemented |
-| `pan` | Applies relative stereo positioning. | Not implemented |
-| `abspan` | Applies absolute stereo positioning. | Not implemented |
-| `freqmul` | Changes playback frequency/rate. | Not implemented |
-| `loop` | Keeps the sample playing until stopped or replaced. | Not implemented |
+## Diagnostics
 
-## Planned runtime flow
-
-```text
-CNS PlaySnd controller
-  ↓ evaluate expressions at the firing frame
-Sound event snapshot
-  ↓ resolve owner CharacterAssets / SND group,index
-Owner-scoped audio channel table
-  ↓
-Web Audio adapter
-```
-
-The playback channel must be scoped by owner entity. P1 channel 0 and P2 channel 0 must not collide. The same design must remain usable when Helper and Projectile owners are introduced.
-
-## Required diagnostics
-
-Successful playback should be traceable in Runtime History:
+Queued playback records:
 
 ```text
-raw.sound_play owner=p1 sample=2,5 channel=0
-  volume=100 pan=0 freqmul=1 loop=0
-  result=started voiceId=87
+raw.sound_play owner=1 scope=character sample=2,5 channel=0
+  volume=100 volumescale=100 pan=0 freqmul=1 loop=0 result=queued
 ```
 
-Failure must also be explicit:
+Rejections use `sound_asset_missing`, `sample_not_found`, `common_sound_unavailable`, or `audio_locked`. Browser Audio diagnostics then report `playback_started` or `decode_failed`.
 
-```text
-raw.sound_play_rejected owner=p1 sample=2,5 reason=sample_not_found
-```
+## Remaining work
 
-Other expected rejection reasons include `audio_locked`, `decode_failed`, and `sound_asset_missing`.
-
-HitDef `hitsound`/`guardsound` now generate owner-scoped sound cues on accepted normal/guard contact and diagnose `audio_runtime_unavailable`. They share the future owner SND lookup requirement described here; cue generation is implemented, decoding/playback is not.
-
-## Completion criteria
-
-`PlaySnd` is not complete until:
-
-- the character SND archive is loaded from DEF/ZIP assets;
-- `value` expressions select a real sample;
-- playback occurs through one reusable AudioContext;
-- owner-scoped channel replacement works;
-- volume, pan, frequency and loop behavior are covered to the documented extent;
-- focused tests and runtime diagnostics exist;
-- the Compatibility Matrix and this document reflect the same status.
-
-See [GitHub Issue #28](https://github.com/yshtysht8sh10-glitch/WebMUGEN/issues/28) for implementation work and acceptance criteria.
+PlaySnd remains Partial because common/fight SND is not loaded, exact WinMUGEN pan/volume edge ranges and `lowpriority` are not audited, and Helper/Projectile asset ownership is not connected. StopSnd and SndPan are tracked by Issues #29 and #40.

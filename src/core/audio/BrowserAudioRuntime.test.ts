@@ -34,6 +34,19 @@ describe('BrowserAudioRuntime', () => {
     expect(fake.close).toHaveBeenCalledTimes(1);
   });
 
+  it('replaces only the matching owner channel and leaves channel-less voices independent', async () => {
+    const fake = createFakeAdapter();
+    const runtime = new BrowserAudioRuntime(() => fake.adapter);
+    await runtime.unlock();
+    await runtime.playSample('p1:0,0', new Uint8Array([1]), { channelKey: 'p1:0' });
+    await runtime.playSample('p2:0,0', new Uint8Array([1]), { channelKey: 'p2:0' });
+    await runtime.playSample('p1:0,0', new Uint8Array([1]), { channelKey: 'p1:0' });
+    await runtime.playSample('p1:0,0', new Uint8Array([1]));
+
+    expect(fake.stop).toHaveBeenCalledTimes(1);
+    expect(fake.play).toHaveBeenCalledTimes(4);
+  });
+
   it('safely reports unsupported, resume rejection, and decode failure', async () => {
     const diagnostics: string[] = [];
     const unsupported = new BrowserAudioRuntime(() => null, (item) => diagnostics.push(item.code));

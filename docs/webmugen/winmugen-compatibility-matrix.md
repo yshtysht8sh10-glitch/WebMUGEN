@@ -182,7 +182,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | ParentVarSet | Partial | Recognized safe no-op. Parent var lookup not implemented. |
 | Pause | Partial | Stores pause time field only. Full pause effect handled elsewhere/incomplete. |
 | PlayerPush | Partial | `value = 0` disables fallback stage push for its execution frame. Grounded players always use horizontal push; airborne cross-over requires fixed 44x80 boxes to clear vertically. Width/AIR `Clsn2` integration remains incomplete. |
-| PlaySnd | Partial | SND v1 assets and a shared unlock/decode-cache/master-gain Browser Audio runtime exist. Controller owner/channel execution remains safe no-op pending #28. |
+| PlaySnd | Partial | Production CNS evaluates group/index and major parameters, resolves owner character SND, and plays through owner-scoped channels with volume scale, relative/absolute pan, playback rate, loop, diagnostics, and decode cache. Common `F` sound scope, lowpriority, and advanced Helper ownership remain unsupported. |
 | PosAdd | Complete | Basic implementation exists. |
 | PosFreeze | Partial | Recognized safe no-op. Freeze behavior not implemented. |
 | PosSet | Complete | Basic implementation exists. |

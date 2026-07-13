@@ -6,6 +6,7 @@ import { activateMoveContact, resetMoveContact } from '../hitdef/MoveContactStat
 import { removeTarget, selectTargets } from '../hitdef/TargetState';
 import { normalizeHitAttribute } from '../hitdef/HitAttribute';
 import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, readNumberExpression, type CnsRuntimeTriggerContext } from './CnsRuntimeTrigger';
+import type { SoundPlayEvent } from '../audio/SoundEvent';
 
 export type CnsRuntimeTrace = {
   playerId: 1 | 2;
@@ -28,6 +29,7 @@ export type CnsRuntimeInput = {
   getAnimationElementNo?: (animNo: number, animTime: number) => number | null;
   hitDiagnostics?: boolean;
   getCnsDocumentForPlayer?: (playerId: number) => CnsDocument | null | undefined;
+  onSoundPlay?: (event: SoundPlayEvent) => void;
 };
 
 export type CnsRuntimeResult = { state: GameState; traces: CnsRuntimeTrace[] };
@@ -110,7 +112,6 @@ const RECOGNIZED_NO_OP_CONTROLLERS = new Map<string, string>([
   ['palfx', 'PalFX'],
   ['parentvaradd', 'ParentVarAdd'],
   ['parentvarset', 'ParentVarSet'],
-  ['playsnd', 'PlaySnd'],
   ['posfreeze', 'PosFreeze'],
   ['projectile', 'Projectile'],
   ['removeexplod', 'RemoveExplod'],
@@ -756,6 +757,7 @@ function executeController(
   if (type === 'hitfalldamage') return hitFallDamage(player, controller);
   if (type === 'pause') return withExtendedPlayer(player, { pauseTime: num(controller, 'time') ?? 0 }, 'Pause');
   if (type === 'superpause') return withExtendedPlayer(player, { superPauseTime: num(controller, 'time') ?? 0 }, 'SuperPause');
+  if (type === 'playsnd') return playSound(player, opponent, controller, input, commands);
   if (type === 'selfstate') {
     const value = num(controller, 'value');
     if (value === null) return withPlayer(player, false, 'SelfState');
@@ -994,6 +996,40 @@ function hitFallDamage(player: PlayerState, controller: CnsStateController): Con
       `  activeHitDefId=${player.hitStun?.activeHitDefId ?? 'none'} lifeBefore=${lifeBefore} damage=${Math.max(0, value)} lifeAfter=${life} kill=${canKill ? 1 : 0} result=applied`,
     ],
   }, true, 'HitFallDamage');
+}
+
+function playSound(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const value = controller.params.value;
+  const parts = Array.isArray(value) ? value : value === undefined ? [] : String(value).split(',');
+  const groupPart = parts[0];
+  const groupText = String(groupPart ?? '').trim();
+  const scope: SoundPlayEvent['scope'] = /^f/i.test(groupText) ? 'common' : 'character';
+  const normalizedGroupPart = /^[sf]/i.test(groupText) ? groupText.slice(1) : groupPart;
+  const group = cnsValueToNumber(normalizedGroupPart, player, input, commands, opponent);
+  const index = cnsValueToNumber(parts[1], player, input, commands, opponent);
+  if (group === null || index === null) return withPlayer(player, false, 'PlaySnd');
+  const relativePan = num(controller, 'pan', player, input, commands, opponent);
+  const absolutePan = num(controller, 'abspan', player, input, commands, opponent);
+  input.onSoundPlay?.({
+    ownerId: player.selfStateOwnerId ?? player.id,
+    scope,
+    group: Math.trunc(group),
+    index: Math.trunc(index),
+    channel: num(controller, 'channel', player, input, commands, opponent),
+    volume: num(controller, 'volume', player, input, commands, opponent) ?? 100,
+    volumeScale: num(controller, 'volumescale', player, input, commands, opponent) ?? 100,
+    pan: absolutePan ?? (relativePan ?? 0) * player.facing,
+    absolutePan: absolutePan !== null,
+    frequencyMultiplier: Math.max(0.01, num(controller, 'freqmul', player, input, commands, opponent) ?? 1),
+    loop: (num(controller, 'loop', player, input, commands, opponent) ?? 0) !== 0,
+  });
+  return withPlayer(player, true, 'PlaySnd');
 }
 
 function activateHitDef(
