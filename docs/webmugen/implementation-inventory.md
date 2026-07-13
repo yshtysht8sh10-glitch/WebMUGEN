@@ -39,7 +39,7 @@ This document is a high-level inventory of WebMUGEN implementation areas. It is 
 | Physics debug | Post-physics state, velocity, facing, power, juggle pool, guard intent, and current/self State owner ids are visible. |
 | Runtime history | Snapshot-based history exists for copyable debugging. |
 | Hit effects | Contact envelopes feed same-frame shared Explod sparks, shared Browser Audio cues, and envshake offsets once per HitEvent. Character `S` scope is production-connected; bundled common fightfx/SND assets are absent and remain diagnosed Partial. |
-| Browser audio | Shared lazy AudioContext adapter supports user-gesture unlock, decode cache, master gain/mute, stop/cleanup, and safe diagnostics. Controller/channel integration remains incomplete. |
+| Browser audio | Shared lazy AudioContext adapter supports user-gesture unlock, decode cache, owner/channel gain and pan, a ramped persistent 0-100 master/mute UI (default 50%), stop/cleanup, and safe diagnostics. Common SND and advanced ownership remain incomplete. |
 | Static debug | Character load, StateDef list, command routes, and coverage are visible. |
 
 ## Documentation layer

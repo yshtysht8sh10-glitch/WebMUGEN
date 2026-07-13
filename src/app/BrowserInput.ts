@@ -95,6 +95,7 @@ export class BrowserInput {
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
+    if (isEditableControl(event.target)) return;
     this.pressedKeys.add(event.code);
     if (shouldPreventDefault(event.code)) {
       event.preventDefault();
@@ -103,6 +104,7 @@ export class BrowserInput {
 
   private readonly handleKeyUp = (event: KeyboardEvent): void => {
     this.pressedKeys.delete(event.code);
+    if (isEditableControl(event.target)) return;
     if (shouldPreventDefault(event.code)) {
       event.preventDefault();
     }
@@ -115,6 +117,12 @@ export class BrowserInput {
 
 export function keysToP1Input(keys: ReadonlySet<string>, config: InputConfig = DEFAULT_INPUT_CONFIG): PlayerInput {
   return keysToPlayerInput(keys, config.players[0].keyboard);
+}
+
+function isEditableControl(target: EventTarget | null): boolean {
+  const element = target as { tagName?: string; isContentEditable?: boolean } | null;
+  const tagName = element?.tagName?.toUpperCase();
+  return element?.isContentEditable === true || tagName === 'INPUT' || tagName === 'SELECT' || tagName === 'TEXTAREA';
 }
 
 export function keysToP2Input(keys: ReadonlySet<string>, config: InputConfig = DEFAULT_INPUT_CONFIG): PlayerInput {

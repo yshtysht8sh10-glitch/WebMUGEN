@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { BrowserAudioRuntime, type AudioAdapter, type AudioPlaybackHandle } from './BrowserAudioRuntime';
+import { BrowserAudioRuntime, createWebAudioAdapter, type AudioAdapter, type AudioPlaybackHandle } from './BrowserAudioRuntime';
 
 describe('BrowserAudioRuntime', () => {
   it('creates one adapter, unlocks once, caches decode by sample key, and plays after unlock', async () => {
@@ -94,6 +94,44 @@ describe('BrowserAudioRuntime', () => {
     expect(runtime.updateChannelPan('p1:3', 0)).toBe('channel_not_found');
   });
 
+  it('keeps individual volume and channel lifecycle intact at 100, 50, and 0 percent master gain', async () => {
+    const fake = createFakeAdapter();
+    const runtime = new BrowserAudioRuntime(() => fake.adapter);
+    await runtime.unlock();
+    runtime.setMasterVolume(1);
+    await runtime.playSample('loop', new Uint8Array([1]), { channelKey: 'p1:4', volume: 0.8, pan: 0.1, loop: true });
+    runtime.setMasterVolume(0.5);
+    runtime.setMasterVolume(0);
+
+    expect(fake.gains).toEqual([1, 1, 0.5, 0]);
+    expect(fake.play.mock.calls[0][1]).toMatchObject({ volume: 0.8, pan: 0.1, loop: true });
+    expect(runtime.updateChannelPan('p1:4', -0.25)).toBe('updated');
+    expect(runtime.stopChannel('p1:4')).toBe(true);
+    expect(fake.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('routes channel gain through pan and the shared ramped master gain', () => {
+    const originalAudioContext = globalThis.AudioContext;
+    const graph = createFakeWebAudioGraph();
+    Object.defineProperty(globalThis, 'AudioContext', { configurable: true, value: graph.AudioContext });
+    try {
+      const adapter = createWebAudioAdapter()!;
+      adapter.setMasterGain(0.5);
+      adapter.play({}, { volume: 0.8, pan: 0.25 });
+
+      expect(graph.master.connect).toHaveBeenCalledWith(graph.destination);
+      expect(graph.source.connect).toHaveBeenCalledWith(graph.channelGain);
+      expect(graph.channelGain.connect).toHaveBeenCalledWith(graph.panner);
+      expect(graph.panner.connect).toHaveBeenCalledWith(graph.master);
+      expect(graph.channelGain.gain.value).toBe(0.8);
+      expect(graph.master.gain.cancelScheduledValues).toHaveBeenCalledWith(2);
+      expect(graph.master.gain.setValueAtTime).toHaveBeenCalledWith(1, 2);
+      expect(graph.master.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0.5, 2.015);
+    } finally {
+      Object.defineProperty(globalThis, 'AudioContext', { configurable: true, value: originalAudioContext });
+    }
+  });
+
   it('safely reports unsupported, resume rejection, and decode failure', async () => {
     const diagnostics: string[] = [];
     const unsupported = new BrowserAudioRuntime(() => null, (item) => diagnostics.push(item.code));
@@ -147,4 +185,31 @@ function createFakeAdapter(supportsPan = true) {
     close,
   };
   return { adapter, stop, resume, decode, play, close, gains, endedCallbacks, pans };
+}
+
+function createFakeWebAudioGraph() {
+  const destination = {} as AudioDestinationNode;
+  const audioParam = () => ({
+    value: 1,
+    cancelScheduledValues: vi.fn(),
+    setValueAtTime: vi.fn(),
+    linearRampToValueAtTime: vi.fn(),
+  });
+  const master = { gain: audioParam(), connect: vi.fn() };
+  const channelGain = { gain: audioParam(), connect: vi.fn() };
+  const source = { buffer: null, loop: false, playbackRate: { value: 1 }, connect: vi.fn(), start: vi.fn(), stop: vi.fn(), onended: null };
+  const panner = { pan: { value: 0 }, connect: vi.fn() };
+  let gainCount = 0;
+  class FakeAudioContext {
+    state = 'running';
+    currentTime = 2;
+    destination = destination;
+    createGain() { gainCount += 1; return gainCount === 1 ? master : channelGain; }
+    createBufferSource() { return source; }
+    createStereoPanner() { return panner; }
+    resume = vi.fn(async () => {});
+    decodeAudioData = vi.fn(async () => ({}));
+    close = vi.fn(async () => {});
+  }
+  return { AudioContext: FakeAudioContext as unknown as typeof AudioContext, destination, master, channelGain, source, panner };
 }

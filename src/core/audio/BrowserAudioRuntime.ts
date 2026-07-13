@@ -212,7 +212,13 @@ export function createWebAudioAdapter(): AudioAdapter | null {
         },
       };
     },
-    setMasterGain(value) { master.gain.value = value; },
+    setMasterGain(value) {
+      const normalized = clamp(value, 0, 1);
+      const now = context.currentTime;
+      master.gain.cancelScheduledValues(now);
+      master.gain.setValueAtTime(master.gain.value, now);
+      master.gain.linearRampToValueAtTime(normalized, now + 0.015);
+    },
     close: () => context.close(),
   };
 }

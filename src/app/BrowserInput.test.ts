@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { BrowserInput, DEFAULT_INPUT_CONFIG, keysToP1Input, keysToP2Input, type InputConfig } from './BrowserInput';
 
 describe('BrowserInput', () => {
@@ -45,6 +45,24 @@ describe('BrowserInput', () => {
     expect(input.down).toBe(true);
     expect(input.attack).toBe(true);
     expect(input.buttons).toEqual(['a', 'x']);
+  });
+
+  it('does not capture or prevent keyboard controls on form fields', () => {
+    const listeners = new Map<string, EventListener[]>();
+    const fakeWindow = {
+      addEventListener(type: string, listener: EventListener) {
+        listeners.set(type, [...(listeners.get(type) ?? []), listener]);
+      },
+      removeEventListener() {},
+    } as unknown as Window;
+    const input = new BrowserInput(fakeWindow);
+    const preventDefault = vi.fn();
+    const keydown = listeners.get('keydown')?.[0] as (event: KeyboardEvent) => void;
+
+    keydown({ code: 'ArrowRight', target: { tagName: 'INPUT' }, preventDefault } as unknown as KeyboardEvent);
+
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(input.getPressedKeys().has('ArrowRight')).toBe(false);
   });
 
   it('maps keyboard input through a custom config', () => {

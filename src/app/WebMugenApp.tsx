@@ -9,6 +9,7 @@ import { sndSampleKey } from '../parser/snd/SndTypes';
 import { BrowserAudioRuntime, type AudioRuntimeDiagnostic } from '../core/audio/BrowserAudioRuntime';
 import type { SoundRuntimeEvent } from '../core/audio/SoundEvent';
 import { processSoundRuntimeEvents } from '../core/audio/SoundRuntimeBridge';
+import { adjustMasterVolumeFromKey, loadAudioSettings, normalizeAudioSettings, saveAudioSettings, type AudioSettings } from './AudioSettings';
 import { applyExplodControllerEvents, removeExplodsOnOwnerHit, stepExplodRuntime, type ExplodControllerEvent } from '../core/explod/ExplodSystem';
 import type { AirAction, AirDocument, AirElement } from '../parser/air/AirTypes';
 import type { ImageDataSpritePack } from '../core/sprite/ImageDataSpriteTypes';
@@ -159,6 +160,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
   const inputRef = useRef<BrowserInput | null>(null);
   const inputConfigRef = useRef<InputConfig>(loadInputConfig());
   const runtimeSettingsRef = useRef<RuntimeSettings>(loadRuntimeSettings());
+  const audioSettingsRef = useRef<AudioSettings>(loadAudioSettings());
   const audioRuntimeRef = useRef<BrowserAudioRuntime | null>(null);
   const characterSoundsRef = useRef<SndDocument | null>(null);
   const lastFrameTickTimeRef = useRef<number | null>(null);
@@ -201,8 +203,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
   const [inputConfig, setInputConfigState] = useState<InputConfig>(inputConfigRef.current);
   const [runtimeSettings, setRuntimeSettingsState] = useState<RuntimeSettings>(runtimeSettingsRef.current);
   const [audioStatus, setAudioStatus] = useState<'locked' | 'unlocked' | 'unsupported'>('locked');
-  const [audioMuted, setAudioMuted] = useState(false);
-  const [audioMasterVolume, setAudioMasterVolume] = useState(1);
+  const [audioMuted, setAudioMuted] = useState(audioSettingsRef.current.muted);
+  const [audioMasterVolume, setAudioMasterVolume] = useState(audioSettingsRef.current.masterVolumePercent);
   const [audioDiagnostic, setAudioDiagnostic] = useState('audio=-');
   const [characterPath, setCharacterPathState] = useState(loadCharacterPath());
   const [cnsSourceFiles, setCnsSourceFiles] = useState<CharacterSourceFile[]>([]);
@@ -236,6 +238,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
       if (!active) return;
       setAudioDiagnostic(`audio ${diagnostic.code}${diagnostic.sampleKey ? ` sample=${diagnostic.sampleKey}` : ''} ${diagnostic.message}`);
     });
+    runtime.setMasterVolume(audioSettingsRef.current.masterVolumePercent / 100);
+    runtime.setMuted(audioSettingsRef.current.muted);
     audioRuntimeRef.current = runtime;
 
     const unlock = () => {
@@ -689,14 +693,19 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
   };
 
   const setAudioMute = (muted: boolean) => {
+    const next = normalizeAudioSettings({ ...audioSettingsRef.current, muted });
+    audioSettingsRef.current = next;
     setAudioMuted(muted);
     audioRuntimeRef.current?.setMuted(muted);
+    saveAudioSettings(next);
   };
 
   const setAudioVolume = (volume: number) => {
-    const normalized = Math.min(1, Math.max(0, volume));
-    setAudioMasterVolume(normalized);
-    audioRuntimeRef.current?.setMasterVolume(normalized);
+    const next = normalizeAudioSettings({ ...audioSettingsRef.current, masterVolumePercent: volume });
+    audioSettingsRef.current = next;
+    setAudioMasterVolume(next.masterVolumePercent);
+    audioRuntimeRef.current?.setMasterVolume(next.masterVolumePercent / 100);
+    saveAudioSettings(next);
   };
 
   return (
@@ -902,7 +911,7 @@ function SettingsPanel({
   );
 }
 
-function AudioSettingsPanel({
+export function AudioSettingsPanel({
   status,
   muted,
   masterVolume,
@@ -935,12 +944,27 @@ function AudioSettingsPanel({
         <button type="button" onClick={onStopTest}>Stop test SND sample</button>
         <button type="button" onClick={onPanTest}>Pan test SND left</button>
         <label>
-          <input type="checkbox" checked={muted} onChange={(event) => onMutedChange(event.currentTarget.checked)} />
+          <input aria-label="Mute all audio" type="checkbox" checked={muted} onChange={(event) => onMutedChange(event.currentTarget.checked)} />
           Mute
         </label>
         <label>
-          Master volume
-          <input type="range" min={0} max={1} step={0.05} value={masterVolume} onChange={(event) => onMasterVolumeChange(Number(event.currentTarget.value))} />
+          Master volume: {masterVolume}%
+          <input
+            aria-label="Master volume"
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={masterVolume}
+            onChange={(event) => onMasterVolumeChange(Number(event.currentTarget.value))}
+            onKeyDown={(event) => {
+              const next = adjustMasterVolumeFromKey(masterVolume, event.key);
+              if (next === null) return;
+              event.preventDefault();
+              event.stopPropagation();
+              onMasterVolumeChange(next);
+            }}
+          />
         </label>
       </div>
       <p>{diagnostic}</p>

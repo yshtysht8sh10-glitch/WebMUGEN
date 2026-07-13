@@ -1,6 +1,6 @@
 # Browser Audio Runtime
 
-Updated: 2026-07-13
+Updated: 2026-07-14
 
 ## Responsibility
 
@@ -11,7 +11,7 @@ The runtime provides:
 - lazy creation and reuse of one adapter/AudioContext per mounted app;
 - `resume()` after a pointer or keyboard user gesture;
 - decoded sample Promise caching by stable owner/sample key;
-- master gain and mute;
+- one shared ramped master gain and mute after every channel gain/pan node;
 - active-source stop and context cleanup;
 - safe fallback and diagnostics for unsupported, locked, resume-rejected, and decode-failed environments.
 
@@ -19,7 +19,9 @@ The runtime provides:
 
 React re-renders do not create another context. The app-level effect owns the runtime for the component lifetime. Character reload and round restart stop active sources; component unmount stops sources, clears decoded data, and closes the context.
 
-The Settings Audio panel exposes current status, an explicit unlock action, master gain/mute, and play/stop/pan test actions for the first loaded WAV sample. These actions exercise the shared runtime API only. They do not implement CNS controller semantics.
+The Settings Audio panel exposes current status, an explicit unlock action, a keyboard-operable 0-100 master slider with current percentage, mute, and play/stop/pan test actions for the first loaded WAV sample. The safe first-run default is 50%. Volume and mute are stored under `webmugen.audioSettings.v1`; missing, malformed, old-shaped, out-of-range, inaccessible, and quota-blocked storage falls back without disabling the game. SSR/test execution without `localStorage` uses the same default.
+
+The audio graph is `individual Sound gain -> channel StereoPanner when supported -> shared master GainNode -> AudioContext destination`. A 100% master leaves CNS `PlaySnd volume` ratios unchanged, 50% halves the final graph output, and 0% silences without stopping sources or deleting channel state. Mute drives the same master node to zero and restores the stored slider value when released. Master changes use a 15 ms linear ramp and therefore affect already-playing one-shot and loop voices without recreating them. Settings changed before AudioContext unlock are retained and applied when the lazy adapter is created.
 
 ## Diagnostics
 
@@ -51,12 +53,16 @@ SndPan evaluates `channel` and `pan`/`abspan` on the firing frame. Relative `pan
 
 Issue #37 verifies real PlaySnd sample resolution for KFM, T-H-M-A, and Yes030_e-rada, real T-H-M-A StopSnd presence, bundled T-H-M-A ZIP SND loading, and cleanup of 240 channel-less voices through one adapter. SndPan has no occurrence in that set, so its focused production tests remain the evidence and its status stays Partial.
 
+Issue #44 adds the persistent user master controls described above. This is an application safety/output multiplier after MUGEN sound semantics, so it does not increase the PlaySnd Matrix percentage or change controller compatibility claims.
+
 ## Test expectations
 
 - adapter factory is called once across repeated unlock/play calls;
 - playback before unlock is rejected safely;
 - identical sample keys decode once and can play multiple times;
 - master gain and mute produce deterministic adapter gain values;
+- 100%, 50%, 0%, and mute/unmute update the shared node while individual gain, live pan, loop, replacement, and stop state remain intact;
+- the UI persists and restores a 0-100 value and mute state, rejects invalid storage, exposes explicit ARIA labels, and keeps native range keyboard behavior;
 - stop/cleanup stop active handles and close the adapter;
 - pan updates affect only the current owner/channel handle, including loop and replacement cases;
 - unsupported, rejected resume, and failed decode paths emit diagnostics;
