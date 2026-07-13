@@ -120,7 +120,7 @@ export function createInitialExplodRuntimeState(): ExplodRuntimeState {
   return { entries: [], nextRuntimeId: 1 };
 }
 
-export function applyExplodCreateEvents(gameState: GameState, events: readonly ExplodCreateEvent[]): GameState {
+export function applyExplodCreateEvents(gameState: GameState, events: readonly ExplodCreateEvent[], randomSource: () => number = Math.random): GameState {
   let explods = gameState.explods;
   const diagnosticLines = [...(gameState.hitDiagnosticLines ?? [])];
 
@@ -131,8 +131,26 @@ export function applyExplodCreateEvents(gameState: GameState, events: readonly E
     }
 
     const runtimeId = explods.nextRuntimeId;
+    const randomOffset = {
+      x: randomDisplacement(event.request.random.x, randomSource),
+      y: randomDisplacement(event.request.random.y, randomSource),
+    };
+    const owner = gameState.players.find((player) => player.id === event.request.owner.entityId);
+    const opponent = gameState.players.find((player) => player.id !== event.request.owner.rootPlayerId) ?? gameState.players[1];
+    const randomWorldX = event.request.postype === 'p2'
+      ? randomOffset.x * opponent.facing
+      : event.request.postype === 'p1' || event.request.postype === 'back'
+        ? randomOffset.x * (owner?.facing ?? 1)
+        : randomOffset.x;
     const entry: ExplodRuntimeEntry = {
       ...event.request,
+      position: { x: event.request.position.x + randomWorldX, y: event.request.position.y + randomOffset.y },
+      offset: { x: event.request.offset.x + randomOffset.x, y: event.request.offset.y + randomOffset.y },
+      bind: event.request.bind ? {
+        ...event.request.bind,
+        offsetX: event.request.bind.offsetX + randomOffset.x,
+        offsetY: event.request.bind.offsetY + randomOffset.y,
+      } : null,
       runtimeId,
       animTime: 0,
       animElement: 0,
@@ -148,12 +166,19 @@ export function applyExplodCreateEvents(gameState: GameState, events: readonly E
     };
     diagnosticLines.push(
       `raw.explod_create owner=p${entry.owner.rootPlayerId} internalId=${entry.runtimeId} mugenId=${entry.mugenId}`,
-      `  anim=${entry.animationSource === 'fightfx' ? 'F' : ''}${entry.animNo} postype=${entry.postype} pos=(${entry.offset.x},${entry.offset.y}) world=(${entry.position.x},${entry.position.y}) facing=${entry.facing} vfacing=${entry.verticalFacing}`,
+      `  anim=${entry.animationSource === 'fightfx' ? 'F' : ''}${entry.animNo} postype=${entry.postype} pos=(${entry.offset.x},${entry.offset.y}) randomOffset=(${randomOffset.x},${randomOffset.y}) world=(${entry.position.x},${entry.position.y}) facing=${entry.facing} vfacing=${entry.verticalFacing}`,
       `  bindtime=${entry.bind?.remaining ?? 0} removetime=${entry.removeTime ?? -1} sprpriority=${entry.spritePriority} ontop=${entry.onTop ? 1 : 0}`,
     );
   }
 
   return { ...gameState, explods, hitDiagnosticLines: diagnosticLines };
+}
+
+function randomDisplacement(range: number, randomSource: () => number): number {
+  const size = Math.max(0, Math.trunc(Math.abs(range)));
+  if (size === 0) return 0;
+  const sample = Math.min(0.999999999999, Math.max(0, randomSource()));
+  return Math.floor(sample * size) - Math.floor(size / 2);
 }
 
 export function applyExplodModifyEvents(gameState: GameState, events: readonly ExplodModifyEvent[]): GameState {
@@ -241,12 +266,12 @@ export function applyExplodBindTimeEvents(gameState: GameState, events: readonly
   return { ...gameState, explods: { ...gameState.explods, entries }, hitDiagnosticLines: diagnosticLines };
 }
 
-export function applyExplodControllerEvents(gameState: GameState, events: readonly ExplodControllerEvent[]): GameState {
+export function applyExplodControllerEvents(gameState: GameState, events: readonly ExplodControllerEvent[], randomSource: () => number = Math.random): GameState {
   return events.reduce((state, event) => {
     if (event.type === 'modify') return applyExplodModifyEvents(state, [event]);
     if (event.type === 'remove') return applyExplodRemoveEvents(state, [event]);
     if (event.type === 'bindtime') return applyExplodBindTimeEvents(state, [event]);
-    return applyExplodCreateEvents(state, [event]);
+    return applyExplodCreateEvents(state, [event], randomSource);
   }, gameState);
 }
 
@@ -359,6 +384,13 @@ export function stepExplodRuntime(gameState: GameState, resolveAnimation: Explod
     }
 
     const bindResult = creationFrame ? { bind: entry.bind, position: entry.position, diagnostic: '' } : stepExplodBind(entry, gameState);
+    const canMove = !creationFrame && entry.bind === null;
+    const nextPosition = canMove
+      ? { x: bindResult.position.x + entry.velocity.x, y: bindResult.position.y + entry.velocity.y }
+      : bindResult.position;
+    const nextVelocity = canMove
+      ? { x: entry.velocity.x + entry.acceleration.x, y: entry.velocity.y + entry.acceleration.y }
+      : entry.velocity;
     const nextEntry: ExplodRuntimeEntry = {
       ...entry,
       age: nextAge,
@@ -366,11 +398,12 @@ export function stepExplodRuntime(gameState: GameState, resolveAnimation: Explod
       animElement: nextAnimElement,
       removeTimeElapsed: nextRemoveTimeElapsed,
       bind: bindResult.bind,
-      position: bindResult.position,
+      position: nextPosition,
+      velocity: nextVelocity,
     };
     entries.push(nextEntry);
     diagnosticLines.push(
-      `raw.explod_step internalId=${entry.runtimeId} mugenId=${entry.mugenId} result=kept age=${nextAge} removeElapsed=${nextRemoveTimeElapsed} animTime=${nextAnimTime} elem=${nextAnimElement || '-'} bind=${nextEntry.bind?.remaining ?? 0} pos=(${nextEntry.position.x},${nextEntry.position.y})${bindResult.diagnostic}`,
+      `raw.explod_step internalId=${entry.runtimeId} mugenId=${entry.mugenId} result=kept age=${nextAge} removeElapsed=${nextRemoveTimeElapsed} animTime=${nextAnimTime} elem=${nextAnimElement || '-'} bind=${nextEntry.bind?.remaining ?? 0} pos=(${nextEntry.position.x},${nextEntry.position.y}) vel=(${nextEntry.velocity.x},${nextEntry.velocity.y}) accel=(${entry.acceleration.x},${entry.acceleration.y})${bindResult.diagnostic}${canMove ? ' movement=applied' : ' movement=bound_or_creation'}`,
     );
   }
 
@@ -378,6 +411,22 @@ export function stepExplodRuntime(gameState: GameState, resolveAnimation: Explod
     ...gameState,
     explods: { ...gameState.explods, entries },
     hitDiagnosticLines: diagnosticLines,
+  };
+}
+
+export function removeExplodsOnOwnerHit(gameState: GameState): GameState {
+  const hitOwnerIds = new Set(gameState.hitEvents.filter((event) => !event.guarded).map((event) => event.defenderId));
+  if (hitOwnerIds.size === 0) return gameState;
+  const removed = gameState.explods.entries.filter((entry) => entry.removeOnGetHit && hitOwnerIds.has(entry.owner.entityId as 1 | 2));
+  if (removed.length === 0) return gameState;
+  const removedIds = new Set(removed.map((entry) => entry.runtimeId));
+  return {
+    ...gameState,
+    explods: { ...gameState.explods, entries: gameState.explods.entries.filter((entry) => !removedIds.has(entry.runtimeId)) },
+    hitDiagnosticLines: [
+      ...(gameState.hitDiagnosticLines ?? []),
+      ...removed.map((entry) => `raw.explod_remove_on_gethit owner=p${entry.owner.rootPlayerId} internalId=${entry.runtimeId} mugenId=${entry.mugenId} reason=owner_hit`),
+    ],
   };
 }
 

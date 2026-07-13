@@ -25,7 +25,15 @@ describe('real character Explod production integration', () => {
     expect(result.hitDiagnosticLines?.join('\n')).toContain('raw.explod_create owner=p1 internalId=1 mugenId=0');
 
     let stepped = stepExplodRuntime(result, () => air);
-    for (let frame = 1; frame < 48; frame += 1) stepped = stepExplodRuntime({ ...stepped, frame }, () => air);
+    stepped = stepExplodRuntime({ ...stepped, frame: 1 }, () => air);
+    expect(stepped.explods.entries.find((entry) => entry.animNo === 191)).toMatchObject({
+      position: { x: 480, y: 195 }, velocity: { x: -4.2, y: -7 }, bind: null,
+    });
+    stepped = stepExplodRuntime({ ...stepped, frame: 2 }, () => air);
+    expect(stepped.explods.entries.find((entry) => entry.animNo === 191)).toMatchObject({
+      position: { x: 475.8, y: 188 }, velocity: { x: -4.2, y: -6.68 },
+    });
+    for (let frame = 3; frame < 48; frame += 1) stepped = stepExplodRuntime({ ...stepped, frame }, () => air);
     expect(stepped.explods.entries.find((entry) => entry.runtimeId === 1)).toMatchObject({ age: 47, animTime: 47 });
     stepped = stepExplodRuntime({ ...stepped, frame: 48 }, () => air);
     expect(stepped.explods.entries.find((entry) => entry.runtimeId === 1)).toBeUndefined();

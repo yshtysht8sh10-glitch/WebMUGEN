@@ -1,0 +1,28 @@
+[Statedef 930]
+type = S
+movetype = I
+physics = N
+anim = 100
+
+[State 930, Visual and motion fields]
+type = Explod
+trigger1 = time = 0
+anim = 100
+id = 100
+pos = 10, -20
+postype = p1
+facing = 1
+vfacing = -1
+bindtime = 0
+vel = 2, -3
+accel = .5, .25
+random = 4, 6
+removetime = -1
+scale = 2, 3
+trans = addalpha
+alpha = 128, 128
+ownpal = 1
+shadow = 4, 5, 6
+removeongethit = 1
+supermovetime = 7
+pausemovetime = 8

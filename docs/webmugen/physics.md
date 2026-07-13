@@ -68,6 +68,8 @@ Important interactions:
 
 On HitDef contact, the defender receives `ground.velocity` or `air.velocity` according to its StateType at contact. CNS X is converted once into the defender reaction direction: the common negative value sends the target away from the attacker for either Facing. Y remains in CNS/internal velocity coordinates. Physics does not clear velocity during hit pause and begins integrating it when pause ends. Guard contact separately applies Facing-relative `guard.velocity`.
 
+Explod velocity uses the same one-time world-X conversion at controller evaluation. On a non-bound lifecycle tick, position consumes the current velocity and velocity then consumes acceleration. Creation/bound ticks hold this motion; after default `bindtime=1` releases, KFM wood begins its configured velocity/acceleration path. Pause/SuperPause gating is handled separately in Issue #35.
+
 StateDef `velset` is applied before the entered State's controllers. Common ground-hit shake State 5000 therefore clears live velocity with `velset = 0,0` while retaining the contact `hitVelY`/`GetHitVar(yvel)` snapshot. Physics must integrate the live `vy`, not the saved hit velocity. The Issue #42 regression first diverged at StateDef header application; GroundClamp and renderer coordinates were downstream of that stale live `vy`.
 
 Air get-hit states with `MoveType = H` are not clamped before CNS sees their ground crossing. This preserves the `Pos Y`/`Vel Y` conditions used by common States 5030/5035/5040/5050 to choose recovery, fall, bounce, and down routes. `HitVelSet` restores the contact velocity after State 5020, while `HitFallVel` restores fall velocity during bounce. Non-hit air movement keeps the normal landing clamp behavior.

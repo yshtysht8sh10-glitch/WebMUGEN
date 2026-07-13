@@ -179,6 +179,10 @@ export class CanvasRenderer {
 
   private drawExplod(ctx: CanvasRenderingContext2D, frame: ExplodRenderFrame): string {
     const { entry, currentElement } = frame;
+    const blend = resolveExplodBlend(entry.render.transparency, entry.render.alpha);
+    ctx.save();
+    ctx.globalCompositeOperation = blend.compositeOperation;
+    ctx.globalAlpha = blend.globalAlpha;
     const drawn = this.drawSpriteByElement(
       ctx,
       currentElement.element.groupNo,
@@ -194,7 +198,8 @@ export class CanvasRenderer {
       entry.render.scaleX,
       entry.render.scaleY,
     );
-    return `raw.explod_draw internalId=${entry.runtimeId} mugenId=${entry.mugenId} anim=${entry.animationSource === 'fightfx' ? 'F' : ''}${entry.animNo} elem=${currentElement.elementIndex + 1} screen=(${frame.screenX},${frame.screenY}) facing=${entry.facing} vfacing=${entry.verticalFacing} scale=(${entry.render.scaleX},${entry.render.scaleY}) sprpriority=${entry.spritePriority} ontop=${entry.onTop ? 1 : 0} result=${drawn ? 'drawn' : 'hidden'}${drawn ? '' : ' reason=sprite_not_found'}`;
+    ctx.restore();
+    return `raw.explod_draw internalId=${entry.runtimeId} mugenId=${entry.mugenId} anim=${entry.animationSource === 'fightfx' ? 'F' : ''}${entry.animNo} elem=${currentElement.elementIndex + 1} screen=(${frame.screenX},${frame.screenY}) facing=${entry.facing} vfacing=${entry.verticalFacing} scale=(${entry.render.scaleX},${entry.render.scaleY}) trans=${entry.render.transparency ?? 'none'} alpha=(${entry.render.alpha?.source ?? 256},${entry.render.alpha?.destination ?? 0}) composite=${blend.compositeOperation} ownpal=${entry.render.ownPalette ? 1 : 0} shadow=(${entry.render.shadow.red},${entry.render.shadow.green},${entry.render.shadow.blue}) sprpriority=${entry.spritePriority} ontop=${entry.onTop ? 1 : 0} result=${drawn ? 'drawn' : 'hidden'}${drawn ? '' : ' reason=sprite_not_found'}${blend.limitation ? ` limitation=${blend.limitation}` : ''}${entry.render.ownPalette ? ' limitation_ownpal=palette_isolation_unverified' : ''}${entry.render.shadow.red || entry.render.shadow.green || entry.render.shadow.blue ? ' limitation_shadow=no_effect_shadow_pass' : ''}`;
   }
 
   private drawSpriteByElement(
@@ -322,6 +327,23 @@ export class CanvasRenderer {
     ctx.strokeStyle = color;
     ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
   }
+}
+
+function resolveExplodBlend(
+  transparency: string | null,
+  alpha: { source: number; destination: number } | null,
+): { compositeOperation: GlobalCompositeOperation; globalAlpha: number; limitation: string | null } {
+  const mode = transparency?.trim().toLowerCase() ?? '';
+  const globalAlpha = alpha ? Math.min(1, Math.max(0, alpha.source / 256)) : 1;
+  if (mode === 'add' || mode === 'add1' || mode === 'addalpha') {
+    return {
+      compositeOperation: 'lighter',
+      globalAlpha: mode === 'addalpha' ? globalAlpha : 1,
+      limitation: mode === 'addalpha' && alpha && alpha.destination !== 0 ? 'destination_alpha_approximated' : null,
+    };
+  }
+  if (mode === 'sub') return { compositeOperation: 'source-over', globalAlpha, limitation: 'subtractive_blend_unsupported' };
+  return { compositeOperation: 'source-over', globalAlpha, limitation: null };
 }
 
 export function getPlayersInSpritePriorityOrder(state: GameState): PlayerState[] {

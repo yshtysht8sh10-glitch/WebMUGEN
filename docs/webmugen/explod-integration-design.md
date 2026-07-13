@@ -10,7 +10,7 @@ Production `GameState` owns an `ExplodRuntimeState` with a monotonically allocat
 
 The snapshot includes owner/animation source, anim, postype, resolved initial stage or screen position, Facing/vfacing, bind/removetime metadata, draw order, and the movement/render/pause fields scheduled for later Issues. P1/P2 ownership, duplicate MUGEN ids, expressions, all legacy postypes, invalid anim, round reset, and bundled KFM State 191 are covered by focused tests.
 
-Issue #31 resolves each visible entry through its owner-scoped AIR/SFF assets, applies world/screen conversion and Facing/vfacing once, and submits regular or `ontop` draw layers. Issue #32 advances age/AnimElem/time, implements exact creation-tick counting for removetime 0/positive/-1/-2, follows bind owners for the configured tick count, releases to the last world position, and removes entries before rendering. Issue #33 evaluates `ModifyExplod`; Issue #38 evaluates `RemoveExplod`; Issue #39 evaluates `ExplodBindTime` in the same ordered controller event stream. Bind time 0 releases immediately, positive values use the existing finite lifecycle, and negative values persist; an unbound P1/P2-postype Explod can rebind from its stored owner-relative offset. Missing ids are diagnosed safe no-ops. Missing AIR actions or sprites remain hidden with diagnostics. Velocity/acceleration stepping remains #34; Pause/SuperPause gating remains #35. Omitted controller-id semantics, non-player owner disappearance/reload, `random`, non-zero camera runtime, fightfx asset loading, generic controller `persistent`, and `NumExplod` remain Partial.
+Issue #31 resolves each visible entry through owner AIR/SFF; #32 advances animation/removetime/binds; #33/#38/#39 connect ordered modify/remove/bind-time events. Issue #34 integrates non-bound world velocity then acceleration, deterministic-injectable creation random, scale/Facing/vfacing Canvas transforms, additive source alpha, and owner-hit removal. KFM wood verifies default bindtime release followed by motion. Ownpal continues selecting the owner sprite assets but independent palette effects are unverified; destination-alpha, subtractive blend, and shadow rendering are explicit approximations/limitations. Pause/SuperPause gating remains #35. Omitted controller-id semantics, non-player owners, non-zero camera exactness, fightfx assets, generic `persistent`, and `NumExplod` remain Partial.
 
 ## Audited implementation inventory
 
@@ -101,6 +101,9 @@ The request queue is frame-local output from CNS execution, not durable state. T
 - Renderer receives an already resolved world/screen origin plus the AIR element offset. It must not mutate runtime position.
 - ModifyExplod preserves every omitted parameter. Changing `pos` or `postype` re-resolves position and bind metadata immediately; changing `anim` restarts progress only when the animation number/source differs.
 - Changing `removetime` resets its independent elapsed clock on the modification frame. This does not reset Explod age or unchanged animation progress.
+- Creation `random=x,y` samples one fixed displacement per axis from `[-floor(n/2), n-floor(n/2)-1]`; tests inject the random source. Owner-relative X displacement is converted by Facing once and the sampled offset remains stable through binding.
+- After binding ends, each normal tick adds world velocity to position, then acceleration to velocity. Creation and bound ticks do not consume movement. Screen-space entries use the same stored screen-coordinate velocity.
+- Canvas applies `scaleX/scaleY` inside Explod Facing/vfacing/AIR flip. `add`, `add1`, and `addalpha` use Canvas `lighter`; addalpha source is mapped to `globalAlpha`, while destination alpha is diagnosed as approximate.
 
 ## Pause, stepping, and cleanup contract
 
@@ -111,6 +114,7 @@ The request queue is frame-local output from CNS execution, not durable state. T
 - A removed entry is absent before rendering in the same frame when removal is applied before the step/render pass.
 - Explicit RemoveExplod filters all exact owner/id matches immediately. Later same-frame modify/bind operations therefore cannot find removed entries; an earlier modify is observable before a later removal diagnostic.
 - ExplodBindTime replaces only bind duration/target metadata. Time 0 releases at the current world position; positive time follows for the finite lifecycle; negative time follows indefinitely. Rebinding resolves the stored postype/offset against the current owner/opponent.
+- After hit collision resolves, `removeongethit=1` filters Explods owned by an actually hit defender before Canvas. Guarded contact does not trigger this path.
 
 ## Issue boundaries
 
@@ -120,7 +124,7 @@ The request queue is frame-local output from CNS execution, not durable state. T
 4. **#33**: completed owner-scoped explicit-ID ModifyExplod partial updates, duplicate selection, same-frame coordinate/render reflection, and independent removetime reset. Omitted-ID selection remains a documented limitation.
 5. **#38**: completed owner-scoped explicit-ID RemoveExplod selection, duplicate removal, ordered event application, same-frame renderer exclusion, and diagnostics. Omitted-ID selection remains a documented limitation.
 6. **#39**: completed owner-scoped explicit-ID ExplodBindTime selection, duplicate updates, zero/positive/negative lifecycle, unbound rebind, ordered removal interaction, and diagnostics. Omitted-ID and non-player owner lifecycle remain documented limitations.
-7. **#34**: transparency, scale, ownpal, velocity, and acceleration.
+7. **#34**: implemented scale/Facing/vfacing, additive source-alpha approximation, unbound velocity/acceleration, injected creation random, and remove-on-owner-hit. Ownpal isolation, destination alpha, subtractive blend, shadow pass, and bound-movement edge rules remain Partial.
 8. **#35**: Pause/SuperPause move-time integration.
 9. **#36**: deliberately converge HitDef spark/sound effects with the completed runtime where compatible.
 
@@ -144,6 +148,8 @@ Each implementation Issue adds focused tests at its boundary and a production-lo
 - explicit-ID RemoveExplod deletes every owner-scoped duplicate before lifecycle/render, while missing/omitted ids remain diagnosed no-ops;
 - create/modify/remove requests preserve CNS controller order;
 - explicit-ID ExplodBindTime updates every owner-scoped duplicate and covers zero, finite, indefinite, rebind, follow, release, and removed-entry ordering;
+- random injection and both Facings prove one-time coordinate conversion; real KFM wood proves bind release then velocity/acceleration motion;
+- Canvas tests capture scale, composite operation, source alpha, ownpal/shadow limitation diagnostics, and removeongethit same-frame filtering;
 - real-character CNS data is exercised before any controller row becomes Complete.
 
 Standalone `ExplodSystem` tests are not sufficient evidence for Matrix promotion. A feature is Complete only after its CNS controller, `GameState`, step, renderer or other required consumer, diagnostics, focused tests, and real game path are connected.

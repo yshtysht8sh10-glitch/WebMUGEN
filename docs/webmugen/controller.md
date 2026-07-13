@@ -100,7 +100,7 @@ Examples:
 - `Projectile`
 - `Explod`
 
-Issues #30-#32 connect `Explod` creation/render/lifecycle; #33/#38/#39 connect explicit-ID `ModifyExplod`, `RemoveExplod`, and `ExplodBindTime`. Every matching Explod in the exact owner scope is selected, including duplicate ids. Ordered events preserve controller order. Bind time 0 releases, positive values follow finitely, negative values follow indefinitely, and unbound P1/P2-postype entries can rebind. Internal runtime ids remain separate. Omitted-id semantics, non-player owner lifecycle, movement, Pause/SuperPause, fightfx ownership, and exact camera/random behavior remain Partial per `explod-integration-design.md`.
+Issues #30-#39 connect Explod create/render/lifecycle and explicit-ID mutation/removal/binding. Issue #34 adds fixed creation random displacement, non-bound world velocity/acceleration, scale/Facing/vfacing transforms, additive source-alpha Canvas rendering, and remove-on-owner-hit. Ownpal uses the existing owner asset scope but independent palette mutation is unverified; destination alpha, subtractive blending, and shadow pass remain Partial. Pause/SuperPause consumption remains #35. See `explod-integration-design.md` for the remaining boundaries.
 
 The common Target controllers now resolve the attacker's registered Target entries, optionally filtered by HitDef `id`, and mutate the matching player rather than assuming P1/P2 roles. `TargetVelSet`, `TargetVelAdd`, `TargetLifeAdd`, `TargetPowerAdd`, `TargetFacing`, `TargetState`, `TargetBind`, and `TargetDrop` are connected. A missing target is a diagnosed safe no-op, and `TargetDrop` prevents later Target controllers in the same State pass from finding the removed entry.
 

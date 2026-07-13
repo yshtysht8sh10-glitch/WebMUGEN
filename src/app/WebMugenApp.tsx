@@ -8,7 +8,7 @@ import type { SndDocument } from '../parser/snd/SndTypes';
 import { findSndSample, sndSampleKey } from '../parser/snd/SndTypes';
 import { BrowserAudioRuntime, type AudioRuntimeDiagnostic } from '../core/audio/BrowserAudioRuntime';
 import type { SoundRuntimeEvent } from '../core/audio/SoundEvent';
-import { applyExplodControllerEvents, stepExplodRuntime, type ExplodControllerEvent } from '../core/explod/ExplodSystem';
+import { applyExplodControllerEvents, removeExplodsOnOwnerHit, stepExplodRuntime, type ExplodControllerEvent } from '../core/explod/ExplodSystem';
 import type { AirAction, AirDocument, AirElement } from '../parser/air/AirTypes';
 import type { ImageDataSpritePack } from '../core/sprite/ImageDataSpriteTypes';
 import { spriteKey } from '../core/sprite/SpritePackLoader';
@@ -451,6 +451,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
 
           nextState = applyFallbackStageRules(nextState);
           nextState = resolveFallbackHits(nextState, character.air, runtimeSettingsRef.current.hitDiagnostics);
+          nextState = removeExplodsOnOwnerHit(nextState);
           nextState = applyFallbackHitRecovery(nextState, runtimeSettingsRef.current.hitDiagnostics);
           if (runtimeEventDiagnosticLines.length > 0) {
             nextState = { ...nextState, hitDiagnosticLines: [...(nextState.hitDiagnosticLines ?? []), ...runtimeEventDiagnosticLines] };

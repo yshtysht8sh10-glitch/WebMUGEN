@@ -163,6 +163,8 @@ For air contact, `raw.hit_reaction` also records State 5020, the selected air an
 
 `raw.explod_step` records age, animation time/element, bind remainder and position for retained entries. Removal records `removetime_zero`, `removetime`, or `animtime_zero`; no later render/draw line is emitted for that internal id.
 
+Issue #34 extends `raw.explod_create` with the sampled random offset and `raw.explod_step` with position, resulting velocity/acceleration, and whether movement applied or was held by creation/binding. `raw.explod_draw` records scale, trans/alpha, Canvas composite, ownpal, shadow, and explicit approximation limitations. `raw.explod_remove_on_gethit` identifies entries filtered after their owner receives an unguarded hit.
+
 `raw.explod_modify` records the owner, requested MUGEN id, number of exact owner/id matches, changed fields, and affected internal ids. Missing explicit ids use `reason=not_found`; omitted ids use `reason=id_missing`. The following same-frame `raw.explod_step`, `raw.explod_render`, and `raw.explod_draw` lines expose the resulting lifecycle, position, scale, priority, and ontop values.
 
 `raw.explod_remove` records the owner, requested MUGEN id, number of exact owner/id matches, affected internal ids, and `reason=removeexplod`. Missing explicit ids use `reason=not_found`; omitted ids use `reason=id_missing`. Removed internal ids have no later same-frame step/render/draw record.
