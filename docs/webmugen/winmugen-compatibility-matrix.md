@@ -153,7 +153,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | DisplayToClipboard | Partial | Recognized safe no-op. Debug clipboard not implemented. |
 | EnvColor | Partial | Recognized safe no-op. Screen color flash not implemented. |
 | EnvShake | Partial | Recognized safe no-op. Screen shake not implemented. |
-| Explod | Partial | Issues #30/#31: production CNS creates owner-scoped entries and Canvas renders owner AIR/SFF frames with separate runtime/MUGEN ids, P1/P2 asset scope, postype world/screen coordinates, single Facing/vfacing application, basic sprpriority/ontop order, missing-asset diagnostics, round cleanup, focused tests, and real-character evidence. Animation/removetime/bind stepping, fightfx assets, random/non-zero camera exactness, Helper ownership, `persistent`, and `NumExplod` remain incomplete. |
+| Explod | Partial | Issues #30-#32: production entries create, render owner AIR/SFF, advance age/AnimElem/time, distinguish removetime 0/positive/-1/-2 with finite/loop/infinite AIR, follow/release binds, and filter removal before Canvas. Separate ids, P1/P2 asset scope, coordinates/Facing/order, diagnostics, round cleanup, focused tests, and real-character evidence exist. Movement/render extensions, Pause/SuperPause, fightfx, non-zero camera exactness, Helper ownership, `persistent`, and `NumExplod` remain incomplete. |
 | ExplodBindTime | Partial | Recognized safe no-op. Issue #25 defines owner-scoped id/bind selection; runtime behavior is scheduled for #39 after #30-#32. |
 | FallEnvShake | Partial | Recognized safe no-op. Landing shake parameters are not connected to HitFeedback. |
 | ForceFeedback | Partial | Recognized safe no-op. Input device feedback not implemented. |

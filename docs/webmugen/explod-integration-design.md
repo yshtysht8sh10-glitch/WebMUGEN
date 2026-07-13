@@ -2,7 +2,7 @@
 
 Updated: 2026-07-13
 
-This document records the Issue #25 audit and the integration contract for the Explod roadmap. Issue #30 connects creation and Issue #31 connects owner AIR/SFF frame rendering; lifecycle evidence remains assigned to #32.
+This document records the Issue #25 audit and the integration contract for the Explod roadmap. Issue #30 connects creation, Issue #31 connects owner AIR/SFF frame rendering, and Issue #32 connects baseline animation/removetime/bind lifecycle.
 
 ## Issue #30 implementation status
 
@@ -10,7 +10,7 @@ Production `GameState` owns an `ExplodRuntimeState` with a monotonically allocat
 
 The snapshot includes owner/animation source, anim, postype, resolved initial stage or screen position, Facing/vfacing, bind/removetime metadata, draw order, and the movement/render/pause fields scheduled for later Issues. P1/P2 ownership, duplicate MUGEN ids, expressions, all legacy postypes, invalid anim, round reset, and bundled KFM State 191 are covered by focused tests.
 
-Issue #31 resolves each visible entry through its owner-scoped AIR/SFF assets, applies world/screen conversion and Facing/vfacing once, and submits regular or `ontop` draw layers. Missing AIR actions or sprites are hidden with `raw.explod_render` / `raw.explod_draw` diagnostics. Animation, bind, removetime, velocity, and acceleration stepping remain #32/#34 responsibilities. `random`, non-zero camera runtime, Helper ownership, fightfx asset loading, generic controller `persistent`, and `NumExplod` remain Partial.
+Issue #31 resolves each visible entry through its owner-scoped AIR/SFF assets, applies world/screen conversion and Facing/vfacing once, and submits regular or `ontop` draw layers. Issue #32 advances age/AnimElem/time, implements exact creation-tick counting for removetime 0/positive/-1/-2, follows bind owners for the configured tick count, releases to the last world position, and removes entries before rendering. Missing AIR actions or sprites are hidden with diagnostics. Velocity/acceleration remain #34 responsibilities; Pause/SuperPause gating remains #35. `random`, non-zero camera runtime, Helper/orphan ownership, fightfx asset loading, generic controller `persistent`, and `NumExplod` remain Partial.
 
 ## Audited implementation inventory
 
@@ -84,7 +84,7 @@ CNS controller trigger passes
   -> controller executor evaluates parameters with the normal CNS context
   -> owner-scoped Explod request is appended to the frame result
   -> game coordinator applies requests to GameState.explods
-  -> Explod step resolves bind, velocity/acceleration, animation and removal
+  -> Explod step resolves bind, animation and removal (#32), then movement (#34)
   -> Canvas effect layer resolves animation through animationOwner AIR
   -> sprite renderer draws at the resolved stage/screen coordinate
   -> Runtime History records request, selection, lifecycle and render lookup
@@ -112,7 +112,7 @@ The request queue is frame-local output from CNS execution, not durable state. T
 
 1. **#30**: completed owner-scoped runtime model in `GameState`, expression-aware CNS creation, separate runtime/MUGEN ids, round cleanup, and Runtime History diagnostics; no renderer claim.
 2. **#31**: resolve owner AIR animation, position, Facing, and render layer in Canvas.
-3. **#32**: animation progression, `removetime`, bind lifecycle, and pause-independent baseline stepping.
+3. **#32**: animation progression, `removetime`, bind lifecycle, and pause-independent baseline stepping. Implemented with finite/loop/infinite AIR boundary coverage and real-character evidence.
 4. **#33/#38/#39**: owner-scoped Modify, Remove, and ExplodBindTime selection semantics.
 5. **#34**: transparency, scale, ownpal, velocity, and acceleration.
 6. **#35**: Pause/SuperPause move-time integration.

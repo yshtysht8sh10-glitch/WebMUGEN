@@ -161,6 +161,8 @@ For air contact, `raw.hit_reaction` also records State 5020, the selected air an
 
 `raw.explod_render` records internal/MUGEN ids, animation and element, world/screen position, Facing/vfacing, and whether the owner animation resolved. `raw.explod_draw` records the final Canvas result; missing sprites remain invisible with `reason=sprite_not_found`.
 
+`raw.explod_step` records age, animation time/element, bind remainder and position for retained entries. Removal records `removetime_zero`, `removetime`, or `animtime_zero`; no later render/draw line is emitted for that internal id.
+
 Browser audio foundation diagnostics use `audio_unsupported`, `audio_locked`, `audio_unlocked`, `decode_failed`, `playback_started`, `playback_stopped`, and `audio_closed`. They distinguish browser/autoplay/decode failures from missing character assets. PlaySnd-specific owner/channel diagnostics are added in Issues #28-#29/#40.
 
 `raw.sound_play` records the owner, scope, group/index, channel, volume/volumescale, resolved pan, frequency multiplier, loop, and queued result. `raw.sound_play_rejected` uses `sound_asset_missing`, `sample_not_found`, `common_sound_unavailable`, or `audio_locked`. The subsequent Browser Audio diagnostic proves playback start or decode failure.

@@ -8,7 +8,7 @@ import type { SndDocument } from '../parser/snd/SndTypes';
 import { findSndSample, sndSampleKey } from '../parser/snd/SndTypes';
 import { BrowserAudioRuntime, type AudioRuntimeDiagnostic } from '../core/audio/BrowserAudioRuntime';
 import type { SoundRuntimeEvent } from '../core/audio/SoundEvent';
-import { applyExplodCreateEvents, type ExplodCreateEvent } from '../core/explod/ExplodSystem';
+import { applyExplodCreateEvents, stepExplodRuntime, type ExplodCreateEvent } from '../core/explod/ExplodSystem';
 import type { AirAction, AirDocument, AirElement } from '../parser/air/AirTypes';
 import type { ImageDataSpritePack } from '../core/sprite/ImageDataSpriteTypes';
 import { spriteKey } from '../core/sprite/SpritePackLoader';
@@ -397,6 +397,11 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           if (explodEvents.length > 0) {
             const previousDiagnosticCount = nextState.hitDiagnosticLines?.length ?? 0;
             nextState = applyExplodCreateEvents(nextState, explodEvents);
+            runtimeEventDiagnosticLines.push(...(nextState.hitDiagnosticLines ?? []).slice(previousDiagnosticCount));
+          }
+          if (nextState.explods.entries.length > 0) {
+            const previousDiagnosticCount = nextState.hitDiagnosticLines?.length ?? 0;
+            nextState = stepExplodRuntime(nextState, (entry) => entry.animationSource === 'owner' ? character.air : null);
             runtimeEventDiagnosticLines.push(...(nextState.hitDiagnosticLines ?? []).slice(previousDiagnosticCount));
           }
           if (soundEvents.length > 0) {
