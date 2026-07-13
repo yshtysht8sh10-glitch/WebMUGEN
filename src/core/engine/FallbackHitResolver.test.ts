@@ -332,6 +332,36 @@ physics = S
     expect(stepped.players[1].x).toBe(targetBefore.x + 4);
     expect(stepped.players[1].vx).not.toBe(0);
   });
+
+  it('applies StateDef velset before grounded get-hit controllers and preserves the hit velocity snapshot', () => {
+    const contact = resolveConfiguredHit({ groundVelocity: [-4, 2], pauseTime: [0, 0] });
+    const common = parseCnsText(`
+[Statedef 5000]
+type = S
+movetype = H
+physics = N
+velset = 0,0
+
+[State 5000, Launch classification]
+type = StateTypeSet
+trigger1 = Time = 0
+trigger1 = GetHitVar(yvel) != 0
+statetype = A
+`);
+
+    const afterCns = stepCnsStateRuntime(contact, common).state;
+    const afterPhysics = stepCnsPhysicsMotion(afterCns, common);
+
+    expect(afterCns.players[1]).toMatchObject({
+      stateNo: 5000,
+      stateType: 'A',
+      physics: 'N',
+      y: 285,
+      vy: 0,
+      hitVelY: 2,
+    });
+    expect(afterPhysics.players[1]).toMatchObject({ y: 285, vy: 0, hitVelY: 2 });
+  });
   it.each([
     ['Light', 5000],
     ['Medium', 5001],

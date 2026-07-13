@@ -145,6 +145,8 @@ Repeated overlap for an already recorded `(activeHitDefId, defenderId)` pair is 
 
 `raw.hit_reaction` reports the applied velocity, `source=active_hitdef`, ground/air selection kind, and attacker facing. This distinguishes the stored CNS pair from its facing-converted world X value.
 
+For vertical hit regressions, compare contact, StateDef-header/CNS, physics, clamp, and renderer-origin values. Issue #42 established that `internalY=285` remained valid through contact, but live `vy` was not cleared by State 5000 `velset`; the first invalid value was therefore the post-header/CNS velocity, followed by Physics producing `internalY > 285`. `hitVelY` and `GetHitVar(yvel)` intentionally remain unchanged across that header reset.
+
 For air contact, `raw.hit_reaction` also records State 5020, the selected air animation source, fall flag, fall velocity, recovery permission, and recovery time. `raw.hit_down` records the `down.hittime`-driven transition from liedown to common getup State 5120.
 
 `raw.hit_juggle` records attacker State, ActiveHitDef generation, cost, before/after/max pool values, and accepted or `insufficient_points` rejection. The associated `raw.hit_collision` rejection uses `reason=juggle_insufficient`.

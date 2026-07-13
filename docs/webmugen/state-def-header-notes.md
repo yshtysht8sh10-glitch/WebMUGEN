@@ -17,6 +17,7 @@ Follow `docs/webmugen/development-policy.md`: do not modify `public/chars/common
 | `movetype` | Complete | Parsed and applied to `moveType`. | Full attack/hit semantics depend on HitDef subsystem. |
 | `physics` | Partial | Parsed and applied. Runtime physics behavior is still incomplete. | Air/stand/crouch physics need broader WinMUGEN verification. |
 | `anim` | Complete | Parsed and applied as initial animation. Animless state preservation exists. | Rendering/animation availability should still be checked per character. |
+| `velset` | Partial | Numeric X/Y pairs apply once on State entry before controllers; X is converted from Facing-relative CNS velocity. | Expression-valued header components and broader real-character coverage remain to audit. |
 | `ctrl` | Complete | Parsed and applied as control flag. | State-specific control handoff still depends on controller flow. |
 | `poweradd` | Complete | Parsed and applied once on state entry. | Should not be re-applied while staying in the same state. |
 | `juggle` | Partial | Parsed as the active attack State cost and consumed from the airborne target's `[Data] airjuggle` pool on accepted HitDef contact. | Helper/projectile/team pools and advanced reset flags remain incomplete. |
@@ -28,7 +29,9 @@ Follow `docs/webmugen/development-policy.md`: do not modify `public/chars/common
 
 ## Implementation guidance
 
-StateDef header fields should be applied when entering a state through `ChangeState`, `SelfState`, or equivalent centralized state-entry logic.
+StateDef header fields should be applied when entering a state through `ChangeState`, `SelfState`, or equivalent centralized state-entry logic. Direct engine entry into a common get-hit State applies entry fields on its first active CNS frame after hit pause.
+
+`velset` changes live `vx`/`vy` only. It does not overwrite `hitVelX`/`hitVelY` or the `GetHitVar` snapshot. This distinction is required by State 5000: `velset = 0,0` freezes the shake while `GetHitVar(yvel)` can still classify the later ground/air route and `HitVelSet` can restore selected components.
 
 Do not apply entry-only fields every frame while the player remains in the same state. `poweradd` is the key example: it should add power once at state entry, not once per tick.
 

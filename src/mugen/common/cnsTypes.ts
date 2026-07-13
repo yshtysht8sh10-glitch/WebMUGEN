@@ -23,6 +23,7 @@ export type CnsStateDefinition = {
   moveType?: string;
   physics?: string;
   initialAnim?: number;
+  velocitySet?: { x: number; y: number };
   ctrl?: boolean;
   powerAdd?: number;
   juggle?: number;

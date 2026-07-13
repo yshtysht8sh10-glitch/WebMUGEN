@@ -425,6 +425,8 @@ function enterState(player: PlayerState, opponent: PlayerState, stateNo: number,
     stateTime: 0,
     animNo,
     animTime: animChanged ? 0 : player.animTime,
+    vx: stateDef.velocitySet ? stateDef.velocitySet.x * player.facing : player.vx,
+    vy: stateDef.velocitySet ? stateDef.velocitySet.y : player.vy,
     stateType: toStateType(stateDef.stateType ?? null) ?? player.stateType,
     moveType: toMoveType(stateDef.moveType ?? null) ?? player.moveType,
     physics: toPhysics(stateDef.physics ?? null) ?? player.physics,
@@ -456,7 +458,8 @@ function inferDefaultCtrl(stateNo: number, currentCtrl: boolean): boolean {
 
 function applyStateHeader(player: PlayerState, stateDef: CnsStateDefinition, resetAnimOnChange: boolean): PlayerState {
   const animNo = stateDef.initialAnim ?? player.animNo;
-  return { ...player, stateType: toStateType(stateDef.stateType ?? null) ?? player.stateType, moveType: toMoveType(stateDef.moveType ?? null) ?? player.moveType, physics: toPhysics(stateDef.physics ?? null) ?? player.physics, ctrl: stateDef.ctrl ?? player.ctrl, juggle: stateDef.juggle ?? player.juggle, animNo, animTime: resetAnimOnChange && player.animNo !== animNo ? 0 : player.animTime };
+  const applyEntryVelocity = player.stateTime === 0 && stateDef.velocitySet !== undefined;
+  return { ...player, stateType: toStateType(stateDef.stateType ?? null) ?? player.stateType, moveType: toMoveType(stateDef.moveType ?? null) ?? player.moveType, physics: toPhysics(stateDef.physics ?? null) ?? player.physics, ctrl: stateDef.ctrl ?? player.ctrl, juggle: stateDef.juggle ?? player.juggle, animNo, animTime: resetAnimOnChange && player.animNo !== animNo ? 0 : player.animTime, vx: applyEntryVelocity ? stateDef.velocitySet!.x * player.facing : player.vx, vy: applyEntryVelocity ? stateDef.velocitySet!.y : player.vy };
 }
 
 function shouldRun(controller: CnsStateController, player: PlayerState, input: CnsRuntimeInput, commands?: ReadonlySet<string>, opponent?: PlayerState): boolean {

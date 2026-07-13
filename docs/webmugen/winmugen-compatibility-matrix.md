@@ -114,6 +114,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | movetype | I/A/H | Complete | Parsed and applied. |
 | physics | S/C/A/N | Partial | Parsed and applied. Physics behavior incomplete. |
 | anim | Initial animation | Complete | Parsed and applied. Animless state preservation exists. |
+| velset | Initial velocity | Partial | Numeric X/Y pairs apply on State entry before controllers; X is Facing-relative. Ground get-hit regression coverage verifies that State 5000 clears live `vy` while preserving `GetHitVar(yvel)`/`hitVelY`. Expression-valued header components need broader audit. |
 | ctrl | Control flag | Complete | Parsed and applied. |
 | poweradd | Power gain on state entry | Complete | Parsed and applied once when entering a state. |
 | juggle | Juggle points | Partial | StateDef value is the air-hit cost; accepted new HitDef generations consume the target's `[Data] airjuggle` pool, insufficient hits are rejected, and grounded control recovery resets it. Helper/projectile/team semantics remain incomplete. |

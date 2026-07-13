@@ -130,6 +130,13 @@ function applyStateDefValue(state: CnsStateDefinition, key: string, value: CnsVa
     case 'anim':
       state.initialAnim = Number(value);
       break;
+    case 'velset': {
+      const parts = Array.isArray(value) ? value : [value];
+      const x = Number(parts[0]);
+      const y = Number(parts[1] ?? 0);
+      if (Number.isFinite(x) && Number.isFinite(y)) state.velocitySet = { x, y };
+      break;
+    }
     case 'ctrl':
       state.ctrl = Number(value) !== 0;
       break;

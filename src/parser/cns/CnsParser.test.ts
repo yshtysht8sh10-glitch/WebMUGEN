@@ -9,6 +9,7 @@ type = S
 movetype = I
 physics = S
 anim = 0
+velset = 0, 0
 ctrl = 1
 
 [State 0, Walk]
@@ -25,6 +26,7 @@ ctrl = 1
       moveType: 'I',
       physics: 'S',
       initialAnim: 0,
+      velocitySet: { x: 0, y: 0 },
       ctrl: true,
     });
     expect(doc.states[0].controllers[0].type).toBe('ChangeState');
