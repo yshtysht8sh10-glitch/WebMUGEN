@@ -8,6 +8,8 @@ Runtime History is the persistent frame-by-frame diagnostic log shown in the Deb
 
 Live debug values are useful, but they change every frame. Runtime History preserves important snapshots so a transition can be inspected after it has already happened.
 
+The App frame number and `GameState.frame` share the same monotonic tick before runtime evaluation. This is required for creation-frame diagnostics: an Explod may report age/time zero only on its actual creation tick, then must advance on the next history frame.
+
 This is especially important for short routes such as:
 
 - State 0 → State 10 crouch start;

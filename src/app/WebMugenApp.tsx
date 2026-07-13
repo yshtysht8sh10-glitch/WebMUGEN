@@ -55,6 +55,7 @@ import {
   stepCnsStateRuntime,
   type CnsRuntimeTrace,
 } from '../core/cns/CnsStateRuntime';
+import { synchronizeRuntimeFrame } from './RuntimeFrame';
 import { stepCnsPhysicsMotion } from '../core/cns/CnsPhysicsStep';
 import { formatCnsRuntimeDebugOverlay } from './CnsRuntimeDebugOverlay';
 import { formatCnsCommandDebugOverlay } from './CnsCommandDebugOverlay';
@@ -350,7 +351,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
         setInputDebugLines(nextInputDebugLines);
         setCommandDebugLines(nextCommandDebugLines);
 
-        let nextState = gameStateRef.current;
+        let nextState = synchronizeRuntimeFrame(gameStateRef.current, frameNoRef.current);
         let nextReadableHistoryState = nextState;
         let nextRoundState = roundStateRef.current;
         let nextFeedback = hitFeedbackRef.current;
@@ -363,7 +364,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           canRestartRound(nextRoundState)
         ) {
           const restarted = restartRound(nextRoundState.roundNo, runtimeSettingsRef.current.roundTime);
-          nextState = restarted.gameState;
+          nextState = synchronizeRuntimeFrame(restarted.gameState, frameNoRef.current);
           nextRoundState = restarted.roundState;
           nextFeedback = restarted.hitFeedbackState;
           nextCnsTraces = [];

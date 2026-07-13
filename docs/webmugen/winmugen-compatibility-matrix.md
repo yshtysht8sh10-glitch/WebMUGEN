@@ -325,7 +325,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | FrontEdgeBodyDist | Partial | Uses fixed fallback stage bounds and player center; camera/body-width precision remains incomplete. |
 | FrontEdgeDist | Partial | Uses internal screen/player coordinate approximation. |
 | FVar | Partial | `fvar(n)` lookup supported with default 0. |
-| GameTime | Partial | Context/player fallback exists; real global frame integration needs audit. |
+| GameTime | Partial | App runtime synchronizes its monotonic tick into `GameState.frame`, so real-game triggers and Explod lifecycle no longer remain at frame 0. Pause/round exact WinMUGEN boundaries still need broader verification. |
 | GetHitVar | Partial | Contact snapshot supplies damage, hit/slide/control time, velocity, type/anim codes, fall damage/kill, combo hitcount, snap xoff/yoff, ids, guarded, and yaccel across get-hit State changes. Unsupported zoff/fall-time keys are diagnosed safe defaults. |
 | HitCount | Partial | Counts accepted hits across ActiveHitDef generations; `hitcountpersist` independently preserves or resets it on State entry. UniqHitCount and full multi-target semantics remain incomplete. |
 | HitDefAttr | Partial | Compares State and attack categories against the same normalized attr snapshot used by live HitBy/NotHitBy filtering. Redirect and malformed-attr edge cases remain incomplete. |
