@@ -1,5 +1,6 @@
 import type { GameState, PlayerState } from './types';
 import { createInitialExplodRuntimeState } from '../explod/ExplodSystem';
+import { createInitialPauseState } from '../pause/PauseSystem';
 
 export function createInitialGameState(): GameState {
   return {
@@ -8,6 +9,7 @@ export function createInitialGameState(): GameState {
     projectiles: [],
     hitEvents: [],
     explods: createInitialExplodRuntimeState(),
+    pause: createInitialPauseState(),
   };
 }
 

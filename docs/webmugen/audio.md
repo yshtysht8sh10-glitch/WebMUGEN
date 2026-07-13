@@ -41,6 +41,8 @@ Issue #27 completes the browser audio foundation. Issue #28 connects PlaySnd cha
 
 PlaySnd cache keys include owner id plus group/index, and channel keys include owner id plus channel number. P1 channel 0 therefore cannot stop or replace P2 channel 0. `S`/unprefixed values use character SND; `F` common sound is rejected explicitly until a common archive is loaded.
 
+Pause/SuperPause does not suspend AudioContext or stop active voices. A PlaySnd controller reached on the activation CNS pass starts normally; globally paused and guarded resume passes skip CNS controllers, so that boundary does not create duplicate voices. Exact same-pass ordering between multiple players remains Partial.
+
 StopSnd evaluates `channel` on the firing frame. A matching active or looping voice stops immediately and is removed from active/channel tables. Natural `onended` performs the same release. Missing channels are diagnosed no-ops; omitted channel is currently an explicit `channel_missing` no-op and keeps the Matrix row Partial.
 
 SndPan evaluates `channel` and `pan`/`abspan` on the firing frame. Relative `pan` follows player Facing; `abspan` is absolute and takes precedence when malformed data supplies both. The app normalizes the current compatibility range by dividing by 100 and clamps to `[-1, 1]`, then updates the existing StereoPanner without recreating the source. Missing/ended channels and adapters without StereoPanner support are diagnosed no-ops. Exact WinMUGEN pixel-to-speaker mapping and player screen-position contribution remain unaudited, so the Matrix row remains Partial.

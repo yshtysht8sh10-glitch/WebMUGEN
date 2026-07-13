@@ -1,0 +1,67 @@
+[Statedef 940]
+type = S
+movetype = I
+physics = N
+anim = 100
+
+[State 940, Frozen Explod]
+type = Explod
+trigger1 = time = 0
+anim = 100
+id = 110
+bindtime = 0
+vel = 1, 0
+removetime = -1
+pausemovetime = 0
+
+[State 940, One pause tick Explod]
+type = Explod
+trigger1 = time = 0
+anim = 100
+id = 111
+bindtime = 0
+vel = 1, 0
+removetime = -1
+pausemovetime = 1
+
+[State 940, Sound on pause frame]
+type = PlaySnd
+trigger1 = time = 0
+value = 1, 1
+
+[State 940, Pause two ticks]
+type = Pause
+trigger1 = time = 0
+time = 2
+movetime = 0
+
+[Statedef 941]
+type = S
+movetype = I
+physics = N
+anim = 100
+
+[State 941, Frozen SuperPause Explod]
+type = Explod
+trigger1 = time = 0
+anim = 100
+id = 120
+bindtime = 0
+removetime = -1
+supermovetime = 0
+
+[State 941, One super tick Explod]
+type = Explod
+trigger1 = time = 0
+anim = 100
+id = 121
+bindtime = 0
+removetime = -1
+supermovetime = 1
+
+[State 941, SuperPause two ticks]
+type = SuperPause
+trigger1 = time = 0
+time = 2
+movetime = 0
+darken = 0

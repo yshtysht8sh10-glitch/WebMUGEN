@@ -1,6 +1,7 @@
 import type { GameState, PlayerState } from '../engine/types';
 import { getAnimationLength, getCurrentAnimationElement, findAction } from '../animation/AnimationPlayer';
 import type { AirDocument } from '../../parser/air/AirTypes';
+import type { PauseState } from '../pause/PauseSystem';
 
 export type RuntimeEntityRef = {
   entityId: number;
@@ -359,11 +360,27 @@ export function normalizeExplodFacing(value: number): 1 | -1 {
 
 export type ExplodAnimationResolver = (entry: ExplodRuntimeEntry) => AirDocument | null | undefined;
 
-export function stepExplodRuntime(gameState: GameState, resolveAnimation: ExplodAnimationResolver): GameState {
+export function stepExplodRuntime(gameState: GameState, resolveAnimation: ExplodAnimationResolver, pauseState: PauseState | null = null): GameState {
   const entries: ExplodRuntimeEntry[] = [];
   const diagnosticLines = [...(gameState.hitDiagnosticLines ?? [])];
 
-  for (const entry of gameState.explods.entries) {
+  for (const originalEntry of gameState.explods.entries) {
+    let entry = originalEntry;
+    const pauseReason = pauseState?.superPauseTime && pauseState.superPauseTime > 0
+      ? 'superpause'
+      : pauseState?.pauseTime && pauseState.pauseTime > 0 ? 'pause' : null;
+    if (pauseReason) {
+      const allowance = pauseReason === 'superpause' ? entry.superMoveTime : entry.pauseMoveTime;
+      if (allowance <= 0) {
+        entries.push(entry);
+        diagnosticLines.push(`raw.explod_step internalId=${entry.runtimeId} mugenId=${entry.mugenId} result=frozen pause=${pauseReason} allowance=0 age=${entry.age} animTime=${entry.animTime} pos=(${entry.position.x},${entry.position.y}) vel=(${entry.velocity.x},${entry.velocity.y})`);
+        continue;
+      }
+      entry = pauseReason === 'superpause'
+        ? { ...entry, superMoveTime: allowance - 1 }
+        : { ...entry, pauseMoveTime: allowance - 1 };
+      diagnosticLines.push(`raw.explod_pause internalId=${entry.runtimeId} mugenId=${entry.mugenId} pause=${pauseReason} update=allowed allowanceBefore=${allowance} allowanceAfter=${allowance - 1}`);
+    }
     const creationFrame = entry.creationFrame === gameState.frame && entry.age === 0;
     const nextAge = creationFrame ? entry.age : entry.age + 1;
     const nextAnimTime = creationFrame ? entry.animTime : entry.animTime + 1;

@@ -100,7 +100,7 @@ Examples:
 - `Projectile`
 - `Explod`
 
-Issues #30-#39 connect Explod create/render/lifecycle and explicit-ID mutation/removal/binding. Issue #34 adds fixed creation random displacement, non-bound world velocity/acceleration, scale/Facing/vfacing transforms, additive source-alpha Canvas rendering, and remove-on-owner-hit. Ownpal uses the existing owner asset scope but independent palette mutation is unverified; destination alpha, subtractive blending, and shadow pass remain Partial. Pause/SuperPause consumption remains #35. See `explod-integration-design.md` for the remaining boundaries.
+Issues #30-#39 connect Explod create/render/lifecycle and explicit-ID mutation/removal/binding. Issue #34 adds fixed creation random displacement, non-bound world velocity/acceleration, scale/Facing/vfacing transforms, additive source-alpha Canvas rendering, and remove-on-owner-hit. Issue #35 freezes the complete lifecycle tick during Pause/SuperPause unless the entry consumes `pausemovetime`/`supermovetime`; hitpause remains independent. Ownpal uses the existing owner asset scope but independent palette mutation is unverified; destination alpha, subtractive blending, and shadow pass remain Partial. See `explod-integration-design.md` for the remaining boundaries.
 
 The common Target controllers now resolve the attacker's registered Target entries, optionally filtered by HitDef `id`, and mutate the matching player rather than assuming P1/P2 roles. `TargetVelSet`, `TargetVelAdd`, `TargetLifeAdd`, `TargetPowerAdd`, `TargetFacing`, `TargetState`, `TargetBind`, and `TargetDrop` are connected. A missing target is a diagnosed safe no-op, and `TargetDrop` prevents later Target controllers in the same State pass from finding the removed entry.
 
@@ -122,6 +122,8 @@ Examples:
 CharacterLoader exposes parsed SND v1 samples by group/index without depending on browser audio. PlaySnd, StopSnd, and SndPan are now connected to the shared browser runtime for character-owned channels.
 
 The shared browser adapter supports user-gesture AudioContext unlock, decode caching, master gain/mute, stop, live pan updates, cleanup, and safe diagnostics; see `audio.md`. `PlaySnd` emits firing-frame owner-scoped events and major playback parameters. `StopSnd` stops and releases the matching owner/channel voice. `SndPan` updates that current voice without touching another owner, a replaced voice, or channel-less voices. Omitted/invalid required values, exact WinMUGEN pan mapping, and advanced ownership remain Partial.
+
+`Pause` and `SuperPause` now emit match-level events instead of storing dead player fields. The owner may execute and move for `movetime`; other CNS and physics stop, including negative States. Explods use their own matching allowance. PlaySnd on the activation pass fires once, then controller suppression plus the resume guard prevents replay. Existing browser voices continue through the pause. Same activation-pass cross-player ordering, Helper ownership, and full SuperPause presentation remain Partial.
 
 If the controller only stores a field or is skipped safely, mark Partial.
 

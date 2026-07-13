@@ -7,6 +7,7 @@ import { removeTarget, selectTargets } from '../hitdef/TargetState';
 import { normalizeHitAttribute } from '../hitdef/HitAttribute';
 import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, readNumberExpression, type CnsRuntimeTriggerContext } from './CnsRuntimeTrigger';
 import type { SoundPanEvent, SoundPlayEvent, SoundStopEvent } from '../audio/SoundEvent';
+import { canEntityMoveDuringPause, type PauseControllerEvent, type PauseState } from '../pause/PauseSystem';
 import {
   normalizeExplodFacing,
   resolveExplodOrigin,
@@ -48,6 +49,8 @@ export type CnsRuntimeInput = {
   onExplodModify?: (event: ExplodModifyEvent) => void;
   onExplodRemove?: (event: ExplodRemoveEvent) => void;
   onExplodBindTime?: (event: ExplodBindTimeEvent) => void;
+  onPause?: (event: PauseControllerEvent) => void;
+  pauseState?: PauseState;
   screenWidth?: number;
 };
 
@@ -198,6 +201,10 @@ function stepPlayer(
     trace.debugLines.push(`hitpause skip remaining=${player.hitPause}`);
     return { ...finishTrace(next, trace), targetOperations };
   }
+  if (input.pauseState && (input.pauseState.resumeGuard || !canEntityMoveDuringPause(input.pauseState, player.id))) {
+    trace.debugLines.push(`global_pause skip reason=${input.pauseState.resumeGuard ? 'resume_guard' : input.pauseState.kind ?? 'pause'} remaining=${Math.max(input.pauseState.pauseTime, input.pauseState.superPauseTime)} owner=p${input.pauseState.ownerEntityId ?? '-'}`);
+    return { ...finishTrace(next, trace), targetOperations };
+  }
   if (debugEnabled) {
     appendDebug(trace, `scan ${stateScanSummary(cns)} cmds=${formatCommands(commands)}`);
     appendDebug(trace, `pipeline start state=${next.stateNo} type=${next.stateType} ctrl=${next.ctrl ? 1 : 0} time=${next.stateTime}`);
@@ -237,7 +244,6 @@ function stepPlayer(
     };
     return { ...finishTrace(next, trace), targetOperations };
   }
-
   if (debugEnabled) appendDebug(trace, `enter current S${stateDef.stateNo} state=${next.stateNo}`);
   if (debugEnabled) appendDebug(trace, formatStateDefOverview(stateDef));
   next = applyStateHeader(next, stateDef, false);
@@ -452,6 +458,7 @@ function enterState(player: PlayerState, opponent: PlayerState, stateNo: number,
     hitDefUsed: preserveHitDef ? player.hitDefUsed : false,
     hitTargets: preserveHitDef ? player.hitTargets ?? [] : [],
     moveContact: preservedMoveContact,
+    pauseControllerLatch: undefined,
     hitDiagnosticLines,
   } as PlayerState;
 }
@@ -768,8 +775,8 @@ function executeController(
   if (type === 'hitfallvel') return hitFallVel(player);
   if (type === 'hitvelset') return hitVelSet(player, controller);
   if (type === 'hitfalldamage') return hitFallDamage(player, controller);
-  if (type === 'pause') return withExtendedPlayer(player, { pauseTime: num(controller, 'time') ?? 0 }, 'Pause');
-  if (type === 'superpause') return withExtendedPlayer(player, { superPauseTime: num(controller, 'time') ?? 0 }, 'SuperPause');
+  if (type === 'pause') return pauseController(player, opponent, controller, input, commands, false);
+  if (type === 'superpause') return pauseController(player, opponent, controller, input, commands, true);
   if (type === 'playsnd') return playSound(player, opponent, controller, input, commands);
   if (type === 'stopsnd') return stopSound(player, opponent, controller, input, commands);
   if (type === 'sndpan') return panSound(player, opponent, controller, input, commands);
@@ -1050,6 +1057,29 @@ function playSound(
     loop: (num(controller, 'loop', player, input, commands, opponent) ?? 0) !== 0,
   });
   return withPlayer(player, true, 'PlaySnd');
+}
+
+function pauseController(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands: ReadonlySet<string> | undefined,
+  superPause: boolean,
+): ControllerResult {
+  const key = `${superPause ? 'superpause' : 'pause'}:${controller.sourceFile ?? '-'}:${controller.sourceLine ?? '-'}`;
+  const latch = player.pauseControllerLatch;
+  if (latch?.key === key && latch.stateNo === player.stateNo && latch.stateTime === player.stateTime) {
+    return withPlayer(player, true, superPause ? 'SuperPause' : 'Pause');
+  }
+  input.onPause?.({
+    type: superPause ? 'superpause' : 'pause',
+    ownerEntityId: player.id,
+    time: Math.max(0, Math.trunc(num(controller, 'time', player, input, commands, opponent) ?? (superPause ? 30 : 0))),
+    moveTime: Math.max(0, Math.trunc(num(controller, 'movetime', player, input, commands, opponent) ?? 0)),
+    darken: superPause && (num(controller, 'darken', player, input, commands, opponent) ?? 1) !== 0,
+  });
+  return withPlayer({ ...player, pauseControllerLatch: { key, stateNo: player.stateNo, stateTime: player.stateTime } }, true, superPause ? 'SuperPause' : 'Pause');
 }
 
 function stopSound(

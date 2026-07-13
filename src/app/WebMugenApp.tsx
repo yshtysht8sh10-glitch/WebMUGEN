@@ -56,6 +56,14 @@ import {
   type CnsRuntimeTrace,
 } from '../core/cns/CnsStateRuntime';
 import { synchronizeRuntimeFrame } from './RuntimeFrame';
+import {
+  applyPauseControllerEvents,
+  canEntityMoveDuringPause,
+  createInitialPauseState,
+  isGamePaused,
+  stepPauseState,
+  type PauseControllerEvent,
+} from '../core/pause/PauseSystem';
 import { stepCnsPhysicsMotion } from '../core/cns/CnsPhysicsStep';
 import { formatCnsRuntimeDebugOverlay } from './CnsRuntimeDebugOverlay';
 import { formatCnsCommandDebugOverlay } from './CnsCommandDebugOverlay';
@@ -372,12 +380,14 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           p2CommandBufferRef.current.clear();
           audioRuntimeRef.current?.stopAll();
         } else if (nextRoundState.phase === 'fight') {
+          const pauseAtFrameStart = nextState.pause ?? createInitialPauseState();
           if (ENABLE_RUNTIME_FALLBACKS) {
             nextState = applyFallbackControls(nextState, p1Input, p2Input);
           }
 
           const soundEvents: SoundRuntimeEvent[] = [];
           const explodRuntimeEvents: ExplodControllerEvent[] = [];
+          const pauseEvents: PauseControllerEvent[] = [];
           const runtimeEventDiagnosticLines: string[] = [];
           const cnsResult = stepCnsStateRuntime(nextState, character.cns, {
             p1Commands,
@@ -395,9 +405,22 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             onExplodModify: (event) => explodRuntimeEvents.push(event),
             onExplodRemove: (event) => explodRuntimeEvents.push(event),
             onExplodBindTime: (event) => explodRuntimeEvents.push(event),
+            onPause: (event) => pauseEvents.push(event),
+            pauseState: pauseAtFrameStart,
             screenWidth: canvas.width,
           });
           nextState = cnsResult.state;
+          if (pauseEvents.length > 0) {
+            const pause = applyPauseControllerEvents(nextState.pause ?? createInitialPauseState(), pauseEvents);
+            nextState = {
+              ...nextState,
+              pause,
+              hitDiagnosticLines: [
+                ...(nextState.hitDiagnosticLines ?? []),
+                ...pauseEvents.map((event) => `raw.global_pause event=start kind=${event.type} owner=p${event.ownerEntityId} time=${event.time} movetime=${event.moveTime} darken=${event.darken ? 1 : 0} soundPolicy=continues`),
+              ],
+            };
+          }
           if (explodRuntimeEvents.length > 0) {
             const previousDiagnosticCount = nextState.hitDiagnosticLines?.length ?? 0;
             nextState = applyExplodControllerEvents(nextState, explodRuntimeEvents);
@@ -405,7 +428,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           }
           if (nextState.explods.entries.length > 0) {
             const previousDiagnosticCount = nextState.hitDiagnosticLines?.length ?? 0;
-            nextState = stepExplodRuntime(nextState, (entry) => entry.animationSource === 'owner' ? character.air : null);
+            nextState = stepExplodRuntime(nextState, (entry) => entry.animationSource === 'owner' ? character.air : null, nextState.pause ?? null);
             runtimeEventDiagnosticLines.push(...(nextState.hitDiagnosticLines ?? []).slice(previousDiagnosticCount));
           }
           if (soundEvents.length > 0) {
@@ -444,23 +467,40 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           nextReadableHistoryState = cnsResult.state;
           nextCnsTraces = cnsResult.traces;
 
+          const pauseDuringFrame = nextState.pause ?? createInitialPauseState();
+          const pausedThisFrame = isGamePaused(pauseDuringFrame);
+          const beforePhysicsPlayers = nextState.players;
           if (ENABLE_RUNTIME_FALLBACKS) {
             nextState = stepFallbackMotion(nextState);
           } else {
             nextState = stepCnsPhysicsMotion(nextState, character.cns);
           }
+          if (pausedThisFrame) {
+            nextState = {
+              ...nextState,
+              players: [
+                canEntityMoveDuringPause(pauseDuringFrame, 1) ? nextState.players[0] : beforePhysicsPlayers[0],
+                canEntityMoveDuringPause(pauseDuringFrame, 2) ? nextState.players[1] : beforePhysicsPlayers[1],
+              ],
+            };
+          }
 
           nextState = applyFallbackStageRules(nextState);
-          nextState = resolveFallbackHits(nextState, character.air, runtimeSettingsRef.current.hitDiagnostics);
-          nextState = removeExplodsOnOwnerHit(nextState);
-          nextState = applyFallbackHitRecovery(nextState, runtimeSettingsRef.current.hitDiagnostics);
+          if (pausedThisFrame) {
+            nextState = { ...nextState, hitEvents: [] };
+          } else {
+            nextState = resolveFallbackHits(nextState, character.air, runtimeSettingsRef.current.hitDiagnostics);
+            nextState = removeExplodsOnOwnerHit(nextState);
+            nextState = applyFallbackHitRecovery(nextState, runtimeSettingsRef.current.hitDiagnostics);
+          }
           if (runtimeEventDiagnosticLines.length > 0) {
             nextState = { ...nextState, hitDiagnosticLines: [...(nextState.hitDiagnosticLines ?? []), ...runtimeEventDiagnosticLines] };
           }
 
-          nextRoundState = stepRoundState(nextRoundState, nextState);
+          if (!pausedThisFrame) nextRoundState = stepRoundState(nextRoundState, nextState);
           nextScore = updateRoundScore(nextScore, nextRoundState);
           nextFeedback = updateHitFeedback(nextFeedback, nextState);
+          nextState = { ...nextState, pause: stepPauseState(pauseDuringFrame) };
         } else {
           nextRoundState = stepRoundState(nextRoundState, nextState);
           nextScore = updateRoundScore(nextScore, nextRoundState);

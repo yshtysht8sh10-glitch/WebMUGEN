@@ -1,5 +1,6 @@
 import type { InputBuffer } from '../../input/InputBuffer';
 import type { ExplodRuntimeState } from '../explod/ExplodSystem';
+import type { PauseState } from '../pause/PauseSystem';
 
 export type PlayerInput = {
   left: boolean;
@@ -136,6 +137,7 @@ export type PlayerState = {
   animNo: number;
   animTime: number;
   hitPause: number;
+  pauseControllerLatch?: { key: string; stateNo: number; stateTime: number };
   activeHitDef: ActiveHitDef | null;
   hitDefUsed: boolean;
   hitTargets?: Array<{ activeHitDefId: number; defenderId: number; hitDefId?: number }>;
@@ -220,6 +222,7 @@ export type GameState = {
   projectiles: ProjectileState[];
   hitEvents: HitEvent[];
   explods: ExplodRuntimeState;
+  pause?: PauseState;
   hitDiagnosticLines?: string[];
   commandBuffers?: [InputBuffer, InputBuffer];
   commandNames?: [ReadonlySet<string>, ReadonlySet<string>];

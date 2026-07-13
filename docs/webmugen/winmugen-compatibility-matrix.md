@@ -153,7 +153,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | DisplayToClipboard | Partial | Recognized safe no-op. Debug clipboard not implemented. |
 | EnvColor | Partial | Recognized safe no-op. Screen color flash not implemented. |
 | EnvShake | Partial | Recognized safe no-op. Screen shake not implemented. |
-| Explod | Partial | Issues #30-#34/#38/#39: production create/render/lifecycle and ordered explicit-ID mutations are connected. Unbound world velocity/acceleration, injected creation random, scale/Facing/vfacing, additive source alpha, removeongethit, KFM motion evidence, diagnostics, and round cleanup are tested. Ownpal isolation, destination/subtractive blend, shadow pass, Pause/SuperPause, fightfx, non-zero camera exactness, Helper ownership, generic `persistent`, and `NumExplod` remain incomplete. |
+| Explod | Partial | Issues #30-#35/#38/#39: production create/render/lifecycle and ordered explicit-ID mutations are connected. Pause/SuperPause freeze the complete Explod tick unless the matching per-entry move-time allowance is consumed; hitpause remains player-local. Palette isolation, destination/subtractive blend, shadow pass, fightfx, non-zero camera exactness, Helper ownership, generic `persistent`, and `NumExplod` remain incomplete. |
 | ExplodBindTime | Partial | Issue #39: normal CNS/app/GameState lifecycle updates every explicit owner/id duplicate in controller order. `time=0`, finite positive, indefinite negative, unbound P1/P2 rebind, owner following, release/position hold, removal ordering, missing fields, and same-frame Renderer evidence are tested. Omitted `id`, non-player owner disappearance/reload, and non-binding postype edge rules remain Partial. |
 | FallEnvShake | Partial | Recognized safe no-op. Landing shake parameters are not connected to HitFeedback. |
 | ForceFeedback | Partial | Recognized safe no-op. Input device feedback not implemented. |
@@ -180,9 +180,9 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | PalFX | Partial | Recognized safe no-op. Palette effect not implemented. |
 | ParentVarAdd | Partial | Recognized safe no-op. Parent var lookup not implemented. |
 | ParentVarSet | Partial | Recognized safe no-op. Parent var lookup not implemented. |
-| Pause | Partial | Stores pause time field only. Full pause effect handled elsewhere/incomplete. |
+| Pause | Partial | Issue #35: production CNS starts a match-level pause, freezes non-owner CNS/physics/timers and all negative States, permits the owner for `movetime`, gates Explods by `pausemovetime`, and prevents activation-side-effect replay. Same-pass controller ordering, Helpers, and less common parameters remain incomplete. |
 | PlayerPush | Partial | `value = 0` disables fallback stage push for its execution frame. Grounded players always use horizontal push; airborne cross-over requires fixed 44x80 boxes to clear vertically. Width/AIR `Clsn2` integration remains incomplete. |
-| PlaySnd | Partial | Production CNS evaluates group/index and major parameters, resolves owner character SND, and plays through owner-scoped channels with volume scale, relative/absolute pan, playback rate, loop, diagnostics, and decode cache. Common `F` sound scope, lowpriority, and advanced Helper ownership remain unsupported. |
+| PlaySnd | Partial | Production CNS evaluates group/index and major parameters and plays through owner-scoped Browser Audio. It fires once on a Pause/SuperPause activation pass; paused and guarded resume passes do not replay it, while already-started audio continues. Common `F` scope, lowpriority, advanced Helper ownership, and same-pass cross-player ordering remain incomplete. |
 | PosAdd | Complete | Basic implementation exists. |
 | PosFreeze | Partial | Recognized safe no-op. Freeze behavior not implemented. |
 | PosSet | Complete | Basic implementation exists. |
@@ -197,7 +197,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | SprPriority | Partial | Stores priority field only. Rendering priority needs audit. |
 | StateTypeSet | Complete | Basic implementation exists. |
 | StopSnd | Partial | Production CNS evaluates channel and stops/releases the matching owner-scoped active or looping voice; P1/P2 channels remain separate and missing channels are diagnosed no-ops. Omitted-channel and advanced Helper ownership rules remain unsupported. |
-| SuperPause | Partial | Stores super pause time field only. Full superpause behavior incomplete. |
+| SuperPause | Partial | Issue #35: production CNS starts a distinct match-level superpause with `darken`/`movetime`, freezes CNS/physics/timers, gates Explods by `supermovetime`, and is tested with bundled T-H-M-A State 3010. Same-pass ordering, Helpers, and full visual semantics remain incomplete. |
 | TargetBind | Partial | Selects registered targets by optional HitDef id, applies `pos` immediately, and stores time/offset metadata. Following-frame bind maintenance and full coordinate semantics remain incomplete. |
 | TargetDrop | Partial | Removes registered targets selected by optional HitDef id; later controllers safely see no target. `excludeid` and Helper/multi-player behavior remain incomplete. |
 | TargetFacing | Partial | Applies facing relative to the target owner for registered targets selected by optional HitDef id. Helper/multi-player behavior remains incomplete. |

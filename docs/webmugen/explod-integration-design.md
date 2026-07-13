@@ -108,7 +108,7 @@ The request queue is frame-local output from CNS execution, not durable state. T
 ## Pause, stepping, and cleanup contract
 
 - Normal frames advance bind, velocity, acceleration, `animTime`, age, and `removetime` once.
-- Pause and SuperPause freeze an entry unless its remaining `pauseMoveTime`/`superMoveTime` permits movement. Exact decrement order is implemented with Issue #35 and covered by boundary tests.
+- Pause and SuperPause freeze the complete Explod tick: bind following, age, AIR animation, removetime, position, velocity, and acceleration do not advance. A positive matching `pauseMoveTime`/`superMoveTime` is consumed before one normal tick; zero freezes. Creation-frame behavior remains a creation tick even when allowance permits it. Player-local hitpause does not gate Explods.
 - `removetime = -1` maps to persistent (`null`) storage. Other negative special values are not guessed; keep them diagnosed/Partial until specified.
 - Round restart creates an empty Explod collection and resets `nextRuntimeId` deterministically.
 - A removed entry is absent before rendering in the same frame when removal is applied before the step/render pass.
@@ -125,7 +125,7 @@ The request queue is frame-local output from CNS execution, not durable state. T
 5. **#38**: completed owner-scoped explicit-ID RemoveExplod selection, duplicate removal, ordered event application, same-frame renderer exclusion, and diagnostics. Omitted-ID selection remains a documented limitation.
 6. **#39**: completed owner-scoped explicit-ID ExplodBindTime selection, duplicate updates, zero/positive/negative lifecycle, unbound rebind, ordered removal interaction, and diagnostics. Omitted-ID and non-player owner lifecycle remain documented limitations.
 7. **#34**: implemented scale/Facing/vfacing, additive source-alpha approximation, unbound velocity/acceleration, injected creation random, and remove-on-owner-hit. Ownpal isolation, destination alpha, subtractive blend, shadow pass, and bound-movement edge rules remain Partial.
-8. **#35**: Pause/SuperPause move-time integration.
+8. **#35**: implemented distinct Pause/SuperPause match state, owner `movetime`, per-Explod `pausemovetime`/`supermovetime`, full-tick freezing, negative-State suppression, resume replay guard, sound-continuation policy, diagnostics, and bundled T-H-M-A evidence. Same activation-pass cross-player ordering, Helpers, and full SuperPause visuals remain Partial.
 9. **#36**: deliberately converge HitDef spark/sound effects with the completed runtime where compatible.
 
 Issue #30 must not absorb #31-#36. Its minimum visible evidence is production `GameState` creation and Runtime History, while visual confirmation begins in #31.
