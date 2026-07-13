@@ -21,7 +21,7 @@ export type AudioPlaybackOptions = {
   channelKey?: string;
 };
 
-export type AudioPlaybackHandle = { stop(): void };
+export type AudioPlaybackHandle = { stop(): void; setOnEnded?(callback: () => void): void };
 
 export interface AudioAdapter {
   readonly state: string;
@@ -94,6 +94,7 @@ export class BrowserAudioRuntime {
         this.channelHandles.set(options.channelKey, handle);
       }
       this.activeHandles.add(handle);
+      handle.setOnEnded?.(() => this.releaseHandle(handle, options.channelKey));
       this.emit('playback_started', 'Audio sample playback started.', sampleKey);
       return true;
     } catch (error) {
@@ -120,6 +121,15 @@ export class BrowserAudioRuntime {
     this.channelHandles.clear();
   }
 
+  stopChannel(channelKey: string): boolean {
+    const handle = this.channelHandles.get(channelKey);
+    if (!handle) return false;
+    handle.stop();
+    this.releaseHandle(handle, channelKey);
+    this.emit('playback_stopped', `Audio channel ${channelKey} was stopped.`);
+    return true;
+  }
+
   async cleanup(): Promise<void> {
     this.stopAll();
     this.decodeCache.clear();
@@ -139,6 +149,11 @@ export class BrowserAudioRuntime {
 
   private applyMasterGain(): void {
     this.adapter?.setMasterGain(this.muted ? 0 : this.masterVolume);
+  }
+
+  private releaseHandle(handle: AudioPlaybackHandle, channelKey?: string): void {
+    this.activeHandles.delete(handle);
+    if (channelKey && this.channelHandles.get(channelKey) === handle) this.channelHandles.delete(channelKey);
   }
 
   private emit(code: AudioRuntimeDiagnosticCode, message: string, sampleKey?: string): void {
@@ -174,7 +189,10 @@ export function createWebAudioAdapter(): AudioAdapter | null {
         gain.connect(master);
       }
       source.start();
-      return { stop: () => { try { source.stop(); } catch { /* already stopped */ } } };
+      return {
+        stop: () => { try { source.stop(); } catch { /* already stopped */ } },
+        setOnEnded(callback) { source.onended = callback; },
+      };
     },
     setMasterGain(value) { master.gain.value = value; },
     close: () => context.close(),

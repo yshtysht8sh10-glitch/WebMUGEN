@@ -47,6 +47,22 @@ describe('BrowserAudioRuntime', () => {
     expect(fake.play).toHaveBeenCalledTimes(4);
   });
 
+  it('stops only a matching channel, cleans its table entry, and treats ended/missing channels as no-op', async () => {
+    const fake = createFakeAdapter();
+    const runtime = new BrowserAudioRuntime(() => fake.adapter);
+    await runtime.unlock();
+    await runtime.playSample('p1:0,0', new Uint8Array([1]), { channelKey: 'p1:2', loop: true });
+    await runtime.playSample('p2:0,0', new Uint8Array([1]), { channelKey: 'p2:2' });
+
+    expect(runtime.stopChannel('p1:2')).toBe(true);
+    expect(runtime.stopChannel('p1:2')).toBe(false);
+    expect(runtime.stopChannel('p2:2')).toBe(true);
+
+    await runtime.playSample('p1:0,0', new Uint8Array([1]), { channelKey: 'p1:3' });
+    fake.endedCallbacks[fake.endedCallbacks.length - 1]?.();
+    expect(runtime.stopChannel('p1:3')).toBe(false);
+  });
+
   it('safely reports unsupported, resume rejection, and decode failure', async () => {
     const diagnostics: string[] = [];
     const unsupported = new BrowserAudioRuntime(() => null, (item) => diagnostics.push(item.code));
@@ -70,7 +86,8 @@ function createFakeAdapter() {
   const stop = vi.fn();
   const resume = vi.fn(async () => {});
   const decode = vi.fn(async () => ({ decoded: true }));
-  const play = vi.fn((): AudioPlaybackHandle => ({ stop }));
+  const endedCallbacks: Array<() => void> = [];
+  const play = vi.fn((): AudioPlaybackHandle => ({ stop, setOnEnded(callback) { endedCallbacks.push(callback); } }));
   const close = vi.fn(async () => {});
   const gains: number[] = [];
   const adapter: AudioAdapter = {
@@ -78,5 +95,5 @@ function createFakeAdapter() {
     setMasterGain(value) { gains.push(value); },
     close,
   };
-  return { adapter, stop, resume, decode, play, close, gains };
+  return { adapter, stop, resume, decode, play, close, gains, endedCallbacks };
 }

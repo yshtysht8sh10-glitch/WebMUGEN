@@ -7,7 +7,7 @@ import type { CharacterSourceFile } from '../core/character/CharacterTypes';
 import type { SndDocument } from '../parser/snd/SndTypes';
 import { findSndSample, sndSampleKey } from '../parser/snd/SndTypes';
 import { BrowserAudioRuntime, type AudioRuntimeDiagnostic } from '../core/audio/BrowserAudioRuntime';
-import type { SoundPlayEvent } from '../core/audio/SoundEvent';
+import type { SoundRuntimeEvent } from '../core/audio/SoundEvent';
 import type { AirAction, AirDocument, AirElement } from '../parser/air/AirTypes';
 import type { ImageDataSpritePack } from '../core/sprite/ImageDataSpriteTypes';
 import { spriteKey } from '../core/sprite/SpritePackLoader';
@@ -370,7 +370,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             nextState = applyFallbackControls(nextState, p1Input, p2Input);
           }
 
-          const soundEvents: SoundPlayEvent[] = [];
+          const soundEvents: SoundRuntimeEvent[] = [];
           const cnsResult = stepCnsStateRuntime(nextState, character.cns, {
             p1Commands,
             p2Commands,
@@ -381,10 +381,16 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             },
             hitDiagnostics: runtimeSettingsRef.current.hitDiagnostics,
             onSoundPlay: (event) => soundEvents.push(event),
+            onSoundStop: (event) => soundEvents.push(event),
           });
           nextState = cnsResult.state;
           if (soundEvents.length > 0) {
             const soundLines = soundEvents.map((event) => {
+              if (event.type === 'stop') {
+                if (event.channel === null) return `raw.sound_stop owner=${event.ownerId} channel=- result=noop reason=channel_missing`;
+                const stopped = audioRuntimeRef.current?.stopChannel(`${event.ownerId}:${Math.trunc(event.channel)}`) ?? false;
+                return `raw.sound_stop owner=${event.ownerId} channel=${Math.trunc(event.channel)} result=${stopped ? 'stopped' : 'noop'}${stopped ? '' : ' reason=channel_not_found'}`;
+              }
               if (event.scope === 'common') return `raw.sound_play_rejected owner=${event.ownerId} sample=F${event.group},${event.index} reason=common_sound_unavailable`;
               const sample = character.sounds ? findSndSample(character.sounds, event.group, event.index) : null;
               if (!character.sounds) return `raw.sound_play_rejected owner=${event.ownerId} sample=${event.group},${event.index} reason=sound_asset_missing`;
@@ -611,7 +617,12 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
       setAudioDiagnostic('audio sound_asset_missing No loaded WAV sample is available.');
       return;
     }
-    await runtime.playSample(sndSampleKey(sample.group, sample.index), sample.bytes);
+    await runtime.playSample(sndSampleKey(sample.group, sample.index), sample.bytes, { channelKey: 'manual:0', loop: true });
+  };
+
+  const stopTestAudio = () => {
+    const stopped = audioRuntimeRef.current?.stopChannel('manual:0') ?? false;
+    setAudioDiagnostic(`audio test_stop result=${stopped ? 'stopped' : 'noop'}`);
   };
 
   const setAudioMute = (muted: boolean) => {
@@ -702,6 +713,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
                 audioDiagnostic={audioDiagnostic}
                 onUnlockAudio={unlockAudio}
                 onTestAudio={testLoadedAudio}
+                onStopTestAudio={stopTestAudio}
                 onAudioMutedChange={setAudioMute}
                 onAudioMasterVolumeChange={setAudioVolume}
               />
@@ -763,6 +775,7 @@ function SettingsPanel({
   audioDiagnostic,
   onUnlockAudio,
   onTestAudio,
+  onStopTestAudio,
   onAudioMutedChange,
   onAudioMasterVolumeChange,
 }: {
@@ -778,6 +791,7 @@ function SettingsPanel({
   audioDiagnostic: string;
   onUnlockAudio: () => void;
   onTestAudio: () => void;
+  onStopTestAudio: () => void;
   onAudioMutedChange: (muted: boolean) => void;
   onAudioMasterVolumeChange: (volume: number) => void;
 }) {
@@ -792,6 +806,7 @@ function SettingsPanel({
         diagnostic={audioDiagnostic}
         onUnlock={onUnlockAudio}
         onTest={onTestAudio}
+        onStopTest={onStopTestAudio}
         onMutedChange={onAudioMutedChange}
         onMasterVolumeChange={onAudioMasterVolumeChange}
       />
@@ -827,6 +842,7 @@ function AudioSettingsPanel({
   diagnostic,
   onUnlock,
   onTest,
+  onStopTest,
   onMutedChange,
   onMasterVolumeChange,
 }: {
@@ -836,6 +852,7 @@ function AudioSettingsPanel({
   diagnostic: string;
   onUnlock: () => void;
   onTest: () => void;
+  onStopTest: () => void;
   onMutedChange: (muted: boolean) => void;
   onMasterVolumeChange: (volume: number) => void;
 }) {
@@ -846,6 +863,7 @@ function AudioSettingsPanel({
       <div className="runtime-settings-grid">
         <button type="button" onClick={onUnlock}>Unlock Audio</button>
         <button type="button" onClick={onTest} disabled={status !== 'unlocked'}>Test loaded SND sample</button>
+        <button type="button" onClick={onStopTest}>Stop test SND sample</button>
         <label>
           <input type="checkbox" checked={muted} onChange={(event) => onMutedChange(event.currentTarget.checked)} />
           Mute

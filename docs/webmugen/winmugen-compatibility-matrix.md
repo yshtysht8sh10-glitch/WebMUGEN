@@ -196,7 +196,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | SndPan | Partial | SND assets and Browser Audio foundation exist, but owner/channel pan remains a safe no-op pending #40. |
 | SprPriority | Partial | Stores priority field only. Rendering priority needs audit. |
 | StateTypeSet | Complete | Basic implementation exists. |
-| StopSnd | Partial | SND assets and Browser Audio stop/cleanup foundation exist, but owner/channel stopping remains a safe no-op pending #29. |
+| StopSnd | Partial | Production CNS evaluates channel and stops/releases the matching owner-scoped active or looping voice; P1/P2 channels remain separate and missing channels are diagnosed no-ops. Omitted-channel and advanced Helper ownership rules remain unsupported. |
 | SuperPause | Partial | Stores super pause time field only. Full superpause behavior incomplete. |
 | TargetBind | Partial | Selects registered targets by optional HitDef id, applies `pos` immediately, and stores time/offset metadata. Following-frame bind maintenance and full coordinate semantics remain incomplete. |
 | TargetDrop | Partial | Removes registered targets selected by optional HitDef id; later controllers safely see no target. `excludeid` and Helper/multi-player behavior remain incomplete. |

@@ -37,9 +37,11 @@ Autoplay/resume rejection is `audio_locked`, not a character load failure. Missi
 
 ## Compatibility boundary
 
-Issue #27 completes the browser audio foundation. Issue #28 connects PlaySnd character samples with owner-scoped channel replacement, channel-less concurrent voices, volume scaling, pan, playback rate, and loop. Issues #29 and #40 add StopSnd and SndPan channel control. HitDef sound integration remains Partial until Issue #36 deliberately routes scoped cues through the same runtime.
+Issue #27 completes the browser audio foundation. Issue #28 connects PlaySnd character samples with owner-scoped channel replacement, channel-less concurrent voices, volume scaling, pan, playback rate, and loop. Issue #29 connects StopSnd to the same owner/channel table; Issue #40 adds SndPan. HitDef sound integration remains Partial until Issue #36 deliberately routes scoped cues through the same runtime.
 
 PlaySnd cache keys include owner id plus group/index, and channel keys include owner id plus channel number. P1 channel 0 therefore cannot stop or replace P2 channel 0. `S`/unprefixed values use character SND; `F` common sound is rejected explicitly until a common archive is loaded.
+
+StopSnd evaluates `channel` on the firing frame. A matching active or looping voice stops immediately and is removed from active/channel tables. Natural `onended` performs the same release. Missing channels are diagnosed no-ops; omitted channel is currently an explicit `channel_missing` no-op and keeps the Matrix row Partial.
 
 ## Test expectations
 

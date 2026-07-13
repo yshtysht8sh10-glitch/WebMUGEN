@@ -1,4 +1,5 @@
 export type SoundPlayEvent = {
+  type: 'play';
   ownerId: number;
   scope: 'character' | 'common';
   group: number;
@@ -11,3 +12,11 @@ export type SoundPlayEvent = {
   frequencyMultiplier: number;
   loop: boolean;
 };
+
+export type SoundStopEvent = {
+  type: 'stop';
+  ownerId: number;
+  channel: number | null;
+};
+
+export type SoundRuntimeEvent = SoundPlayEvent | SoundStopEvent;

@@ -32,7 +32,7 @@ loop = 1
     });
 
     expect(events).toContainEqual({
-      ownerId: 1, scope: 'character', group: 7, index: 5, channel: 1, volume: 80, volumeScale: 50,
+      type: 'play', ownerId: 1, scope: 'character', group: 7, index: 5, channel: 1, volume: 80, volumeScale: 50,
       pan: -25, absolutePan: false, frequencyMultiplier: 1.5, loop: true,
     });
   });

@@ -6,7 +6,7 @@ import { activateMoveContact, resetMoveContact } from '../hitdef/MoveContactStat
 import { removeTarget, selectTargets } from '../hitdef/TargetState';
 import { normalizeHitAttribute } from '../hitdef/HitAttribute';
 import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, readNumberExpression, type CnsRuntimeTriggerContext } from './CnsRuntimeTrigger';
-import type { SoundPlayEvent } from '../audio/SoundEvent';
+import type { SoundPlayEvent, SoundStopEvent } from '../audio/SoundEvent';
 
 export type CnsRuntimeTrace = {
   playerId: 1 | 2;
@@ -30,6 +30,7 @@ export type CnsRuntimeInput = {
   hitDiagnostics?: boolean;
   getCnsDocumentForPlayer?: (playerId: number) => CnsDocument | null | undefined;
   onSoundPlay?: (event: SoundPlayEvent) => void;
+  onSoundStop?: (event: SoundStopEvent) => void;
 };
 
 export type CnsRuntimeResult = { state: GameState; traces: CnsRuntimeTrace[] };
@@ -117,7 +118,6 @@ const RECOGNIZED_NO_OP_CONTROLLERS = new Map<string, string>([
   ['removeexplod', 'RemoveExplod'],
   ['reversaldef', 'ReversalDef'],
   ['screenbound', 'ScreenBound'],
-  ['stopsnd', 'StopSnd'],
   ['sndpan', 'SndPan'],
   ['zoom', 'Zoom'],
 ]);
@@ -758,6 +758,7 @@ function executeController(
   if (type === 'pause') return withExtendedPlayer(player, { pauseTime: num(controller, 'time') ?? 0 }, 'Pause');
   if (type === 'superpause') return withExtendedPlayer(player, { superPauseTime: num(controller, 'time') ?? 0 }, 'SuperPause');
   if (type === 'playsnd') return playSound(player, opponent, controller, input, commands);
+  if (type === 'stopsnd') return stopSound(player, opponent, controller, input, commands);
   if (type === 'selfstate') {
     const value = num(controller, 'value');
     if (value === null) return withPlayer(player, false, 'SelfState');
@@ -1017,6 +1018,7 @@ function playSound(
   const relativePan = num(controller, 'pan', player, input, commands, opponent);
   const absolutePan = num(controller, 'abspan', player, input, commands, opponent);
   input.onSoundPlay?.({
+    type: 'play',
     ownerId: player.selfStateOwnerId ?? player.id,
     scope,
     group: Math.trunc(group),
@@ -1030,6 +1032,21 @@ function playSound(
     loop: (num(controller, 'loop', player, input, commands, opponent) ?? 0) !== 0,
   });
   return withPlayer(player, true, 'PlaySnd');
+}
+
+function stopSound(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  input.onSoundStop?.({
+    type: 'stop',
+    ownerId: player.selfStateOwnerId ?? player.id,
+    channel: num(controller, 'channel', player, input, commands, opponent),
+  });
+  return withPlayer(player, true, 'StopSnd');
 }
 
 function activateHitDef(

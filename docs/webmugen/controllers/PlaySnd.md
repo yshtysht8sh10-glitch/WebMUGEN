@@ -31,7 +31,7 @@ loop = 0
 | `pan` | Partial relative pan: -100..100 maps to stereo -1..1 and mirrors with Facing. |
 | `abspan` | Partial absolute pan, takes precedence over `pan`. |
 | `freqmul` | Positive Web Audio playback rate. |
-| `loop` | Loops until channel replacement, runtime cleanup, or later StopSnd support. |
+| `loop` | Loops until channel replacement, matching StopSnd, or runtime cleanup. |
 
 ## Diagnostics
 
@@ -46,4 +46,4 @@ Rejections use `sound_asset_missing`, `sample_not_found`, `common_sound_unavaila
 
 ## Remaining work
 
-PlaySnd remains Partial because common/fight SND is not loaded, exact WinMUGEN pan/volume edge ranges and `lowpriority` are not audited, and Helper/Projectile asset ownership is not connected. StopSnd and SndPan are tracked by Issues #29 and #40.
+PlaySnd remains Partial because common/fight SND is not loaded, exact WinMUGEN pan/volume edge ranges and `lowpriority` are not audited, and Helper/Projectile asset ownership is not connected. StopSnd owner/channel stopping is connected; SndPan is tracked by Issue #40.

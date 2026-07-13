@@ -163,6 +163,8 @@ Browser audio foundation diagnostics use `audio_unsupported`, `audio_locked`, `a
 
 `raw.sound_play` records the owner, scope, group/index, channel, volume/volumescale, resolved pan, frequency multiplier, loop, and queued result. `raw.sound_play_rejected` uses `sound_asset_missing`, `sample_not_found`, `common_sound_unavailable`, or `audio_locked`. The subsequent Browser Audio diagnostic proves playback start or decode failure.
 
+`raw.sound_stop` records owner/channel and either `result=stopped`, `reason=channel_not_found`, or `reason=channel_missing`. A stopped or naturally ended voice is removed from the channel table before later sound events.
+
 `raw.hit_power` records selected hit/guard `getpower` and `givepower`, both gauges before/after clamping, and proves the mutation occurred once for the accepted contact. `raw.hit_cornerpush` records contact class, edge condition, selected velocity offset, Facing, before/after attacker velocity, and applied/skipped reason. `raw.hit_snap` records Facing-relative offset and target before/after position. `raw.hit_sprpriority` records applied P1/P2 priorities.
 
 `raw.hit_fall_damage` is emitted by common-State `HitFallDamage` and records fall damage, independent `fall.kill`, Life before/after, and the originating ActiveHitDef id.
