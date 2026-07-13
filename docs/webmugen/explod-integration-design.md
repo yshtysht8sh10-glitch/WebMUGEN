@@ -127,6 +127,7 @@ The request queue is frame-local output from CNS execution, not durable state. T
 7. **#34**: implemented scale/Facing/vfacing, additive source-alpha approximation, unbound velocity/acceleration, injected creation random, and remove-on-owner-hit. Ownpal isolation, destination alpha, subtractive blend, shadow pass, and bound-movement edge rules remain Partial.
 8. **#35**: implemented distinct Pause/SuperPause match state, owner `movetime`, per-Explod `pausemovetime`/`supermovetime`, full-tick freezing, negative-State suppression, resume replay guard, sound-continuation policy, diagnostics, and bundled T-H-M-A evidence. Same activation-pass cross-player ordering, Helpers, and full SuperPause visuals remain Partial.
 9. **#36**: connected one normal/guard spark and sound per HitEvent to shared Explod/Browser Audio paths, including scoped expression evaluation, character/common asset selection, same-frame render, missing-asset diagnostics, ID isolation, and bundled T-H-M-A evidence. Bundled common fightfx/SND assets remain Partial.
+10. **#37**: verified KFM, T-H-M-A, and Yes030_e-rada PlaySnd/Explod paths for P1/P2 and both Facings, 1,800 lifecycle ticks, T-H-M-A ZIP, round/tab cleanup, and Audio stress. Matrix rows remain individually Partial where documented boundaries persist.
 
 Issue #30 must not absorb #31-#36. Its minimum visible evidence is production `GameState` creation and Runtime History, while visual confirmation begins in #31.
 

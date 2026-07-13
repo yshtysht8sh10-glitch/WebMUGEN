@@ -209,6 +209,8 @@ On State entry, `raw.hitdef_lifecycle` reports preserve/discard together with `h
 
 The optional three-character regression harness asserts a continuous event chain for ground, air, guard, KO, edge, both Facing directions, and both player roles. Its current evidence and reproduction command are recorded in `hitdef-real-character-regression.md`.
 
+The companion Explod/Sound harness follows real PlaySnd and Explod controllers through production SND/AIR resolution for P1/P2 and both Facings, then runs lifecycle and cleanup gates. Counts, commands, and absent-real-data limitations are recorded in `explod-sound-real-character-regression.md`.
+
 ## What to look for
 
 | Symptom in history | Interpretation |

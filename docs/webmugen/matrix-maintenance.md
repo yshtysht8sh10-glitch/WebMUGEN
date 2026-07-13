@@ -130,6 +130,8 @@ A broad HitDef audit requires at least three structurally different WinMUGEN cha
 
 Every controller and HitDef parameter observed by the configured characters must have its own row in both Matrix mirrors. A parsed-but-unused field is Unsupported; recognized safe no-op, stored-only data, approximations, or incomplete renderer/runtime connections are Partial. Real-character presence alone never promotes an item to Complete. Record the character set, trace scenarios, results, and known limitations in `hitdef-real-character-regression.md`.
 
+For an Explod/Sound final audit, run `RealCharacterExplodSoundRegression.test.ts` with the same three-character minimum. Audit Explod, ModifyExplod, RemoveExplod, ExplodBindTime, PlaySnd, StopSnd, and SndPan separately. When selected characters do not use a controller, retain focused-fixture evidence and state that real-character evidence is absent; do not infer Unsupported or Complete. Record counts in `explod-sound-real-character-regression.md`.
+
 ## One item per row
 
 Do not combine multiple triggers, controllers, states, operators, redirects, or CMD features into one matrix item.

@@ -153,8 +153,8 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | DisplayToClipboard | Partial | Recognized safe no-op. Debug clipboard not implemented. |
 | EnvColor | Partial | Recognized safe no-op. Screen color flash not implemented. |
 | EnvShake | Partial | Recognized safe no-op. Screen shake not implemented. |
-| Explod | Partial | Issues #30-#36/#38/#39: production create/render/lifecycle, ordered explicit-ID mutations, pause gating, and HitDef character-scope spark entries share GameState/Canvas. Hit sparks are isolated from Modify/RemoveExplod ID selection. Bundled common fightfx assets, palette isolation, destination/subtractive blend, shadow pass, non-zero camera exactness, Helper ownership, generic `persistent`, and `NumExplod` remain incomplete. |
-| ExplodBindTime | Partial | Issue #39: normal CNS/app/GameState lifecycle updates every explicit owner/id duplicate in controller order. `time=0`, finite positive, indefinite negative, unbound P1/P2 rebind, owner following, release/position hold, removal ordering, missing fields, and same-frame Renderer evidence are tested. Omitted `id`, non-player owner disappearance/reload, and non-binding postype edge rules remain Partial. |
+| Explod | Partial | Issue #37 verifies production CNS/GameState/AIR renderer paths with KFM, T-H-M-A, and Yes030_e-rada for P1/P2, both Facings, and 1,800 lifecycle ticks. Common fightfx assets, palette/blend/shadow edges, camera exactness, Helper ownership, generic `persistent`, and `NumExplod` remain incomplete. |
+| ExplodBindTime | Partial | No occurrence in the three-character Issue #37 set; explicit-ID lifecycle fixtures remain the evidence. Omitted `id`, non-player owner disappearance/reload, and non-binding postype edge rules remain Partial. |
 | FallEnvShake | Partial | Recognized safe no-op. Landing shake parameters are not connected to HitFeedback. |
 | ForceFeedback | Partial | Recognized safe no-op. Input device feedback not implemented. |
 | GameMakeAnim | Partial | Recognized safe no-op. Global animation effect not implemented. |
@@ -171,7 +171,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | LifeAdd | Complete | Basic implementation exists. |
 | LifeSet | Complete | Basic implementation exists. |
 | MakeDust | Partial | Recognized safe no-op. Dust rendering not implemented. |
-| ModifyExplod | Partial | Issue #33: the normal CNS/app/GameState/Canvas path partially updates every explicit owner/id match. Supported fields are anim, pos/postype, facing/vfacing, bindtime, vel/accel/random, removetime, pause/supermovetime, scale, sprpriority/ontop, shadow/ownpal/removeongethit; omitted values persist, coordinates/render update in-frame, and removetime restarts from that frame. Duplicate ids and owner isolation are tested. Omitted `id` remains a diagnosed safe no-op because its selection boundary is not established. Movement/pause consumption and broader Helper/fightfx semantics remain Partial. |
+| ModifyExplod | Partial | Issue #37 confirms real Yes030_e-rada usage and retains explicit owner/id production fixture evidence. Omitted `id` remains a diagnosed safe no-op; broader Helper/fightfx semantics remain Partial. |
 | MoveHitReset | Complete | Clears current generation contact/hit/guard flags while preserving hit count and duplicate-target history; focused tests cover reset semantics. |
 | MoveTypeSet | Complete | Basic implementation exists. |
 | NotHitBy | Partial | Matching normalized HitDef state/attack attr rejects live contact. Duration/stacking remains incomplete. |
@@ -182,21 +182,21 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | ParentVarSet | Partial | Recognized safe no-op. Parent var lookup not implemented. |
 | Pause | Partial | Issue #35: production CNS starts a match-level pause, freezes non-owner CNS/physics/timers and all negative States, permits the owner for `movetime`, gates Explods by `pausemovetime`, and prevents activation-side-effect replay. Same-pass controller ordering, Helpers, and less common parameters remain incomplete. |
 | PlayerPush | Partial | `value = 0` disables fallback stage push for its execution frame. Grounded players always use horizontal push; airborne cross-over requires fixed 44x80 boxes to clear vertically. Width/AIR `Clsn2` integration remains incomplete. |
-| PlaySnd | Partial | Production CNS evaluates group/index and major parameters and plays through owner-scoped Browser Audio. It fires once on a Pause/SuperPause activation pass; paused and guarded resume passes do not replay it, while already-started audio continues. Common `F` scope, lowpriority, advanced Helper ownership, and same-pass cross-player ordering remain incomplete. |
+| PlaySnd | Partial | Issue #37 resolves real SND samples for KFM, T-H-M-A, and Yes030_e-rada through production CNS for P1/P2. Pause boundaries and Browser Audio are connected. Common `F` archive, lowpriority, Helper ownership, and same-pass cross-player ordering remain Partial. |
 | PosAdd | Complete | Basic implementation exists. |
 | PosFreeze | Partial | Recognized safe no-op. Freeze behavior not implemented. |
 | PosSet | Complete | Basic implementation exists. |
 | PowerAdd | Complete | Basic implementation exists. |
 | PowerSet | Complete | Basic implementation exists. |
 | Projectile | Partial | Recognized safe no-op in CNS runtime; Projectile system exists separately. |
-| RemoveExplod | Partial | Issue #38: the normal CNS/app/GameState path removes every explicit owner/id match in controller order before lifecycle and same-frame Canvas rendering. Duplicate ids, owner isolation, bound/persistent entries, missing ids, ordering with ModifyExplod, neutral fixture rendering, and bundled T-H-M-A CNS are tested. Omitted `id` remains a diagnosed safe no-op because its selection boundary is not established; broader Helper ownership also remains Partial. |
+| RemoveExplod | Partial | Issue #37 confirms real T-H-M-A and Yes030_e-rada usage and retains explicit owner/id production fixture evidence. Omitted `id` remains a diagnosed safe no-op; broader Helper ownership remains Partial. |
 | ReversalDef | Partial | Recognized safe no-op. Reversal behavior not implemented. |
 | ScreenBound | Partial | Recognized safe no-op. Camera/screen bound behavior not implemented. |
 | SelfState | Partial | Returns a borrowed player to `selfStateOwnerId` and executes that owner's CNS document. Helper/animation ownership remains incomplete. |
-| SndPan | Partial | Production CNS evaluates owner/channel and relative `pan` or absolute `abspan`, then updates the current active/looping voice without recreating its source. Owner separation, replacement, natural end, clamping, and unsupported adapters are tested/diagnosed. Exact WinMUGEN pixel mapping and Helper ownership remain incomplete. |
+| SndPan | Partial | No occurrence in the three-character Issue #37 set; focused owner/channel/panner tests remain the evidence. Exact WinMUGEN pixel mapping and Helper ownership remain Partial. |
 | SprPriority | Partial | Stores priority field only. Rendering priority needs audit. |
 | StateTypeSet | Complete | Basic implementation exists. |
-| StopSnd | Partial | Production CNS evaluates channel and stops/releases the matching owner-scoped active or looping voice; P1/P2 channels remain separate and missing channels are diagnosed no-ops. Omitted-channel and advanced Helper ownership rules remain unsupported. |
+| StopSnd | Partial | Issue #37 confirms real T-H-M-A usage; focused owner/channel tests remain the behavior evidence. Omitted channel and advanced Helper ownership remain Partial. |
 | SuperPause | Partial | Issue #35: production CNS starts a distinct match-level superpause with `darken`/`movetime`, freezes CNS/physics/timers, gates Explods by `supermovetime`, and is tested with bundled T-H-M-A State 3010. Same-pass ordering, Helpers, and full visual semantics remain incomplete. |
 | TargetBind | Partial | Selects registered targets by optional HitDef id, applies `pos` immediately, and stores time/offset metadata. Following-frame bind maintenance and full coordinate semantics remain incomplete. |
 | TargetDrop | Partial | Removes registered targets selected by optional HitDef id; later controllers safely see no target. `excludeid` and Helper/multi-player behavior remain incomplete. |

@@ -100,6 +100,8 @@ describe('AppCharacterLoader', () => {
       expect(result.character?.sprites?.sprites.size ?? 0).toBeGreaterThan(0);
       expect(result.character?.sounds?.samples.length ?? 0).toBeGreaterThan(0);
       expect(result.character?.sounds?.samples.some((sample) => sample.format === 'wave')).toBe(true);
+      expect(result.character?.cns.states.flatMap((state) => state.controllers).some((controller) => controller.type.toLowerCase() === 'explod')).toBe(true);
+      expect(result.character?.cns.states.flatMap((state) => state.controllers).some((controller) => controller.type.toLowerCase() === 'playsnd')).toBe(true);
       expect(result.character?.loadDiagnostics).toEqual([]);
     } finally {
       globalThis.fetch = originalFetch;

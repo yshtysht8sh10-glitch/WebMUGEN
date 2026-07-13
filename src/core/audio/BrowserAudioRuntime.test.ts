@@ -111,6 +111,21 @@ describe('BrowserAudioRuntime', () => {
 
     expect(diagnostics).toEqual(expect.arrayContaining(['audio_unsupported', 'audio_locked', 'decode_failed']));
   });
+
+  it('releases every channel-less voice during long-session cleanup without recreating the adapter', async () => {
+    const fake = createFakeAdapter();
+    const factory = vi.fn(() => fake.adapter);
+    const runtime = new BrowserAudioRuntime(factory);
+    await runtime.unlock();
+    for (let index = 0; index < 240; index += 1) {
+      await runtime.playSample(`long:${index % 3}`, new Uint8Array([index % 3]));
+    }
+    await runtime.cleanup();
+    expect(factory).toHaveBeenCalledTimes(1);
+    expect(fake.play).toHaveBeenCalledTimes(240);
+    expect(fake.stop).toHaveBeenCalledTimes(240);
+    expect(fake.close).toHaveBeenCalledTimes(1);
+  });
 });
 
 function createFakeAdapter(supportsPan = true) {

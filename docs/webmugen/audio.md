@@ -49,6 +49,8 @@ StopSnd evaluates `channel` on the firing frame. A matching active or looping vo
 
 SndPan evaluates `channel` and `pan`/`abspan` on the firing frame. Relative `pan` follows player Facing; `abspan` is absolute and takes precedence when malformed data supplies both. The app normalizes the current compatibility range by dividing by 100 and clamps to `[-1, 1]`, then updates the existing StereoPanner without recreating the source. Missing/ended channels and adapters without StereoPanner support are diagnosed no-ops. Exact WinMUGEN pixel-to-speaker mapping and player screen-position contribution remain unaudited, so the Matrix row remains Partial.
 
+Issue #37 verifies real PlaySnd sample resolution for KFM, T-H-M-A, and Yes030_e-rada, real T-H-M-A StopSnd presence, bundled T-H-M-A ZIP SND loading, and cleanup of 240 channel-less voices through one adapter. SndPan has no occurrence in that set, so its focused production tests remain the evidence and its status stays Partial.
+
 ## Test expectations
 
 - adapter factory is called once across repeated unlock/play calls;
