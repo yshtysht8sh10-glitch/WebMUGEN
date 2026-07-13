@@ -108,6 +108,8 @@ When a behavior depends on a future subsystem, implement the safest observable p
 
 HitDef activation evaluates its major numeric expressions and pairs into a typed `ActiveHitDef` snapshot. Collision and later hit processing consume that snapshot instead of re-reading the originating controller after a hit. Parameters that are stored for later HitDef phases but not yet behaviorally connected are emitted in activation diagnostics and remain Partial.
 
+The fallback hit recovery layer must not terminate an active common fall/down lifecycle. Grounded launch hits can enter States 5030/5035 with `HitFall=1` even when `targetStateTypeAtHit` was S/C; after hit-stun ends, those reactions continue through common States 5050, 5100/5110, 5120, and finally State 0. States 5200/5210 remain CNS-controlled and require both `CanRecover` and `Command = "recovery"`.
+
 ## Good next runtime improvements
 
 - richer controller execution tables;

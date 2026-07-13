@@ -22,7 +22,7 @@ function recoverPlayer(player: PlayerState, diagnosticsEnabled: boolean): { play
   if (!player.hitStun && player.hitReactionElapsed !== undefined) {
     if (player.moveType === 'H' || player.stateType === 'A' || player.stateType === 'L') {
       const downHitTime = player.getHitVars?.['down.hittime'];
-      if (player.stateType === 'L' && downHitTime !== undefined && player.stateTime >= downHitTime) {
+      if (player.stateType === 'L' && player.moveType === 'H' && downHitTime !== undefined && player.stateTime >= downHitTime) {
         return {
           player: { ...player, stateNo: 5120, stateTime: 0, moveType: 'I', ctrl: false },
           diagnosticLines: diagnosticsEnabled ? [
@@ -117,6 +117,14 @@ function recoverPlayer(player: PlayerState, diagnosticsEnabled: boolean): { play
       hitReactionElapsed: elapsed,
     }, diagnosticLines: diagnosticLines.map((line) => line.replace('recoveryPath=existing', 'recoveryPath=common_air')) };
   }
+  if (isCommonFallLifecycle(player)) {
+    return { player: {
+      ...player,
+      ctrl: false,
+      hitStun: undefined,
+      hitReactionElapsed: elapsed,
+    }, diagnosticLines: diagnosticLines.map((line) => line.replace('recoveryPath=existing', 'recoveryPath=common_fall')) };
+  }
   return { player: {
     ...player,
     stateNo: 0,
@@ -146,4 +154,11 @@ function recoverPlayer(player: PlayerState, diagnosticsEnabled: boolean): { play
 
 function isFallbackHitState(player: PlayerState): boolean {
   return player.moveType === 'H' || player.stateNo === STAND_HIT_STATE || player.stateNo === AIR_HIT_STATE;
+}
+
+function isCommonFallLifecycle(player: PlayerState): boolean {
+  return player.hitFall === true
+    || player.stateType === 'A'
+    || player.stateType === 'L'
+    || (player.stateNo >= AIR_HIT_STATE && player.stateNo <= 5120);
 }

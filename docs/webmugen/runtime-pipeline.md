@@ -137,6 +137,24 @@ Debug shows state=10
 
 If the screen does not crouch, check whether the runtime reached State 10 or whether rendering/animation failed after State 10.
 
+## Common hit fall route example: launched defender
+
+```text
+HitDef contact on grounded target
+  ->
+GetHitVar(yvel) snapshots ground.velocity.y
+  ->
+State 5000/5010 chooses State 5030 when fall/yvel requires airborne hit reaction
+  ->
+State 5035 transitions to State 5050 after hit shake
+  ->
+FallbackHitRecovery ends hit-stun without clearing HitFall/get-hit values
+  ->
+State 5050 lands through 5100/5110, then 5120, then State 0
+```
+
+Do not treat `targetStateTypeAtHit = S/C` as permission for fallback recovery to return directly to State 0 once `HitFall=1` has moved the defender into the common air/down path. Recovery States 5200/5210 are only valid when both `CanRecover` and `Command = "recovery"` are true in the CNS route.
+
 ## Common movement route example: walk forward
 
 ```text

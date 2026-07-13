@@ -77,7 +77,7 @@ Safe defaults are useful but should not be overclaimed.
 
 Examples:
 
-- `CanRecover` reads snapshotted `fall.recover` and `fall.recovertime` during an air-fall reaction;
+- `CanRecover` reads snapshotted `fall.recover` and `fall.recovertime` during an air-fall reaction. Common recovery states still require the CNS `Command = "recovery"` trigger; `CanRecover` alone must not auto-enter States 5200/5210;
 - `NumHelper` may return 0 before Helper lookup exists;
 - projectile contact time may return -1 before projectile contact is integrated.
 

@@ -40,10 +40,106 @@ function airHitPlayer(fall: boolean, recover = true): PlayerState {
   };
 }
 
+function launchedGroundHitPlayer(options: {
+  recover?: boolean;
+  recoverTime?: number;
+  fall?: boolean;
+  selectedHitTime?: number;
+} = {}): PlayerState {
+  const player = createInitialGameState().players[1];
+  const fall = options.fall ?? true;
+  const recover = options.recover ?? true;
+  const recoverTime = options.recoverTime ?? 100;
+  return {
+    ...player,
+    y: 285,
+    stateNo: 5000,
+    stateType: 'S',
+    moveType: 'H',
+    physics: 'N',
+    ctrl: false,
+    animNo: 5000,
+    vx: -1.5,
+    vy: -13,
+    hitVelX: -1.5,
+    hitVelY: -13,
+    hitFall: fall,
+    fallRecover: recover,
+    fallRecoverTime: recoverTime,
+    hitFallVelocity: { x: 0, y: 0 },
+    getHitVars: {
+      animtype: 3, groundtype: 1, hittime: options.selectedHitTime ?? 15,
+      xvel: -1.5, yvel: -13, yaccel: 0.28,
+      fall: fall ? 1 : 0, 'fall.xvel': 0, 'fall.yvel': 0, 'fall.recover': recover ? 1 : 0,
+      'fall.recovertime': recoverTime, 'fall.damage': 0, 'down.hittime': 3,
+    },
+    hitStun: {
+      activeHitDefId: 215, selectedHitTime: options.selectedHitTime ?? 15, kind: 'ground', source: 'active_hitdef',
+      targetStateTypeAtHit: 'S', elapsed: 0, lastStateNo: 5000, selectedAnim: 5000,
+      getHitVarYVelocitySource: 'ground.velocity.y',
+      groundVelocityAtHit: { x: -1.5, y: -13 },
+      airVelocityAtHit: { x: -1.5, y: -7 },
+      fallYVelocityAtHit: 0,
+    },
+  };
+}
+
 function tick(state: GameState, p2Commands?: ReadonlySet<string>): GameState {
-  const cns = stepCnsStateRuntime(state, common, { p2Commands }).state;
+  const cns = stepCnsStateRuntime(state, common, { p2Commands, hitDiagnostics: true }).state;
   const moved = stepCnsPhysicsMotion(cns, common);
   return applyFallbackHitRecovery(moved);
+}
+
+function traceUntil(
+  player: PlayerState,
+  commandForFrame: (frame: number) => ReadonlySet<string> | undefined = () => undefined,
+  maxFrames = 180,
+): { state: GameState; visited: number[]; trace: string } {
+  const initial = createInitialGameState();
+  let state: GameState = { ...initial, players: [initial.players[0], player] };
+  const visited: number[] = [];
+  const lines: string[] = [];
+  let saw5120 = false;
+  for (let frame = 0; frame < maxFrames; frame += 1) {
+    const before = state.players[1];
+    const commands = commandForFrame(frame);
+    const cns = stepCnsStateRuntime(state, common, { p2Commands: commands, hitDiagnostics: true }).state;
+    const afterCns = cns.players[1];
+    const moved = stepCnsPhysicsMotion(cns, common);
+    const afterPhysics = moved.players[1];
+    state = applyFallbackHitRecovery(moved);
+    const after = state.players[1];
+    visited.push(afterCns.stateNo, afterPhysics.stateNo, after.stateNo);
+    if (after.stateNo === 5120) saw5120 = true;
+    lines.push([
+      `f=${frame}`,
+      `prev=${before.stateNo}`,
+      `cns=${afterCns.stateNo}`,
+      `phys=${afterPhysics.stateNo}`,
+      `state=${after.stateNo}`,
+      `type=${after.stateType}`,
+      `move=${after.moveType}`,
+      `phys=${after.physics}`,
+      `y=${after.y}`,
+      `vx=${after.vx}`,
+      `vy=${after.vy}`,
+      `yvel=${after.getHitVars?.yvel ?? '-'}`,
+      `yaccel=${after.getHitVars?.yaccel ?? '-'}`,
+      `fall=${after.getHitVars?.fall ?? '-'}`,
+      `recover=${after.getHitVars?.['fall.recover'] ?? '-'}`,
+      `recovertime=${after.getHitVars?.['fall.recovertime'] ?? '-'}`,
+      `fallY=${after.getHitVars?.['fall.yvel'] ?? '-'}`,
+      `HitFall=${after.hitFall ? 1 : 0}`,
+      `CanRecover=${after.fallRecover !== false && (after.hitStun?.elapsed ?? after.hitReactionElapsed ?? after.stateTime) >= (after.fallRecoverTime ?? 0) ? 1 : 0}`,
+      `cmd=${commands?.has('recovery') ? 1 : 0}`,
+      `hitStun=${after.hitStun?.elapsed ?? '-'}`,
+      `hitElapsed=${after.hitReactionElapsed ?? '-'}`,
+      `cnsDiag=${afterCns.hitDiagnosticLines?.slice(-6).join('|') ?? '-'}`,
+      `fallback=${state.hitDiagnosticLines?.filter((line) => line.includes('recoveryPath=') || line.includes('raw.hit_down')).slice(-2).join('|') ?? '-'}`,
+    ].join(' '));
+    if (saw5120 && after.stateNo === 0) break;
+  }
+  return { state, visited, trace: lines.join('\n') };
 }
 
 describe('air hit common-state integration', () => {
@@ -81,5 +177,57 @@ describe('air hit common-state integration', () => {
       state = tick(state, new Set(['recovery']));
     }
     expect([5200, 5210]).toContain(state.players[1].stateNo);
+  });
+
+  it('keeps ground launch fall in the common down route when no recovery command is pressed', () => {
+    const { state, visited, trace } = traceUntil(launchedGroundHitPlayer());
+    const firstIdle = visited.indexOf(0);
+    const firstGetup = visited.indexOf(5120);
+    expect(visited, trace).toContain(5035);
+    expect(visited, trace).toContain(5050);
+    expect(trace).toContain('from=5050 to=5100');
+    expect(trace).toContain('from=5100 to=5110');
+    expect(visited, trace).toContain(5110);
+    expect(visited, trace).toContain(5120);
+    expect(visited, trace).not.toContain(5200);
+    expect(visited, trace).not.toContain(5210);
+    expect(firstIdle, trace).toBeGreaterThan(firstGetup);
+    expect(state.players[1], trace).toMatchObject({ stateNo: 0, stateType: 'S', moveType: 'I', ctrl: true });
+  });
+
+  it('allows fall recovery only when CanRecover and the recovery command are both true', () => {
+    const { visited, trace } = traceUntil(
+      launchedGroundHitPlayer({ recover: true, recoverTime: 3 }),
+      () => new Set(['recovery']),
+    );
+    expect(visited, trace).toContain(5050);
+    expect(visited.some((stateNo) => stateNo === 5200 || stateNo === 5210), trace).toBe(true);
+  });
+
+  it('does not enter recovery states without recovery command even after CanRecover is true', () => {
+    const { visited, trace } = traceUntil(launchedGroundHitPlayer({ recover: true, recoverTime: 3 }));
+    expect(trace).toContain('CanRecover=1 cmd=0');
+    expect(visited, trace).not.toContain(5200);
+    expect(visited, trace).not.toContain(5210);
+  });
+
+  it('blocks recovery command when fall.recover is disabled', () => {
+    const { visited, trace } = traceUntil(
+      launchedGroundHitPlayer({ recover: false, recoverTime: 3 }),
+      () => new Set(['recovery']),
+    );
+    expect(visited, trace).toContain(5120);
+    expect(visited, trace).not.toContain(5200);
+    expect(visited, trace).not.toContain(5210);
+  });
+
+  it('blocks recovery command before fall.recovertime', () => {
+    const { visited, trace } = traceUntil(
+      launchedGroundHitPlayer({ recover: true, recoverTime: 120 }),
+      () => new Set(['recovery']),
+    );
+    expect(visited, trace).toContain(5120);
+    expect(visited, trace).not.toContain(5200);
+    expect(visited, trace).not.toContain(5210);
   });
 });

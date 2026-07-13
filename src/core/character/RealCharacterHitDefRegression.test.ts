@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { AirAction } from '../../parser/air/AirTypes';
 import type { CnsDocument, CnsStateController, CnsStateDefinition } from '../../mugen/common/cnsTypes';
 import { stepCnsStateRuntime } from '../cns/CnsStateRuntime';
+import { stepCnsPhysicsMotion } from '../cns/CnsPhysicsStep';
 import { analyzeCnsCoverage } from '../cns/CnsCoverageDiagnostics';
 import { createInitialGameState } from '../engine/GameState';
 import { applyFallbackHitRecovery } from '../engine/FallbackHitRecovery';
@@ -126,6 +127,48 @@ realCharacterDescribe('WinMUGEN real-character HitDef regression', () => {
   }, 120_000);
 });
 
+describe('T-H-M-A State 215 launch regression', () => {
+  it.each(['ground', 'air'] as const)('keeps State 215 fall hit on the common down route for %s targets without recovery input', async (mode) => {
+    const assets = await loadCharacterFromDef('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.def', createFileSystemFetcher());
+    const activated = activateState215HitDef(assets.cns);
+    expect(activated.players[0].activeHitDef?.fall?.enabled).toBe(true);
+    expect(activated.players[0].activeHitDef?.fall?.recoverTime).toBe(100);
+
+    const attack = findActionCollisionElement(assets.air.actions, 215, 'attack');
+    const body = findCollisionElement(assets.air.actions, 'body');
+    expect(attack).not.toBeNull();
+    expect(body).not.toBeNull();
+
+    const contacted = findContact(activated, assets.air, 1, attack!, body!, mode, 1);
+    expect(contacted, `State 215 ${mode} contact`).not.toBeNull();
+    let state = contacted!;
+    const visited: number[] = [];
+    const transitions: string[] = [];
+    let sawGetup = false;
+    for (let frame = 0; frame < 220; frame += 1) {
+      const cns = stepCnsStateRuntime(state, assets.cns, { hitDiagnostics: true }).state;
+      transitions.push(...(cns.players[1].hitDiagnosticLines ?? []).filter((line) => line.includes('from=') && line.includes('to=')));
+      const moved = stepCnsPhysicsMotion(cns, assets.cns);
+      state = applyFallbackHitRecovery(moved, true);
+      visited.push(cns.players[1].stateNo, moved.players[1].stateNo, state.players[1].stateNo);
+      if (state.players[1].stateNo === 5120) sawGetup = true;
+      if (sawGetup && state.players[1].stateNo === 0) break;
+    }
+
+    const diagnostics = state.hitDiagnosticLines?.join('\n') ?? '';
+    expect(diagnostics).toContain('hitDefId=215');
+    expect(diagnostics).toContain('fall=1');
+    expect(visited).toContain(5035);
+    expect(visited).toContain(5050);
+    expect(transitions.join('\n')).toContain('to=5100');
+    expect(visited).toContain(5110);
+    expect(visited).toContain(5120);
+    expect(visited).not.toContain(5200);
+    expect(visited).not.toContain(5210);
+    expect(state.players[1]).toMatchObject({ stateNo: 0, stateType: 'S', moveType: 'I' });
+  }, 30_000);
+});
+
 function createFileSystemFetcher(): CharacterAssetFetcher {
   return {
     async text(requestPath) {
@@ -152,6 +195,7 @@ function mapCommonPath(requestPath: string): string {
   const normalized = normalizePath(requestPath);
   if (normalized === '/chars/common1.cns') return 'public/chars/common1.cns';
   if (normalized === '/chars/common.cmd' || normalized === '/chars/common1.cmd') return 'public/chars/common.cmd';
+  if (normalized.startsWith('/chars/')) return `public${normalized}`;
   return normalized;
 }
 
@@ -210,6 +254,32 @@ function findCollisionElement(actions: AirAction[], kind: 'attack' | 'body'): { 
     }
   }
   return null;
+}
+
+function findActionCollisionElement(actions: AirAction[], actionNo: number, kind: 'attack' | 'body'): { actionNo: number; animTime: number } | null {
+  const action = actions.find((candidate) => candidate.actionNo === actionNo);
+  if (!action) return null;
+  let animTime = 0;
+  for (const element of action.elements) {
+    if ((kind === 'attack' ? element.clsn1 : element.clsn2).length > 0) return { actionNo: action.actionNo, animTime };
+    animTime += Math.max(0, element.duration);
+  }
+  return null;
+}
+
+function activateState215HitDef(cns: CnsDocument): GameState {
+  const state215 = cns.states.find((state) => state.stateNo === 215);
+  const hitDef = state215?.controllers.find((controller) =>
+    controller.type.trim().toLowerCase() === 'hitdef' && Number(controller.params.id) === 215);
+  if (!state215 || !hitDef) throw new Error('State 215 HitDef not found');
+  const forcedCns: CnsDocument = {
+    metadataSections: cns.metadataSections,
+    states: [{ ...state215, controllers: [{ ...hitDef, triggers: [{ name: 'trigger1', expression: '1' }] }] }],
+  };
+  const initial = createInitialGameState();
+  const players = [...initial.players] as GameState['players'];
+  players[0] = { ...players[0], stateNo: 215, stateType: 'S', moveType: 'A', physics: 'S', ctrl: false, animNo: 215 };
+  return stepCnsStateRuntime({ ...initial, players }, forcedCns, { hitDiagnostics: true }).state;
 }
 
 function findContact(
