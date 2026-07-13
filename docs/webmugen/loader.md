@@ -67,9 +67,11 @@ A missing SND or a fatal invalid header does not discard otherwise valid charact
 
 ## SFF v1 palette policy
 
-The SFF v1 converter resolves palette selection before indexed PCX pixels become RGBA. A node with the shared-palette flag uses the DEF-selected ACT palette when one is available; a node without that flag keeps its embedded PCX palette. Linked sprites reuse their source node's decoded pixels and palette while retaining the linked node's axes. PCX index 0 remains transparent in both paths.
+The SFF v1 converter resolves palette ownership before indexed PCX pixels become RGBA. A sprite with its own PCX palette keeps that palette and uses normal source-index lookup even when the character has a DEF-selected ACT. The external ACT path, including reversed ACT index lookup, applies only to shared character-palette sprites.
 
-Canvas bitmap caching is scoped by the loaded `ImageDataSpritePack` identity, sprite group/index, and the Explod `ownpal` isolation flag. Identical group/index values from different character owners therefore cannot reuse one owner's RGBA canvas. SFF v2 is rejected explicitly by the v1 parser; native SFF v2 decoding and dynamic palette effects remain unsupported rather than being interpreted as v1 data.
+SFF subfile order is significant. A `samePalette` sprite inherits the previous effective palette in subfile sequence, including a preceding sprite-specific PCX palette. Linked sprites share the source pixel data but keep the linked node's palette context, so a linked node can inherit the previous effective palette instead of blindly sharing the source node's palette identity.
+
+The resulting `ImageDataSpritePack` stores palette metadata and a palette cache key for each sprite. Normal player rendering, AIR Preview, and Explod rendering all consume the same baked RGBA data. Canvas bitmap caching is scoped by loaded asset identity, sprite group/index, baked palette key, and the Explod `ownpal` isolation flag. Identical group/index values from different owners or palette chains therefore cannot reuse one stale canvas. SFF v2 is rejected explicitly by the v1 parser; native SFF v2 decoding and dynamic palette effects remain unsupported rather than being interpreted as v1 data.
 
 ## Why `common.cmd` exists
 

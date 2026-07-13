@@ -21,7 +21,7 @@ class FakeImageData {
 (globalThis as unknown as { ImageData: typeof ImageData }).ImageData =
   FakeImageData as unknown as typeof ImageData;
 
-function createFake8BitPcx(withPalette = true): Uint8Array {
+function createFake8BitPcx(withPalette = true, color1: [number, number, number] = [10, 20, 30], color2: [number, number, number] = [40, 50, 60]): Uint8Array {
   const width = 2;
   const height = 1;
   const bytesPerLine = 2;
@@ -42,12 +42,8 @@ function createFake8BitPcx(withPalette = true): Uint8Array {
 
   const imageData = new Uint8Array([1, 2]);
   const palette = new Uint8Array(256 * 3);
-  palette[3] = 10;
-  palette[4] = 20;
-  palette[5] = 30;
-  palette[6] = 40;
-  palette[7] = 50;
-  palette[8] = 60;
+  palette.set(color1, 3);
+  palette.set(color2, 6);
 
   if (!withPalette) {
     const result = new Uint8Array(header.length + imageData.length);
@@ -191,4 +187,93 @@ describe('SffSpritePackConverter', () => {
     expect(pack.sprites.get('200,2')).toBeDefined();
     expect(pack.sprites.get('200,4')).toBeUndefined();
   });
+
+  it('inherits the previous effective sprite-specific palette for samePalette sprites', () => {
+    const doc = createPaletteChainDocument([
+      { groupNo: 20, imageNo: 9, samePalette: false, pcx: createFake8BitPcx(true, [90, 10, 20]) },
+      { groupNo: 10, imageNo: 1, samePalette: true, pcx: createFake8BitPcx(false) },
+    ]);
+    const externalAct = new Uint8Array(256 * 3);
+    externalAct.set([1, 2, 3], (255 - 1) * 3);
+
+    const pack = convertSffDocumentToImageDataSpritePack(doc, {
+      externalPalette: externalAct,
+      preferExternalPalette: true,
+      paletteIndexOrder: 'reversed',
+    });
+
+    expect(Array.from(pack.sprites.get('10,1')!.imageData.data.slice(0, 4))).toEqual([90, 10, 20, 255]);
+    expect(pack.sprites.get('10,1')?.paletteMetadata).toMatchObject({
+      source: 'sprite-specific-chain',
+      ownerGroupNo: 20,
+      ownerImageNo: 9,
+      ownerSequence: 0,
+      externalActApplied: false,
+    });
+  });
+
+  it('lets linked sprites share source pixels while inheriting the linked node palette context', () => {
+    const doc = createPaletteChainDocument([
+      { groupNo: 10, imageNo: 0, samePalette: false, pcx: createFake8BitPcx(true, [200, 10, 20]) },
+      { groupNo: 20, imageNo: 0, samePalette: false, pcx: createFake8BitPcx(true, [20, 200, 40]) },
+      { groupNo: 10, imageNo: 1, samePalette: true, linkedIndex: 0 },
+    ]);
+
+    const pack = convertSffDocumentToImageDataSpritePack(doc);
+
+    expect(Array.from(pack.sprites.get('10,1')!.imageData.data.slice(0, 4))).toEqual([20, 200, 40, 255]);
+    expect(pack.sprites.get('10,1')?.paletteMetadata).toMatchObject({
+      linked: true,
+      linkedSource: 0,
+      source: 'sprite-specific-chain',
+      ownerGroupNo: 20,
+      ownerImageNo: 0,
+    });
+  });
 });
+
+function createPaletteChainDocument(entries: Array<{
+  groupNo: number;
+  imageNo: number;
+  samePalette: boolean;
+  pcx?: Uint8Array;
+  linkedIndex?: number;
+}>): SffDocument {
+  const sprites: SffDocument['sprites'] = [];
+  const totalLength = entries.reduce((sum, entry) => sum + (entry.pcx?.length ?? 0) + 32, 64);
+  const data = new Uint8Array(totalLength);
+  let offset = 96;
+  entries.forEach((entry, index) => {
+    const dataOffset = offset;
+    if (entry.pcx) data.set(entry.pcx, dataOffset);
+    sprites.push({
+      index,
+      nextOffset: 0,
+      length: entry.pcx?.length ?? 0,
+      xAxis: index,
+      yAxis: index,
+      groupNo: entry.groupNo,
+      imageNo: entry.imageNo,
+      linkedIndex: entry.linkedIndex ?? -1,
+      samePalette: entry.samePalette,
+      comment: '',
+      dataOffset,
+      isLinked: !entry.pcx && entry.linkedIndex !== undefined,
+    });
+    offset += (entry.pcx?.length ?? 0) + 32;
+  });
+
+  return {
+    header: {
+      signature: 'ElecbyteSpr\\0',
+      version: { major: 1, minor: 1, patch: 0, beta: 0 },
+      groupCount: 1,
+      imageCount: entries.length,
+      firstSubfileOffset: 64,
+      subheaderSize: 32,
+      paletteType: 1,
+    },
+    data,
+    sprites,
+  };
+}

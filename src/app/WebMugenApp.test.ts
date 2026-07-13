@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { MutableRefObject } from 'react';
 import type { CnsRuntimeTrace } from '../core/cns/CnsStateRuntime';
-import { WebMugenApp, appendRuntimeHistoryIfNeeded, createSourceOutline, findAirActionForLine, stripReadableRuntimeValueSummaries } from './WebMugenApp';
+import { WebMugenApp, appendRuntimeHistoryIfNeeded, createSourceOutline, drawAirPreview, findAirActionForLine, stripReadableRuntimeValueSummaries } from './WebMugenApp';
+import type { ImageDataSpritePack } from '../core/sprite/ImageDataSpriteTypes';
 
 describe('WebMugenApp runtime history', () => {
   it('keeps the game panel mounted while leaving hidden static content unmounted', () => {
@@ -184,7 +185,81 @@ describe('WebMugenApp runtime history', () => {
     expect(findAirActionForLine(outline, 2)).toBe(100);
     expect(findAirActionForLine(outline, 3)).toBe(101);
   });
+
+  it('draws AIR Preview from the same baked RGBA and palette cache identity as runtime sprites', () => {
+    const originalDocument = globalThis.document;
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: { createElement: () => fakePreviewSpriteCanvas() },
+    });
+    try {
+      const drawImage = vi.fn();
+      const mainCanvas = fakePreviewMainCanvas(drawImage);
+      const cache = new Map<string, HTMLCanvasElement>();
+      const pack = previewPack([12, 34, 56, 255], 'sprite:10,0#0');
+      const action = {
+        actionNo: 15001,
+        loopStartIndex: null,
+        defaultClsn1: [],
+        defaultClsn2: [],
+        elements: [{ groupNo: 10, imageNo: 0, offsetX: 0, offsetY: 0, duration: 2, flip: '', clsn1: [], clsn2: [] }],
+      };
+
+      drawAirPreview(mainCanvas, action, 0, pack, cache);
+      drawAirPreview(mainCanvas, action, 0, previewPack([90, 80, 70, 255], 'sprite:10,0#1'), cache);
+
+      expect(drawImage.mock.calls.map(([source]) => (source as PreviewCanvas).rgba)).toEqual([
+        [12, 34, 56, 255],
+        [90, 80, 70, 255],
+      ]);
+      expect(Array.from(cache.keys())).toEqual([
+        'asset=asset-a;sprite=10,0;palette=sprite:10,0#0',
+        'asset=asset-a;sprite=10,0;palette=sprite:10,0#1',
+      ]);
+    } finally {
+      Object.defineProperty(globalThis, 'document', { configurable: true, value: originalDocument });
+    }
+  });
 });
+
+type PreviewCanvas = HTMLCanvasElement & { rgba: number[] };
+
+function fakePreviewSpriteCanvas(): PreviewCanvas {
+  const canvas = { width: 0, height: 0, rgba: [] as number[] } as unknown as PreviewCanvas;
+  canvas.getContext = ((() => ({
+    putImageData(imageData: ImageData) { canvas.rgba = Array.from(imageData.data); },
+  })) as unknown) as HTMLCanvasElement['getContext'];
+  return canvas;
+}
+
+function fakePreviewMainCanvas(drawImage: ReturnType<typeof vi.fn>): HTMLCanvasElement {
+  return {
+    width: 220,
+    height: 160,
+    getContext: () => ({
+      clearRect: vi.fn(), fillRect: vi.fn(), strokeRect: vi.fn(), beginPath: vi.fn(), moveTo: vi.fn(),
+      lineTo: vi.fn(), stroke: vi.fn(), save: vi.fn(), restore: vi.fn(), translate: vi.fn(), scale: vi.fn(),
+      drawImage, fillText: vi.fn(),
+    }),
+  } as unknown as HTMLCanvasElement;
+}
+
+function previewPack(rgba: [number, number, number, number], paletteKey: string): ImageDataSpritePack {
+  return {
+    cacheKey: 'asset-a',
+    sprites: new Map([[
+      '10,0',
+      {
+        groupNo: 10,
+        imageNo: 0,
+        xAxis: 0,
+        yAxis: 0,
+        paletteKey,
+        imageData: { data: new Uint8ClampedArray(rgba), width: 1, height: 1 } as ImageData,
+      },
+    ]]),
+  };
+}
 
 function createTrace(patch: Partial<CnsRuntimeTrace>): CnsRuntimeTrace {
   return {

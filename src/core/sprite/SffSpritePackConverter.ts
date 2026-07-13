@@ -23,7 +23,9 @@ export function convertSffDocumentToImageDataSpritePack(
 ): ImageDataSpritePack {
   const sprites = new Map<string, ImageDataSprite>();
   const sharedPalette = options.externalPalette ?? findSharedPalette(document);
-  const decodedSources = new Map<number, ReturnType<typeof decodePcx>>();
+  const decodedSources = new Map<string, ReturnType<typeof decodePcx>>();
+  const sourcePaletteMetadata = new Map<number, PaletteResolution>();
+  let previousPalette: PaletteResolution | null = null;
 
   for (const sprite of document.sprites) {
     const sourceSprite = resolveLinkedSprite(document, sprite);
@@ -31,40 +33,151 @@ export function convertSffDocumentToImageDataSpritePack(
       continue;
     }
 
-    let pcx = decodedSources.get(sourceSprite.index);
-    if (!pcx) {
-      const rawData = getSpriteData(document, sourceSprite);
-      if (rawData.length === 0) {
-        continue;
-      }
+    const rawData = getSpriteData(document, sourceSprite);
+    if (rawData.length === 0) {
+      continue;
+    }
 
-      const embeddedPalette = tryReadVgaPalette(rawData);
-      const usesSharedPalette = sourceSprite.samePalette;
-      const palette = usesSharedPalette
-        ? sharedPalette
-        : embeddedPalette ?? sharedPalette;
+    const embeddedPalette = tryReadVgaPalette(rawData);
+    const paletteResolution = resolveSpritePalette({
+      sprite,
+      sourceSprite,
+      embeddedPalette,
+      previousPalette,
+      sharedPalette,
+      sourcePaletteMetadata,
+      externalPaletteSelected: options.externalPalette !== undefined,
+      externalPaletteIndexOrder: options.paletteIndexOrder ?? 'normal',
+    });
+
+    if (!sprite.isLinked) {
+      previousPalette = paletteResolution;
+      sourcePaletteMetadata.set(sprite.index, paletteResolution);
+    } else {
+      previousPalette = paletteResolution;
+    }
+
+    const decodeKey = `${sourceSprite.index}:${paletteResolution.key}`;
+    let pcx = decodedSources.get(decodeKey);
+    if (!pcx) {
       pcx = tryDecodeSpritePcx(rawData, {
-        externalPalette: palette ?? undefined,
-        preferExternalPalette: palette ? usesSharedPalette || embeddedPalette !== null : options.preferExternalPalette,
-        paletteIndexOrder: options.paletteIndexOrder,
+        externalPalette: paletteResolution.palette ?? undefined,
+        preferExternalPalette: paletteResolution.palette !== null || options.preferExternalPalette,
+        paletteIndexOrder: paletteResolution.paletteIndexOrder,
       }) ?? undefined;
-      if (pcx) decodedSources.set(sourceSprite.index, pcx);
+      if (pcx) decodedSources.set(decodeKey, pcx);
     }
     if (!pcx) {
       continue;
     }
 
+    const sampleIndex = pcx.indexedPixels.find((value) => value !== 0) ?? pcx.indexedPixels[0];
+    const sampleRgba = sampleIndex === undefined ? undefined : rgbaAt(pcx.rgbaPixels, pcx.indexedPixels, sampleIndex);
+    const imagePixels = new Uint8ClampedArray(pcx.rgbaPixels);
     sprites.set(spriteKey(sprite.groupNo, sprite.imageNo), {
       groupNo: sprite.groupNo,
       imageNo: sprite.imageNo,
       xAxis: sprite.xAxis,
       yAxis: sprite.yAxis,
-      imageData: new ImageData(pcx.rgbaPixels, pcx.width, pcx.height),
+      imageData: new ImageData(imagePixels, pcx.width, pcx.height),
+      paletteKey: paletteResolution.key,
+      paletteMetadata: {
+        source: paletteResolution.source,
+        ownerGroupNo: paletteResolution.owner?.groupNo,
+        ownerImageNo: paletteResolution.owner?.imageNo,
+        ownerSequence: paletteResolution.owner?.index,
+        samePaletteRaw: sprite.samePalette ? 1 : 0,
+        linked: sprite.isLinked,
+        linkedSource: sprite.isLinked ? sprite.linkedIndex : undefined,
+        embeddedPalette: embeddedPalette !== null,
+        externalActApplied: paletteResolution.externalActApplied,
+        sampleIndex,
+        sampleRgba,
+      },
     });
   }
 
   return {
     sprites: sprites as ImageDataSpritePack['sprites'],
+    cacheKey: `sffv1:${document.header.imageCount}:${document.header.firstSubfileOffset}:${options.externalPalette ? 'act' : 'embedded'}`,
+  };
+}
+
+type PaletteResolution = {
+  palette: Uint8Array | null;
+  paletteIndexOrder: 'normal' | 'reversed';
+  key: string;
+  source: string;
+  owner?: Pick<SffSpriteNode, 'groupNo' | 'imageNo' | 'index'>;
+  externalActApplied: boolean;
+};
+
+function resolveSpritePalette({
+  sprite,
+  sourceSprite,
+  embeddedPalette,
+  previousPalette,
+  sharedPalette,
+  sourcePaletteMetadata,
+  externalPaletteSelected,
+  externalPaletteIndexOrder,
+}: {
+  sprite: SffSpriteNode;
+  sourceSprite: SffSpriteNode;
+  embeddedPalette: Uint8Array | null;
+  previousPalette: PaletteResolution | null;
+  sharedPalette: Uint8Array | null;
+  sourcePaletteMetadata: ReadonlyMap<number, PaletteResolution>;
+  externalPaletteSelected: boolean;
+  externalPaletteIndexOrder: 'normal' | 'reversed';
+}): PaletteResolution {
+  if (!sprite.samePalette && !sprite.isLinked && embeddedPalette) {
+    return {
+      palette: embeddedPalette,
+      paletteIndexOrder: 'normal',
+      key: `sprite:${sprite.groupNo},${sprite.imageNo}#${sprite.index}`,
+      source: 'sprite-specific-pcx',
+      owner: sprite,
+      externalActApplied: false,
+    };
+  }
+
+  if (sprite.samePalette && previousPalette) {
+    return {
+      ...previousPalette,
+      key: `${previousPalette.key}:chain:${sprite.groupNo},${sprite.imageNo}#${sprite.index}`,
+      source: previousPalette.source === 'external-act' ? 'external-act-chain' : 'sprite-specific-chain',
+    };
+  }
+
+  if (sprite.isLinked) {
+    const sourcePalette = sourcePaletteMetadata.get(sourceSprite.index);
+    if (sourcePalette) {
+      return {
+        ...sourcePalette,
+        key: `${sourcePalette.key}:linked:${sprite.groupNo},${sprite.imageNo}#${sprite.index}`,
+        source: `${sourcePalette.source}-linked`,
+      };
+    }
+  }
+
+  if (embeddedPalette) {
+    return {
+      palette: embeddedPalette,
+      paletteIndexOrder: 'normal',
+      key: `sprite:${sourceSprite.groupNo},${sourceSprite.imageNo}#${sourceSprite.index}`,
+      source: 'sprite-specific-pcx',
+      owner: sourceSprite,
+      externalActApplied: false,
+    };
+  }
+
+  return {
+    palette: sharedPalette,
+    paletteIndexOrder: externalPaletteSelected ? externalPaletteIndexOrder : 'normal',
+    key: externalPaletteSelected ? 'external-act' : 'shared-embedded',
+    source: externalPaletteSelected ? 'external-act' : 'shared-embedded',
+    externalActApplied: externalPaletteSelected,
   };
 }
 
@@ -77,6 +190,22 @@ function tryDecodeSpritePcx(
   } catch {
     return null;
   }
+}
+
+function rgbaAt(
+  rgbaPixels: Uint8ClampedArray,
+  indexedPixels: Uint8Array,
+  sampleIndex: number,
+): [number, number, number, number] | undefined {
+  const pixelIndex = indexedPixels.findIndex((value) => value === sampleIndex);
+  if (pixelIndex < 0) return undefined;
+  const offset = pixelIndex * 4;
+  return [
+    rgbaPixels[offset],
+    rgbaPixels[offset + 1],
+    rgbaPixels[offset + 2],
+    rgbaPixels[offset + 3],
+  ];
 }
 
 export function resolveLinkedSprite(

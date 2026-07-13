@@ -2376,7 +2376,7 @@ function getAirElementDurationMs(element: AirElement | undefined): number {
   return Math.max(1, element.duration) * DEFAULT_FRAME_INTERVAL_MS;
 }
 
-function drawAirPreview(
+export function drawAirPreview(
   canvas: HTMLCanvasElement | null,
   action: AirAction | null,
   frameIndex: number,
@@ -2435,11 +2435,12 @@ function getSpriteCanvas(
   imageNo: number,
   cache: Map<string, HTMLCanvasElement>,
 ): HTMLCanvasElement | null {
-  const key = spriteKey(groupNo, imageNo);
+  const spriteId = spriteKey(groupNo, imageNo);
+  const sprite = sprites?.sprites.get(spriteId);
+  if (!sprite) return null;
+  const key = `asset=${sprites?.cacheKey ?? 'unknown'};sprite=${spriteId};palette=${sprite.paletteKey ?? 'baked-rgba'}`;
   const cached = cache.get(key);
   if (cached) return cached;
-  const sprite = sprites?.sprites.get(key);
-  if (!sprite) return null;
   const canvas = document.createElement('canvas');
   canvas.width = sprite.imageData.width;
   canvas.height = sprite.imageData.height;

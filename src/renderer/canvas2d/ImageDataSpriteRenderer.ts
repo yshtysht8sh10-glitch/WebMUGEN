@@ -21,10 +21,10 @@ export class ImageDataSpriteRenderer {
       this.assetIds.set(spritePack, assetId);
     }
     const spriteId = spriteKey(groupNo, imageNo);
-    const key = `asset=${assetId};sprite=${spriteId};palette=baked-rgba;ownpal=${ownPalette ? 1 : 0}`;
-    const cached = this.canvasCache.get(key);
     const sprite = spritePack.sprites.get(spriteId);
     if (!sprite) return undefined;
+    const key = `asset=${assetId};sprite=${spriteId};palette=${sprite.paletteKey ?? 'baked-rgba'};ownpal=${ownPalette ? 1 : 0}`;
+    const cached = this.canvasCache.get(key);
     let stats = this.colorStats.get(sprite.imageData);
     if (!stats) {
       stats = getColorStats(sprite.imageData.data);

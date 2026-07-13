@@ -4,6 +4,8 @@ import { createInitialGameState } from '../../core/engine/GameState';
 import type { ExplodRuntimeEntry } from '../../core/explod/ExplodSystem';
 import { convertSffDocumentToImageDataSpritePack, convertSffV1ToImageDataSpritePack } from '../../core/sprite/SffSpritePackConverter';
 import type { ImageDataSpritePack } from '../../core/sprite/ImageDataSpriteTypes';
+import { spriteKey } from '../../core/sprite/SpritePackLoader';
+import type { SpriteKey } from '../../core/sprite/SpriteTypes';
 import type { AirDocument } from '../../parser/air/AirTypes';
 import { parseSffV1 } from '../../parser/sff/SffParser';
 import type { SffDocument, SffSpriteNode } from '../../parser/sff/SffTypes';
@@ -35,9 +37,15 @@ describe('Explod indexed palette regression', () => {
     });
 
     expect(rgba(pack, '10,0')).toEqual([0, 0, 0, 0, 180, 20, 30, 255]);
-    expect(rgba(pack, '10,1')).toEqual([0, 0, 0, 0, 20, 80, 220, 255]);
+    expect(rgba(pack, '10,1')).toEqual([0, 0, 0, 0, 180, 20, 30, 255]);
     expect(rgba(pack, '10,2')).toEqual([0, 0, 0, 0, 20, 210, 70, 255]);
-    expect(rgba(pack, '10,3')).toEqual([0, 0, 0, 0, 20, 80, 220, 255]);
+    expect(rgba(pack, '10,3')).toEqual([0, 0, 0, 0, 20, 210, 70, 255]);
+    expect(pack.sprites.get('10,3')?.paletteMetadata).toMatchObject({
+      source: 'sprite-specific-chain',
+      externalActApplied: false,
+      sampleIndex: 1,
+      sampleRgba: [20, 210, 70, 255],
+    });
   });
 
   it('does not reuse a group/index canvas across different owner assets', () => {
@@ -128,15 +136,47 @@ describe('Explod indexed palette regression', () => {
     expect(explod.nonTransparent).toBeGreaterThan(0);
     expect(explod.nonBlack).toBeGreaterThan(0);
   });
+
+  it('keeps real T-H-M-A Action 15001 sprite-specific palettes before AIR Preview or Explod rendering', async () => {
+    const sff = await readFile('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.sff');
+    const act = await readFile('public/chars/T-H-M-A/T-H-M-A/Act/t3.act');
+    const pack = convertSffV1ToImageDataSpritePack(exactBuffer(sff), {
+      externalPalette: act,
+      preferExternalPalette: true,
+      paletteIndexOrder: 'reversed',
+    });
+
+    const expectedSamples = new Map([
+      [0, { sampleIndex: 161, sampleRgba: [206, 190, 157, 255] }],
+      [1, { sampleIndex: 161, sampleRgba: [206, 190, 157, 255] }],
+      [2, { sampleIndex: 162, sampleRgba: [174, 157, 125, 255] }],
+      [3, { sampleIndex: 163, sampleRgba: [141, 125, 93, 255] }],
+      [11, { sampleIndex: 161, sampleRgba: [206, 190, 157, 255] }],
+    ]);
+
+    for (let imageNo = 0; imageNo <= 11; imageNo += 1) {
+      const sprite = pack.sprites.get(spriteKey(15000, imageNo));
+      expect(sprite?.paletteMetadata).toMatchObject({
+        source: 'sprite-specific-pcx',
+        externalActApplied: false,
+        embeddedPalette: true,
+        samePaletteRaw: 0,
+      });
+      expect(colorStats(sprite!.imageData.data).nonBlack).toBeGreaterThan(0);
+    }
+    for (const [imageNo, expected] of expectedSamples) {
+      expect(pack.sprites.get(spriteKey(15000, imageNo))?.paletteMetadata).toMatchObject(expected);
+    }
+  });
 });
 
 type FakeCanvas = HTMLCanvasElement & { rgba: number[] };
 
 function fakeOffscreenCanvas(): FakeCanvas {
   const canvas = { width: 0, height: 0, rgba: [] as number[] } as unknown as FakeCanvas;
-  canvas.getContext = (() => ({
+  canvas.getContext = ((() => ({
     putImageData(imageData: ImageData) { canvas.rgba = Array.from(imageData.data); },
-  })) as HTMLCanvasElement['getContext'];
+  })) as unknown) as HTMLCanvasElement['getContext'];
   return canvas;
 }
 
@@ -152,7 +192,7 @@ function imagePack(color: [number, number, number, number]): ImageDataSpritePack
   return { sprites: new Map([['10,0', { groupNo: 10, imageNo: 0, xAxis: 0, yAxis: 0, imageData: new FakeImageData(new Uint8ClampedArray(color), 1, 1) as unknown as ImageData }]]) };
 }
 
-function rgba(pack: ImageDataSpritePack, key: string): number[] {
+function rgba(pack: ImageDataSpritePack, key: SpriteKey): number[] {
   return Array.from(pack.sprites.get(key)!.imageData.data);
 }
 

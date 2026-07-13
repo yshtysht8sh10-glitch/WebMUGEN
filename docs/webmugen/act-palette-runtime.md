@@ -20,6 +20,8 @@ Before this fix, `CharacterLoader` loaded `cns`, `air`, `cmd`, and `sff`, but di
 
 The visual symptom was KFM rendering with obviously wrong colors. After connecting ACT loading, the colors changed substantially, proving that the ACT path was active. The final correction was to use reversed palette index order when applying external ACT palettes to SFF/PCX indexed pixels.
 
+Issue #46 tightened the boundary: reversed ACT index lookup must not be applied to sprite-specific embedded PCX palettes. T-H-M-A Action 15001 uses `15000,0..11`, and those SFF nodes carry their own PCX palettes. Applying the DEF ACT reversal to those embedded palettes produced the AIR Preview color corruption before Explod runtime was involved.
+
 ## Runtime Flow
 
 The intended runtime path is:
@@ -68,12 +70,15 @@ If no ACT palette exists, the SFF/PCX path remains normal and uses the embedded/
 
 ### `src/core/sprite/SffSpritePackConverter.ts`
 
-Accepts palette conversion options and passes them into `decodePcx()`.
+Accepts palette conversion options, resolves SFF v1 palette ownership in subfile order, and passes the selected palette into `decodePcx()`.
 
-Important distinction:
+Important distinctions:
 
 - SFF/PCX default behavior remains normal.
 - Character DEF/ACT loading explicitly opts into external ACT palette behavior.
+- Sprite-specific PCX palettes always use normal source-index lookup.
+- `samePalette` nodes inherit the previous effective palette in SFF subfile order.
+- Linked sprites share source pixels but keep the linked node's palette context.
 
 ### `src/parser/pcx/PcxDecoder.ts`
 
@@ -103,7 +108,7 @@ Do not base transparency on the reversed color index. Index `0` means transparen
 
 ## Key Rule
 
-For DEF-loaded ACT palettes with SFF/PCX indexed sprites:
+For DEF-loaded ACT palettes with shared SFF/PCX indexed sprites:
 
 ```text
 ACT color lookup uses reversed palette index order.
@@ -116,7 +121,7 @@ This is why the final successful path is:
 paletteIndexOrder: 'reversed'
 ```
 
-only when an external ACT palette is selected.
+only when an external ACT palette is selected for a shared character-palette sprite. Sprite-specific embedded PCX palettes keep normal index order even when a DEF ACT is loaded.
 
 ## Regression Tests To Preserve
 
@@ -127,6 +132,10 @@ Keep these behaviors covered:
 - PCX decoding can prefer external palette over embedded palette.
 - PCX decoding supports reversed palette index order.
 - Source index `0` remains transparent even with reversed palette order.
+- SFF conversion preserves sprite-specific embedded palettes under DEF ACT selection.
+- `samePalette` inherits the previous effective palette by subfile order.
+- Linked sprite tests verify source pixels can be recolored by linked-node palette context.
+- T-H-M-A Action 15001 `15000,0..11` retains sprite-specific palette metadata and representative RGBA values before AIR Preview/Explod rendering.
 
 ## Current Limitations
 
