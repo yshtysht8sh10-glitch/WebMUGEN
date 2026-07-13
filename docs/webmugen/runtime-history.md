@@ -167,6 +167,8 @@ Browser audio foundation diagnostics use `audio_unsupported`, `audio_locked`, `a
 
 `raw.sound_pan` records owner/channel, relative or absolute mode, raw pixel value, normalized value, and `result=updated`. Missing/ended channels, missing required parameters, and adapters without pan support are explicit no-ops with `channel_not_found`, `channel_missing`, `pan_missing`, or `unsupported` reasons.
 
+`raw.explod_create` records owner, internal runtime id, duplicate-capable MUGEN id, animation scope/number, postype, raw offset, resolved world/screen position, Facing/vfacing, bindtime, removetime, sprite priority, and ontop. `raw.explod_create_rejected` identifies missing or invalid `anim`. These records prove production GameState creation only; render and lifecycle evidence begins with #31/#32.
+
 `raw.hit_power` records selected hit/guard `getpower` and `givepower`, both gauges before/after clamping, and proves the mutation occurred once for the accepted contact. `raw.hit_cornerpush` records contact class, edge condition, selected velocity offset, Facing, before/after attacker velocity, and applied/skipped reason. `raw.hit_snap` records Facing-relative offset and target before/after position. `raw.hit_sprpriority` records applied P1/P2 priorities.
 
 `raw.hit_fall_damage` is emitted by common-State `HitFallDamage` and records fall damage, independent `fall.kill`, Life before/after, and the originating ActiveHitDef id.

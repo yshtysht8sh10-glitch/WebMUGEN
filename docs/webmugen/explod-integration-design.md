@@ -2,13 +2,21 @@
 
 Updated: 2026-07-13
 
-This document records the Issue #25 audit and the integration contract for the Explod roadmap. It is a design gate, not evidence that Explod controllers are connected to the game.
+This document records the Issue #25 audit and the integration contract for the Explod roadmap. Issue #30 now connects the creation boundary described here; rendering and lifecycle evidence remain assigned to #31/#32.
+
+## Issue #30 implementation status
+
+Production `GameState` owns an `ExplodRuntimeState` with a monotonically allocated `runtimeId` independent from duplicate-capable MUGEN `id`. The normal `CnsStateRuntime` executor evaluates an Explod controller on its firing frame and emits an owner-scoped creation snapshot. The app coordinator applies that snapshot to `GameState.explods` and records `raw.explod_create` or `raw.explod_create_rejected` in Runtime History.
+
+The snapshot includes owner/animation source, anim, postype, resolved initial stage or screen position, Facing/vfacing, bind/removetime metadata, draw order, and the movement/render/pause fields scheduled for later Issues. P1/P2 ownership, duplicate MUGEN ids, expressions, all legacy postypes, invalid anim, round reset, and bundled KFM State 191 are covered by focused tests.
+
+Issue #30 intentionally does not advance animation, bind, removetime, velocity, or acceleration and does not draw the entry. Those are #31/#32/#34 responsibilities. `random`, exact camera space, Helper ownership, fightfx asset lookup, generic controller `persistent`, and `NumExplod` remain Partial.
 
 ## Audited implementation inventory
 
 | Existing code | What works | Production status | Decision |
 |---|---|---|---|
-| `core/explod/ExplodSystem.ts` | Immutable add, age, `removetime`, and id-based removal over a standalone `ExplodState`. | Imported only by its unit test and `RuntimeExplodIntegration`; absent from `GameState` and the app loop. | Reuse the immutable collection style and lifecycle test cases. Replace the entry/id model before integration. |
+| `core/explod/ExplodSystem.ts` | Owner-scoped production runtime entries, separate runtime/MUGEN ids, creation application, and diagnostics. | Connected to `GameState`, normal CNS creation, and the app coordinator by #30; render/step remain pending. | Use as the durable model for #31 onward. |
 | `core/runtime/RuntimeEventQueue.ts` | Defines prototype `explod` and `removeExplod` events. | No queue is owned or drained by the production CNS/game loop. Events lack owner identity and coordinate/animation ownership. | Reuse the event boundary concept. Replace the Explod payload with an owner-scoped request. |
 | `core/cns/CnsRuntimeEventAdapter.ts` | Converts literal `Explod`/`RemoveExplod` parameters in isolation. | Not called by `CnsStateRuntime`; does not use the normal CNS expression context. | Do not connect directly. Move parameter evaluation into the normal controller executor and emit the shared request type. |
 | `core/cns/CnsRuntimeSideEffectsPhase55.ts` | Recognizes Explod and emits an untyped command payload. | Not called by `CnsStateRuntime`; duplicates the event adapter. | Deprecation candidate after the production controller path exists. Keep until replacement tests cover its useful cases. |
@@ -102,7 +110,7 @@ The request queue is frame-local output from CNS execution, not durable state. T
 
 ## Issue boundaries
 
-1. **#30**: add the owner-scoped runtime model to `GameState`; connect literal/common Explod creation through CNS execution; allocate separate runtime/MUGEN ids; round cleanup; no renderer claim yet.
+1. **#30**: completed owner-scoped runtime model in `GameState`, expression-aware CNS creation, separate runtime/MUGEN ids, round cleanup, and Runtime History diagnostics; no renderer claim.
 2. **#31**: resolve owner AIR animation, position, Facing, and render layer in Canvas.
 3. **#32**: animation progression, `removetime`, bind lifecycle, and pause-independent baseline stepping.
 4. **#33/#38/#39**: owner-scoped Modify, Remove, and ExplodBindTime selection semantics.

@@ -115,3 +115,9 @@ HitDef activation evaluates its major numeric expressions and pairs into a typed
 - previous-state tracking for `PrevStateNo` and related triggers;
 - Helper and animation ownership beyond the implemented HitDef/TargetState/SelfState CNS owner ids;
 - runtime events for HitDef/contact lifecycle.
+
+## Explod creation runtime
+
+`GameState.explods` is the durable match-level collection. `CnsStateRuntime` emits frame-local owner-scoped creation snapshots; the app coordinator allocates the internal runtime id and appends the entry before Runtime History capture. A MUGEN `id` is selection metadata and may be duplicated; it is never used as the internal identity.
+
+Issue #30 resolves the initial legacy postype/Facing transform exactly once and stores both the original offset and resolved stage/screen position. Round restart constructs a new empty collection. The baseline does not yet step or render entries; #31/#32 own those paths.

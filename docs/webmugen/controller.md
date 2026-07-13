@@ -100,7 +100,7 @@ Examples:
 - `Projectile`
 - `Explod`
 
-The Issue #25 audit found a standalone Explod collection, event adapter, and integration prototype, but none is connected to `CnsStateRuntime`, production `GameState`, the app step loop, or Canvas rendering. The integration contract, ownership/id separation, lifecycle order, and per-Issue test boundaries are defined in `explod-integration-design.md`. Until those paths are implemented, Explod-family controllers remain safe no-ops rather than completed behavior.
+Issue #30 connects `Explod` creation through the normal expression-aware CNS executor into an owner-scoped `GameState.explods` collection. Internal runtime ids are independent from duplicate MUGEN ids. Creation freezes anim/source, postype and resolved initial coordinates, Facing, bind/removetime metadata, draw order, and later movement/render fields; missing or invalid anim is a diagnosed rejection. Round creation/restart clears the collection. Canvas rendering, animation/removetime/bind stepping, Modify/Remove/Bind controllers, Helper ownership, and exact camera/random semantics remain Partial per `explod-integration-design.md`.
 
 The common Target controllers now resolve the attacker's registered Target entries, optionally filtered by HitDef `id`, and mutate the matching player rather than assuming P1/P2 roles. `TargetVelSet`, `TargetVelAdd`, `TargetLifeAdd`, `TargetPowerAdd`, `TargetFacing`, `TargetState`, `TargetBind`, and `TargetDrop` are connected. A missing target is a diagnosed safe no-op, and `TargetDrop` prevents later Target controllers in the same State pass from finding the removed entry.
 

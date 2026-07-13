@@ -60,6 +60,7 @@ export function stepGameByCns(
   const projectileResult = resolveProjectileHits(directHitResult.players, steppedProjectiles);
 
   return applyFallbackStageRules({
+    ...current,
     frame: current.frame + 1,
     players: projectileResult.players,
     projectiles: projectileResult.projectiles,

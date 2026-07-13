@@ -8,6 +8,7 @@ import type { SndDocument } from '../parser/snd/SndTypes';
 import { findSndSample, sndSampleKey } from '../parser/snd/SndTypes';
 import { BrowserAudioRuntime, type AudioRuntimeDiagnostic } from '../core/audio/BrowserAudioRuntime';
 import type { SoundRuntimeEvent } from '../core/audio/SoundEvent';
+import { applyExplodCreateEvents, type ExplodCreateEvent } from '../core/explod/ExplodSystem';
 import type { AirAction, AirDocument, AirElement } from '../parser/air/AirTypes';
 import type { ImageDataSpritePack } from '../core/sprite/ImageDataSpriteTypes';
 import { spriteKey } from '../core/sprite/SpritePackLoader';
@@ -371,6 +372,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           }
 
           const soundEvents: SoundRuntimeEvent[] = [];
+          const explodEvents: ExplodCreateEvent[] = [];
+          const runtimeEventDiagnosticLines: string[] = [];
           const cnsResult = stepCnsStateRuntime(nextState, character.cns, {
             p1Commands,
             p2Commands,
@@ -383,8 +386,15 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             onSoundPlay: (event) => soundEvents.push(event),
             onSoundStop: (event) => soundEvents.push(event),
             onSoundPan: (event) => soundEvents.push(event),
+            onExplodCreate: (event) => explodEvents.push(event),
+            screenWidth: canvas.width,
           });
           nextState = cnsResult.state;
+          if (explodEvents.length > 0) {
+            const previousDiagnosticCount = nextState.hitDiagnosticLines?.length ?? 0;
+            nextState = applyExplodCreateEvents(nextState, explodEvents);
+            runtimeEventDiagnosticLines.push(...(nextState.hitDiagnosticLines ?? []).slice(previousDiagnosticCount));
+          }
           if (soundEvents.length > 0) {
             const soundLines = soundEvents.map((event) => {
               if (event.type === 'stop') {
@@ -416,7 +426,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
               });
               return `raw.sound_play owner=${event.ownerId} scope=${event.scope} sample=${event.group},${event.index} channel=${event.channel ?? '-'} volume=${event.volume} volumescale=${event.volumeScale} pan=${event.pan} freqmul=${event.frequencyMultiplier} loop=${event.loop ? 1 : 0} result=queued`;
             });
-            nextState = { ...nextState, hitDiagnosticLines: [...(nextState.hitDiagnosticLines ?? []), ...soundLines] };
+            runtimeEventDiagnosticLines.push(...soundLines);
           }
           nextReadableHistoryState = cnsResult.state;
           nextCnsTraces = cnsResult.traces;
@@ -430,6 +440,9 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           nextState = applyFallbackStageRules(nextState);
           nextState = resolveFallbackHits(nextState, character.air, runtimeSettingsRef.current.hitDiagnostics);
           nextState = applyFallbackHitRecovery(nextState, runtimeSettingsRef.current.hitDiagnostics);
+          if (runtimeEventDiagnosticLines.length > 0) {
+            nextState = { ...nextState, hitDiagnosticLines: [...(nextState.hitDiagnosticLines ?? []), ...runtimeEventDiagnosticLines] };
+          }
 
           nextRoundState = stepRoundState(nextRoundState, nextState);
           nextScore = updateRoundScore(nextScore, nextRoundState);

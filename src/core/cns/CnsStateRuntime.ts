@@ -7,6 +7,7 @@ import { removeTarget, selectTargets } from '../hitdef/TargetState';
 import { normalizeHitAttribute } from '../hitdef/HitAttribute';
 import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, readNumberExpression, type CnsRuntimeTriggerContext } from './CnsRuntimeTrigger';
 import type { SoundPanEvent, SoundPlayEvent, SoundStopEvent } from '../audio/SoundEvent';
+import type { ExplodCreateEvent, ExplodCreateRequest, ExplodPostype, RuntimeEntityRef } from '../explod/ExplodSystem';
 
 export type CnsRuntimeTrace = {
   playerId: 1 | 2;
@@ -32,6 +33,8 @@ export type CnsRuntimeInput = {
   onSoundPlay?: (event: SoundPlayEvent) => void;
   onSoundStop?: (event: SoundStopEvent) => void;
   onSoundPan?: (event: SoundPanEvent) => void;
+  onExplodCreate?: (event: ExplodCreateEvent) => void;
+  screenWidth?: number;
 };
 
 export type CnsRuntimeResult = { state: GameState; traces: CnsRuntimeTrace[] };
@@ -98,7 +101,6 @@ const RECOGNIZED_NO_OP_CONTROLLERS = new Map<string, string>([
   ['displaytoclipboard', 'DisplayToClipboard'],
   ['envcolor', 'EnvColor'],
   ['envshake', 'EnvShake'],
-  ['explod', 'Explod'],
   ['explodbindtime', 'ExplodBindTime'],
   ['fallenvshake', 'FallEnvShake'],
   ['forcefeedback', 'ForceFeedback'],
@@ -760,6 +762,7 @@ function executeController(
   if (type === 'playsnd') return playSound(player, opponent, controller, input, commands);
   if (type === 'stopsnd') return stopSound(player, opponent, controller, input, commands);
   if (type === 'sndpan') return panSound(player, opponent, controller, input, commands);
+  if (type === 'explod') return createExplod(player, opponent, controller, input, commands);
   if (type === 'selfstate') {
     const value = num(controller, 'value');
     if (value === null) return withPlayer(player, false, 'SelfState');
@@ -1067,6 +1070,110 @@ function panSound(
     mode: absolutePan !== null ? 'abspan' : relativePan !== null ? 'pan' : null,
   });
   return withPlayer(player, true, 'SndPan');
+}
+
+function createExplod(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const owner: RuntimeEntityRef = { entityId: player.id, rootPlayerId: player.id };
+  const rawAnim = controller.params.anim;
+  if (rawAnim === undefined) {
+    input.onExplodCreate?.({ type: 'rejected', owner, reason: 'missing_anim', rawAnim: '' });
+    return withPlayer(player, true, 'Explod');
+  }
+
+  const animText = String(rawAnim).trim();
+  const animationSource = /^f/i.test(animText) ? 'fightfx' as const : 'owner' as const;
+  const animExpression = /^[fs]/i.test(animText) ? animText.slice(1) : rawAnim;
+  const animNo = cnsValueToNumber(animExpression, player, input, commands, opponent);
+  if (animNo === null) {
+    input.onExplodCreate?.({ type: 'rejected', owner, reason: 'invalid_anim', rawAnim: animText });
+    return withPlayer(player, true, 'Explod');
+  }
+
+  const postype = normalizeExplodPostype(str(controller, 'postype'));
+  const offset = pair(controller, 'pos', player, input, commands, opponent, 0, 0);
+  const velocity = pair(controller, 'vel', player, input, commands, opponent, 0, 0, 'velocity');
+  const acceleration = pair(controller, 'accel', player, input, commands, opponent, 0, 0);
+  const scale = pair(controller, 'scale', player, input, commands, opponent, 1, 1);
+  const alpha = optionalPair(controller, 'alpha', player, input, commands, opponent);
+  const random = pair(controller, 'random', player, input, commands, opponent, 0, 0);
+  const facingParameter = normalizeFacing(num(controller, 'facing', player, input, commands, opponent) ?? 1);
+  const verticalFacing = normalizeFacing(num(controller, 'vfacing', player, input, commands, opponent) ?? 1);
+  const resolved = resolveExplodOrigin(postype, player, opponent, offset.x, offset.y, input.screenWidth ?? 640);
+  const facing = normalizeFacing(resolved.baseFacing * facingParameter);
+  const bindTime = Math.trunc(num(controller, 'bindtime', player, input, commands, opponent) ?? 1);
+  const rawRemoveTime = num(controller, 'removetime', player, input, commands, opponent) ?? -2;
+  const request: ExplodCreateRequest = {
+    mugenId: Math.trunc(num(controller, 'id', player, input, commands, opponent) ?? 0),
+    owner,
+    animationOwner: animationSource === 'owner' ? owner : null,
+    animationSource,
+    animNo: Math.trunc(animNo),
+    position: { x: resolved.x, y: resolved.y },
+    offset,
+    velocity: { x: velocity.x * facing, y: velocity.y },
+    acceleration: { x: acceleration.x * facing, y: acceleration.y },
+    facing,
+    verticalFacing,
+    postype,
+    coordinateSpace: resolved.coordinateSpace,
+    bind: resolved.bindTargetEntityId === null || bindTime === 0 ? null : {
+      targetEntityId: resolved.bindTargetEntityId,
+      remaining: bindTime,
+      offsetX: offset.x,
+      offsetY: offset.y,
+    },
+    removeTime: rawRemoveTime === -1 ? null : Math.trunc(rawRemoveTime),
+    spritePriority: Math.trunc(num(controller, 'sprpriority', player, input, commands, opponent) ?? 0),
+    onTop: (num(controller, 'ontop', player, input, commands, opponent) ?? 0) !== 0,
+    pauseMoveTime: Math.trunc(num(controller, 'pausemovetime', player, input, commands, opponent) ?? 0),
+    superMoveTime: Math.trunc(num(controller, 'supermovetime', player, input, commands, opponent) ?? 0),
+    removeOnGetHit: (num(controller, 'removeongethit', player, input, commands, opponent) ?? 0) !== 0,
+    random,
+    render: {
+      transparency: str(controller, 'trans'),
+      alpha: alpha ? { source: alpha.x, destination: alpha.y } : null,
+      scaleX: scale.x,
+      scaleY: scale.y,
+      ownPalette: (num(controller, 'ownpal', player, input, commands, opponent) ?? (animationSource === 'fightfx' ? 1 : 0)) !== 0,
+      shadow: Math.trunc(num(controller, 'shadow', player, input, commands, opponent) ?? 0),
+    },
+  };
+  input.onExplodCreate?.({ type: 'create', request });
+  return withPlayer(player, true, 'Explod');
+}
+
+function normalizeExplodPostype(value: string | null): ExplodPostype {
+  const normalized = value?.toLowerCase();
+  return normalized === 'p2' || normalized === 'front' || normalized === 'back' || normalized === 'left' || normalized === 'right' || normalized === 'none'
+    ? normalized
+    : 'p1';
+}
+
+function resolveExplodOrigin(
+  postype: ExplodPostype,
+  player: PlayerState,
+  opponent: PlayerState,
+  offsetX: number,
+  offsetY: number,
+  screenWidth: number,
+): { x: number; y: number; baseFacing: 1 | -1; coordinateSpace: 'stage' | 'screen'; bindTargetEntityId: number | null } {
+  if (postype === 'p1') return { x: player.x + offsetX * player.facing, y: player.y + offsetY, baseFacing: player.facing, coordinateSpace: 'stage', bindTargetEntityId: player.id };
+  if (postype === 'p2') return { x: opponent.x + offsetX * opponent.facing, y: opponent.y + offsetY, baseFacing: opponent.facing, coordinateSpace: 'stage', bindTargetEntityId: opponent.id };
+  if (postype === 'front') return { x: (player.facing === 1 ? screenWidth : 0) + offsetX, y: offsetY, baseFacing: 1, coordinateSpace: 'screen', bindTargetEntityId: null };
+  if (postype === 'back') return { x: (player.facing === 1 ? 0 : screenWidth) + offsetX * player.facing, y: offsetY, baseFacing: player.facing, coordinateSpace: 'screen', bindTargetEntityId: null };
+  if (postype === 'left') return { x: offsetX, y: offsetY, baseFacing: 1, coordinateSpace: 'screen', bindTargetEntityId: null };
+  if (postype === 'right') return { x: screenWidth + offsetX, y: offsetY, baseFacing: 1, coordinateSpace: 'screen', bindTargetEntityId: null };
+  return { x: offsetX, y: offsetY, baseFacing: 1, coordinateSpace: 'stage', bindTargetEntityId: null };
+}
+
+function normalizeFacing(value: number): 1 | -1 {
+  return value < 0 ? -1 : 1;
 }
 
 function activateHitDef(
@@ -1460,6 +1567,38 @@ function num(
   opponent?: PlayerState,
 ): number | null {
   return cnsValueToNumber(controller.params[key.toLowerCase()], player, input, commands, opponent);
+}
+
+function pair(
+  controller: CnsStateController,
+  key: string,
+  player: PlayerState,
+  input: CnsRuntimeInput,
+  commands: ReadonlySet<string> | undefined,
+  opponent: PlayerState,
+  defaultX: number,
+  defaultY: number,
+  alias?: string,
+): { x: number; y: number } {
+  const value = controller.params[key.toLowerCase()] ?? (alias ? controller.params[alias.toLowerCase()] : undefined);
+  if (value === undefined) return { x: defaultX, y: defaultY };
+  const values = Array.isArray(value) ? value : String(value).split(',').map((part) => part.trim());
+  return {
+    x: cnsValueToNumber(values[0], player, input, commands, opponent) ?? defaultX,
+    y: cnsValueToNumber(values[1], player, input, commands, opponent) ?? defaultY,
+  };
+}
+
+function optionalPair(
+  controller: CnsStateController,
+  key: string,
+  player: PlayerState,
+  input: CnsRuntimeInput,
+  commands: ReadonlySet<string> | undefined,
+  opponent: PlayerState,
+): { x: number; y: number } | null {
+  if (controller.params[key.toLowerCase()] === undefined) return null;
+  return pair(controller, key, player, input, commands, opponent, 0, 0);
 }
 
 function hasNum(

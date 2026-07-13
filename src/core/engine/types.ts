@@ -1,4 +1,5 @@
 import type { InputBuffer } from '../../input/InputBuffer';
+import type { ExplodRuntimeState } from '../explod/ExplodSystem';
 
 export type PlayerInput = {
   left: boolean;
@@ -218,6 +219,7 @@ export type GameState = {
   players: [PlayerState, PlayerState];
   projectiles: ProjectileState[];
   hitEvents: HitEvent[];
+  explods: ExplodRuntimeState;
   hitDiagnosticLines?: string[];
   commandBuffers?: [InputBuffer, InputBuffer];
   commandNames?: [ReadonlySet<string>, ReadonlySet<string>];

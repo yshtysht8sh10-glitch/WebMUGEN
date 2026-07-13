@@ -153,7 +153,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | DisplayToClipboard | Partial | Recognized safe no-op. Debug clipboard not implemented. |
 | EnvColor | Partial | Recognized safe no-op. Screen color flash not implemented. |
 | EnvShake | Partial | Recognized safe no-op. Screen shake not implemented. |
-| Explod | Partial | Issue #25 audit: recognized safe no-op; a standalone collection/event prototype exists but is not connected to production CNS, GameState, step, or renderer paths. Integration design is documented; game effect begins with #30/#31. |
+| Explod | Partial | Issue #30: production CNS evaluates owner-scoped creation snapshots into `GameState.explods`, with separate runtime/MUGEN ids, duplicate ids, P1/P2 ownership, legacy postype/Facing initial coordinates, major field storage, rejected-anim diagnostics, round cleanup, focused tests, and bundled KFM evidence. AIR/SFF rendering, animation/removetime/bind stepping, random/camera exactness, Helper ownership, `persistent`, and `NumExplod` remain incomplete. |
 | ExplodBindTime | Partial | Recognized safe no-op. Issue #25 defines owner-scoped id/bind selection; runtime behavior is scheduled for #39 after #30-#32. |
 | FallEnvShake | Partial | Recognized safe no-op. Landing shake parameters are not connected to HitFeedback. |
 | ForceFeedback | Partial | Recognized safe no-op. Input device feedback not implemented. |
@@ -356,7 +356,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | MoveType | Complete | Basic support. |
 | Name | Partial | String source exists; metadata defaults empty. |
 | NumEnemy | Partial | Safe default 1. |
-| NumExplod | Partial | Safe default 0. Issue #25 requires production lookup by owner plus optional MUGEN id after the runtime model is connected. |
+| NumExplod | Partial | Production Explod entries now exist, but this trigger still returns safe default 0; owner plus optional MUGEN id lookup remains unconnected. |
 | NumHelper | Partial | Safe default 0. |
 | NumPartner | Partial | Safe default 0. |
 | NumProj | Partial | Safe default 0. |

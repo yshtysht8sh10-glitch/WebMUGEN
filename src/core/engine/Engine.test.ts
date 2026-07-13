@@ -1,6 +1,7 @@
 import { describe, it } from 'vitest';
 import { stepGame } from './Engine';
 import type { FrameInput, GameState, PlayerInput, PlayerState } from './types';
+import { createInitialExplodRuntimeState } from '../explod/ExplodSystem';
 
 function createPlayer(overrides: Partial<PlayerState> = {}): PlayerState {
   return {
@@ -32,6 +33,7 @@ function createState(player: PlayerState = createPlayer()): GameState {
     players: [player, createPlayer({ id: 2, x: 420, facing: -1 })],
     projectiles: [],
     hitEvents: [],
+    explods: createInitialExplodRuntimeState(),
   };
 }
 
