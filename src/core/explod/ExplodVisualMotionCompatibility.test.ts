@@ -45,7 +45,7 @@ describe('Explod visual and motion compatibility fixture', () => {
     expect(drawState).toContainEqual({ composite: 'lighter', alpha: 0.5 });
     expect(diagnostics.join('\n')).toContain('trans=addalpha alpha=(128,128) composite=lighter ownpal=1 shadow=(4,5,6)');
     expect(diagnostics.join('\n')).toContain('limitation=destination_alpha_approximated');
-    expect(diagnostics.join('\n')).toContain('limitation_ownpal=palette_isolation_unverified');
+    expect(diagnostics.join('\n')).toContain('limitation_ownpal=dynamic_palette_effects_unverified');
     expect(diagnostics.join('\n')).toContain('limitation_shadow=no_effect_shadow_pass');
   });
 

@@ -65,6 +65,12 @@ The loader retains WAV payload bytes. Zero-byte, duplicate key, and non-RIFF/WAV
 
 A missing SND or a fatal invalid header does not discard otherwise valid character assets. `CharacterAssets.sounds` is `null` and `loadDiagnostics` records the sound path/error. Missing required CNS/CMD/AIR remains fatal. This separation allows silent character loading while keeping the audio failure observable.
 
+## SFF v1 palette policy
+
+The SFF v1 converter resolves palette selection before indexed PCX pixels become RGBA. A node with the shared-palette flag uses the DEF-selected ACT palette when one is available; a node without that flag keeps its embedded PCX palette. Linked sprites reuse their source node's decoded pixels and palette while retaining the linked node's axes. PCX index 0 remains transparent in both paths.
+
+Canvas bitmap caching is scoped by the loaded `ImageDataSpritePack` identity, sprite group/index, and the Explod `ownpal` isolation flag. Identical group/index values from different character owners therefore cannot reuse one owner's RGBA canvas. SFF v2 is rejected explicitly by the v1 parser; native SFF v2 decoding and dynamic palette effects remain unsupported rather than being interpreted as v1 data.
+
 ## Why `common.cmd` exists
 
 `common.cmd` is WebMUGEN's common control layer.

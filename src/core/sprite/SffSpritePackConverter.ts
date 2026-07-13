@@ -23,6 +23,7 @@ export function convertSffDocumentToImageDataSpritePack(
 ): ImageDataSpritePack {
   const sprites = new Map<string, ImageDataSprite>();
   const sharedPalette = options.externalPalette ?? findSharedPalette(document);
+  const decodedSources = new Map<number, ReturnType<typeof decodePcx>>();
 
   for (const sprite of document.sprites) {
     const sourceSprite = resolveLinkedSprite(document, sprite);
@@ -30,16 +31,25 @@ export function convertSffDocumentToImageDataSpritePack(
       continue;
     }
 
-    const rawData = getSpriteData(document, sourceSprite);
-    if (rawData.length === 0) {
-      continue;
-    }
+    let pcx = decodedSources.get(sourceSprite.index);
+    if (!pcx) {
+      const rawData = getSpriteData(document, sourceSprite);
+      if (rawData.length === 0) {
+        continue;
+      }
 
-    const pcx = tryDecodeSpritePcx(rawData, {
-      externalPalette: sharedPalette ?? undefined,
-      preferExternalPalette: options.preferExternalPalette,
-      paletteIndexOrder: options.paletteIndexOrder,
-    });
+      const embeddedPalette = tryReadVgaPalette(rawData);
+      const usesSharedPalette = sourceSprite.samePalette;
+      const palette = usesSharedPalette
+        ? sharedPalette
+        : embeddedPalette ?? sharedPalette;
+      pcx = tryDecodeSpritePcx(rawData, {
+        externalPalette: palette ?? undefined,
+        preferExternalPalette: palette ? usesSharedPalette || embeddedPalette !== null : options.preferExternalPalette,
+        paletteIndexOrder: options.paletteIndexOrder,
+      }) ?? undefined;
+      if (pcx) decodedSources.set(sourceSprite.index, pcx);
+    }
     if (!pcx) {
       continue;
     }

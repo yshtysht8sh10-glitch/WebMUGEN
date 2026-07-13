@@ -12,6 +12,10 @@ export function parseSffV1(buffer: ArrayBuffer): SffDocument {
     throw new Error(`Invalid SFF signature: ${header.signature}`);
   }
 
+  if (header.version.major >= 2) {
+    throw new Error('SFF v2 is not supported by the SFF v1 parser.');
+  }
+
   if (header.subheaderSize !== SFF_V1_SUBHEADER_SIZE) {
     throw new Error(`Unsupported SFF subheader size: ${header.subheaderSize}`);
   }

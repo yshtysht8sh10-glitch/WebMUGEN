@@ -67,7 +67,7 @@ describe('ExplodBindTime explicit-ID compatibility fixture', () => {
 
     const drawImage = vi.fn();
     const diagnostics = renderer(drawImage).render(state);
-    expect(drawImage).toHaveBeenCalledTimes(1);
+    expect(drawImage).toHaveBeenCalledTimes(2);
     expect(diagnostics.join('\n')).toContain('screen=(305,280)');
 
     state = { ...state, frame: 11, players: [{ ...state.players[0], x: 360 }, state.players[1]] };

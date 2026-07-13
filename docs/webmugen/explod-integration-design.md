@@ -10,7 +10,7 @@ Production `GameState` owns an `ExplodRuntimeState` with a monotonically allocat
 
 The snapshot includes owner/animation source, anim, postype, resolved initial stage or screen position, Facing/vfacing, bind/removetime metadata, draw order, and the movement/render/pause fields scheduled for later Issues. P1/P2 ownership, duplicate MUGEN ids, expressions, all legacy postypes, invalid anim, round reset, and bundled KFM State 191 are covered by focused tests.
 
-Issue #31 resolves each visible entry through owner AIR/SFF; #32 advances animation/removetime/binds; #33/#38/#39 connect ordered modify/remove/bind-time events. Issue #34 integrates movement/render extensions and owner-hit removal; #35 integrates Pause/SuperPause; #36 adds isolated HitDef spark entries to the same lifecycle and renderer. Hit sparks carry `effectKind=hit-spark`, use `removetime=-2`, and are excluded from controller ID selection. Ownpal isolation, destination-alpha, subtractive blend, shadow rendering, common fightfx assets, omitted controller-id semantics, non-player owners, camera exactness, generic `persistent`, and `NumExplod` remain Partial.
+Issue #31 resolves each visible entry through owner AIR/SFF; #32 advances animation/removetime/binds; #33/#38/#39 connect ordered modify/remove/bind-time events. Issue #34 integrates movement/render extensions and owner-hit removal; #35 integrates Pause/SuperPause; #36 adds isolated HitDef spark entries to the same lifecycle and renderer. Issue #45 fixes SFF v1 shared-versus-sprite-specific palette selection and asset-scoped Canvas caching for both normal sprites and Explods. Hit sparks carry `effectKind=hit-spark`, use `removetime=-2`, and are excluded from controller ID selection. Dynamic ownpal effects, SFF v2, destination-alpha, subtractive blend, shadow rendering, common fightfx assets, omitted controller-id semantics, non-player owners, camera exactness, generic `persistent`, and `NumExplod` remain Partial.
 
 ## Audited implementation inventory
 
@@ -104,6 +104,7 @@ The request queue is frame-local output from CNS execution, not durable state. T
 - Creation `random=x,y` samples one fixed displacement per axis from `[-floor(n/2), n-floor(n/2)-1]`; tests inject the random source. Owner-relative X displacement is converted by Facing once and the sampled offset remains stable through binding.
 - After binding ends, each normal tick adds world velocity to position, then acceleration to velocity. Creation and bound ticks do not consume movement. Screen-space entries use the same stored screen-coordinate velocity.
 - Canvas applies `scaleX/scaleY` inside Explod Facing/vfacing/AIR flip. `add`, `add1`, and `addalpha` use Canvas `lighter`; addalpha source is mapped to `globalAlpha`, while destination alpha is diagnosed as approximate.
+- Normal player and Explod draws use the same owner-scoped AIR/SFF lookup. Indexed PCX conversion selects the shared ACT only for shared-palette SFF v1 nodes, preserves sprite-specific embedded palettes, and treats index 0 as transparent. The Canvas cache key includes asset-pack identity, group/index, baked palette identity, and `ownpal`, preventing cross-owner reuse. `ownpal=1` has an isolated cached surface, but later dynamic PalFX mutation remains unimplemented.
 
 ## Pause, stepping, and cleanup contract
 

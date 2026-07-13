@@ -40,7 +40,7 @@ describe('RemoveExplod explicit-ID compatibility fixture', () => {
     expect(state.explods.entries).toHaveLength(1);
     const drawImage = vi.fn();
     const diagnostics = rendererForFixture(drawImage).render(state);
-    expect(drawImage).toHaveBeenCalledTimes(1);
+    expect(drawImage).toHaveBeenCalledTimes(2);
     expect(diagnostics.filter((line) => line.includes('raw.explod_draw'))).toHaveLength(1);
     expect(diagnostics.join('\n')).not.toContain('internalId=2');
     expect(diagnostics.join('\n')).not.toContain('internalId=3');

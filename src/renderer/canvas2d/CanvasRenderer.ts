@@ -135,7 +135,7 @@ export class CanvasRenderer {
           currentElement.element.flip,
         );
 
-        if (drawn) continue;
+        if (drawn.drawn) continue;
       }
 
       ctx.save();
@@ -154,8 +154,9 @@ export class CanvasRenderer {
   }
 
   private drawPlayer(ctx: CanvasRenderingContext2D, player: PlayerState, color: string): void {
-    const currentElement = this.airDocument
-      ? getCurrentAnimationElement(this.airDocument, player.animNo, player.animTime)
+    const assets = this.ownerAssets[player.id] ?? this.defaultAssets();
+    const currentElement = assets.airDocument
+      ? getCurrentAnimationElement(assets.airDocument, player.animNo, player.animTime)
       : null;
 
     if (currentElement) {
@@ -169,9 +170,10 @@ export class CanvasRenderer {
         currentElement.element.offsetX,
         currentElement.element.offsetY,
         currentElement.element.flip,
+        assets,
       );
 
-      if (drawn) return;
+      if (drawn.drawn) return;
     }
 
     this.drawFallbackPlayer(ctx, player, color, currentElement);
@@ -183,7 +185,7 @@ export class CanvasRenderer {
     ctx.save();
     ctx.globalCompositeOperation = blend.compositeOperation;
     ctx.globalAlpha = blend.globalAlpha;
-    const drawn = this.drawSpriteByElement(
+    const drawResult = this.drawSpriteByElement(
       ctx,
       currentElement.element.groupNo,
       currentElement.element.imageNo,
@@ -197,9 +199,10 @@ export class CanvasRenderer {
       entry.verticalFacing,
       entry.render.scaleX,
       entry.render.scaleY,
+      entry.render.ownPalette,
     );
     ctx.restore();
-    return `raw.explod_draw internalId=${entry.runtimeId} mugenId=${entry.mugenId} anim=${entry.animationSource === 'fightfx' ? 'F' : ''}${entry.animNo} elem=${currentElement.elementIndex + 1} screen=(${frame.screenX},${frame.screenY}) facing=${entry.facing} vfacing=${entry.verticalFacing} scale=(${entry.render.scaleX},${entry.render.scaleY}) trans=${entry.render.transparency ?? 'none'} alpha=(${entry.render.alpha?.source ?? 256},${entry.render.alpha?.destination ?? 0}) composite=${blend.compositeOperation} ownpal=${entry.render.ownPalette ? 1 : 0} shadow=(${entry.render.shadow.red},${entry.render.shadow.green},${entry.render.shadow.blue}) sprpriority=${entry.spritePriority} ontop=${entry.onTop ? 1 : 0} result=${drawn ? 'drawn' : 'hidden'}${drawn ? '' : ' reason=sprite_not_found'}${blend.limitation ? ` limitation=${blend.limitation}` : ''}${entry.render.ownPalette ? ' limitation_ownpal=palette_isolation_unverified' : ''}${entry.render.shadow.red || entry.render.shadow.green || entry.render.shadow.blue ? ' limitation_shadow=no_effect_shadow_pass' : ''}`;
+    return `raw.explod_draw internalId=${entry.runtimeId} mugenId=${entry.mugenId} anim=${entry.animationSource === 'fightfx' ? 'F' : ''}${entry.animNo} elem=${currentElement.elementIndex + 1} screen=(${frame.screenX},${frame.screenY}) facing=${entry.facing} vfacing=${entry.verticalFacing} scale=(${entry.render.scaleX},${entry.render.scaleY}) trans=${entry.render.transparency ?? 'none'} alpha=(${entry.render.alpha?.source ?? 256},${entry.render.alpha?.destination ?? 0}) composite=${blend.compositeOperation} ownpal=${entry.render.ownPalette ? 1 : 0} shadow=(${entry.render.shadow.red},${entry.render.shadow.green},${entry.render.shadow.blue}) sprpriority=${entry.spritePriority} ontop=${entry.onTop ? 1 : 0} result=${drawResult.drawn ? 'drawn' : 'hidden'}${drawResult.drawn ? ` ${drawResult.diagnostic}` : ' reason=sprite_not_found'}${blend.limitation ? ` limitation=${blend.limitation}` : ''}${entry.render.ownPalette ? ' limitation_ownpal=dynamic_palette_effects_unverified' : ''}${entry.render.shadow.red || entry.render.shadow.green || entry.render.shadow.blue ? ' limitation_shadow=no_effect_shadow_pass' : ''}`;
   }
 
   private drawSpriteByElement(
@@ -216,21 +219,22 @@ export class CanvasRenderer {
     verticalFacing: 1 | -1 = 1,
     scaleX = 1,
     scaleY = 1,
-  ): boolean {
+    ownPalette = false,
+  ): { drawn: boolean; diagnostic: string } {
     const flipX = flip.toUpperCase().includes('H');
     const key = spriteKey(groupNo, imageNo);
 
     const imageDataSprite = assets.imageDataSpritePack?.sprites.get(key);
     if (imageDataSprite) {
-      const canvas = this.imageDataSpriteRenderer.findCanvas(assets.imageDataSpritePack, groupNo, imageNo);
-      if (!canvas) return false;
+      const resolved = this.imageDataSpriteRenderer.resolveCanvas(assets.imageDataSpritePack, groupNo, imageNo, ownPalette);
+      if (!resolved) return { drawn: false, diagnostic: '' };
 
       ctx.save();
       ctx.translate(x, y);
       ctx.scale(facing * (flipX ? -1 : 1) * scaleX, verticalFacing * scaleY);
-      ctx.drawImage(canvas, -imageDataSprite.xAxis + offsetX, -imageDataSprite.yAxis + offsetY);
+      ctx.drawImage(resolved.canvas, -imageDataSprite.xAxis + offsetX, -imageDataSprite.yAxis + offsetY);
       ctx.restore();
-      return true;
+      return { drawn: true, diagnostic: resolved.diagnostic };
     }
 
     const sprite = findSprite(assets.spritePack, groupNo, imageNo);
@@ -240,10 +244,10 @@ export class CanvasRenderer {
       ctx.scale(facing * (flipX ? -1 : 1) * scaleX, verticalFacing * scaleY);
       ctx.drawImage(sprite.image, -sprite.xAxis + offsetX, -sprite.yAxis + offsetY);
       ctx.restore();
-      return true;
+      return { drawn: true, diagnostic: 'sprite=bitmap cache=external' };
     }
 
-    return false;
+    return { drawn: false, diagnostic: '' };
   }
 
   private drawFallbackPlayer(

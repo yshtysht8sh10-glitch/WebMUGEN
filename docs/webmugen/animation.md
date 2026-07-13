@@ -93,6 +93,6 @@ Explod rendering resolves the current AIR element from the creating owner's asse
 
 Explod lifecycle advances AIR time before each following-frame render. Finite non-loop actions reach AnimTime 0 and satisfy the default `removetime=-2`; `LoopStart` and negative-duration elements do not. A positive removetime counts the creation frame as its first displayed tick, `0` never reaches the renderer, and `-1` remains until an explicit later removal path.
 
-Issue #34 applies Explod scale after Facing/vfacing and AIR horizontal flip, and maps additive modes to Canvas `lighter`. `addalpha` source alpha maps to `globalAlpha`; destination alpha, subtractive blend, independent ownpal mutation, and a colored shadow pass remain diagnosed Partial behavior.
+Issue #34 applies Explod scale after Facing/vfacing and AIR horizontal flip, and maps additive modes to Canvas `lighter`. `addalpha` source alpha maps to `globalAlpha`. Issue #45 makes normal player and Explod draws resolve the same owner-scoped AIR/SFF RGBA data and isolates the bitmap cache by asset identity and `ownpal`; runtime diagnostics include non-transparent/non-black RGBA counts and cache identity. Dynamic palette mutation after creation, destination alpha, subtractive blend, and a colored shadow pass remain diagnosed Partial behavior.
 
 Do not promote animation triggers to Complete just because a simple KFM action works. Full AIR timing, loop behavior, and target/common animation ownership need broader verification.
