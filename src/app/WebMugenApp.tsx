@@ -4,6 +4,9 @@ import { createInitialGameState } from '../core/engine/GameState';
 import type { GameState } from '../core/engine/types';
 import { createSampleCharacterAssets, loadAppCharacter } from './AppCharacterLoader';
 import type { CharacterSourceFile } from '../core/character/CharacterTypes';
+import type { SndDocument } from '../parser/snd/SndTypes';
+import { sndSampleKey } from '../parser/snd/SndTypes';
+import { BrowserAudioRuntime, type AudioRuntimeDiagnostic } from '../core/audio/BrowserAudioRuntime';
 import type { AirAction, AirDocument, AirElement } from '../parser/air/AirTypes';
 import type { ImageDataSpritePack } from '../core/sprite/ImageDataSpriteTypes';
 import { spriteKey } from '../core/sprite/SpritePackLoader';
@@ -143,6 +146,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
   const inputRef = useRef<BrowserInput | null>(null);
   const inputConfigRef = useRef<InputConfig>(loadInputConfig());
   const runtimeSettingsRef = useRef<RuntimeSettings>(loadRuntimeSettings());
+  const audioRuntimeRef = useRef<BrowserAudioRuntime | null>(null);
+  const characterSoundsRef = useRef<SndDocument | null>(null);
   const lastFrameTickTimeRef = useRef<number | null>(null);
   const frameNoRef = useRef(0);
   const runtimeHistoryRef = useRef<string[]>([]);
@@ -182,6 +187,10 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
   const [copyStatus, setCopyStatus] = useState('');
   const [inputConfig, setInputConfigState] = useState<InputConfig>(inputConfigRef.current);
   const [runtimeSettings, setRuntimeSettingsState] = useState<RuntimeSettings>(runtimeSettingsRef.current);
+  const [audioStatus, setAudioStatus] = useState<'locked' | 'unlocked' | 'unsupported'>('locked');
+  const [audioMuted, setAudioMuted] = useState(false);
+  const [audioMasterVolume, setAudioMasterVolume] = useState(1);
+  const [audioDiagnostic, setAudioDiagnostic] = useState('audio=-');
   const [characterPath, setCharacterPathState] = useState(loadCharacterPath());
   const [cnsSourceFiles, setCnsSourceFiles] = useState<CharacterSourceFile[]>([]);
   const [loadedAir, setLoadedAir] = useState<AirDocument | null>(null);
@@ -207,6 +216,35 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
       setRuntimeHistoryVersion((version) => version + 1);
     }, RUNTIME_HISTORY_RENDER_THROTTLE_MS);
   };
+
+  useEffect(() => {
+    let active = true;
+    const runtime = new BrowserAudioRuntime(undefined, (diagnostic: AudioRuntimeDiagnostic) => {
+      if (!active) return;
+      setAudioDiagnostic(`audio ${diagnostic.code}${diagnostic.sampleKey ? ` sample=${diagnostic.sampleKey}` : ''} ${diagnostic.message}`);
+    });
+    audioRuntimeRef.current = runtime;
+
+    const unlock = () => {
+      void runtime.unlock().then((unlocked) => {
+        setAudioStatus(unlocked ? 'unlocked' : runtime.status === 'unsupported' ? 'unsupported' : 'locked');
+        if (unlocked) {
+          window.removeEventListener('pointerdown', unlock);
+          window.removeEventListener('keydown', unlock);
+        }
+      });
+    };
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
+
+    return () => {
+      active = false;
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+      void runtime.cleanup();
+      audioRuntimeRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     let disposed = false;
@@ -245,6 +283,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
       setSelectedCnsSource(null);
       setLoadedAir(null);
       setLoadedSprites(null);
+      audioRuntimeRef.current?.stopAll();
+      characterSoundsRef.current = null;
       setStateTransitionLogLines(['StateNoが変化すると、ここに遷移だけが残ります。']);
 
       const loadResult = await loadAppCharacter(characterPath);
@@ -260,6 +300,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
       setCnsSourceFiles(character.cnsSourceFiles ?? []);
       setLoadedAir(character.air);
       setLoadedSprites(character.sprites);
+      characterSoundsRef.current = character.sounds ?? null;
       cnsCoverageRef.current = analyzeCnsCoverage(character.cns);
       setCoverageDebugLines(formatCnsCoverageDebugOverlay(cnsCoverageRef.current));
 
@@ -322,6 +363,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           nextCnsTraces = [];
           p1CommandBufferRef.current.clear();
           p2CommandBufferRef.current.clear();
+          audioRuntimeRef.current?.stopAll();
         } else if (nextRoundState.phase === 'fight') {
           if (ENABLE_RUNTIME_FALLBACKS) {
             nextState = applyFallbackControls(nextState, p1Input, p2Input);
@@ -531,6 +573,34 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
     setCharacterPathState(trimmed);
   };
 
+  const unlockAudio = async () => {
+    const runtime = audioRuntimeRef.current;
+    if (!runtime) return;
+    const unlocked = await runtime.unlock();
+    setAudioStatus(unlocked ? 'unlocked' : runtime.status === 'unsupported' ? 'unsupported' : 'locked');
+  };
+
+  const testLoadedAudio = async () => {
+    const sample = characterSoundsRef.current?.samples.find((entry) => entry.format === 'wave');
+    const runtime = audioRuntimeRef.current;
+    if (!runtime || !sample) {
+      setAudioDiagnostic('audio sound_asset_missing No loaded WAV sample is available.');
+      return;
+    }
+    await runtime.playSample(sndSampleKey(sample.group, sample.index), sample.bytes);
+  };
+
+  const setAudioMute = (muted: boolean) => {
+    setAudioMuted(muted);
+    audioRuntimeRef.current?.setMuted(muted);
+  };
+
+  const setAudioVolume = (volume: number) => {
+    const normalized = Math.min(1, Math.max(0, volume));
+    setAudioMasterVolume(normalized);
+    audioRuntimeRef.current?.setMasterVolume(normalized);
+  };
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -602,6 +672,14 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
                 onCharacterPathChange={setCharacterPath}
                 onInputConfigChange={setInputConfig}
                 onRuntimeSettingsChange={setRuntimeSettings}
+                audioStatus={audioStatus}
+                audioMuted={audioMuted}
+                audioMasterVolume={audioMasterVolume}
+                audioDiagnostic={audioDiagnostic}
+                onUnlockAudio={unlockAudio}
+                onTestAudio={testLoadedAudio}
+                onAudioMutedChange={setAudioMute}
+                onAudioMasterVolumeChange={setAudioVolume}
               />
             )}
           </section>
@@ -655,6 +733,14 @@ function SettingsPanel({
   onCharacterPathChange,
   onInputConfigChange,
   onRuntimeSettingsChange,
+  audioStatus,
+  audioMuted,
+  audioMasterVolume,
+  audioDiagnostic,
+  onUnlockAudio,
+  onTestAudio,
+  onAudioMutedChange,
+  onAudioMasterVolumeChange,
 }: {
   characterPath: string;
   inputConfig: InputConfig;
@@ -662,11 +748,29 @@ function SettingsPanel({
   onCharacterPathChange: (path: string) => void;
   onInputConfigChange: (config: InputConfig) => void;
   onRuntimeSettingsChange: (settings: RuntimeSettings) => void;
+  audioStatus: 'locked' | 'unlocked' | 'unsupported';
+  audioMuted: boolean;
+  audioMasterVolume: number;
+  audioDiagnostic: string;
+  onUnlockAudio: () => void;
+  onTestAudio: () => void;
+  onAudioMutedChange: (muted: boolean) => void;
+  onAudioMasterVolumeChange: (volume: number) => void;
 }) {
   return (
     <div className="settings-stack">
       <CharacterConfigPanel characterPath={characterPath} onChange={onCharacterPathChange} />
       <RuntimeSettingsPanel settings={runtimeSettings} onChange={onRuntimeSettingsChange} />
+      <AudioSettingsPanel
+        status={audioStatus}
+        muted={audioMuted}
+        masterVolume={audioMasterVolume}
+        diagnostic={audioDiagnostic}
+        onUnlock={onUnlockAudio}
+        onTest={onTestAudio}
+        onMutedChange={onAudioMutedChange}
+        onMasterVolumeChange={onAudioMasterVolumeChange}
+      />
       <section className="settings-section">
         <h2>Control Summary</h2>
         <div className="control-help-grid">
@@ -689,6 +793,46 @@ function SettingsPanel({
         onChange={onInputConfigChange}
       />
     </div>
+  );
+}
+
+function AudioSettingsPanel({
+  status,
+  muted,
+  masterVolume,
+  diagnostic,
+  onUnlock,
+  onTest,
+  onMutedChange,
+  onMasterVolumeChange,
+}: {
+  status: 'locked' | 'unlocked' | 'unsupported';
+  muted: boolean;
+  masterVolume: number;
+  diagnostic: string;
+  onUnlock: () => void;
+  onTest: () => void;
+  onMutedChange: (muted: boolean) => void;
+  onMasterVolumeChange: (volume: number) => void;
+}) {
+  return (
+    <section className="settings-section" aria-label="audio settings">
+      <h2>Audio</h2>
+      <p>AudioContext: {status}</p>
+      <div className="runtime-settings-grid">
+        <button type="button" onClick={onUnlock}>Unlock Audio</button>
+        <button type="button" onClick={onTest} disabled={status !== 'unlocked'}>Test loaded SND sample</button>
+        <label>
+          <input type="checkbox" checked={muted} onChange={(event) => onMutedChange(event.currentTarget.checked)} />
+          Mute
+        </label>
+        <label>
+          Master volume
+          <input type="range" min={0} max={1} step={0.05} value={masterVolume} onChange={(event) => onMasterVolumeChange(Number(event.currentTarget.value))} />
+        </label>
+      </div>
+      <p>{diagnostic}</p>
+    </section>
   );
 }
 

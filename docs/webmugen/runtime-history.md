@@ -159,6 +159,8 @@ For air contact, `raw.hit_reaction` also records State 5020, the selected air an
 
 `raw.hit_effect` records hit/guard selection, scoped spark animation, AIR availability, Clsn/Facing-adjusted position, scoped sound sample, audio availability, and envshake parameters. Missing attacker AIR actions add `warning=missing_animation`; sound cues add `limitation=audio_runtime_unavailable` until owner SND playback is connected. Duplicate contact produces no second effect event.
 
+Browser audio foundation diagnostics use `audio_unsupported`, `audio_locked`, `audio_unlocked`, `decode_failed`, `playback_started`, `playback_stopped`, and `audio_closed`. They distinguish browser/autoplay/decode failures from missing character assets. PlaySnd-specific owner/channel diagnostics are added in Issues #28-#29/#40.
+
 `raw.hit_power` records selected hit/guard `getpower` and `givepower`, both gauges before/after clamping, and proves the mutation occurred once for the accepted contact. `raw.hit_cornerpush` records contact class, edge condition, selected velocity offset, Facing, before/after attacker velocity, and applied/skipped reason. `raw.hit_snap` records Facing-relative offset and target before/after position. `raw.hit_sprpriority` records applied P1/P2 priorities.
 
 `raw.hit_fall_damage` is emitted by common-State `HitFallDamage` and records fall damage, independent `fall.kill`, Life before/after, and the originating ActiveHitDef id.
