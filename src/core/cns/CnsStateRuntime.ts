@@ -146,8 +146,8 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
 
   const p1Cns = resolvePlayerCns(state.players[0], cns, input);
   const p2Cns = resolvePlayerCns(state.players[1], cns, input);
-  const p1 = stepPlayer(state.players[0], state.players[1], 1, p1Cns, input, input.p1Commands);
-  const p2 = stepPlayer(state.players[1], state.players[0], 2, p2Cns, input, input.p2Commands);
+  const p1 = stepPlayer(state.players[0], state.players[1], 1, p1Cns, input, input.p1Commands, state.frame);
+  const p2 = stepPlayer(state.players[1], state.players[0], 2, p2Cns, input, input.p2Commands, state.frame);
 
   const players = applyTargetOperations([p1.player, p2.player], [...p1.targetOperations, ...p2.targetOperations], cns, input);
   return { state: { ...state, players }, traces: [p1.trace, p2.trace] };
@@ -168,6 +168,7 @@ function stepPlayer(
   cns: CnsDocument,
   input: CnsRuntimeInput,
   commands?: ReadonlySet<string>,
+  runtimeFrame = 0,
 ): { player: PlayerState; trace: CnsRuntimeTrace; targetOperations: TargetOperation[] } {
   const originalStateNo = player.stateNo;
   const juggleMax = player.juggleMax ?? readAirJuggle(cns);
@@ -219,7 +220,7 @@ function stepPlayer(
     if (debugEnabled) appendDebug(trace, `enter S${negativeStateNo} state=${next.stateNo} controllers=${negativeState.controllers.length}`);
     if (debugEnabled) appendDebug(trace, formatStateDefOverview(negativeState));
     const negativeStateEntry = next;
-    const result = executeStateControllers(next, opponent, negativeState, cns, input, commands, debugEnabled, negativeStateEntry);
+    const result = executeStateControllers(next, opponent, negativeState, cns, input, commands, debugEnabled, negativeStateEntry, runtimeFrame);
     next = result.player;
     trace.executedControllers.push(...result.executedControllers);
     trace.debugLines.push(...result.debugLines);
@@ -248,8 +249,9 @@ function stepPlayer(
   if (debugEnabled) appendDebug(trace, formatStateDefOverview(stateDef));
   next = applyStateHeader(next, stateDef, false);
   next = forceHitStunControl(next, `statedef:${stateDef.stateNo}`, input.hitDiagnostics !== false);
+  next = appendGetHitFrameDiagnostic(next, opponent, stateDef, input, commands, runtimeFrame, input.hitDiagnostics !== false);
   if (debugEnabled) appendDebug(trace, `after header S${stateDef.stateNo} state=${next.stateNo} type=${next.stateType} ctrl=${next.ctrl ? 1 : 0}`);
-  const result = executeStateControllers(next, opponent, stateDef, cns, input, commands, debugEnabled);
+  const result = executeStateControllers(next, opponent, stateDef, cns, input, commands, debugEnabled, undefined, runtimeFrame);
   next = result.player;
   trace.executedControllers.push(...result.executedControllers);
   trace.debugLines.push(...result.debugLines);
@@ -259,7 +261,7 @@ function stepPlayer(
     if (enteredState) {
       if (debugEnabled) appendDebug(trace, `enter target S${enteredState.stateNo} state=${next.stateNo}`);
       if (debugEnabled) appendDebug(trace, formatStateDefOverview(enteredState));
-      const enteredResult = executeStateControllers(next, opponent, enteredState, cns, input, commands, debugEnabled);
+      const enteredResult = executeStateControllers(next, opponent, enteredState, cns, input, commands, debugEnabled, undefined, runtimeFrame);
       next = enteredResult.player;
       trace.executedControllers.push(...enteredResult.executedControllers);
       trace.debugLines.push(...enteredResult.debugLines);
@@ -290,6 +292,7 @@ function executeStateControllers(
   commands?: ReadonlySet<string>,
   debugEnabled = false,
   negativeStateEntry?: PlayerState,
+  runtimeFrame = 0,
 ): ControllerExecutionResult {
   let next = player;
   const executedControllers: string[] = [];
@@ -344,6 +347,19 @@ function executeStateControllers(
       executedControllers.push(result.name);
       if (debugEnabled && beforeStateNo !== next.stateNo) {
         pushDebug(debugLines, executedControllers, `${result.name} ${beforeStateNo}->${next.stateNo}`);
+      }
+      if (stateDef.stateNo >= 0 && (type === 'changestate' || type === 'selfstate')) {
+        if (input.hitDiagnostics !== false) {
+          next = {
+            ...next,
+            hitDiagnosticLines: [
+              ...(next.hitDiagnosticLines ?? []),
+              `raw.controller_transition player=p${next.id}`,
+              `  frame=${runtimeFrame} controller=${controller.type} from=${beforeStateNo} to=${next.stateNo} stopRemaining=1 reason=state_change_is_terminal`,
+            ],
+          };
+        }
+        break;
       }
     }
   }
@@ -1080,6 +1096,47 @@ function pauseController(
     darken: superPause && (num(controller, 'darken', player, input, commands, opponent) ?? 1) !== 0,
   });
   return withPlayer({ ...player, pauseControllerLatch: { key, stateNo: player.stateNo, stateTime: player.stateTime } }, true, superPause ? 'SuperPause' : 'Pause');
+}
+
+function appendGetHitFrameDiagnostic(
+  player: PlayerState,
+  opponent: PlayerState,
+  stateDef: CnsStateDefinition,
+  input: CnsRuntimeInput,
+  commands: ReadonlySet<string> | undefined,
+  runtimeFrame: number,
+  enabled: boolean,
+): PlayerState {
+  if (!enabled || stateDef.stateNo !== 5000) return player;
+  const hitStun = player.hitStun;
+  const source = hitStun?.getHitVarYVelocitySource
+    ?? (hitStun?.targetStateTypeAtHit === 'A' ? 'air.velocity.y' : 'ground.velocity.y');
+  const routeLines = stateDef.controllers.flatMap((controller) => {
+    if (controller.type.toLowerCase() !== 'changestate') return [];
+    const run = shouldRun(controller, player, input, commands, opponent);
+    return [
+      `raw.gethit_changestate_eval target=p${player.id}`,
+      `  frame=${runtimeFrame} state=5000 stateTime=${player.stateTime} value=${num(controller, 'value') ?? '?'} result=${run ? 1 : 0} yvel=${readGetHitDiagnosticValue(player, 'yvel')} fall=${readGetHitDiagnosticValue(player, 'fall')} hitShakeOver=${player.hitPause <= 0 ? 1 : 0}`,
+    ];
+  });
+  return {
+    ...player,
+    hitDiagnosticLines: [
+      ...(player.hitDiagnosticLines ?? []),
+      `raw.gethitvar_frame target=p${player.id}`,
+      `  frame=${runtimeFrame} state=${player.stateNo} stateTime=${player.stateTime} stateType=${player.stateType} moveType=${player.moveType} physics=${player.physics} targetStateTypeAtHit=${hitStun?.targetStateTypeAtHit ?? '-'} yvel=${readGetHitDiagnosticValue(player, 'yvel')} yvelSource=${source} fall=${readGetHitDiagnosticValue(player, 'fall')} groundtype=${readGetHitDiagnosticValue(player, 'groundtype')} animtype=${readGetHitDiagnosticValue(player, 'animtype')}`,
+      `  groundVelocityY=${hitStun?.groundVelocityAtHit?.y ?? '-'} airVelocityY=${hitStun?.airVelocityAtHit?.y ?? '-'} fallYVelocity=${hitStun?.fallYVelocityAtHit ?? readGetHitDiagnosticValue(player, 'fall.yvel')}`,
+      ...routeLines,
+    ],
+  };
+}
+
+function readGetHitDiagnosticValue(player: PlayerState, key: string): number | string {
+  const value = player.getHitVars?.[key];
+  if (value !== undefined) return value;
+  if (key === 'yvel') return player.hitVelY ?? 0;
+  if (key === 'fall') return player.hitFall ? 1 : 0;
+  return '-';
 }
 
 function stopSound(

@@ -877,7 +877,9 @@ ctrl = 1
   });
 
   it('recognizes WinMUGEN state controllers that have runtime shims', () => {
+    const terminalTypes = new Set(['ChangeState', 'SelfState']);
     const controllerBlocks = recognizedControllerFixtures
+      .filter(({ type }) => !terminalTypes.has(type))
       .map(({ type, params }) => `
 [State 0, ${type}]
 type = ${type}
@@ -896,8 +898,13 @@ ${controllerBlocks}
 `);
 
     const result = stepCnsStateRuntime(createInitialGameState(), cns);
+    const executedControllers = [...result.traces[0].executedControllers];
+    for (const fixture of recognizedControllerFixtures.filter(({ type }) => terminalTypes.has(type))) {
+      const terminalCns = parseCnsText(`[Statedef 0]\ntype=S\n[State 0, ${fixture.type}]\ntype=${fixture.type}\ntrigger1=1\n${fixture.params ?? ''}`);
+      executedControllers.push(...stepCnsStateRuntime(createInitialGameState(), terminalCns).traces[0].executedControllers);
+    }
 
-    expect(result.traces[0].executedControllers).toEqual(expect.arrayContaining(
+    expect(executedControllers).toEqual(expect.arrayContaining(
       recognizedControllerFixtures.map(({ traceName }) => traceName),
     ));
   });

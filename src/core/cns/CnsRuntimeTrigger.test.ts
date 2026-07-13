@@ -124,6 +124,15 @@ describe('CnsRuntimeTrigger', () => {
     expect(evaluateCnsRuntimeTrigger('vel x > 2 || vel y > 0', { player })).toBe(true);
   });
 
+  it('uses numeric GetHitVar values as booleans for common-state fall conditions', () => {
+    const falling = { ...player, getHitVars: { fall: 1 } };
+    expect(evaluateCnsRuntimeTrigger('GetHitVar(fall)', { player: falling })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('!GetHitVar(fall)', { player: falling })).toBe(false);
+    expect(evaluateCnsRuntimeTrigger('!GetHitVar(fall)', {
+      player: { ...falling, getHitVars: { fall: 0 } },
+    })).toBe(true);
+  });
+
   it('exposes Vel X relative to the player facing', () => {
     expect(evaluateCnsRuntimeTrigger('vel x > 0', {
       player: { ...player, facing: -1, vx: -3 },

@@ -187,6 +187,10 @@ export type PlayerState = {
     lastStateNo: number;
     blockedEvents?: string[];
     selectedAnim?: number;
+    getHitVarYVelocitySource?: 'ground.velocity.y' | 'air.velocity.y';
+    groundVelocityAtHit?: { x: number; y: number };
+    airVelocityAtHit?: { x: number; y: number };
+    fallYVelocityAtHit?: number;
   };
 };
 

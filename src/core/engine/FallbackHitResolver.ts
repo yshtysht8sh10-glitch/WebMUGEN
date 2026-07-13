@@ -12,6 +12,7 @@ import { addPower } from '../power/PowerGauge';
 import { isAtFallbackStageEdge } from './FallbackStageRules';
 
 const STAND_HIT_STATE = 5000;
+const CROUCH_HIT_STATE = 5010;
 const AIR_HIT_SHAKE_STATE = 5020;
 
 type PriorityDecision = {
@@ -238,7 +239,11 @@ function resolveAttack(
       ? active.airHitTimeFallbackReason ?? 'missing_air_hittime'
       : active.groundHitTimeFallbackReason ?? 'missing_ground_hittime'
     : 'active_hitdef_missing';
-  const reactionState = hitTimeKind === 'air' ? AIR_HIT_SHAKE_STATE : STAND_HIT_STATE;
+  const reactionState = hitTimeKind === 'air'
+    ? AIR_HIT_SHAKE_STATE
+    : targetStateTypeAtHit === 'C'
+      ? CROUCH_HIT_STATE
+      : STAND_HIT_STATE;
   const selectedAnimType = hitTimeKind === 'air' ? active.airAnimType ?? 'Light' : active.animType;
   const selectedAnim = hitTimeKind === 'ground' ? groundHitAnim(active?.animType) : airHitAnim(selectedAnimType, active.airType);
   const selectedVelocity = hitTimeKind === 'air' ? active.airVelocity : active.groundVelocity;
@@ -267,6 +272,10 @@ function resolveAttack(
     elapsed: 0,
     lastStateNo: reactionState,
     selectedAnim,
+    getHitVarYVelocitySource: hitTimeKind === 'air' ? 'air.velocity.y' : 'ground.velocity.y',
+    groundVelocityAtHit: { ...active.groundVelocity },
+    airVelocityAtHit: { ...active.airVelocity },
+    fallYVelocityAtHit: active.fall?.yVelocity ?? 0,
     ...(activeHitTime === undefined ? { fallbackReason: hitTimeFallbackReason } : {}),
   }, createGetHitVarSnapshot(active, damage, selectedHitTime, hitTimeKind, selectedVelocity)), active, attacker.id), attacker.id, active.hitId);
   const idText = activeHitDefId === null ? 'none' : String(activeHitDefId);

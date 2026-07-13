@@ -87,6 +87,8 @@ These should generally remain Partial.
 
 Successful HitDef contact stores numeric get-hit values on the defender so common get-hit states can read them after State changes. The current snapshot covers damage, selected hittime/slidetime/ctrltime, velocity values, type/animtype/airtype/groundtype codes, fall values including `fall.damage`/`fall.kill`, basic down velocity/hittime, hit/chain id, guarded, combo `hitcount`, snap `xoff`/`yoff`, and yaccel. It persists through the air fall/down path and is cleared after leaving get-hit states. Unsupported `zoff`/fall-time keys return the existing safe zero and are listed in contact diagnostics; therefore GetHitVar remains Partial.
 
+For `GetHitVar(yvel)`, contact StateType S/C selects `ground.velocity.y` and A selects `air.velocity.y`; `fall.yvelocity` is exposed only as `GetHitVar(fall.yvel)`. Numeric trigger terms use MUGEN boolean truthiness, so `GetHitVar(fall)` and `!GetHitVar(fall)` correctly distinguish zero and nonzero values in common States 5000/5010.
+
 ## HitDefAttr
 
 `HitDefAttr = SCA, NA, SA` compares the current ActiveHitDef's normalized attack State and attack categories. It uses the same normalization and matching rules as live `HitBy`/`NotHitBy`, preventing Trigger and collision filtering from disagreeing. Missing or malformed attr does not match.

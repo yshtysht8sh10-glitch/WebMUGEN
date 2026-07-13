@@ -14,7 +14,7 @@ describe('real character Explod production integration', () => {
     const events: ExplodCreateEvent[] = [];
     const cnsResult = stepCnsStateRuntime({
       ...initial,
-      players: [{ ...initial.players[0], stateNo: 191 }, initial.players[1]],
+      players: [{ ...initial.players[0], stateNo: 191, animTime: 1 }, initial.players[1]],
     }, cns, { onExplodCreate: (event) => events.push(event) });
     const result = applyExplodCreateEvents(cnsResult.state, events);
     const wood = result.explods.entries.find((entry) => entry.owner.entityId === 1 && entry.animNo === 191);

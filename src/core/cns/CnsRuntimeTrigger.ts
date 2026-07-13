@@ -47,6 +47,11 @@ function evaluateBooleanExpression(expression: string, context: CnsRuntimeTrigge
   const bareBoolean = getBooleanSource(trimmed);
   if (bareBoolean) return bareBoolean(context);
 
+  if (!splitTopLevelComparison(trimmed)) {
+    const numeric = readNumberExpression(trimmed, context);
+    if (numeric !== null) return numeric !== 0;
+  }
+
   return evaluateComparison(trimmed, context);
 }
 

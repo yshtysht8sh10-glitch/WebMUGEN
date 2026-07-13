@@ -30,6 +30,33 @@ Clsn1: 1
 `);
 
 describe('FallbackHitResolver', () => {
+  it('selects ground.velocity.y for grounded targets and air.velocity.y only for airborne targets', () => {
+    const configured = {
+      groundVelocity: [-5.5, 0] as [number, number],
+      airVelocity: [-2.5, 8] as [number, number],
+      fallVelocity: [0, -4] as [number, number],
+      pauseTime: [0, 0] as [number, number],
+    };
+    const ground = resolveConfiguredHit({ ...configured, targetStateType: 'S' });
+    const crouch = resolveConfiguredHit({ ...configured, targetStateType: 'C' });
+    const airTarget = resolveConfiguredHit({ ...configured, targetStateType: 'A' });
+
+    expect(ground.players[1].hitStun?.targetStateTypeAtHit).toBe('S');
+    expect(ground.players[1].hitStun).toMatchObject({
+      getHitVarYVelocitySource: 'ground.velocity.y',
+      groundVelocityAtHit: { x: -5.5, y: 0 },
+      airVelocityAtHit: { x: -2.5, y: 8 },
+      fallYVelocityAtHit: -4,
+    });
+    expect(ground.players[1].getHitVars).toMatchObject({ yvel: 0, 'fall.yvel': -4 });
+    expect(crouch.players[1]).toMatchObject({ stateNo: 5010 });
+    expect(crouch.players[1].hitStun?.targetStateTypeAtHit).toBe('C');
+    expect(crouch.players[1].getHitVars?.yvel).toBe(0);
+    expect(airTarget.players[1].hitStun?.targetStateTypeAtHit).toBe('A');
+    expect(airTarget.players[1].hitStun?.getHitVarYVelocitySource).toBe('air.velocity.y');
+    expect(airTarget.players[1].getHitVars).toMatchObject({ yvel: 8, 'fall.yvel': -4 });
+  });
+
   it('stores the contact GetHitVar snapshot and uses it in later get-hit states', () => {
     const hit = resolveConfiguredHit({ damage: 100, groundHitTime: 20, animType: 'Medium', groundVelocity: [-4, -1], pauseTime: [0, 0] });
     expect(hit.players[1].getHitVars).toMatchObject({

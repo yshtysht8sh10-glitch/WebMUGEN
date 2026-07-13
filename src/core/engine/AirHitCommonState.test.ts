@@ -66,7 +66,8 @@ describe('air hit common-state integration', () => {
       visited.add(state.players[1].stateNo);
     }
     expect(visited).toContain(5050);
-    expect(Array.from(visited)).toContain(5101);
+    expect(Array.from(visited)).toContain(5110);
+    expect(Array.from(visited)).not.toContain(5101);
     expect(state.players[1]).toMatchObject({ stateNo: 5120, moveType: 'I', ctrl: false });
   });
 
