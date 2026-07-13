@@ -35,7 +35,7 @@ export function updateHitFeedback(
     .filter((spark) => spark.life > 0);
 
   let nextSparkId = feedback.nextSparkId;
-  const added = gameState.hitEvents.filter((event) => event.spark?.available !== false).map((event) => {
+  const added = gameState.hitEvents.filter((event) => event.spark?.available !== false && !event.spark?.runtimeIntegrated).map((event) => {
     const attacker = getPlayer(gameState.players, event.attackerId);
     const defender = getPlayer(gameState.players, event.defenderId);
 

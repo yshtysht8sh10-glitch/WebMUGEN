@@ -51,6 +51,7 @@ export type ExplodRuntimeEntry = {
   removeOnGetHit: boolean;
   random: { x: number; y: number };
   render: ExplodRenderSnapshot;
+  effectKind?: 'hit-spark';
 };
 
 export type ExplodRuntimeState = {
@@ -194,7 +195,7 @@ export function applyExplodModifyEvents(gameState: GameState, events: readonly E
 
     const internalIds: number[] = [];
     entries = entries.map((entry) => {
-      if (!sameRuntimeOwner(entry.owner, event.owner) || entry.mugenId !== event.mugenId) return entry;
+      if (!isControllerExplod(entry) || !sameRuntimeOwner(entry.owner, event.owner) || entry.mugenId !== event.mugenId) return entry;
       internalIds.push(entry.runtimeId);
       return applyExplodModifyPatch(entry, event, gameState);
     });
@@ -218,9 +219,9 @@ export function applyExplodRemoveEvents(gameState: GameState, events: readonly E
     }
 
     const internalIds = entries
-      .filter((entry) => sameRuntimeOwner(entry.owner, event.owner) && entry.mugenId === event.mugenId)
+      .filter((entry) => isControllerExplod(entry) && sameRuntimeOwner(entry.owner, event.owner) && entry.mugenId === event.mugenId)
       .map((entry) => entry.runtimeId);
-    entries = entries.filter((entry) => !sameRuntimeOwner(entry.owner, event.owner) || entry.mugenId !== event.mugenId);
+    entries = entries.filter((entry) => !isControllerExplod(entry) || !sameRuntimeOwner(entry.owner, event.owner) || entry.mugenId !== event.mugenId);
     diagnosticLines.push(
       `raw.explod_remove owner=p${event.owner.rootPlayerId} id=${event.mugenId} matched=${internalIds.length} internalIds=[${internalIds.join(',') || '-'}]${internalIds.length === 0 ? ' reason=not_found' : ' reason=removeexplod'}`,
     );
@@ -247,7 +248,7 @@ export function applyExplodBindTimeEvents(gameState: GameState, events: readonly
     const opponent = gameState.players.find((player) => player.id !== event.owner.rootPlayerId) ?? gameState.players[1];
     const changes: string[] = [];
     entries = entries.map((entry) => {
-      if (!sameRuntimeOwner(entry.owner, event.owner) || entry.mugenId !== event.mugenId) return entry;
+      if (!isControllerExplod(entry) || !sameRuntimeOwner(entry.owner, event.owner) || entry.mugenId !== event.mugenId) return entry;
       const oldTime = entry.bind?.remaining ?? 0;
       const resolved = owner
         ? resolveExplodOrigin(entry.postype, owner, opponent, entry.offset.x, entry.offset.y, event.screenWidth)
@@ -335,6 +336,10 @@ function applyExplodModifyPatch(entry: ExplodRuntimeEntry, event: ExplodModifyEv
 
 function sameRuntimeOwner(left: RuntimeEntityRef, right: RuntimeEntityRef): boolean {
   return left.entityId === right.entityId && left.rootPlayerId === right.rootPlayerId;
+}
+
+function isControllerExplod(entry: ExplodRuntimeEntry): boolean {
+  return entry.effectKind !== 'hit-spark';
 }
 
 export function resolveExplodOrigin(

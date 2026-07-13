@@ -37,9 +37,11 @@ Autoplay/resume rejection is `audio_locked`, not a character load failure. Missi
 
 ## Compatibility boundary
 
-Issue #27 completes the browser audio foundation. Issue #28 connects PlaySnd character samples with owner-scoped channel replacement, channel-less concurrent voices, volume scaling, pan, playback rate, and loop. Issue #29 connects StopSnd to the same owner/channel table; Issue #40 connects SndPan updates to the current matching voice. HitDef sound integration remains Partial until Issue #36 deliberately routes scoped cues through the same runtime.
+Issue #27 completes the browser audio foundation. Issue #28 connects PlaySnd character samples with owner-scoped channel replacement, channel-less concurrent voices, volume scaling, pan, playback rate, and loop. Issue #29 connects StopSnd to the same owner/channel table; Issue #40 connects SndPan updates to the current matching voice. Issue #36 routes HitDef `hitsound`/`guardsound` cues through that same bridge once per HitEvent.
 
 PlaySnd cache keys include owner id plus group/index, and channel keys include owner id plus channel number. P1 channel 0 therefore cannot stop or replace P2 channel 0. `S`/unprefixed values use character SND; `F` common sound is rejected explicitly until a common archive is loaded.
+
+HitDef scope rules differ from PlaySnd syntax: `S` uses the attacker character SND; unprefixed and explicit `F` use common SND. Both group and index expressions are evaluated on HitDef activation. Valid character samples become channel-less one-shot SoundPlayEvents and are verified with bundled T-H-M-A. The bridge supports a supplied common archive, but the app currently has none and reports `common_snd_missing`/`common_sound_unavailable`.
 
 Pause/SuperPause does not suspend AudioContext or stop active voices. A PlaySnd controller reached on the activation CNS pass starts normally; globally paused and guarded resume passes skip CNS controllers, so that boundary does not create duplicate voices. Exact same-pass ordering between multiple players remains Partial.
 

@@ -395,7 +395,7 @@ function formatHitEffectDiagnostics(event: HitEvent, activeHitDefId: number | nu
   const sparkAvailability = event.spark?.available === false ? 'missing' : event.spark?.available === true ? 'available' : 'unknown';
   return [
     `raw.hit_effect attacker=p${event.attackerId} target=p${event.defenderId}`,
-    `  activeHitDefId=${activeHitDefId ?? 'none'} kind=${event.guarded ? 'guard' : 'hit'} spark=${event.spark ? `${event.spark.scope}:${event.spark.animNo}` : '-'} sparkAvailable=${sparkAvailability} sparkPos=${event.spark ? `${event.spark.x},${event.spark.y}` : '-'} sound=${event.sound ? `${event.sound.scope}:${event.sound.group},${event.sound.index}` : '-'} soundAvailable=${event.sound ? 'unknown' : '-'} envshake=${event.envShake ? `${event.envShake.time},${event.envShake.frequency},${event.envShake.amplitude},${event.envShake.phase}` : '-'} result=generated${event.spark?.available === false ? ' warning=missing_animation' : ''}${event.sound ? ' limitation=audio_runtime_unavailable' : ''}`,
+    `  activeHitDefId=${activeHitDefId ?? 'none'} kind=${event.guarded ? 'guard' : 'hit'} spark=${event.spark ? `${event.spark.scope}:${event.spark.animNo}` : '-'} sparkAvailable=${sparkAvailability} sparkPos=${event.spark ? `${event.spark.x},${event.spark.y}` : '-'} sound=${event.sound ? `${event.sound.scope}:${event.sound.group},${event.sound.index}` : '-'} soundAvailable=${event.sound ? 'deferred' : '-'} envshake=${event.envShake ? `${event.envShake.time},${event.envShake.frequency},${event.envShake.amplitude},${event.envShake.phase}` : '-'} result=generated${event.spark?.available === false ? ' warning=missing_animation' : ''}`,
   ];
 }
 

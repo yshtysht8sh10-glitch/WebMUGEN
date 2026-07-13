@@ -153,7 +153,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | DisplayToClipboard | Partial | Recognized safe no-op. Debug clipboard not implemented. |
 | EnvColor | Partial | Recognized safe no-op. Screen color flash not implemented. |
 | EnvShake | Partial | Recognized safe no-op. Screen shake not implemented. |
-| Explod | Partial | Issues #30-#35/#38/#39: production create/render/lifecycle and ordered explicit-ID mutations are connected. Pause/SuperPause freeze the complete Explod tick unless the matching per-entry move-time allowance is consumed; hitpause remains player-local. Palette isolation, destination/subtractive blend, shadow pass, fightfx, non-zero camera exactness, Helper ownership, generic `persistent`, and `NumExplod` remain incomplete. |
+| Explod | Partial | Issues #30-#36/#38/#39: production create/render/lifecycle, ordered explicit-ID mutations, pause gating, and HitDef character-scope spark entries share GameState/Canvas. Hit sparks are isolated from Modify/RemoveExplod ID selection. Bundled common fightfx assets, palette isolation, destination/subtractive blend, shadow pass, non-zero camera exactness, Helper ownership, generic `persistent`, and `NumExplod` remain incomplete. |
 | ExplodBindTime | Partial | Issue #39: normal CNS/app/GameState lifecycle updates every explicit owner/id duplicate in controller order. `time=0`, finite positive, indefinite negative, unbound P1/P2 rebind, owner following, release/position hold, removal ordering, missing fields, and same-frame Renderer evidence are tested. Omitted `id`, non-player owner disappearance/reload, and non-binding postype edge rules remain Partial. |
 | FallEnvShake | Partial | Recognized safe no-op. Landing shake parameters are not connected to HitFeedback. |
 | ForceFeedback | Partial | Recognized safe no-op. Input device feedback not implemented. |
@@ -162,7 +162,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | Helper | Partial | Recognized safe no-op in CNS runtime; Helper system exists separately. |
 | HitAdd | Partial | Stores hit count field only. |
 | HitBy | Partial | Normalized HitDef attr must match the stored allowed state/attack filter before live contact. Duration/stacking remains incomplete. |
-| HitDef | Partial | Live paths apply independent kill/guard/fall rules, explicit power, numhits, edge-only cornerpush, snap and sprite priorities in addition to filtering/reactions/effects/chains/persistence. mugen.cfg power defaults, camera-relative edges, team validation, modifiers, full fightfx/SND, and Helper/projectile parity remain incomplete. |
+| HitDef | Partial | Issue #36 routes one normal/guard contact effect per HitEvent into shared Explod and Sound runtimes. `S`-scoped expression animations/sounds use attacker AIR/SFF/SND; unprefixed/`F` use injected common assets. Bundled common fightfx/SND assets, Helper/projectile parity, modifiers, and mixed priority edges remain incomplete. |
 | HitFallDamage | Partial | Applies snapshotted fall.damage at the common-State trigger and honors fall.kill; fall envshake/projectile parity remains incomplete. |
 | HitFallSet | Partial | Recognized safe no-op. Fall flags not implemented. |
 | HitFallVel | Partial | Restores the contact-snapshotted fall X/Y velocity for common bounce states. Full down-hit variants remain incomplete. |
@@ -254,14 +254,14 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | guard.kill | Partial | Guard contact independently clamps chip damage at one Life when 0. Projectile parity remains incomplete. |
 | guard.pausetime | Partial | Applies separate attacker/defender guard pause counters. |
 | guard.slidetime | Unsupported | Guard slide timing is not independently applied. |
-| guard.sparkno | Partial | Selects the guard spark effect envelope; full fightfx animation remains incomplete. |
+| guard.sparkno | Partial | Guard contact creates one shared Explod effect. `S` scope uses attacker AIR/SFF; common/`F` scope requires fightfx assets and is diagnosed when absent. |
 | guard.sparkxy | Unsupported | Legacy guard-only spark offset is not applied; common `sparkxy` is connected. |
 | guard.velocity | Partial | Applies live guard recoil with Facing conversion. |
 | guardflag | Partial | Selects standing/crouching/air guard eligibility. |
 | guardpausetime | Unsupported | Unprefixed legacy alias is not applied; `guard.pausetime` is connected. |
-| guardsound | Partial | Selects scoped guard sound cue; character SND bytes are loadable, but Browser Audio playback remains unavailable. |
+| guardsound | Partial | Guard contact creates one shared SoundPlayEvent. `S` scope resolves attacker SND through Browser Audio; common/`F` scope requires a common SND archive. |
 | hitflag | Partial | H/L/M/A/F/D target classes are connected; `+`/`-` modifiers remain unsupported. |
-| hitsound | Partial | Selects scoped hit sound cue; character SND bytes are loadable, but Browser Audio playback remains unavailable. |
+| hitsound | Partial | Normal hit creates one shared SoundPlayEvent. `S` scope resolves attacker SND through Browser Audio; common/`F` scope requires a common SND archive. |
 | fall.kill | Partial | Snapshotted into GetHitVar and honored by common-State HitFallDamage independently of normal/guard kill. Projectile parity remains incomplete. |
 | getpower | Partial | Explicit hit/guard values are applied once to the attacker and clamped to 0..3000. mugen.cfg-derived omitted defaults remain unavailable. |
 | givepower | Partial | Explicit hit/guard values are applied once to the defender and clamped to 0..3000. mugen.cfg-derived omitted defaults remain unavailable. |
@@ -282,8 +282,8 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | pausemovetime | Unsupported | HitDef-specific pause move-time override is not applied. |
 | pausetime | Partial | Applies separate attacker/defender hit-pause counters. |
 | priority | Partial | Numeric priority and Hit/Miss/Dodge equal-clash behavior are connected; mixed-type edges remain incomplete. |
-| sparkno | Partial | Selects scoped hit spark envelope; full sprite animation remains incomplete. |
-| sparkxy | Partial | Applies Facing-relative offset to the Clsn contact point. |
+| sparkno | Partial | Normal hit creates one shared Explod effect at the contact point. `S` scope uses attacker AIR/SFF; common/`F` scope requires fightfx assets and is diagnosed when absent. |
+| sparkxy | Partial | Applies Facing-relative X and direct Y offset to the Clsn contact point before same-frame Explod rendering. |
 | supermovetime | Unsupported | HitDef-specific super-pause move-time override is not applied. |
 | yaccel | Partial | Snapshotted into GetHitVar for common air reaction logic. |
 

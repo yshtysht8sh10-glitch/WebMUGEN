@@ -292,7 +292,7 @@ physics = S
     expect(result.hitEvents[0].spark).toMatchObject({ animNo: 9999, available: false });
     const diagnostics = result.hitDiagnosticLines?.join('\n') ?? '';
     expect(diagnostics).toContain('warning=missing_animation');
-    expect(diagnostics).toContain('limitation=audio_runtime_unavailable');
+    expect(diagnostics).toContain('soundAvailable=deferred');
   });
 
   it('freezes motion and timers for exactly the defender pausetime then resumes', () => {

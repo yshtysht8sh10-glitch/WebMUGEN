@@ -37,7 +37,7 @@ This document is a high-level inventory of WebMUGEN implementation areas. It is 
 | CNS debug | Runtime traces expose state/animation/controller execution. |
 | Physics debug | Post-physics state, velocity, facing, power, juggle pool, guard intent, and current/self State owner ids are visible. |
 | Runtime history | Snapshot-based history exists for copyable debugging. |
-| Hit effects | Contact envelopes feed positioned spark feedback and envshake offsets; scoped sound cue generation exists but audio playback is Partial. |
+| Hit effects | Contact envelopes feed same-frame shared Explod sparks, shared Browser Audio cues, and envshake offsets once per HitEvent. Character `S` scope is production-connected; bundled common fightfx/SND assets are absent and remain diagnosed Partial. |
 | Browser audio | Shared lazy AudioContext adapter supports user-gesture unlock, decode cache, master gain/mute, stop/cleanup, and safe diagnostics. Controller/channel integration remains incomplete. |
 | Static debug | Character load, StateDef list, command routes, and coverage are visible. |
 

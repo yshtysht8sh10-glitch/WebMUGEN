@@ -159,7 +159,7 @@ For air contact, `raw.hit_reaction` also records State 5020, the selected air an
 
 `raw.custom_state` records HitDef/TargetState p1/p2 State numbers, current/self owner ids, p2getp1state, forcestand, applied ownership, and missing owner-State rejection. The runtime does not substitute the currently loaded or common CNS when an explicit owner lookup fails.
 
-`raw.hit_effect` records hit/guard selection, scoped spark animation, AIR availability, Clsn/Facing-adjusted position, scoped sound sample, audio availability, and envshake parameters. Missing attacker AIR actions add `warning=missing_animation`; sound cues add `limitation=audio_runtime_unavailable` until owner SND playback is connected. Duplicate contact produces no second effect event.
+`raw.hit_effect` records hit/guard selection, scoped spark animation, preliminary AIR availability, Clsn/Facing-adjusted position, scoped sound sample, and envshake parameters. `raw.hit_effect_runtime` then records the final asset resolution: created spark internal id/position, queued sound, or `animation_disabled`, `animation_not_found`, `owner_air_missing`, `fightfx_air_missing`, `owner_snd_missing`, `common_snd_missing`, or `sample_not_found`. Duplicate contact produces no second HitEvent, and already integrated events produce no second runtime effect.
 
 `raw.explod_render` records internal/MUGEN ids, animation and element, world/screen position, Facing/vfacing, and whether the owner animation resolved. `raw.explod_draw` records the final Canvas result; missing sprites remain invisible with `reason=sprite_not_found`.
 

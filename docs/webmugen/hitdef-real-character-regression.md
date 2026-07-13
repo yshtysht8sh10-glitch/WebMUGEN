@@ -53,6 +53,7 @@ Focused engine tests from Issues #3-#22 remain the behavioral evidence for multi
 
 - The harness forces an existing HitDef controller's trigger true to isolate HitDef/AIR/runtime compatibility. It does not claim every original CMD or AI route is playable end-to-end.
 - `mugen.cfg`-derived default power gain is unavailable; explicit power pairs are tested.
-- Camera-relative cornerpush, team/Helper/projectile parity, full throw/custom animation ownership, fightfx/SND playback, palette effects, and legacy aliases remain Partial or Unsupported per Matrix.
+- T-H-M-A State 200 additionally verifies expression-valued attacker-scoped hit/guard sparks (`16100`/`16000`) and sounds (`200,0`/`645,1`) through production Explod and Browser Audio event bridges.
+- Camera-relative cornerpush, team/Helper/projectile parity, full throw/custom animation ownership, bundled common fightfx/SND assets, palette effects, and legacy aliases remain Partial or Unsupported per Matrix.
 - Real Target/custom-State/multihit structures are inventoried here and their generic runtime behavior is covered by focused tests; exhaustive character-specific cinematics and AI routes are outside this Issue.
 - The normal build remains blocked before compilation by known TS5107 configuration. The full Vitest suite is the regression gate.

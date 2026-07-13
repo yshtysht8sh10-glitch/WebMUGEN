@@ -1482,11 +1482,11 @@ function evaluateHitDefSnapshot(
     p2StateNo: numValue('p2stateno'),
     p2GetP1State: boolValue('p2getp1state'),
     forceStand: boolValue('forcestand'),
-    spark: parseEffectAnimation(controller.params.sparkno),
-    guardSpark: parseEffectAnimation(controller.params['guard.sparkno'] ?? controller.params.guardsparkno),
+    spark: parseEffectAnimation(controller.params.sparkno, player, input, commands, opponent),
+    guardSpark: parseEffectAnimation(controller.params['guard.sparkno'] ?? controller.params.guardsparkno, player, input, commands, opponent),
     sparkOffset: { x: sparkOffset[0] ?? 0, y: sparkOffset[1] ?? 0 },
-    hitSound: parseEffectSound(controller.params.hitsound),
-    guardSound: parseEffectSound(controller.params.guardsound),
+    hitSound: parseEffectSound(controller.params.hitsound, player, input, commands, opponent),
+    guardSound: parseEffectSound(controller.params.guardsound, player, input, commands, opponent),
     envShake: {
       time: Math.max(0, numValue('envshake.time') ?? 0),
       frequency: numValue('envshake.freq') ?? 60,
@@ -1581,11 +1581,17 @@ function formatOptionalBool(value: boolean | undefined): string | number {
   return value === undefined ? '-' : value ? 1 : 0;
 }
 
-function parseEffectAnimation(value: CnsValue | undefined): ActiveHitDef['spark'] {
+function parseEffectAnimation(
+  value: CnsValue | undefined,
+  player: PlayerState,
+  input: CnsRuntimeInput,
+  commands: ReadonlySet<string> | undefined,
+  opponent: PlayerState,
+): ActiveHitDef['spark'] {
   if (value === undefined) return undefined;
   const raw = Array.isArray(value) ? value[0] : value;
-  const parsed = parseScopedNumber(raw);
-  return parsed ? { animNo: parsed.value, scope: parsed.scope } : undefined;
+  const parsed = evaluateScopedNumber(raw, player, input, commands, opponent);
+  return parsed ? { animNo: Math.trunc(parsed.value), scope: parsed.scope } : undefined;
 }
 
 function formatEffectAnimation(value: ActiveHitDef['spark']): string {
@@ -1596,20 +1602,34 @@ function formatEffectSound(value: ActiveHitDef['hitSound']): string {
   return value ? `${value.scope}:${value.group},${value.index}` : '-';
 }
 
-function parseEffectSound(value: CnsValue | undefined): ActiveHitDef['hitSound'] {
+function parseEffectSound(
+  value: CnsValue | undefined,
+  player: PlayerState,
+  input: CnsRuntimeInput,
+  commands: ReadonlySet<string> | undefined,
+  opponent: PlayerState,
+): ActiveHitDef['hitSound'] {
   if (value === undefined) return undefined;
   const parts = Array.isArray(value) ? value : String(value).split(',');
-  const group = parseScopedNumber(parts[0]);
-  const index = Number(String(parts[1] ?? '').trim());
-  if (!group || !Number.isFinite(index)) return undefined;
-  return { group: group.value, index, scope: group.scope };
+  const group = evaluateScopedNumber(parts[0], player, input, commands, opponent);
+  const index = cnsValueToNumber(parts[1] ?? '', player, input, commands, opponent);
+  if (!group || index === null) return undefined;
+  return { group: Math.trunc(group.value), index: Math.trunc(index), scope: group.scope };
 }
 
-function parseScopedNumber(value: string | number | boolean): { value: number; scope: 'common' | 'attacker' } | null {
+function evaluateScopedNumber(
+  value: string | number | boolean,
+  player: PlayerState,
+  input: CnsRuntimeInput,
+  commands: ReadonlySet<string> | undefined,
+  opponent: PlayerState,
+): { value: number; scope: 'common' | 'attacker' } | null {
   const raw = String(value).trim();
   const attackerScoped = /^s/i.test(raw);
-  const parsed = Number(attackerScoped ? raw.slice(1) : raw);
-  return Number.isFinite(parsed) ? { value: parsed, scope: attackerScoped ? 'attacker' : 'common' } : null;
+  const explicitlyCommon = /^f/i.test(raw);
+  const expression = attackerScoped || explicitlyCommon ? raw.slice(1) : value;
+  const parsed = cnsValueToNumber(expression, player, input, commands, opponent);
+  return parsed === null ? null : { value: parsed, scope: attackerScoped ? 'attacker' : 'common' };
 }
 
 function formatFall(value: ActiveHitDef['fall']): string {

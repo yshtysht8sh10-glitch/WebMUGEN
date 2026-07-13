@@ -211,8 +211,8 @@ export type HitEvent = {
   defenderId: 1 | 2;
   damage: number;
   guarded?: boolean;
-  spark?: { animNo: number; scope: 'common' | 'attacker'; x: number; y: number; available?: boolean };
-  sound?: { group: number; index: number; scope: 'common' | 'attacker'; available?: boolean };
+  spark?: { animNo: number; scope: 'common' | 'attacker'; x: number; y: number; available?: boolean; runtimeIntegrated?: boolean };
+  sound?: { group: number; index: number; scope: 'common' | 'attacker'; available?: boolean; runtimeIntegrated?: boolean };
   envShake?: { time: number; frequency: number; amplitude: number; phase: number };
 };
 

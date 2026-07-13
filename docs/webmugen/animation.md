@@ -87,7 +87,7 @@ When debugging animation, expose:
 
 ## Compatibility caution
 
-HitDef spark events carry common or attacker scope and the requested animation number into HitFeedback. Attacker-scoped `S` actions are validated against AIR; missing actions are diagnosed and not rendered. The Canvas renderer currently visualizes the requested id at the contact position rather than rendering full fightfx/character sprite animation frames, so spark rendering remains Partial.
+HitDef spark events carry common or attacker scope and the requested animation number into the shared Explod effect path. Attacker-scoped `S` actions resolve the attacker's AIR/SFF, advance with normal AIR lifecycle, and render at the Facing-adjusted contact position in the contact frame. Common/`F` actions use fightfx assets when supplied; the bundled app has no fightfx AIR/SFF and diagnoses that scope instead of drawing a placeholder. Missing actions are safe no-ops. The former fixed-circle HitFeedback renderer is suppressed for runtime-integrated sparks while envshake remains there.
 
 Explod rendering resolves the current AIR element from the creating owner's asset scope, then uses the matching owner SFF sprite. World-space entries pass through the camera-X conversion while screen-space `front/back/left/right` entries do not. Explod Facing, vfacing, AIR flip, sprite priority, and `ontop` are applied in the effect layer; missing animation or sprite data is hidden with a diagnostic instead of a placeholder.
 
