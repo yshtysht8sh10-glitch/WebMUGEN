@@ -21,7 +21,13 @@ export type AudioPlaybackOptions = {
   channelKey?: string;
 };
 
-export type AudioPlaybackHandle = { stop(): void; setOnEnded?(callback: () => void): void };
+export type AudioPlaybackHandle = {
+  stop(): void;
+  setOnEnded?(callback: () => void): void;
+  setPan?(value: number): boolean;
+};
+
+export type AudioPanUpdateResult = 'updated' | 'unsupported' | 'channel_not_found';
 
 export interface AudioAdapter {
   readonly state: string;
@@ -130,6 +136,13 @@ export class BrowserAudioRuntime {
     return true;
   }
 
+  updateChannelPan(channelKey: string, pan: number): AudioPanUpdateResult {
+    const handle = this.channelHandles.get(channelKey);
+    if (!handle) return 'channel_not_found';
+    if (!handle.setPan) return 'unsupported';
+    return handle.setPan(clamp(pan, -1, 1)) ? 'updated' : 'unsupported';
+  }
+
   async cleanup(): Promise<void> {
     this.stopAll();
     this.decodeCache.clear();
@@ -192,6 +205,11 @@ export function createWebAudioAdapter(): AudioAdapter | null {
       return {
         stop: () => { try { source.stop(); } catch { /* already stopped */ } },
         setOnEnded(callback) { source.onended = callback; },
+        setPan(value) {
+          if (!panner) return false;
+          panner.pan.value = clamp(value, -1, 1);
+          return true;
+        },
       };
     },
     setMasterGain(value) { master.gain.value = value; },

@@ -193,7 +193,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | ReversalDef | Partial | Recognized safe no-op. Reversal behavior not implemented. |
 | ScreenBound | Partial | Recognized safe no-op. Camera/screen bound behavior not implemented. |
 | SelfState | Partial | Returns a borrowed player to `selfStateOwnerId` and executes that owner's CNS document. Helper/animation ownership remains incomplete. |
-| SndPan | Partial | SND assets and Browser Audio foundation exist, but owner/channel pan remains a safe no-op pending #40. |
+| SndPan | Partial | Production CNS evaluates owner/channel and relative `pan` or absolute `abspan`, then updates the current active/looping voice without recreating its source. Owner separation, replacement, natural end, clamping, and unsupported adapters are tested/diagnosed. Exact WinMUGEN pixel mapping and Helper ownership remain incomplete. |
 | SprPriority | Partial | Stores priority field only. Rendering priority needs audit. |
 | StateTypeSet | Complete | Basic implementation exists. |
 | StopSnd | Partial | Production CNS evaluates channel and stops/releases the matching owner-scoped active or looping voice; P1/P2 channels remain separate and missing channels are diagnosed no-ops. Omitted-channel and advanced Helper ownership rules remain unsupported. |

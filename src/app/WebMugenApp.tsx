@@ -382,6 +382,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             hitDiagnostics: runtimeSettingsRef.current.hitDiagnostics,
             onSoundPlay: (event) => soundEvents.push(event),
             onSoundStop: (event) => soundEvents.push(event),
+            onSoundPan: (event) => soundEvents.push(event),
           });
           nextState = cnsResult.state;
           if (soundEvents.length > 0) {
@@ -390,6 +391,13 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
                 if (event.channel === null) return `raw.sound_stop owner=${event.ownerId} channel=- result=noop reason=channel_missing`;
                 const stopped = audioRuntimeRef.current?.stopChannel(`${event.ownerId}:${Math.trunc(event.channel)}`) ?? false;
                 return `raw.sound_stop owner=${event.ownerId} channel=${Math.trunc(event.channel)} result=${stopped ? 'stopped' : 'noop'}${stopped ? '' : ' reason=channel_not_found'}`;
+              }
+              if (event.type === 'pan') {
+                if (event.channel === null) return `raw.sound_pan owner=${event.ownerId} channel=- result=noop reason=channel_missing`;
+                if (event.pan === null || event.mode === null) return `raw.sound_pan owner=${event.ownerId} channel=${Math.trunc(event.channel)} result=noop reason=pan_missing`;
+                const normalized = Math.min(1, Math.max(-1, event.pan / 100));
+                const result = audioRuntimeRef.current?.updateChannelPan(`${event.ownerId}:${Math.trunc(event.channel)}`, normalized) ?? 'channel_not_found';
+                return `raw.sound_pan owner=${event.ownerId} channel=${Math.trunc(event.channel)} mode=${event.mode} raw=${event.pan} normalized=${normalized} result=${result === 'updated' ? 'updated' : 'noop'}${result === 'updated' ? '' : ` reason=${result}`}`;
               }
               if (event.scope === 'common') return `raw.sound_play_rejected owner=${event.ownerId} sample=F${event.group},${event.index} reason=common_sound_unavailable`;
               const sample = character.sounds ? findSndSample(character.sounds, event.group, event.index) : null;
@@ -625,6 +633,11 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
     setAudioDiagnostic(`audio test_stop result=${stopped ? 'stopped' : 'noop'}`);
   };
 
+  const panTestAudio = () => {
+    const result = audioRuntimeRef.current?.updateChannelPan('manual:0', -0.75) ?? 'channel_not_found';
+    setAudioDiagnostic(`audio test_pan normalized=-0.75 result=${result}`);
+  };
+
   const setAudioMute = (muted: boolean) => {
     setAudioMuted(muted);
     audioRuntimeRef.current?.setMuted(muted);
@@ -714,6 +727,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
                 onUnlockAudio={unlockAudio}
                 onTestAudio={testLoadedAudio}
                 onStopTestAudio={stopTestAudio}
+                onPanTestAudio={panTestAudio}
                 onAudioMutedChange={setAudioMute}
                 onAudioMasterVolumeChange={setAudioVolume}
               />
@@ -776,6 +790,7 @@ function SettingsPanel({
   onUnlockAudio,
   onTestAudio,
   onStopTestAudio,
+  onPanTestAudio,
   onAudioMutedChange,
   onAudioMasterVolumeChange,
 }: {
@@ -792,6 +807,7 @@ function SettingsPanel({
   onUnlockAudio: () => void;
   onTestAudio: () => void;
   onStopTestAudio: () => void;
+  onPanTestAudio: () => void;
   onAudioMutedChange: (muted: boolean) => void;
   onAudioMasterVolumeChange: (volume: number) => void;
 }) {
@@ -807,6 +823,7 @@ function SettingsPanel({
         onUnlock={onUnlockAudio}
         onTest={onTestAudio}
         onStopTest={onStopTestAudio}
+        onPanTest={onPanTestAudio}
         onMutedChange={onAudioMutedChange}
         onMasterVolumeChange={onAudioMasterVolumeChange}
       />
@@ -843,6 +860,7 @@ function AudioSettingsPanel({
   onUnlock,
   onTest,
   onStopTest,
+  onPanTest,
   onMutedChange,
   onMasterVolumeChange,
 }: {
@@ -853,6 +871,7 @@ function AudioSettingsPanel({
   onUnlock: () => void;
   onTest: () => void;
   onStopTest: () => void;
+  onPanTest: () => void;
   onMutedChange: (muted: boolean) => void;
   onMasterVolumeChange: (volume: number) => void;
 }) {
@@ -864,6 +883,7 @@ function AudioSettingsPanel({
         <button type="button" onClick={onUnlock}>Unlock Audio</button>
         <button type="button" onClick={onTest} disabled={status !== 'unlocked'}>Test loaded SND sample</button>
         <button type="button" onClick={onStopTest}>Stop test SND sample</button>
+        <button type="button" onClick={onPanTest}>Pan test SND left</button>
         <label>
           <input type="checkbox" checked={muted} onChange={(event) => onMutedChange(event.currentTarget.checked)} />
           Mute

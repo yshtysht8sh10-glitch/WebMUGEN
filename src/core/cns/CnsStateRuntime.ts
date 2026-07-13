@@ -6,7 +6,7 @@ import { activateMoveContact, resetMoveContact } from '../hitdef/MoveContactStat
 import { removeTarget, selectTargets } from '../hitdef/TargetState';
 import { normalizeHitAttribute } from '../hitdef/HitAttribute';
 import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, readNumberExpression, type CnsRuntimeTriggerContext } from './CnsRuntimeTrigger';
-import type { SoundPlayEvent, SoundStopEvent } from '../audio/SoundEvent';
+import type { SoundPanEvent, SoundPlayEvent, SoundStopEvent } from '../audio/SoundEvent';
 
 export type CnsRuntimeTrace = {
   playerId: 1 | 2;
@@ -31,6 +31,7 @@ export type CnsRuntimeInput = {
   getCnsDocumentForPlayer?: (playerId: number) => CnsDocument | null | undefined;
   onSoundPlay?: (event: SoundPlayEvent) => void;
   onSoundStop?: (event: SoundStopEvent) => void;
+  onSoundPan?: (event: SoundPanEvent) => void;
 };
 
 export type CnsRuntimeResult = { state: GameState; traces: CnsRuntimeTrace[] };
@@ -118,7 +119,6 @@ const RECOGNIZED_NO_OP_CONTROLLERS = new Map<string, string>([
   ['removeexplod', 'RemoveExplod'],
   ['reversaldef', 'ReversalDef'],
   ['screenbound', 'ScreenBound'],
-  ['sndpan', 'SndPan'],
   ['zoom', 'Zoom'],
 ]);
 
@@ -759,6 +759,7 @@ function executeController(
   if (type === 'superpause') return withExtendedPlayer(player, { superPauseTime: num(controller, 'time') ?? 0 }, 'SuperPause');
   if (type === 'playsnd') return playSound(player, opponent, controller, input, commands);
   if (type === 'stopsnd') return stopSound(player, opponent, controller, input, commands);
+  if (type === 'sndpan') return panSound(player, opponent, controller, input, commands);
   if (type === 'selfstate') {
     const value = num(controller, 'value');
     if (value === null) return withPlayer(player, false, 'SelfState');
@@ -1047,6 +1048,25 @@ function stopSound(
     channel: num(controller, 'channel', player, input, commands, opponent),
   });
   return withPlayer(player, true, 'StopSnd');
+}
+
+function panSound(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const relativePan = num(controller, 'pan', player, input, commands, opponent);
+  const absolutePan = num(controller, 'abspan', player, input, commands, opponent);
+  input.onSoundPan?.({
+    type: 'pan',
+    ownerId: player.selfStateOwnerId ?? player.id,
+    channel: num(controller, 'channel', player, input, commands, opponent),
+    pan: absolutePan ?? (relativePan === null ? null : relativePan * player.facing),
+    mode: absolutePan !== null ? 'abspan' : relativePan !== null ? 'pan' : null,
+  });
+  return withPlayer(player, true, 'SndPan');
 }
 
 function activateHitDef(

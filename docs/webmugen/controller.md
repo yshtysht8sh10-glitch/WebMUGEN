@@ -119,9 +119,9 @@ Examples:
 - `Trans`
 - `AngleDraw`
 
-CharacterLoader now exposes parsed SND v1 samples by group/index without depending on browser audio. This satisfies the asset prerequisite only: `PlaySnd`, `StopSnd`, and `SndPan` remain runtime safe no-ops until Issues #27-#29/#40 connect decoding, playback, channels, and pan.
+CharacterLoader exposes parsed SND v1 samples by group/index without depending on browser audio. PlaySnd, StopSnd, and SndPan are now connected to the shared browser runtime for character-owned channels.
 
-The shared browser adapter supports user-gesture AudioContext unlock, decode caching, master gain/mute, stop, cleanup, and safe diagnostics; see `audio.md`. `PlaySnd` emits firing-frame owner-scoped events and major playback parameters. `StopSnd` now stops and releases the matching owner/channel voice, including loops, without touching another owner or channel-less voices. Omitted channel and advanced ownership remain Partial; SndPan remains #40.
+The shared browser adapter supports user-gesture AudioContext unlock, decode caching, master gain/mute, stop, live pan updates, cleanup, and safe diagnostics; see `audio.md`. `PlaySnd` emits firing-frame owner-scoped events and major playback parameters. `StopSnd` stops and releases the matching owner/channel voice. `SndPan` updates that current voice without touching another owner, a replaced voice, or channel-less voices. Omitted/invalid required values, exact WinMUGEN pan mapping, and advanced ownership remain Partial.
 
 If the controller only stores a field or is skipped safely, mark Partial.
 

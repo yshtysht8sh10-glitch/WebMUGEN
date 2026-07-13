@@ -19,4 +19,12 @@ export type SoundStopEvent = {
   channel: number | null;
 };
 
-export type SoundRuntimeEvent = SoundPlayEvent | SoundStopEvent;
+export type SoundPanEvent = {
+  type: 'pan';
+  ownerId: number;
+  channel: number | null;
+  pan: number | null;
+  mode: 'pan' | 'abspan' | null;
+};
+
+export type SoundRuntimeEvent = SoundPlayEvent | SoundStopEvent | SoundPanEvent;

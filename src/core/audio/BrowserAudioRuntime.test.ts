@@ -63,6 +63,37 @@ describe('BrowserAudioRuntime', () => {
     expect(runtime.stopChannel('p1:3')).toBe(false);
   });
 
+  it('updates only the current matching channel pan and reports missing or unsupported handles', async () => {
+    const fake = createFakeAdapter();
+    const runtime = new BrowserAudioRuntime(() => fake.adapter);
+    await runtime.unlock();
+    await runtime.playSample('p1:0,0', new Uint8Array([1]), { channelKey: 'p1:2', loop: true });
+    await runtime.playSample('p2:0,0', new Uint8Array([1]), { channelKey: 'p2:2' });
+
+    expect(runtime.updateChannelPan('p1:2', 2)).toBe('updated');
+    expect(runtime.updateChannelPan('p2:2', -0.4)).toBe('updated');
+    expect(runtime.updateChannelPan('p1:9', 0)).toBe('channel_not_found');
+    expect(fake.pans).toEqual([1, -0.4]);
+
+    const unsupported = createFakeAdapter(false);
+    const unsupportedRuntime = new BrowserAudioRuntime(() => unsupported.adapter);
+    await unsupportedRuntime.unlock();
+    await unsupportedRuntime.playSample('p1:0,0', new Uint8Array([1]), { channelKey: 'p1:2' });
+    expect(unsupportedRuntime.updateChannelPan('p1:2', 0.5)).toBe('unsupported');
+  });
+
+  it('updates only the replacement voice and removes naturally ended channels from pan lookup', async () => {
+    const fake = createFakeAdapter();
+    const runtime = new BrowserAudioRuntime(() => fake.adapter);
+    await runtime.unlock();
+    await runtime.playSample('old', new Uint8Array([1]), { channelKey: 'p1:3' });
+    await runtime.playSample('new', new Uint8Array([2]), { channelKey: 'p1:3' });
+    expect(runtime.updateChannelPan('p1:3', 0.25)).toBe('updated');
+    expect(fake.pans).toEqual([0.25]);
+    fake.endedCallbacks[fake.endedCallbacks.length - 1]?.();
+    expect(runtime.updateChannelPan('p1:3', 0)).toBe('channel_not_found');
+  });
+
   it('safely reports unsupported, resume rejection, and decode failure', async () => {
     const diagnostics: string[] = [];
     const unsupported = new BrowserAudioRuntime(() => null, (item) => diagnostics.push(item.code));
@@ -82,12 +113,17 @@ describe('BrowserAudioRuntime', () => {
   });
 });
 
-function createFakeAdapter() {
+function createFakeAdapter(supportsPan = true) {
   const stop = vi.fn();
   const resume = vi.fn(async () => {});
   const decode = vi.fn(async () => ({ decoded: true }));
   const endedCallbacks: Array<() => void> = [];
-  const play = vi.fn((): AudioPlaybackHandle => ({ stop, setOnEnded(callback) { endedCallbacks.push(callback); } }));
+  const pans: number[] = [];
+  const play = vi.fn((): AudioPlaybackHandle => ({
+    stop,
+    setOnEnded(callback) { endedCallbacks.push(callback); },
+    ...(supportsPan ? { setPan(value: number) { pans.push(value); return true; } } : {}),
+  }));
   const close = vi.fn(async () => {});
   const gains: number[] = [];
   const adapter: AudioAdapter = {
@@ -95,5 +131,5 @@ function createFakeAdapter() {
     setMasterGain(value) { gains.push(value); },
     close,
   };
-  return { adapter, stop, resume, decode, play, close, gains, endedCallbacks };
+  return { adapter, stop, resume, decode, play, close, gains, endedCallbacks, pans };
 }
