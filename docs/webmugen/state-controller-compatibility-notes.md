@@ -31,7 +31,7 @@ Recognized safe no-ops are normally **Partial**, not Complete.
 | Vars | `VarSet`, `VarAdd`, `VarRangeSet`, `VarRandom` | Integer vars exist. `VarRandom` is still a deterministic placeholder. |
 | Hit-related | `HitDef`, `HitBy`, `NotHitBy`, `HitVelSet`, `HitFallVel`, `HitFallDamage` | `HitDef` evaluates a typed activation snapshot for major fields. Normal and guard damage/pause/hit time/velocity, guard control/kill, ground/air reaction, fall/recover data, and basic down time reach live common-state paths. Advanced guard/fall/down behavior remains Partial. |
 | Target-related | `TargetState`, `TargetVelSet`, `TargetLifeAdd`, etc. | TargetState records the controller owner and executes that owner's CNS; SelfState can return the target. Other registered-target mutations remain connected. Persistent TargetBind, Helper/multi-player lookup, animation ownership, and secondary parameters remain incomplete. |
-| Helper/Projectile/Explod | `Helper`, `Projectile`, `Explod`, `ModifyExplod`, `RemoveExplod` | CNS runtime recognition exists as Partial; full subsystem behavior must be implemented separately. |
+| Helper/Projectile/Explod | `Helper`, `Projectile`, `Explod`, `ModifyExplod`, `RemoveExplod`, `ExplodBindTime` | Explod audit complete: standalone collection/events/tests exist, but production CNS/GameState/step/renderer integration does not. Controllers remain safe no-ops; see `explod-integration-design.md`. |
 | Visual/audio effects | `AfterImage`, `PalFX`, `EnvShake`, `PlaySnd`, `Trans`, `AngleDraw` | Mostly Partial safe no-op or field storage. Rendering/audio integration incomplete. |
 
 ## Implementation guidance

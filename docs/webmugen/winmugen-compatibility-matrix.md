@@ -153,8 +153,8 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | DisplayToClipboard | Partial | Recognized safe no-op. Debug clipboard not implemented. |
 | EnvColor | Partial | Recognized safe no-op. Screen color flash not implemented. |
 | EnvShake | Partial | Recognized safe no-op. Screen shake not implemented. |
-| Explod | Partial | Recognized safe no-op in CNS runtime; Explod system exists separately. |
-| ExplodBindTime | Partial | Recognized safe no-op. Explod binding not implemented here. |
+| Explod | Partial | Issue #25 audit: recognized safe no-op; a standalone collection/event prototype exists but is not connected to production CNS, GameState, step, or renderer paths. Integration design is documented; game effect begins with #30/#31. |
+| ExplodBindTime | Partial | Recognized safe no-op. Issue #25 defines owner-scoped id/bind selection; runtime behavior is scheduled for #39 after #30-#32. |
 | FallEnvShake | Partial | Recognized safe no-op. Landing shake parameters are not connected to HitFeedback. |
 | ForceFeedback | Partial | Recognized safe no-op. Input device feedback not implemented. |
 | GameMakeAnim | Partial | Recognized safe no-op. Global animation effect not implemented. |
@@ -171,7 +171,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | LifeAdd | Complete | Basic implementation exists. |
 | LifeSet | Complete | Basic implementation exists. |
 | MakeDust | Partial | Recognized safe no-op. Dust rendering not implemented. |
-| ModifyExplod | Partial | Recognized safe no-op. Explod mutation not implemented here. |
+| ModifyExplod | Partial | Recognized safe no-op. Issue #25 defines owner-scoped selection and separate runtime/MUGEN ids; implementation is scheduled for #33. |
 | MoveHitReset | Complete | Clears current generation contact/hit/guard flags while preserving hit count and duplicate-target history; focused tests cover reset semantics. |
 | MoveTypeSet | Complete | Basic implementation exists. |
 | NotHitBy | Partial | Matching normalized HitDef state/attack attr rejects live contact. Duration/stacking remains incomplete. |
@@ -189,7 +189,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | PowerAdd | Complete | Basic implementation exists. |
 | PowerSet | Complete | Basic implementation exists. |
 | Projectile | Partial | Recognized safe no-op in CNS runtime; Projectile system exists separately. |
-| RemoveExplod | Partial | Recognized safe no-op. Explod removal not implemented here. |
+| RemoveExplod | Partial | Recognized safe no-op. The standalone prototype is not production-connected; owner-scoped removal is scheduled for #38. |
 | ReversalDef | Partial | Recognized safe no-op. Reversal behavior not implemented. |
 | ScreenBound | Partial | Recognized safe no-op. Camera/screen bound behavior not implemented. |
 | SelfState | Partial | Returns a borrowed player to `selfStateOwnerId` and executes that owner's CNS document. Helper/animation ownership remains incomplete. |
@@ -356,7 +356,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | MoveType | Complete | Basic support. |
 | Name | Partial | String source exists; metadata defaults empty. |
 | NumEnemy | Partial | Safe default 1. |
-| NumExplod | Partial | Safe default 0. |
+| NumExplod | Partial | Safe default 0. Issue #25 requires production lookup by owner plus optional MUGEN id after the runtime model is connected. |
 | NumHelper | Partial | Safe default 0. |
 | NumPartner | Partial | Safe default 0. |
 | NumProj | Partial | Safe default 0. |

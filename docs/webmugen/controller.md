@@ -100,6 +100,8 @@ Examples:
 - `Projectile`
 - `Explod`
 
+The Issue #25 audit found a standalone Explod collection, event adapter, and integration prototype, but none is connected to `CnsStateRuntime`, production `GameState`, the app step loop, or Canvas rendering. The integration contract, ownership/id separation, lifecycle order, and per-Issue test boundaries are defined in `explod-integration-design.md`. Until those paths are implemented, Explod-family controllers remain safe no-ops rather than completed behavior.
+
 The common Target controllers now resolve the attacker's registered Target entries, optionally filtered by HitDef `id`, and mutate the matching player rather than assuming P1/P2 roles. `TargetVelSet`, `TargetVelAdd`, `TargetLifeAdd`, `TargetPowerAdd`, `TargetFacing`, `TargetState`, `TargetBind`, and `TargetDrop` are connected. A missing target is a diagnosed safe no-op, and `TargetDrop` prevents later Target controllers in the same State pass from finding the removed entry.
 
 `TargetState` assigns the controller owner's stable player id as the target's State owner and resolves that owner's CNS document. This matches HitDef `p2stateno` with `p2getp1state = 1`; `SelfState` returns the target to its own document. Animation ownership, Helpers, and multi-player targets remain Partial. `TargetBind` applies its position immediately and records duration/offset metadata; following-frame bind maintenance is not yet connected.

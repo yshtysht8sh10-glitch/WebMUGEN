@@ -25,7 +25,7 @@ This document is a high-level inventory of WebMUGEN implementation areas. It is 
 | Physics | Basic position/velocity stepping exists; full WinMUGEN physics is Partial. |
 | Animation | AIR-based animation selection and timing exist; exact edge cases need audit. |
 | Hit/Collision | Partial live paths cover normal/guard/fall kill separation, explicit power/numhits, edge cornerpush, snap, sprite priority, effects, chains, targets, and common get-hit routing. Three-character P1/P2 real-data regression evidence is recorded in `hitdef-real-character-regression.md`; projectile/team/camera-relative behavior remains a major area. |
-| Projectile/Helper/Explod | Some recognition or partial systems exist; full compatibility remains incomplete. |
+| Projectile/Helper/Explod | Explod has a standalone collection/event prototype, audited in `explod-integration-design.md`; it is not connected to production GameState/CNS/step/render paths. Helper/Projectile also remain incomplete. |
 
 ## App/debug layer
 
