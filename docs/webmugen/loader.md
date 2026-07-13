@@ -15,6 +15,7 @@ A character load may involve:
 - CMD: character commands and State -1 routes;
 - AIR: animation actions and collision boxes;
 - SFF/SpritePack: sprite data;
+- SND v1: character WAV sample archive;
 - WebMUGEN common files:
   - `public/chars/common1.cns`
   - `public/chars/common.cmd`
@@ -55,6 +56,14 @@ Rules:
 - Character-defined routes should take precedence when they define the same primary behavior.
 - `common.cmd` fills missing baseline routes.
 - Common routes should be visible as MUGEN data rather than hidden TypeScript when practical.
+
+## SND loading policy
+
+`[Files] sound` is resolved relative to the DEF path and loaded through the same binary fetcher used by HTTP and ZIP characters. The pure SND v1 parser reads the linked subfile archive and exposes all entries plus deterministic `group,index` lookup without creating an `AudioContext`.
+
+The loader retains WAV payload bytes. Zero-byte, duplicate key, and non-RIFF/WAVE entries remain inspectable and carry parser diagnostics. Duplicate lookup uses the first archive entry while preserving later duplicates in the ordered sample list.
+
+A missing SND or a fatal invalid header does not discard otherwise valid character assets. `CharacterAssets.sounds` is `null` and `loadDiagnostics` records the sound path/error. Missing required CNS/CMD/AIR remains fatal. This separation allows silent character loading while keeping the audio failure observable.
 
 ## Why `common.cmd` exists
 
@@ -104,6 +113,10 @@ Loader tests should verify:
 - common routes fill missing baseline behavior;
 - `common1.cns` states are available without modifying the file;
 - State -1 merge keeps trigger/controller data intact.
+- DEF-relative and ZIP-relative SND paths load through `arrayBuffer`;
+- group/index lookup returns the original WAV bytes;
+- missing/invalid SND produces a load diagnostic without losing the character;
+- duplicate, missing lookup, zero-byte, and unknown payload cases remain deterministic.
 
 ## Documentation update rule
 

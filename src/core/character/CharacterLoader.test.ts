@@ -155,7 +155,38 @@ describe('CharacterLoader', () => {
     ]);
     expect(Array.from(character.palettes[0].bytes)).toEqual([1, 2, 3, 4, 5, 6]);
   });
+
+  it('loads DEF sound through the binary fetcher and exposes group/index bytes', async () => {
+    const textAssets = minimalTextAssets('[Files]\ncmd = kfm.cmd\ncns = kfm.cns\nanim = kfm.air\nsound = audio/kfm.snd\n');
+    const snd = makeSingleSampleSnd(7, 3, waveBytes(9));
+    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createTextOnlyFetcher(textAssets, new Map([
+      ['/chars/kfm/audio/kfm.snd', toArrayBuffer(snd)],
+    ])));
+
+    expect(character.sounds?.samplesByKey.get('7,3')?.bytes).toEqual(waveBytes(9));
+    expect(character.loadDiagnostics).toEqual([]);
+  });
+
+  it('keeps the character load usable when its declared SND is missing or invalid', async () => {
+    const textAssets = minimalTextAssets('[Files]\ncmd = kfm.cmd\ncns = kfm.cns\nanim = kfm.air\nsound = missing.snd\n');
+    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createTextOnlyFetcher(textAssets));
+
+    expect(character.cns.states[0].stateNo).toBe(0);
+    expect(character.sounds).toBeNull();
+    expect(character.loadDiagnostics).toEqual([expect.objectContaining({
+      asset: 'sound', path: '/chars/kfm/missing.snd', message: expect.stringContaining('missing binary asset'),
+    })]);
+  });
 });
+
+function minimalTextAssets(def: string): Map<string, string> {
+  return new Map([
+    ['/chars/kfm/kfm.def', def],
+    ['/chars/kfm/kfm.cns', '[StateDef 0]\ntype = S\nmovetype = I\nphysics = S\nanim = 0\nctrl = 1\n'],
+    ['/chars/kfm/kfm.air', 'Begin Action 0\n0,0, 0,0, 5\n'],
+    ['/chars/kfm/kfm.cmd', '[Command]\nname = "a"\ncommand = a\ntime = 1\n'],
+  ]);
+}
 
 function createTextOnlyFetcher(
   textAssets: Map<string, string>,
@@ -183,4 +214,22 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const copy = new Uint8Array(bytes.length);
   copy.set(bytes);
   return copy.buffer;
+}
+
+function makeSingleSampleSnd(group: number, index: number, payload: Uint8Array): Uint8Array {
+  const bytes = new Uint8Array(512 + 16 + payload.byteLength);
+  bytes.set(Array.from('ElecbyteSnd\0').map((value) => value.charCodeAt(0)), 0);
+  bytes.set([1, 0, 0, 0], 12);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(16, 1, true);
+  view.setUint32(20, 512, true);
+  view.setUint32(512 + 4, payload.byteLength, true);
+  view.setInt32(512 + 8, group, true);
+  view.setInt32(512 + 12, index, true);
+  bytes.set(payload, 528);
+  return bytes;
+}
+
+function waveBytes(marker: number): Uint8Array {
+  return new Uint8Array([82, 73, 70, 70, marker, 0, 0, 0, 87, 65, 86, 69]);
 }

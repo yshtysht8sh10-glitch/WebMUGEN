@@ -34,11 +34,13 @@ describe('AppCharacterLoader', () => {
   });
 
   it('loads a character from a zip archive', async () => {
+    const sndBytes = makeSingleSampleSnd(4, 2, new Uint8Array([82, 73, 70, 70, 1, 0, 0, 0, 87, 65, 86, 69]));
     const zipBytes = zipSync({
-      'Demo/Demo.def': strToU8('[Files]\ncmd = Demo.cmd\ncns = Demo.cns\nanim = Demo.air\n'),
+      'Demo/Demo.def': strToU8('[Files]\ncmd = Demo.cmd\ncns = Demo.cns\nanim = Demo.air\nsound = audio/Demo.snd\n'),
       'Demo/Demo.cns': strToU8('[StateDef 0]\ntype = S\nmovetype = I\nphysics = S\nanim = 0\nctrl = 1\n'),
       'Demo/Demo.air': strToU8('Begin Action 0\n0,0, 0,0, 5\n'),
       'Demo/Demo.cmd': strToU8('[Command]\nname = "a"\ncommand = a\ntime = 1\n'),
+      'Demo/audio/Demo.snd': sndBytes,
       'chars/common.cmd': strToU8('[Command]\nname = "holdup"\ncommand = /U\n'),
     });
     const originalFetch = globalThis.fetch;
@@ -59,6 +61,7 @@ describe('AppCharacterLoader', () => {
       expect(result.source).toBe('def');
       expect(result.character?.air.actions[0].actionNo).toBe(0);
       expect(result.character?.cmd.commands.map((command) => command.name)).toContain('a');
+      expect(result.character?.sounds?.samplesByKey.get('4,2')?.bytes).toEqual(sndBytes.slice(528));
       expect(result.character?.cnsSourceFiles?.map((file) => file.path)).toEqual(expect.arrayContaining([
         'Demo/Demo.def',
         'Demo/Demo.cns',
@@ -95,6 +98,9 @@ describe('AppCharacterLoader', () => {
       expect(result.character?.cns.states.length).toBeGreaterThan(9);
       expect(result.character?.cmd.commands.length).toBeGreaterThan(8);
       expect(result.character?.sprites?.sprites.size ?? 0).toBeGreaterThan(0);
+      expect(result.character?.sounds?.samples.length ?? 0).toBeGreaterThan(0);
+      expect(result.character?.sounds?.samples.some((sample) => sample.format === 'wave')).toBe(true);
+      expect(result.character?.loadDiagnostics).toEqual([]);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -319,4 +325,18 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const copy = new Uint8Array(bytes.length);
   copy.set(bytes);
   return copy.buffer;
+}
+
+function makeSingleSampleSnd(group: number, index: number, payload: Uint8Array): Uint8Array {
+  const bytes = new Uint8Array(512 + 16 + payload.byteLength);
+  bytes.set(Array.from('ElecbyteSnd\0').map((value) => value.charCodeAt(0)), 0);
+  bytes.set([1, 0, 0, 0], 12);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(16, 1, true);
+  view.setUint32(20, 512, true);
+  view.setUint32(516, payload.byteLength, true);
+  view.setInt32(520, group, true);
+  view.setInt32(524, index, true);
+  bytes.set(payload, 528);
+  return bytes;
 }

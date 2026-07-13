@@ -13,6 +13,7 @@ This document is a high-level inventory of WebMUGEN implementation areas. It is 
 | CMD | Commands, hold prefixes, simple sequences, and buffer time exist. WinMUGEN timing still needs audit. |
 | AIR | Actions, elements, timing, loop handling, and Clsn blocks exist. Edge cases remain. |
 | SFF/Sprites | SpritePack renderer prototype exists; full SFF compatibility may require further work. |
+| SND | SND v1 header/subfile parsing, group/index lookup, WAV byte retention, HTTP/ZIP CharacterLoader integration, and non-fatal load diagnostics exist. Browser decoding/playback begins with Issues #27/#28. |
 
 ## Runtime layer
 

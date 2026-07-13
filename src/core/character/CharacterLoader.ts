@@ -4,8 +4,9 @@ import { parseCmdText } from '../../parser/cmd/CmdParser';
 import type { CmdDocument } from '../../parser/cmd/CmdTypes';
 import { parseCnsText } from '../../parser/cns/CnsParser';
 import { getCharacterDefFiles, parseDefText } from '../../parser/def/DefParser';
+import { parseSndV1 } from '../../parser/snd/SndParser';
 import { convertSffV1ToImageDataSpritePack } from '../sprite/SffSpritePackConverter';
-import type { CharacterAssets, CharacterPaletteAsset, CharacterSourceFile } from './CharacterTypes';
+import type { CharacterAssets, CharacterLoadDiagnostic, CharacterPaletteAsset, CharacterSourceFile } from './CharacterTypes';
 
 const COMMON_CNS_PATH = '/chars/common1.cns';
 const COMMON_CMD_PATHS = ['/chars/common.cmd', '/chars/common1.cmd'];
@@ -138,8 +139,9 @@ export async function loadCharacterFromDef(
   const airPath = resolveAssetPath(basePath, files.anim);
   const cmdPath = resolveAssetPath(basePath, files.cmd);
   const characterCommonCnsPath = files.stcommon ? resolveAssetPath(basePath, files.stcommon) : null;
+  const soundPath = files.sound ? resolveAssetPath(basePath, files.sound) : null;
 
-  const [cnsText, extraCnsTexts, airText, cmdText, characterCommonCnsText, commonCnsText, fetchedCommonCmdTexts, palettes] = await Promise.all([
+  const [cnsText, extraCnsTexts, airText, cmdText, characterCommonCnsText, commonCnsText, fetchedCommonCmdTexts, palettes, soundResult] = await Promise.all([
     fetcher.text(primaryCnsPath),
     loadOptionalTextEntries(extraCnsPaths, fetcher),
     fetcher.text(airPath),
@@ -148,6 +150,7 @@ export async function loadCharacterFromDef(
     loadOptionalText(COMMON_CNS_PATH, fetcher),
     loadOptionalTextEntries(COMMON_CMD_PATHS, fetcher),
     loadCharacterPalettes(basePath, files.palettes ?? [], fetcher),
+    soundPath ? loadCharacterSounds(soundPath, fetcher) : Promise.resolve({ sounds: null, diagnostics: [] }),
   ]);
 
   const selectedPalette = palettes[0]?.bytes;
@@ -205,8 +208,24 @@ export async function loadCharacterFromDef(
     cmd: mergeCmdDocuments(characterCmd, commonCmdDocuments),
     sprites,
     palettes,
+    sounds: soundResult.sounds,
+    loadDiagnostics: soundResult.diagnostics,
     cnsSourceFiles,
   };
+}
+
+async function loadCharacterSounds(
+  path: string,
+  fetcher: CharacterAssetFetcher,
+): Promise<Pick<CharacterAssets, 'sounds'> & { diagnostics: CharacterLoadDiagnostic[] }> {
+  try {
+    return { sounds: parseSndV1(await fetcher.arrayBuffer(path)), diagnostics: [] };
+  } catch (error) {
+    return {
+      sounds: null,
+      diagnostics: [{ asset: 'sound', path, message: error instanceof Error ? error.message : String(error) }],
+    };
+  }
 }
 
 export function createHttpCharacterAssetFetcher(): CharacterAssetFetcher {

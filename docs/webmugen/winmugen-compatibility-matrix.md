@@ -182,7 +182,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | ParentVarSet | Partial | Recognized safe no-op. Parent var lookup not implemented. |
 | Pause | Partial | Stores pause time field only. Full pause effect handled elsewhere/incomplete. |
 | PlayerPush | Partial | `value = 0` disables fallback stage push for its execution frame. Grounded players always use horizontal push; airborne cross-over requires fixed 44x80 boxes to clear vertically. Width/AIR `Clsn2` integration remains incomplete. |
-| PlaySnd | Partial | Recognized safe no-op. Sound playback not implemented. |
+| PlaySnd | Partial | SND v1 character archives now load through DEF-relative HTTP/ZIP paths with group/index WAV lookup. Controller execution and browser playback remain safe no-op pending #27/#28. |
 | PosAdd | Complete | Basic implementation exists. |
 | PosFreeze | Partial | Recognized safe no-op. Freeze behavior not implemented. |
 | PosSet | Complete | Basic implementation exists. |
@@ -193,10 +193,10 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | ReversalDef | Partial | Recognized safe no-op. Reversal behavior not implemented. |
 | ScreenBound | Partial | Recognized safe no-op. Camera/screen bound behavior not implemented. |
 | SelfState | Partial | Returns a borrowed player to `selfStateOwnerId` and executes that owner's CNS document. Helper/animation ownership remains incomplete. |
-| SndPan | Partial | Recognized safe no-op. Sound pan not implemented. |
+| SndPan | Partial | SND assets are available, but channel playback/pan remains a safe no-op pending #27/#40. |
 | SprPriority | Partial | Stores priority field only. Rendering priority needs audit. |
 | StateTypeSet | Complete | Basic implementation exists. |
-| StopSnd | Partial | Recognized safe no-op. Sound stopping not implemented. |
+| StopSnd | Partial | SND assets are available, but channel playback/stopping remains a safe no-op pending #27/#29. |
 | SuperPause | Partial | Stores super pause time field only. Full superpause behavior incomplete. |
 | TargetBind | Partial | Selects registered targets by optional HitDef id, applies `pos` immediately, and stores time/offset metadata. Following-frame bind maintenance and full coordinate semantics remain incomplete. |
 | TargetDrop | Partial | Removes registered targets selected by optional HitDef id; later controllers safely see no target. `excludeid` and Helper/multi-player behavior remain incomplete. |
@@ -259,9 +259,9 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | guard.velocity | Partial | Applies live guard recoil with Facing conversion. |
 | guardflag | Partial | Selects standing/crouching/air guard eligibility. |
 | guardpausetime | Unsupported | Unprefixed legacy alias is not applied; `guard.pausetime` is connected. |
-| guardsound | Partial | Selects scoped guard sound cue; SND playback remains unavailable. |
+| guardsound | Partial | Selects scoped guard sound cue; character SND bytes are loadable, but Browser Audio playback remains unavailable. |
 | hitflag | Partial | H/L/M/A/F/D target classes are connected; `+`/`-` modifiers remain unsupported. |
-| hitsound | Partial | Selects scoped hit sound cue; SND playback remains unavailable. |
+| hitsound | Partial | Selects scoped hit sound cue; character SND bytes are loadable, but Browser Audio playback remains unavailable. |
 | fall.kill | Partial | Snapshotted into GetHitVar and honored by common-State HitFallDamage independently of normal/guard kill. Projectile parity remains incomplete. |
 | getpower | Partial | Explicit hit/guard values are applied once to the attacker and clamped to 0..3000. mugen.cfg-derived omitted defaults remain unavailable. |
 | givepower | Partial | Explicit hit/guard values are applied once to the defender and clamped to 0..3000. mugen.cfg-derived omitted defaults remain unavailable. |

@@ -119,6 +119,8 @@ Examples:
 - `Trans`
 - `AngleDraw`
 
+CharacterLoader now exposes parsed SND v1 samples by group/index without depending on browser audio. This satisfies the asset prerequisite only: `PlaySnd`, `StopSnd`, and `SndPan` remain runtime safe no-ops until Issues #27-#29/#40 connect decoding, playback, channels, and pan.
+
 If the controller only stores a field or is skipped safely, mark Partial.
 
 ## Complete vs Partial
