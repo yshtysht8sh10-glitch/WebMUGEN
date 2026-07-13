@@ -89,4 +89,6 @@ When debugging animation, expose:
 
 HitDef spark events carry common or attacker scope and the requested animation number into HitFeedback. Attacker-scoped `S` actions are validated against AIR; missing actions are diagnosed and not rendered. The Canvas renderer currently visualizes the requested id at the contact position rather than rendering full fightfx/character sprite animation frames, so spark rendering remains Partial.
 
+Explod rendering resolves the current AIR element from the creating owner's asset scope, then uses the matching owner SFF sprite. World-space entries pass through the camera-X conversion while screen-space `front/back/left/right` entries do not. Explod Facing, vfacing, AIR flip, sprite priority, and `ontop` are applied in the effect layer; missing animation or sprite data is hidden with a diagnostic instead of a placeholder.
+
 Do not promote animation triggers to Complete just because a simple KFM action works. Full AIR timing, loop behavior, and target/common animation ownership need broader verification.

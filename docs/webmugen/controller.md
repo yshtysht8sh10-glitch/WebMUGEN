@@ -100,7 +100,7 @@ Examples:
 - `Projectile`
 - `Explod`
 
-Issue #30 connects `Explod` creation through the normal expression-aware CNS executor into an owner-scoped `GameState.explods` collection. Internal runtime ids are independent from duplicate MUGEN ids. Creation freezes anim/source, postype and resolved initial coordinates, Facing, bind/removetime metadata, draw order, and later movement/render fields; missing or invalid anim is a diagnosed rejection. Round creation/restart clears the collection. Canvas rendering, animation/removetime/bind stepping, Modify/Remove/Bind controllers, Helper ownership, and exact camera/random semantics remain Partial per `explod-integration-design.md`.
+Issues #30/#31 connect `Explod` creation through the expression-aware CNS executor into owner-scoped `GameState.explods` entries and render their owner AIR/SFF frames. Internal runtime ids remain independent from duplicate MUGEN ids. `postype`/`pos`, Facing/vfacing, `sprpriority`, and `ontop` feed the Canvas effect layer without reapplying owner Facing; missing actions or sprites are hidden and diagnosed. Animation/removetime/bind stepping, Modify/Remove/Bind controllers, Helper/fightfx ownership, and exact camera/random semantics remain Partial per `explod-integration-design.md`.
 
 The common Target controllers now resolve the attacker's registered Target entries, optionally filtered by HitDef `id`, and mutate the matching player rather than assuming P1/P2 roles. `TargetVelSet`, `TargetVelAdd`, `TargetLifeAdd`, `TargetPowerAdd`, `TargetFacing`, `TargetState`, `TargetBind`, and `TargetDrop` are connected. A missing target is a diagnosed safe no-op, and `TargetDrop` prevents later Target controllers in the same State pass from finding the removed entry.
 

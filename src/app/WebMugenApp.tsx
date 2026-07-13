@@ -315,7 +315,11 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           : `Sample character fallback: ${loadResult.errorMessage ?? 'unknown reason'}`,
       );
 
-      rendererRef.current = new CanvasRenderer(canvas, character.air, null, character.sprites);
+      const characterRenderAssets = { airDocument: character.air, imageDataSpritePack: character.sprites };
+      rendererRef.current = new CanvasRenderer(canvas, character.air, null, character.sprites, {
+        1: characterRenderAssets,
+        2: characterRenderAssets,
+      });
       inputRef.current = new BrowserInput(window);
       p1CommandBufferRef.current = new InputBuffer(60);
       p2CommandBufferRef.current = new InputBuffer(60);
@@ -455,6 +459,11 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
 
         restartPressedRef.current = inputSnapshot.system.restartRound;
 
+        const explodRenderDiagnosticLines = rendererRef.current?.render(nextState, nextFeedback, nextRoundState, nextScore) ?? [];
+        if (explodRenderDiagnosticLines.length > 0) {
+          nextState = { ...nextState, hitDiagnosticLines: [...(nextState.hitDiagnosticLines ?? []), ...explodRenderDiagnosticLines] };
+        }
+
         gameStateRef.current = nextState;
         hitFeedbackRef.current = nextFeedback;
         roundStateRef.current = nextRoundState;
@@ -518,8 +527,6 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           lastStateNosRef: stateTransitionLogLastStateNosRef,
           setHistoryLines: setStateTransitionLogLines,
         });
-
-        rendererRef.current?.render(nextState, nextFeedback, nextRoundState, nextScore);
 
         frameId = requestAnimationFrame(tick);
       };

@@ -2,7 +2,7 @@
 
 Updated: 2026-07-13
 
-This document records the Issue #25 audit and the integration contract for the Explod roadmap. Issue #30 now connects the creation boundary described here; rendering and lifecycle evidence remain assigned to #31/#32.
+This document records the Issue #25 audit and the integration contract for the Explod roadmap. Issue #30 connects creation and Issue #31 connects owner AIR/SFF frame rendering; lifecycle evidence remains assigned to #32.
 
 ## Issue #30 implementation status
 
@@ -10,7 +10,7 @@ Production `GameState` owns an `ExplodRuntimeState` with a monotonically allocat
 
 The snapshot includes owner/animation source, anim, postype, resolved initial stage or screen position, Facing/vfacing, bind/removetime metadata, draw order, and the movement/render/pause fields scheduled for later Issues. P1/P2 ownership, duplicate MUGEN ids, expressions, all legacy postypes, invalid anim, round reset, and bundled KFM State 191 are covered by focused tests.
 
-Issue #30 intentionally does not advance animation, bind, removetime, velocity, or acceleration and does not draw the entry. Those are #31/#32/#34 responsibilities. `random`, exact camera space, Helper ownership, fightfx asset lookup, generic controller `persistent`, and `NumExplod` remain Partial.
+Issue #31 resolves each visible entry through its owner-scoped AIR/SFF assets, applies world/screen conversion and Facing/vfacing once, and submits regular or `ontop` draw layers. Missing AIR actions or sprites are hidden with `raw.explod_render` / `raw.explod_draw` diagnostics. Animation, bind, removetime, velocity, and acceleration stepping remain #32/#34 responsibilities. `random`, non-zero camera runtime, Helper ownership, fightfx asset loading, generic controller `persistent`, and `NumExplod` remain Partial.
 
 ## Audited implementation inventory
 
@@ -22,7 +22,7 @@ Issue #30 intentionally does not advance animation, bind, removetime, velocity, 
 | `core/cns/CnsRuntimeSideEffectsPhase55.ts` | Recognizes Explod and emits an untyped command payload. | Not called by `CnsStateRuntime`; duplicates the event adapter. | Deprecation candidate after the production controller path exists. Keep until replacement tests cover its useful cases. |
 | `core/runtime/RuntimeExplodIntegration.ts` | Applies prototype add/remove events relative to one supplied owner. | Not called by the app; assumes one external owner and conflates ids. | Reuse coordinate conversion test ideas, not the current public signature. |
 | `core/hitdef/HitRuntimeEvents.ts` | Can describe a hit spark as the prototype Explod event. | The production HitDef path uses `HitEvent.spark`/`HitFeedback`, not this event path. | Keep separate until Issue #36 deliberately selects the shared effect path. Do not silently reroute hit sparks in Issue #30. |
-| `CanvasRenderer` | Resolves AIR animation elements and draws player/projectile sprites. | Has no Explod collection or draw pass. | Reuse AIR element lookup and sprite draw primitives in Issue #31; add an explicit effect layer instead of pretending an Explod is a player/projectile. |
+| `CanvasRenderer` | Resolves AIR animation elements and draws player/projectile sprites. | Issue #31 adds an explicit Explod effect layer with owner asset selection, priority/ontop ordering, and diagnostics. | Keep lifecycle mutation outside the renderer; it consumes immutable runtime entries. |
 | CNS compatibility shims | `Explod`, `ModifyExplod`, `RemoveExplod`, and `ExplodBindTime` are recognized. `NumExplod` returns zero. | Safe no-op only; no game-state effect. | Keep Matrix status honest until each production path is connected and tested. |
 
 No current file needs immediate deletion. `CnsRuntimeSideEffectsPhase55` and the Explod branches of `CnsRuntimeEventAdapter` become removal candidates only after the production controller-to-request path has equivalent focused coverage.

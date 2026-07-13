@@ -7,7 +7,7 @@ import {
 import type { GameState, PlayerState, ProjectileState, Rect } from '../../core/engine/types';
 import { getAttackBox, getBodyBox, isAttackActive } from '../../core/engine/SimpleCollision';
 import { getProjectileWorldBox } from '../../core/projectile/ProjectileSystem';
-import { findSprite } from '../../core/sprite/SpritePackLoader';
+import { findSprite, spriteKey } from '../../core/sprite/SpritePackLoader';
 import type { SpritePack } from '../../core/sprite/SpriteTypes';
 import type { ImageDataSpritePack } from '../../core/sprite/ImageDataSpriteTypes';
 import { ImageDataSpriteRenderer } from './ImageDataSpriteRenderer';
@@ -16,6 +16,12 @@ import { HitFeedbackRenderer } from './HitFeedbackRenderer';
 import type { RoundState } from '../../core/engine/RoundState';
 import type { RoundScore } from '../../core/engine/RoundScore';
 import { RoundStateRenderer } from './RoundStateRenderer';
+import {
+  getExplodsInDrawOrder,
+  resolveExplodRenderFrames,
+  type CharacterRenderAssets,
+  type ExplodRenderFrame,
+} from './ExplodRender';
 
 export class CanvasRenderer {
   private readonly context: CanvasRenderingContext2D;
@@ -28,6 +34,8 @@ export class CanvasRenderer {
     private readonly airDocument?: AirDocument,
     private readonly spritePack?: SpritePack | null,
     private readonly imageDataSpritePack?: ImageDataSpritePack | null,
+    private readonly ownerAssets: Partial<Record<1 | 2, CharacterRenderAssets>> = {},
+    private readonly fightFxAssets?: CharacterRenderAssets,
   ) {
     const context = canvas.getContext('2d');
     if (!context) throw new Error('CanvasRenderingContext2D is not available.');
@@ -39,7 +47,7 @@ export class CanvasRenderer {
     hitFeedback?: HitFeedbackState,
     roundState?: RoundState,
     roundScore?: RoundScore,
-  ): void {
+  ): string[] {
     const ctx = this.context;
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     const shake = getScreenShakeOffset(hitFeedback);
@@ -49,14 +57,45 @@ export class CanvasRenderer {
     this.drawLifeBars(ctx, state);
     if (roundState) this.roundStateRenderer.render(ctx, roundState, roundScore);
     this.drawProjectiles(ctx, state.projectiles);
-    for (const player of getPlayersInSpritePriorityOrder(state)) {
-      this.drawPlayer(ctx, player, player.id === 1 ? '#66ccff' : '#ff99aa');
+    const explodResolution = resolveExplodRenderFrames(state, this.defaultAssets(), this.ownerAssets, this.fightFxAssets);
+    const explodDiagnostics = [...explodResolution.diagnosticLines];
+    const regularDrawables = [
+      ...getPlayersInSpritePriorityOrder(state).map((player) => ({
+        kind: 'player' as const,
+        priority: player.sprPriority ?? 0,
+        stableId: player.id,
+        player,
+      })),
+      ...getExplodsInDrawOrder(explodResolution.frames)
+        .filter((frame) => !frame.entry.onTop)
+        .map((frame) => ({
+          kind: 'explod' as const,
+          priority: frame.entry.spritePriority,
+          stableId: frame.entry.runtimeId,
+          frame,
+        })),
+    ].sort((a, b) => a.priority - b.priority || Number(a.kind === 'explod') - Number(b.kind === 'explod') || a.stableId - b.stableId);
+    for (const drawable of regularDrawables) {
+      if (drawable.kind === 'player') this.drawPlayer(ctx, drawable.player, drawable.player.id === 1 ? '#66ccff' : '#ff99aa');
+      else explodDiagnostics.push(this.drawExplod(ctx, drawable.frame));
     }
     if (hitFeedback) this.hitFeedbackRenderer.render(ctx, hitFeedback);
+    for (const frame of getExplodsInDrawOrder(explodResolution.frames).filter((candidate) => candidate.entry.onTop)) {
+      explodDiagnostics.push(this.drawExplod(ctx, frame));
+    }
     this.drawDebugBoxes(ctx, state.players[0]);
     this.drawDebugBoxes(ctx, state.players[1]);
     this.drawProjectileDebugBoxes(ctx, state.projectiles);
     ctx.restore();
+    return explodDiagnostics;
+  }
+
+  private defaultAssets(): CharacterRenderAssets {
+    return {
+      airDocument: this.airDocument,
+      spritePack: this.spritePack,
+      imageDataSpritePack: this.imageDataSpritePack,
+    };
   }
 
   private drawStage(ctx: CanvasRenderingContext2D): void {
@@ -138,6 +177,24 @@ export class CanvasRenderer {
     this.drawFallbackPlayer(ctx, player, color, currentElement);
   }
 
+  private drawExplod(ctx: CanvasRenderingContext2D, frame: ExplodRenderFrame): string {
+    const { entry, currentElement } = frame;
+    const drawn = this.drawSpriteByElement(
+      ctx,
+      currentElement.element.groupNo,
+      currentElement.element.imageNo,
+      frame.screenX,
+      frame.screenY,
+      entry.facing,
+      currentElement.element.offsetX,
+      currentElement.element.offsetY,
+      currentElement.element.flip,
+      frame.assets,
+      entry.verticalFacing,
+    );
+    return `raw.explod_draw internalId=${entry.runtimeId} mugenId=${entry.mugenId} anim=${entry.animationSource === 'fightfx' ? 'F' : ''}${entry.animNo} elem=${currentElement.elementIndex + 1} screen=(${frame.screenX},${frame.screenY}) facing=${entry.facing} vfacing=${entry.verticalFacing} result=${drawn ? 'drawn' : 'hidden'}${drawn ? '' : ' reason=sprite_not_found'}`;
+  }
+
   private drawSpriteByElement(
     ctx: CanvasRenderingContext2D,
     groupNo: number,
@@ -148,28 +205,30 @@ export class CanvasRenderer {
     offsetX = 0,
     offsetY = 0,
     flip = '',
+    assets: CharacterRenderAssets = this.defaultAssets(),
+    verticalFacing: 1 | -1 = 1,
   ): boolean {
     const flipX = flip.toUpperCase().includes('H');
-    const key = `${groupNo},${imageNo}`;
+    const key = spriteKey(groupNo, imageNo);
 
-    const imageDataSprite = this.imageDataSpritePack?.sprites.get(key);
+    const imageDataSprite = assets.imageDataSpritePack?.sprites.get(key);
     if (imageDataSprite) {
-      const canvas = this.imageDataSpriteRenderer.findCanvas(this.imageDataSpritePack, groupNo, imageNo);
+      const canvas = this.imageDataSpriteRenderer.findCanvas(assets.imageDataSpritePack, groupNo, imageNo);
       if (!canvas) return false;
 
       ctx.save();
       ctx.translate(x, y);
-      ctx.scale(facing * (flipX ? -1 : 1), 1);
+      ctx.scale(facing * (flipX ? -1 : 1), verticalFacing);
       ctx.drawImage(canvas, -imageDataSprite.xAxis + offsetX, -imageDataSprite.yAxis + offsetY);
       ctx.restore();
       return true;
     }
 
-    const sprite = findSprite(this.spritePack, groupNo, imageNo);
+    const sprite = findSprite(assets.spritePack, groupNo, imageNo);
     if (sprite) {
       ctx.save();
       ctx.translate(x, y);
-      ctx.scale(facing * (flipX ? -1 : 1), 1);
+      ctx.scale(facing * (flipX ? -1 : 1), verticalFacing);
       ctx.drawImage(sprite.image, -sprite.xAxis + offsetX, -sprite.yAxis + offsetY);
       ctx.restore();
       return true;
