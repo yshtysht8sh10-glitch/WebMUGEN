@@ -189,7 +189,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | PowerAdd | Complete | Basic implementation exists. |
 | PowerSet | Complete | Basic implementation exists. |
 | Projectile | Partial | Recognized safe no-op in CNS runtime; Projectile system exists separately. |
-| RemoveExplod | Partial | Recognized safe no-op. The standalone prototype is not production-connected; owner-scoped removal is scheduled for #38. |
+| RemoveExplod | Partial | Issue #38: the normal CNS/app/GameState path removes every explicit owner/id match in controller order before lifecycle and same-frame Canvas rendering. Duplicate ids, owner isolation, bound/persistent entries, missing ids, ordering with ModifyExplod, neutral fixture rendering, and bundled T-H-M-A CNS are tested. Omitted `id` remains a diagnosed safe no-op because its selection boundary is not established; broader Helper ownership also remains Partial. |
 | ReversalDef | Partial | Recognized safe no-op. Reversal behavior not implemented. |
 | ScreenBound | Partial | Recognized safe no-op. Camera/screen bound behavior not implemented. |
 | SelfState | Partial | Returns a borrowed player to `selfStateOwnerId` and executes that owner's CNS document. Helper/animation ownership remains incomplete. |

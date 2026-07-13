@@ -8,7 +8,7 @@ import type { SndDocument } from '../parser/snd/SndTypes';
 import { findSndSample, sndSampleKey } from '../parser/snd/SndTypes';
 import { BrowserAudioRuntime, type AudioRuntimeDiagnostic } from '../core/audio/BrowserAudioRuntime';
 import type { SoundRuntimeEvent } from '../core/audio/SoundEvent';
-import { applyExplodCreateEvents, applyExplodModifyEvents, stepExplodRuntime, type ExplodCreateEvent, type ExplodModifyEvent } from '../core/explod/ExplodSystem';
+import { applyExplodControllerEvents, stepExplodRuntime, type ExplodControllerEvent } from '../core/explod/ExplodSystem';
 import type { AirAction, AirDocument, AirElement } from '../parser/air/AirTypes';
 import type { ImageDataSpritePack } from '../core/sprite/ImageDataSpriteTypes';
 import { spriteKey } from '../core/sprite/SpritePackLoader';
@@ -376,8 +376,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           }
 
           const soundEvents: SoundRuntimeEvent[] = [];
-          const explodEvents: ExplodCreateEvent[] = [];
-          const explodModifyEvents: ExplodModifyEvent[] = [];
+          const explodRuntimeEvents: ExplodControllerEvent[] = [];
           const runtimeEventDiagnosticLines: string[] = [];
           const cnsResult = stepCnsStateRuntime(nextState, character.cns, {
             p1Commands,
@@ -391,19 +390,15 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             onSoundPlay: (event) => soundEvents.push(event),
             onSoundStop: (event) => soundEvents.push(event),
             onSoundPan: (event) => soundEvents.push(event),
-            onExplodCreate: (event) => explodEvents.push(event),
-            onExplodModify: (event) => explodModifyEvents.push(event),
+            onExplodCreate: (event) => explodRuntimeEvents.push(event),
+            onExplodModify: (event) => explodRuntimeEvents.push(event),
+            onExplodRemove: (event) => explodRuntimeEvents.push(event),
             screenWidth: canvas.width,
           });
           nextState = cnsResult.state;
-          if (explodEvents.length > 0) {
+          if (explodRuntimeEvents.length > 0) {
             const previousDiagnosticCount = nextState.hitDiagnosticLines?.length ?? 0;
-            nextState = applyExplodCreateEvents(nextState, explodEvents);
-            runtimeEventDiagnosticLines.push(...(nextState.hitDiagnosticLines ?? []).slice(previousDiagnosticCount));
-          }
-          if (explodModifyEvents.length > 0) {
-            const previousDiagnosticCount = nextState.hitDiagnosticLines?.length ?? 0;
-            nextState = applyExplodModifyEvents(nextState, explodModifyEvents);
+            nextState = applyExplodControllerEvents(nextState, explodRuntimeEvents);
             runtimeEventDiagnosticLines.push(...(nextState.hitDiagnosticLines ?? []).slice(previousDiagnosticCount));
           }
           if (nextState.explods.entries.length > 0) {

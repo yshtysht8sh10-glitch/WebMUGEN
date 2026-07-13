@@ -1,0 +1,91 @@
+[Statedef 910]
+type = S
+movetype = I
+physics = N
+anim = 100
+
+[State 910, Create bound persistent]
+type = Explod
+trigger1 = time = 0
+anim = 100
+id = 88
+bindtime = -1
+removetime = -1
+
+[State 910, Create duplicate]
+type = Explod
+trigger1 = time = 0
+anim = 100
+id = 88
+removetime = -1
+
+[State 910, Remove duplicate id]
+type = RemoveExplod
+trigger1 = time = 0
+id = 88
+
+[State 910, Missing id]
+type = RemoveExplod
+trigger1 = time = 0
+id = 999
+
+[State 910, Omitted id]
+type = RemoveExplod
+trigger1 = time = 0
+
+[Statedef 911]
+type = S
+movetype = I
+physics = N
+anim = 100
+
+[State 911, Trigger false]
+type = RemoveExplod
+trigger1 = 0
+id = 88
+
+[Statedef 912]
+type = S
+movetype = I
+physics = N
+anim = 100
+
+[State 912, Create]
+type = Explod
+trigger1 = time = 0
+anim = 100
+id = 88
+
+[State 912, Remove before modify]
+type = RemoveExplod
+trigger1 = time = 0
+id = 88
+
+[State 912, Modify after remove]
+type = ModifyExplod
+trigger1 = time = 0
+id = 88
+pos = 99, 99
+
+[Statedef 913]
+type = S
+movetype = I
+physics = N
+anim = 100
+
+[State 913, Create]
+type = Explod
+trigger1 = time = 0
+anim = 100
+id = 88
+
+[State 913, Modify before remove]
+type = ModifyExplod
+trigger1 = time = 0
+id = 88
+pos = 77, 77
+
+[State 913, Remove after modify]
+type = RemoveExplod
+trigger1 = time = 0
+id = 88

@@ -89,6 +89,14 @@ export type ExplodModifyEvent = {
   screenWidth: number;
 };
 
+export type ExplodRemoveEvent = {
+  type: 'remove';
+  owner: RuntimeEntityRef;
+  mugenId: number | null;
+};
+
+export type ExplodControllerEvent = ExplodCreateEvent | ExplodModifyEvent | ExplodRemoveEvent;
+
 export type ExplodCreateRejection = {
   type: 'rejected';
   owner: RuntimeEntityRef;
@@ -163,6 +171,36 @@ export function applyExplodModifyEvents(gameState: GameState, events: readonly E
   }
 
   return { ...gameState, explods: { ...gameState.explods, entries }, hitDiagnosticLines: diagnosticLines };
+}
+
+export function applyExplodRemoveEvents(gameState: GameState, events: readonly ExplodRemoveEvent[]): GameState {
+  let entries = gameState.explods.entries;
+  const diagnosticLines = [...(gameState.hitDiagnosticLines ?? [])];
+
+  for (const event of events) {
+    if (event.mugenId === null) {
+      diagnosticLines.push(`raw.explod_remove owner=p${event.owner.rootPlayerId} id=- matched=0 reason=id_missing`);
+      continue;
+    }
+
+    const internalIds = entries
+      .filter((entry) => sameRuntimeOwner(entry.owner, event.owner) && entry.mugenId === event.mugenId)
+      .map((entry) => entry.runtimeId);
+    entries = entries.filter((entry) => !sameRuntimeOwner(entry.owner, event.owner) || entry.mugenId !== event.mugenId);
+    diagnosticLines.push(
+      `raw.explod_remove owner=p${event.owner.rootPlayerId} id=${event.mugenId} matched=${internalIds.length} internalIds=[${internalIds.join(',') || '-'}]${internalIds.length === 0 ? ' reason=not_found' : ' reason=removeexplod'}`,
+    );
+  }
+
+  return { ...gameState, explods: { ...gameState.explods, entries }, hitDiagnosticLines: diagnosticLines };
+}
+
+export function applyExplodControllerEvents(gameState: GameState, events: readonly ExplodControllerEvent[]): GameState {
+  return events.reduce((state, event) => {
+    if (event.type === 'modify') return applyExplodModifyEvents(state, [event]);
+    if (event.type === 'remove') return applyExplodRemoveEvents(state, [event]);
+    return applyExplodCreateEvents(state, [event]);
+  }, gameState);
 }
 
 function applyExplodModifyPatch(entry: ExplodRuntimeEntry, event: ExplodModifyEvent, gameState: GameState): ExplodRuntimeEntry {

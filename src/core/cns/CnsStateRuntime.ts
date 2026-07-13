@@ -15,6 +15,7 @@ import {
   type ExplodModifyEvent,
   type ExplodModifyPatch,
   type ExplodPostype,
+  type ExplodRemoveEvent,
   type RuntimeEntityRef,
 } from '../explod/ExplodSystem';
 
@@ -44,6 +45,7 @@ export type CnsRuntimeInput = {
   onSoundPan?: (event: SoundPanEvent) => void;
   onExplodCreate?: (event: ExplodCreateEvent) => void;
   onExplodModify?: (event: ExplodModifyEvent) => void;
+  onExplodRemove?: (event: ExplodRemoveEvent) => void;
   screenWidth?: number;
 };
 
@@ -127,7 +129,6 @@ const RECOGNIZED_NO_OP_CONTROLLERS = new Map<string, string>([
   ['parentvarset', 'ParentVarSet'],
   ['posfreeze', 'PosFreeze'],
   ['projectile', 'Projectile'],
-  ['removeexplod', 'RemoveExplod'],
   ['reversaldef', 'ReversalDef'],
   ['screenbound', 'ScreenBound'],
   ['zoom', 'Zoom'],
@@ -773,6 +774,7 @@ function executeController(
   if (type === 'sndpan') return panSound(player, opponent, controller, input, commands);
   if (type === 'explod') return createExplod(player, opponent, controller, input, commands);
   if (type === 'modifyexplod') return modifyExplod(player, opponent, controller, input, commands);
+  if (type === 'removeexplod') return removeExplod(player, opponent, controller, input, commands);
   if (type === 'selfstate') {
     const value = num(controller, 'value');
     if (value === null) return withPlayer(player, false, 'SelfState');
@@ -1225,6 +1227,22 @@ function modifyExplod(
     screenWidth: input.screenWidth ?? 640,
   });
   return withPlayer(player, true, 'ModifyExplod');
+}
+
+function removeExplod(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const requestedId = optionalNum(controller, 'id', player, input, commands, opponent);
+  input.onExplodRemove?.({
+    type: 'remove',
+    owner: { entityId: player.id, rootPlayerId: player.id },
+    mugenId: requestedId === null ? null : Math.trunc(requestedId),
+  });
+  return withPlayer(player, true, 'RemoveExplod');
 }
 
 function normalizeExplodPostype(value: string | null): ExplodPostype {

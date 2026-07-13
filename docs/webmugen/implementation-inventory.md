@@ -26,7 +26,7 @@ This document is a high-level inventory of WebMUGEN implementation areas. It is 
 | Physics | Basic position/velocity stepping exists; full WinMUGEN physics is Partial. |
 | Animation | AIR-based animation selection and timing exist; exact edge cases need audit. |
 | Hit/Collision | Partial live paths cover normal/guard/fall kill separation, explicit power/numhits, edge cornerpush, snap, sprite priority, effects, chains, targets, and common get-hit routing. Three-character P1/P2 real-data regression evidence is recorded in `hitdef-real-character-regression.md`; projectile/team/camera-relative behavior remains a major area. |
-| Projectile/Helper/Explod | Explod creation, owner AIR/SFF Canvas rendering, animation/removetime/bind lifecycle, round cleanup, explicit-ID ModifyExplod partial updates, and diagnostics are connected to the production `GameState` model. Omitted-ID modification, movement integration, pause gating, fightfx assets, RemoveExplod, and ExplodBindTime remain incomplete; see `explod-integration-design.md`. Helper/Projectile also remain incomplete. |
+| Projectile/Helper/Explod | Explod creation, owner AIR/SFF Canvas rendering, lifecycle, round cleanup, ordered explicit-ID modification/removal, and diagnostics are connected to the production `GameState` model. Omitted-ID selection, movement integration, pause gating, fightfx assets, and ExplodBindTime remain incomplete; see `explod-integration-design.md`. Helper/Projectile also remain incomplete. |
 
 ## App/debug layer
 
