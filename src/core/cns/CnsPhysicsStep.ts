@@ -1,15 +1,15 @@
 import type { GameState, PlayerState } from '../engine/types';
 import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 import type { CnsDocument, CnsStateDefinition } from '../../mugen/common/cnsTypes';
+import { readCnsConst } from './CnsConstants';
 
-const AIR_GRAVITY = 0.6;
 const GROUND_FRICTION = 0.82;
 const COMMON_JUMP_LAND_STATE = 52;
 
 export function stepCnsPhysicsMotion(state: GameState, cns?: CnsDocument | null): GameState {
   const movedPlayers = [
-    stepPlayerCnsPhysics(state.players[0]),
-    stepPlayerCnsPhysics(state.players[1]),
+    stepPlayerCnsPhysics(state.players[0], cns),
+    stepPlayerCnsPhysics(state.players[1], cns),
   ] as [PlayerState, PlayerState];
   const clampedPlayers = [
     clampPlayerAfterCnsPhysics(movedPlayers[0]),
@@ -26,7 +26,7 @@ export function stepCnsPhysicsMotion(state: GameState, cns?: CnsDocument | null)
   };
 }
 
-function stepPlayerCnsPhysics(player: PlayerState): PlayerState {
+function stepPlayerCnsPhysics(player: PlayerState, cns?: CnsDocument | null): PlayerState {
   if (player.hitPause > 0) {
     return {
       ...player,
@@ -52,7 +52,7 @@ function stepPlayerCnsPhysics(player: PlayerState): PlayerState {
   }
 
   if (player.physics === 'A') {
-    const nextVy = player.vy + AIR_GRAVITY;
+    const nextVy = player.vy + readCnsConst(cns, 'movement.yaccel');
     return {
       ...player,
       x: player.x + player.vx,

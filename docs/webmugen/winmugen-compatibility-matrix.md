@@ -57,13 +57,13 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | 12 | Crouch end | Complete | Common crouch-release route from State 11 is covered by CNS runtime assertions. |
 | 20 | Walk forward | Complete | Common holdfwd route is covered by CNS runtime ChangeState assertions. Walk route is blocked during dash states 100-107. |
 | 21 | Walk back | Complete | Common holdback route is covered by CNS runtime ChangeState assertions. Walk route is blocked during dash states 100-107. |
-| 40 | Jump start | Complete | Common holdup route into State 40 is covered by CNS command/runtime tests. |
+| 40 | Jump start | Complete | Common holdup route selects character `jump.neu/fwd/back` and `runjump.fwd/back` pairs with one Facing conversion; focused runtime tests cover all profiles and both Facings. |
 | 41 | Character-defined jump variant | Complete | Character-defined holdup override into State 41 is covered by CNS runtime assertions. |
 | 42 | Character-defined jump variant | Complete | Character-defined holdup route into State 42 is covered by CNS runtime assertions. |
 | 45 | Air jump / jump transition variant | Partial 60% | Implemented: Character-defined State 45 entry is covered; common air-jump rules still need WinMUGEN/common1 verification. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| 50 | Jump up | Partial 40% | Implemented: Common baseline exists. Air physics incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| 50 | Jump up | Partial 60% | Implemented: Common air state uses character `movement.yaccel` once per Physics=A frame; two profiles have verified apex and airtime. Missing: broader coordinate scaling and uncommon air-state semantics. Evidence: focused jump trajectory and bundled real-character loader/runtime tests. |
 | 51 | Jump down | Partial 60% | Implemented: Character-defined State 51 entry is covered; full common air-state sequencing is still incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| 52 | Jump land | Partial 40% | Implemented: Common baseline exists. Landing logic under active work. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| 52 | Jump land | Partial 60% | Implemented: Character-specific jump trajectories enter State 52 on the measured ground-crossing frame with Y/velocity reset. Missing: broader stage-coordinate and uncommon landing semantics. Evidence: focused apex/airtime/landing tests. |
 | 100 | Run / dash forward | Partial 40% | Implemented: Common route added with PosAdd. Common walk routes no longer interrupt dash states 100-107. Needs true velocity/friction behavior. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
 | 101 | Run / dash substate | Audit needed | Common walk routes no longer interrupt dash states 100-107. Common implementations vary. |
 | 102 | Run / dash substate | Audit needed | Common implementations vary. |
@@ -125,7 +125,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 |---|---|---|---|
 | type | State type: S/C/A/L | Complete | Parsed and applied. |
 | movetype | I/A/H | Complete | Parsed and applied. |
-| physics | S/C/A/N | Partial 70% | Implemented: Parsed and applied. Physics behavior incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| physics | S/C/A/N | Partial 75% | Implemented: Physics=A applies character `movement.yaccel` once, Physics=N preserves explicit controller motion, and common jump landing is frame-tested. Missing: exact ground friction, coordinate scaling, and broader stage behavior. Evidence: focused jump, motion, and air-hit regression tests. |
 | anim | Initial animation | Complete | Parsed and applied. Animless state preservation exists. |
 | velset | Initial velocity | Partial 40% | Implemented: Numeric X/Y pairs apply on State entry before controllers; X is Facing-relative. Ground get-hit regression coverage verifies that State 5000 clears live `vy` while preserving `GetHitVar(yvel)`/`hitVelY`. Expression-valued header components need broader audit. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
 | ctrl | Control flag | Complete | Parsed and applied. |
@@ -326,7 +326,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | Ceil | Complete | `Ceil(...)` supported for numeric expressions. |
 | Command | Complete | Basic command set matching. |
 | Cond | Complete | Numeric conditional function supported in runtime trigger evaluator. |
-| Const | Fallback 40% | Implemented: Common constants return default approximations. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current approximate behavior, runtime inventory, and focused-test inventory. |
+| Const | Partial 65% | Implemented: Current-character `[Data]`, `[Size]`, `[Velocity]`, and `[Movement]` values resolve through the intended CNS path; jump/run-jump pairs and yaccel have production-loader coverage. Missing: remaining constant families and coordinate scaling. Evidence: focused expression/runtime tests and bundled T-H-M-A loading. |
 | Cos | Complete | Numeric math function supported in runtime trigger evaluator. |
 | Ctrl | Complete | Basic support. |
 | DrawGame | Safe no-op | Recognized by the runtime without changing game state. Safe default false. Round result not implemented. |

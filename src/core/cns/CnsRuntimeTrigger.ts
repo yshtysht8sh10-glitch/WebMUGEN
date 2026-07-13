@@ -2,6 +2,8 @@ import type { PlayerState } from '../engine/types';
 import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 import { selectTargets } from '../hitdef/TargetState';
 import { hitDefAttrMatches } from '../hitdef/HitAttribute';
+import type { CnsDocument } from '../../mugen/common/cnsTypes';
+import { readCnsConst } from './CnsConstants';
 
 export type CnsRuntimeTriggerContext = {
   player: PlayerState;
@@ -17,6 +19,7 @@ export type CnsRuntimeTriggerContext = {
   screenWidth?: number;
   screenHeight?: number;
   animationExists?: (animNo: number) => boolean;
+  constants?: CnsDocument;
 };
 
 type NumberSource = (context: CnsRuntimeTriggerContext) => number;
@@ -270,7 +273,7 @@ function getNumberSource(rawName: string): NumberSource | null {
   if (fVarMatch) return (context) => readPlayerFVar(context.player, Number(fVarMatch[1]));
 
   const constMatch = name.match(/^const\(([^)]+)\)$/);
-  if (constMatch) return () => readDefaultConst(constMatch[1]);
+  if (constMatch) return (context) => readCnsConst(context.constants, constMatch[1]);
 
   const getHitVarMatch = name.match(/^gethitvar\(([^)]+)\)$/);
   if (getHitVarMatch) return (context) => readGetHitVar(context.player, getHitVarMatch[1]);
@@ -644,31 +647,6 @@ function readGetHitVar(player: PlayerState, name: string): number {
     case 'hittime': return 0;
     case 'slidetime': return 0;
     case 'ctrltime': return 0;
-    default: return 0;
-  }
-}
-
-function readDefaultConst(name: string): number {
-  switch (name.trim().toLowerCase()) {
-    case 'data.life': return 1000;
-    case 'data.power': return 3000;
-    case 'size.xscale': return 1;
-    case 'size.yscale': return 1;
-    case 'size.ground.back': return 15;
-    case 'size.ground.front': return 16;
-    case 'size.air.back': return 12;
-    case 'size.air.front': return 12;
-    case 'size.height': return 60;
-    case 'size.attack.dist': return 160;
-    case 'velocity.walk.fwd.x': return 2;
-    case 'velocity.walk.back.x': return -2;
-    case 'velocity.jump.y': return -8.4;
-    case 'velocity.jump.neu.x': return 0;
-    case 'velocity.jump.fwd.x': return 3.2;
-    case 'velocity.jump.back.x': return -3.2;
-    case 'movement.airjump.num': return 1;
-    case 'movement.airjump.height': return 35;
-    case 'movement.yaccel': return 0.6;
     default: return 0;
   }
 }

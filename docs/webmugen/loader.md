@@ -39,6 +39,8 @@ Rules:
 - Do not patch `common1.cns` for WebMUGEN convenience.
 - Runtime incompatibilities should be fixed in parser/runtime/trigger/controller/physics layers.
 
+Character `[Data]`, `[Size]`, `[Velocity]`, and `[Movement]` sections are retained as CNS metadata. `Const(...)` resolves those character sections before using the existing compatibility defaults. Directional jump and run-jump pairs therefore remain available to common State 40, and `movement.yaccel` reaches air physics without copying character values into TypeScript.
+
 ## CMD loading policy
 
 ```text

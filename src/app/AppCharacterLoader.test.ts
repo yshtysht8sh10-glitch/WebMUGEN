@@ -3,6 +3,9 @@ import { zipSync, strToU8 } from 'fflate';
 import { readFile } from 'node:fs/promises';
 import { getAnimationDuration } from '../core/animation/AnimationDuration';
 import { stepCnsStateRuntime } from '../core/cns/CnsStateRuntime';
+import { readCnsConst } from '../core/cns/CnsConstants';
+import { stepCnsPhysicsMotion } from '../core/cns/CnsPhysicsStep';
+import { readNumberExpression } from '../core/cns/CnsRuntimeTrigger';
 import { analyzeCnsCoverage } from '../core/cns/CnsCoverageDiagnostics';
 import { createInitialGameState } from '../core/engine/GameState';
 import { formatScenarioFrame, holdP1Keys, neutral, simulateCnsInputScenario } from '../testing/CnsInputScenarioSimulator';
@@ -187,7 +190,33 @@ describe('AppCharacterLoader', () => {
         prevStateNo: 40,
         ctrl: true,
       });
-      expect(runtimeResult.state.players[0].vy).toBeLessThan(0);
+      expect(readCnsConst(character!.cns, 'velocity.jump.neu.y')).toBe(-9.1);
+      expect(readCnsConst(character!.cns, 'movement.yaccel')).toBe(0.47);
+      expect(runtimeResult.state.players[0].vy).toBe(-9.1);
+      expect(stepCnsPhysicsMotion(runtimeResult.state, character!.cns).players[0].vy).toBeCloseTo(-8.63);
+
+      const delayedDirectional = stepCnsStateRuntime({
+        ...state,
+        players: [{
+          ...state.players[0],
+          stateNo: 40,
+          animNo: 40,
+          animTime: jumpStartupDuration,
+          stateTime: jumpStartupDuration,
+          ctrl: false,
+          sysVars: { 1: 1 },
+        }, state.players[1]],
+      }, character!.cns, {
+        p1Commands: new Set(),
+        p2Commands: new Set(),
+        getAnimationDuration: (animNo) => getAnimationDuration(character!.air, animNo),
+      });
+      const jumpVelocityController = character!.cns.states.find((candidate) => candidate.stateNo === 40)?.controllers.find((controller) => controller.type.toLowerCase() === 'velset' && controller.params.y !== undefined);
+      expect(jumpVelocityController?.params.y).toContain('const(velocity.jump.fwd.y)');
+      expect(character!.cns.states.find((candidate) => candidate.stateNo === 50)?.velocitySet).toBeUndefined();
+      expect(readNumberExpression(String(jumpVelocityController!.params.y), { player: state.players[0], constants: character!.cns })).toBe(-9.1);
+      expect(readNumberExpression(String(jumpVelocityController!.params.y), { player: { ...state.players[0], sysVars: { 1: 1 }, prevStateNo: 0 }, constants: character!.cns })).toBe(-9.1);
+      expect(delayedDirectional.state.players[0]).toMatchObject({ stateNo: 50, vx: 3.57, vy: -9.1 });
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -227,6 +256,16 @@ describe('AppCharacterLoader', () => {
         ctrl: true,
       });
       expect(finalFrame!.p1.vy).toBeLessThan(0);
+
+      for (const [key, expectedDirection] of [['ArrowRight', 1], ['ArrowLeft', -1]] as const) {
+        const directional = simulateCnsInputScenario(character!, [
+          holdP1Keys([key, 'ArrowUp'], 2),
+          neutral(8),
+        ]);
+        const airborne = directional.frames.find((frame) => frame.p1.stateNo === 50 && frame.p1.vy < 0);
+        expect(airborne, directional.frames.map(formatScenarioFrame).join('\n')).toBeDefined();
+        expect(Math.sign(airborne!.p1.vx)).toBe(expectedDirection);
+      }
     } finally {
       globalThis.fetch = originalFetch;
     }

@@ -156,3 +156,39 @@ triggerall = vel y >= 0
 trigger1 = pos y >= 0
 value = 52
 ctrl = 0
+
+; Common jump startup for characters that rely on common1.cns.
+; Directional and running profiles use the character's [Velocity] pairs.
+[Statedef 40]
+type = S
+physics = S
+anim = 40
+ctrl = 0
+sprpriority = 1
+
+[State 40, Direction]
+type = VarSet
+trigger1 = Time = 0
+sysvar(1) = 0
+
+[State 40, Forward]
+type = VarSet
+trigger1 = command = "holdfwd"
+sysvar(1) = 1
+
+[State 40, Back]
+type = VarSet
+trigger1 = command = "holdback"
+sysvar(1) = -1
+
+[State 40, Jump Velocity]
+type = VelSet
+trigger1 = AnimTime = 0
+x = ifelse(sysvar(1)=0, const(velocity.jump.neu.x), ifelse(sysvar(1)=1, ifelse(prevstateno=100, const(velocity.runjump.fwd.x), const(velocity.jump.fwd.x)), ifelse(prevstateno=105, const(velocity.runjump.back.x), const(velocity.jump.back.x))))
+y = ifelse(sysvar(1)=0, const(velocity.jump.neu.y), ifelse(sysvar(1)=1, ifelse(prevstateno=100, const(velocity.runjump.fwd.y), const(velocity.jump.fwd.y)), ifelse(prevstateno=105, const(velocity.runjump.back.y), const(velocity.jump.back.y))))
+
+[State 40, Air State]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 50
+ctrl = 1

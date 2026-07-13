@@ -71,6 +71,10 @@ When adding expression support, update Expression rows in the matrix, not unrela
 
 `PlayerState.vx` is stored in world coordinates, but the CNS `Vel X` trigger is facing-relative. The evaluator multiplies world X velocity by the player's facing when exposing `Vel X`; `Vel Y` remains unchanged.
 
+## Character constants
+
+`Const(...)` first resolves the current character CNS metadata. `[Velocity]` pairs expose their requested X/Y component, including `jump.neu`, `jump.fwd`, `jump.back`, `runjump.fwd`, and `runjump.back`; a directional entry that defines only X inherits the same character's `jump.neu` Y, as used by bundled real character data. `[Movement] yaccel` feeds both expressions and `Physics=A`. Existing defaults remain only for missing values already covered by the former compatibility table. Other WinMUGEN constant families and coordinate scaling remain Partial.
+
 ## Safe defaults
 
 Safe defaults are useful but should not be overclaimed.

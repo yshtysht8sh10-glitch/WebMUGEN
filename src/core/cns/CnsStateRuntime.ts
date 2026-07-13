@@ -52,6 +52,7 @@ export type CnsRuntimeInput = {
   onPause?: (event: PauseControllerEvent) => void;
   pauseState?: PauseState;
   screenWidth?: number;
+  constants?: CnsDocument;
 };
 
 export type CnsRuntimeResult = { state: GameState; traces: CnsRuntimeTrace[] };
@@ -146,8 +147,8 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
 
   const p1Cns = resolvePlayerCns(state.players[0], cns, input);
   const p2Cns = resolvePlayerCns(state.players[1], cns, input);
-  const p1 = stepPlayer(state.players[0], state.players[1], 1, p1Cns, input, input.p1Commands, state.frame);
-  const p2 = stepPlayer(state.players[1], state.players[0], 2, p2Cns, input, input.p2Commands, state.frame);
+  const p1 = stepPlayer(state.players[0], state.players[1], 1, p1Cns, { ...input, constants: p1Cns }, input.p1Commands, state.frame);
+  const p2 = stepPlayer(state.players[1], state.players[0], 2, p2Cns, { ...input, constants: p2Cns }, input.p2Commands, state.frame);
 
   const players = applyTargetOperations([p1.player, p2.player], [...p1.targetOperations, ...p2.targetOperations], cns, input);
   return { state: { ...state, players }, traces: [p1.trace, p2.trace] };
@@ -517,6 +518,7 @@ function createTriggerContext(
     animTime: mugenAnimTime(player, input),
     animElemNo: input.getAnimationElementNo?.(player.animNo, player.animTime) ?? undefined,
     animationExists: input.getAnimationDuration ? (animNo) => input.getAnimationDuration?.(animNo) !== null : undefined,
+    constants: input.constants,
   };
 }
 

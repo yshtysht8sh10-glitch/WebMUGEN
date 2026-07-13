@@ -66,6 +66,10 @@ Important interactions:
 - air physics may apply gravity;
 - ground checks may trigger landing state routes.
 
+For ordinary `Physics=A`, the physics step reads `Const(movement.yaccel)` from the current character CNS and adds it exactly once before integrating Y. The previous unconditional `0.6` gravity is retained only as the existing missing-value fallback. `Physics=N` receives no automatic gravity, so common air-hit/fall states continue to use their explicit `VelAdd y = GetHitVar(yaccel)` controllers without a second acceleration.
+
+The visible common State 40 in `public/chars/common.cmd` selects the character `[Velocity]` profile for neutral, forward, back, forward run-jump, and back run-jump. A direction that supplies only X inherits `jump.neu` Y; explicit pair Y remains authoritative. VelSet converts X by Facing once and leaves MUGEN Y unchanged. State 50 then uses character air acceleration until the tested State 52 ground transition.
+
 On HitDef contact, the defender receives `ground.velocity` or `air.velocity` according to its StateType at contact. CNS X is converted once into the defender reaction direction: the common negative value sends the target away from the attacker for either Facing. Y remains in CNS/internal velocity coordinates. Physics does not clear velocity during hit pause and begins integrating it when pause ends. Guard contact separately applies Facing-relative `guard.velocity`.
 
 Explod velocity uses the same one-time world-X conversion at controller evaluation. On a non-bound lifecycle tick, position consumes the current velocity and velocity then consumes acceleration. Creation/bound ticks hold this motion; after default `bindtime=1` releases, KFM wood begins its configured velocity/acceleration path. Pause/SuperPause gating is handled separately in Issue #35.
@@ -101,7 +105,7 @@ pos y >= ground
 ChangeState 52
 ```
 
-The current ground value is visible in common routing notes where used. Hard-coded temporary values should be documented and eventually replaced with stage/coordinate-aware logic.
+Focused trajectory tests record apex, airtime, and landing frame for two distinct character profiles. The current ground value is still the runtime stage baseline; broader stage/coordinate scaling remains Partial.
 
 ## Player push
 
