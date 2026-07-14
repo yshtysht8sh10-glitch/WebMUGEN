@@ -1,6 +1,6 @@
 # CMD Compatibility Notes
 
-Updated: 2026-07-06
+Updated: 2026-07-14
 
 This document summarizes CMD implementation notes. The compatibility matrix remains the source of truth:
 
@@ -18,12 +18,12 @@ Follow `docs/webmugen/development-policy.md`: common movement routing belongs in
 | Hold direction `/F` | Complete | Used for walk-forward route. | Direction depends on facing/context assumptions. |
 | Hold direction `/B` | Complete | Used for walk-back route. | Direction depends on facing/context assumptions. |
 | Hold direction `/U` | Complete | Used for jump route. | Air-jump/common-state behavior incomplete. |
-| Direction sequences | Partial | Command matcher exists. | WinMUGEN timing and edge syntax need audit. |
+| Direction sequences | Partial | Facing-relative `~D, DB, B, F, x/y` is verified through the bundled T-H-M-A CMD and State -1 route. | Other sequence forms and charge syntax need audit. |
 | Button sequences | Partial | Basic support; simple button commands are kept briefly active. | Full sequence timing and cancel windows need audit. |
 | Simultaneous buttons | Partial | Basic syntax exists. | Full parsing/timing behavior needs audit. |
-| Release commands | Untested | `~` syntax needs verification. | Important for real character CMD compatibility. |
+| Release commands | Partial | The matcher retains `~` and requires the matched direction/button to be released in a newer input frame. | Numeric charge forms such as `~30$D` and other compound modifiers remain unsupported. |
 | Buffer time | Partial | InputBuffer exists and default buffering covers simple buttons/double-tap directions. Double-tap directions do not retrigger while the second direction is held. | Exact WinMUGEN timing still needs audit. |
-| `command.time` | Untested | Parser/runtime status needs verification. | Must be tested separately from buffer time. |
+| `command.time` | Partial | A 25-frame window accepts sequences spanning 24 or 25 frames and rejects 26 frames. | Broader WinMUGEN timing and pause behavior still need audit. |
 | `command.buffer.time` | Partial | Parser and matcher honor explicit post-match active window; double-tap direction buffering applies after release, not during a held second tap. | Exact WinMUGEN behavior still needs audit. |
 | `$` direction match | Partial | KFM hold commands work. | Full syntax and facing-relative behavior need tests. |
 | `/` hold prefix | Partial | Used in common commands. | Syntax coverage is incomplete. |
@@ -71,3 +71,9 @@ CMD tests should cover:
 - route integration through CNS runtime for important movement commands.
 
 For movement routes, tests should assert `stateNo`, `velocity`, and `animNo` where applicable.
+
+Issue #50 verifies the production path from Shift-JIS CMD parsing through input normalization,
+history, matching, the active command set, Japanese `Command` trigger comparison, and State -1
+`ChangeState`. The matcher records the frame used by each command step; a `~` step succeeds only
+when a newer frame no longer contains that direction or button. Facing conversion remains confined
+to `InputBuffer`, so B/F is not converted a second time during matching.

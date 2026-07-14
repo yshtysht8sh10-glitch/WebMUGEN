@@ -328,7 +328,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | Cond | Complete | Numeric conditional function supported in runtime trigger evaluator. |
 | Const | Partial 65% | Implemented: Current-character `[Data]`, `[Size]`, `[Velocity]`, and `[Movement]` values resolve through the intended CNS path; jump/run-jump pairs and yaccel have production-loader coverage. Missing: remaining constant families and coordinate scaling. Evidence: focused expression/runtime tests and bundled T-H-M-A loading. |
 | Cos | Complete | Numeric math function supported in runtime trigger evaluator. |
-| Ctrl | Complete | Basic support. |
+| Ctrl | Complete | Bare boolean and numeric `Ctrl = 1` / `Ctrl = 0` comparisons are covered, including a bundled real-character State -1 route. |
 | DrawGame | Safe no-op | Recognized by the runtime without changing game state. Safe default false. Round result not implemented. |
 | E | Complete | Numeric math constant supported in runtime trigger evaluator. |
 | Exp | Complete | Numeric math function supported in runtime trigger evaluator. |
@@ -487,12 +487,12 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | Hold direction `/F` | Complete | Basic support. |
 | Hold direction `/B` | Complete | Basic support. |
 | Hold direction `/U` | Complete | Basic support. |
-| Direction sequences | Partial 40% | Implemented: Command matcher exists; needs WinMUGEN timing audit. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| Direction sequences | Partial 40% | Implemented: Facing-relative `~D, DB, B, F, x/y` is verified through the bundled T-H-M-A CMD and State -1 route. Missing: other sequence and charge forms still need WinMUGEN timing/syntax audit. Evidence: focused matcher, resolver, and real-character integration tests. |
 | Button sequences | Partial 40% | Implemented: Basic support; simple button commands are kept briefly active so jump/crouch startup routes do not drop the input. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
 | Simultaneous buttons | Audit needed | Parser and command matcher behavior require syntax and timing verification. |
-| Release commands | Audit needed | Check `~` syntax behavior. |
+| Release commands | Partial 40% | Implemented: `~` is retained and requires the matched direction/button to be absent in a newer input frame. Missing: numeric charge and other compound modifier forms. Evidence: positive/negative release tests and bundled T-H-M-A integration. |
 | Buffer time | Partial 40% | Implemented: InputBuffer exists; simple button and double-tap direction commands have short default post-match buffering. Double-tap directions no longer retrigger while the second direction is held, but full WinMUGEN timing still needs audit. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| command.time | Audit needed | Parser/runtime status needs verification. |
+| command.time | Partial 60% | Implemented: `time = 25` accepts 24/25-frame sequences and rejects 26 frames in the production matcher. Missing: broader WinMUGEN timing/pause audit. Evidence: focused 24/25/26-frame matcher tests. |
 | command.buffer.time | Partial 50% | Implemented: Parser and command matcher honor explicit buffer.time as a post-match active window; default buffering covers simple buttons and double-tap directions after release, but WinMUGEN timing audit still needed. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
 | `$` direction match | Partial 40% | Implemented: KFM hold commands work; full syntax needs tests. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
 | `/` hold prefix | Partial 40% | Implemented: Used in common commands. Needs syntax coverage. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |

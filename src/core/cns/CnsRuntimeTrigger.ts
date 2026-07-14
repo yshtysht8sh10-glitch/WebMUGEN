@@ -321,6 +321,7 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'anim': return (context) => context.player.animNo;
     case 'animelemno': return (context) => context.animElemNo ?? 1;
     case 'animelem': return (context) => context.player.animTime;
+    case 'ctrl': return (context) => context.player.ctrl ? 1 : 0;
     case 'stateno': return (context) => context.player.stateNo;
     case 'prevstateno': return (context) => readOptionalNumber(context.player, 'prevStateNo', context.player.stateNo);
     case 'roundstate': return (context) => context.roundState ?? 2;

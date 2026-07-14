@@ -2,8 +2,8 @@ import type { CmdCommand } from '../parser/cmd/CmdTypes';
 import type { DirectionToken, InputFrame } from './InputBuffer';
 
 export type CommandToken =
-  | { kind: 'direction'; value: DirectionToken; hold: boolean }
-  | { kind: 'button'; value: string; hold: boolean };
+  | { kind: 'direction'; value: DirectionToken; hold: boolean; release: boolean }
+  | { kind: 'button'; value: string; hold: boolean; release: boolean };
 
 export type CommandStep = {
   tokens: CommandToken[];
@@ -108,6 +108,7 @@ function matchesCommandAtOffset(
 
   let frameIndex = 0;
   let previousMatchedFrameIndex = -1;
+  const matchedFrameIndices = new Array<number>(steps.length).fill(-1);
 
   for (let stepIndex = steps.length - 1; stepIndex >= 0; stepIndex -= 1) {
     const step = steps[stepIndex];
@@ -118,6 +119,7 @@ function matchesCommandAtOffset(
       stepMatchesFrame(step, frames[previousMatchedFrameIndex]);
 
     if (allowSameFrame) {
+      matchedFrameIndices[stepIndex] = previousMatchedFrameIndex;
       frameIndex = previousMatchedFrameIndex + 1;
       continue;
     }
@@ -135,11 +137,12 @@ function matchesCommandAtOffset(
       return false;
     }
 
+    matchedFrameIndices[stepIndex] = foundIndex;
     previousMatchedFrameIndex = foundIndex;
     frameIndex = foundIndex + 1;
   }
 
-  return true;
+  return releaseRequirementsSatisfied(steps, frames, matchedFrameIndices);
 }
 
 function parseCommandStep(part: string): CommandStep {
@@ -155,13 +158,33 @@ function parseCommandStep(part: string): CommandStep {
 function parseCommandToken(part: string): CommandToken {
   const normalizedPart = part.trim();
   const hold = normalizedPart.includes('/') || normalizedPart.includes('$');
+  const release = normalizedPart.includes('~');
   const raw = normalizedPart.replace(/[~/$]/g, '');
 
   if (isDirectionToken(raw)) {
-    return { kind: 'direction', value: raw, hold };
+    return { kind: 'direction', value: raw, hold, release };
   }
 
-  return { kind: 'button', value: raw.toLowerCase(), hold };
+  return { kind: 'button', value: raw.toLowerCase(), hold, release };
+}
+
+function releaseRequirementsSatisfied(
+  steps: readonly CommandStep[],
+  frames: readonly InputFrame[],
+  matchedFrameIndices: readonly number[],
+): boolean {
+  return steps.every((step, stepIndex) =>
+    step.tokens.every((token) => {
+      if (!token.release) return true;
+
+      const matchedFrameIndex = matchedFrameIndices[stepIndex];
+      for (let index = matchedFrameIndex - 1; index >= 0; index -= 1) {
+        if (!frameMatchesToken(frames[index], token)) return true;
+      }
+
+      return false;
+    }),
+  );
 }
 
 function findStep(

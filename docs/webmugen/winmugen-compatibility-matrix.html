@@ -109,6 +109,7 @@ Object.assign(triggerNotes,{NumTarget:'Counts registered targets with optional H
 Object.assign(triggerNotes,{GetHitVar:'Contact snapshot includes fall damage/kill, combo hitcount, snap xoff/yoff, ids, reaction data, and guarded state; zoff/fall-time remain diagnosed safe defaults.'});
 Object.assign(triggerNotes,{GetHitVar:'Contact snapshot includes reaction/fall data; yvel selects ground.velocity.y for S/C contact and air.velocity.y for A, while fall.yvelocity remains separate. Numeric terms have boolean truthiness. zoff/fall-time remain diagnosed safe defaults.'});
 Object.assign(triggerNotes,{GameTime:'App runtime synchronizes its monotonic tick into GameState.frame, so real-game triggers and Explod lifecycle advance. Pause and round boundaries remain Partial.'});
+Object.assign(triggerNotes,{Ctrl:'Bare boolean and numeric Ctrl = 1 / Ctrl = 0 comparisons are covered, including a bundled real-character State -1 route.'});
 const triggerRows=Object.entries(triggerStatus).map(([item,status])=>same(item,'Trigger',status,triggerNotes[item]??(status==='complete'?'Implemented in runtime trigger evaluator.':status==='partial'?'Limited implementation or safe default.':'Not implemented.')));
 const redirectData=Object.entries({enemy:'partial',enemynear:'partial',helper:'unsupported',parent:'partial',partner:'unsupported',root:'partial',target:'partial',playerid:'unsupported'}).map(([item,status])=>same(item,'Redirect',status,status==='unsupported'?'Lookup not implemented.':'Basic fallback support.'));
 const exprRows=Object.entries({'=':'complete','!=':'complete','>':'complete','>=':'complete','<':'complete','<=':'complete','= [a,b]':'complete','!= [a,b]':'complete','triggerall AND':'complete','triggerN OR':'complete','&&':'complete','||':'complete','!':'complete','Parentheses':'partial','+':'complete','-':'complete','*':'complete','/':'complete','%':'complete','Unary minus':'partial','var(n)':'complete','sysvar(n)':'complete','fvar(n)':'partial','Redirect expression chain':'partial'}).map(([item,status])=>same(item,'Expression feature',status,status==='complete'?'Supported.':status==='partial'?'Limited support.':'Not implemented.'));
@@ -118,18 +119,18 @@ const cmdNotes={
   'Hold direction /F':'Basic support.',
   'Hold direction /B':'Basic support.',
   'Hold direction /U':'Basic support.',
-  'Direction sequences':'Needs WinMUGEN timing/syntax audit.',
+  'Direction sequences':'Facing-relative ~D, DB, B, F, x/y is verified through the bundled T-H-M-A CMD and State -1 route; other sequence and charge forms need audit.',
   'Button sequences':'Basic support; simple button commands are kept briefly active so jump/crouch startup routes do not drop the input.',
   'Simultaneous buttons':'Needs full syntax audit.',
-  'Release commands':'Needs verification.',
+  'Release commands':'The matcher retains ~ and requires the matched direction/button to be released in a newer frame. Numeric charge and other compound forms remain unsupported.',
   'Buffer time':'InputBuffer exists; simple button and double-tap direction commands have short default post-match buffering. Double-tap directions no longer retrigger while the second direction is held, but full WinMUGEN timing still needs audit.',
-  'command.time':'Needs verification.',
+  'command.time':'Implemented: time = 25 accepts 24/25-frame sequences and rejects 26 frames. Missing: broader WinMUGEN timing and pause behavior. Evidence: focused 24/25/26-frame matcher tests.',
   'command.buffer.time':'Parser and command matcher honor explicit buffer.time as a post-match active window; default buffering covers simple buttons and double-tap directions after release, but WinMUGEN timing audit still needed.',
   '$ direction match':'KFM hold commands work; full syntax needs tests.',
   '/ hold prefix':'Used in common commands. Needs syntax coverage.',
   '+ simultaneous input':'Needs WinMUGEN timing/syntax audit.'
 };
-const cmdRows=Object.entries({'Single button commands':'complete','Hold direction /D':'complete','Hold direction /F':'complete','Hold direction /B':'complete','Hold direction /U':'complete','Direction sequences':'partial','Button sequences':'partial','Simultaneous buttons':'untested','Release commands':'untested','Buffer time':'partial','command.time':'untested','command.buffer.time':'partial','$ direction match':'partial','/ hold prefix':'partial','+ simultaneous input':'untested'}).map(([item,status])=>same(item,'CMD feature',status,cmdNotes[item]));
+const cmdRows=Object.entries({'Single button commands':'complete','Hold direction /D':'complete','Hold direction /F':'complete','Hold direction /B':'complete','Hold direction /U':'complete','Direction sequences':'partial','Button sequences':'partial','Simultaneous buttons':'untested','Release commands':'partial','Buffer time':'partial','command.time':'partial','command.buffer.time':'partial','$ direction match':'partial','/ hold prefix':'partial','+ simultaneous input':'untested'}).map(([item,status])=>same(item,'CMD feature',status,cmdNotes[item]));
 let sections=[{id:'statedef',ja:'Statedef / 共通State',en:'Statedef / Common States',rows:stateRows},{id:'headers',ja:'StateDef Header',en:'StateDef Headers',rows:headerRows},{id:'controllers',ja:'State Controller',en:'State Controllers',rows:controllerRows},{id:'hitdefparams',ja:'HitDef補助パラメータ',en:'HitDef Auxiliary Parameters',rows:hitDefParamRows},{id:'triggers',ja:'Trigger',en:'Triggers',rows:triggerRows},{id:'redirects',ja:'Redirect / Player参照',en:'Redirects / Player References',rows:redirectData},{id:'expressions',ja:'Expression / Operator',en:'Expressions / Operators',rows:exprRows},{id:'cmd',ja:'CMD互換',en:'CMD Compatibility',rows:cmdRows}];
 let lang='ja';
 function labelStatus(s,progress){return statuses[s][lang]+(['partial','fallback'].includes(s)?` ${progress}%`:'')}

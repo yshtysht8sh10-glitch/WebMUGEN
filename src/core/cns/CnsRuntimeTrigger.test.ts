@@ -4,6 +4,12 @@ import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, readNumberExpression } from './CnsRuntimeTrigger';
 
 describe('CnsRuntimeTrigger', () => {
+  it('evaluates Ctrl as a WinMUGEN numeric boolean', () => {
+    const player = createInitialGameState().players[0];
+    expect(evaluateCnsRuntimeTrigger('Ctrl = 1', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('Ctrl = 0', { player: { ...player, ctrl: false } })).toBe(true);
+  });
+
   it('evaluates real-character StateTime and TimeMod compatibility syntax', () => {
     const player = { ...createInitialGameState().players[0], stateTime: 10 };
     expect(evaluateCnsRuntimeTrigger('StateTime = 10', { player })).toBe(true);

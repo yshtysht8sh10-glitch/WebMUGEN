@@ -1,6 +1,6 @@
 # Trigger Evaluator
 
-Updated: 2026-07-06
+Updated: 2026-07-14
 
 This document describes CNS trigger evaluation in WebMUGEN. For status per trigger, see `trigger-compatibility-notes.md` and the compatibility matrix.
 
@@ -27,6 +27,10 @@ at least one triggerN group must be true
 ```
 
 Within a numbered group, all expressions in that group must be true.
+
+Boolean trigger values also participate in numeric comparisons. In particular, `Ctrl = 1` and
+`Ctrl = 0` expose the control flag as 1/0, matching real-character State -1 command routes; bare
+`Ctrl` remains supported.
 
 Example:
 

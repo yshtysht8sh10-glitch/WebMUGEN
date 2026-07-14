@@ -1,6 +1,6 @@
 # Trigger Compatibility Notes
 
-Updated: 2026-07-06
+Updated: 2026-07-14
 
 This document summarizes Trigger implementation notes. The compatibility matrix remains the source of truth:
 
@@ -30,7 +30,7 @@ Do not mark safe defaults as Complete.
 | `Command` | Complete | Basic command set matching works. | CMD syntax/timing remains partially covered elsewhere. |
 | `StateNo` | Complete | Numeric state comparison. | None known for simple comparisons. |
 | `StateType` | Complete | Basic S/C/A/L comparison. | State header correctness still matters. |
-| `Ctrl` | Complete | Basic control-flag comparison. | Control handoff semantics depend on state/controller flow. |
+| `Ctrl` | Complete | Bare `Ctrl` and numeric `Ctrl = 1` / `Ctrl = 0` comparisons are covered, including the bundled T-H-M-A State -1 route. | Control handoff semantics depend on state/controller flow. |
 | `Time` | Complete | State time comparison. | Previous-state and transition timing still need broader route tests. |
 | `MoveContact` / `MoveHit` / `MoveGuarded` / `HitCount` | Partial | Reads ActiveHitDef-generation contact/hit/guard flags and State-local hit count; live normal and guarded routes are tested. | Persist headers and Helper/projectile parity remain incomplete. |
 | `HitDefAttr` | Partial | Compares requested State/category sets with the normalized ActiveHitDef attr shared by HitBy/NotHitBy collision filtering. | Redirect and malformed multi-attr edge cases remain incomplete. |

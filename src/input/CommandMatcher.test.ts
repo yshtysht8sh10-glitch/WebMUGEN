@@ -5,20 +5,20 @@ import { InputBuffer } from './InputBuffer';
 describe('CommandMatcher', () => {
   it('parses command tokens', () => {
     expect(parseCommandTokens('D,DF,F,a')).toEqual([
-      { kind: 'direction', value: 'D', hold: false },
-      { kind: 'direction', value: 'DF', hold: false },
-      { kind: 'direction', value: 'F', hold: false },
-      { kind: 'button', value: 'a', hold: false },
+      { kind: 'direction', value: 'D', hold: false, release: false },
+      { kind: 'direction', value: 'DF', hold: false, release: false },
+      { kind: 'direction', value: 'F', hold: false, release: false },
+      { kind: 'button', value: 'a', hold: false, release: false },
     ]);
   });
 
   it('keeps lowercase b as a button and uppercase B as back direction', () => {
     expect(parseCommandTokens('b')).toEqual([
-      { kind: 'button', value: 'b', hold: false },
+      { kind: 'button', value: 'b', hold: false, release: false },
     ]);
 
     expect(parseCommandTokens('B')).toEqual([
-      { kind: 'direction', value: 'B', hold: false },
+      { kind: 'direction', value: 'B', hold: false, release: false },
     ]);
   });
 
@@ -50,10 +50,10 @@ describe('CommandMatcher', () => {
 
   it('parses MUGEN release and hold modifiers', () => {
     expect(parseCommandTokens('~D, /$F, x+y')).toEqual([
-      { kind: 'direction', value: 'D', hold: false },
-      { kind: 'direction', value: 'F', hold: true },
-      { kind: 'button', value: 'x', hold: false },
-      { kind: 'button', value: 'y', hold: false },
+      { kind: 'direction', value: 'D', hold: false, release: true },
+      { kind: 'direction', value: 'F', hold: true, release: false },
+      { kind: 'button', value: 'x', hold: false, release: false },
+      { kind: 'button', value: 'y', hold: false, release: false },
     ]);
   });
 
@@ -61,8 +61,8 @@ describe('CommandMatcher', () => {
     expect(parseCommandSteps('/F+/U')).toEqual([
       {
         tokens: [
-          { kind: 'direction', value: 'F', hold: true },
-          { kind: 'direction', value: 'U', hold: true },
+          { kind: 'direction', value: 'F', hold: true, release: false },
+          { kind: 'direction', value: 'U', hold: true, release: false },
         ],
       },
     ]);
@@ -190,6 +190,27 @@ describe('CommandMatcher', () => {
     expect(matchesCommand({ name: 'QCF_x', command: '~D, DF, F, x', time: 15 }, buffer.getFrames())).toBe(
       true,
     );
+  });
+
+  it('requires a released ~D before the later command steps', () => {
+    const released = new InputBuffer(20);
+    released.push({ left: false, right: false, up: false, down: true, attack: false });
+    released.push({ left: true, right: false, up: false, down: true, attack: false });
+    released.push({ left: true, right: false, up: false, down: false, attack: false });
+    released.push({ left: false, right: true, up: false, down: false, attack: false });
+    released.push({ left: false, right: false, up: false, down: false, attack: false, buttons: ['x'] });
+
+    const held = new InputBuffer(20);
+    held.push({ left: false, right: false, up: false, down: true, attack: false });
+    held.push({ left: true, right: false, up: false, down: true, attack: false });
+    held.push({ left: true, right: false, up: false, down: true, attack: false });
+    held.push({ left: false, right: true, up: false, down: true, attack: false });
+    held.push({ left: false, right: false, up: false, down: true, attack: false, buttons: ['x'] });
+
+    const command = { name: 'release', command: '~D, DB, B, F, x', time: 25 };
+    expect(matchesCommand(command, released.getFrames())).toBe(true);
+    expect(matchesCommand(command, held.getFrames())).toBe(false);
+    expect(matchesCommand({ ...command, command: 'D, DB, B, F, x' }, held.getFrames())).toBe(true);
   });
 
   it('matches hold-down plus button command', () => {
