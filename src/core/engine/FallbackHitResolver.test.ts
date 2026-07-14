@@ -277,27 +277,49 @@ physics = S
   });
 
   it.each([
-    [1, 300],
-    [-1, 230],
-  ] as const)('generates one normal hit effect envelope at the Clsn contact with Facing %i', (attackerFacing, expectedX) => {
+    [1, 264],
+    [-1, 266],
+  ] as const)('positions one normal spark from P2 front and the P1 axis with Facing %i', (attackerFacing, expectedX) => {
     const result = resolveConfiguredHit({
-      attackerFacing, sparkNo: 'S5001', sparkXY: [10, -5], hitSound: 'S1, 2',
+      attackerFacing, targetFacing: -attackerFacing as 1 | -1,
+      sparkNo: 'S5001', sparkXY: [10, -5], hitSound: 'S1, 2',
       envShake: [6, 90, -4, 30], pauseTime: [0, 0],
     });
     expect(result.hitEvents).toHaveLength(1);
     expect(result.hitEvents[0]).toMatchObject({
       guarded: false,
-      spark: { animNo: 5001, scope: 'attacker', x: expectedX, y: 235, available: true },
+      contact: { x: expect.any(Number), y: 240 },
+      spark: { animNo: 5001, scope: 'attacker', x: expectedX, y: 280, coordinateSpace: 'stage', available: true },
       sound: { group: 1, index: 2, scope: 'attacker' },
       envShake: { time: 6, frequency: 90, amplitude: -4, phase: 30 },
     });
-    expect(result.hitDiagnosticLines?.join('\n')).toContain('kind=hit spark=attacker:5001');
+    expect(result.hitDiagnosticLines?.join('\n')).toContain('kind=hit contact=');
+    expect(result.hitDiagnosticLines?.join('\n')).toContain('spark=attacker:5001');
 
     const duplicate = resolveFallbackHits({
       ...result,
       players: [{ ...result.players[0], hitPause: 0 }, { ...result.players[1], hitPause: 0, animNo: 0 }],
     }, air);
     expect(duplicate.hitEvents).toHaveLength(0);
+  });
+
+  it.each([
+    { offsetY: 0, expectedY: 250 },
+    { offsetY: -20, expectedY: 230 },
+    { offsetY: 20, expectedY: 270 },
+  ])('applies sparkxy Y $offsetY once from a nonzero P1 root', ({ offsetY, expectedY }) => {
+    const result = resolveConfiguredHit({
+      attackerY: 250, targetY: 250, sparkNo: 'S5001', sparkXY: [0, offsetY], pauseTime: [0, 0],
+    });
+    expect(result.hitEvents[0].spark).toMatchObject({ x: 274, y: expectedY, coordinateSpace: 'stage' });
+    expect(result.hitEvents[0].contact?.y).not.toBe(expectedY);
+  });
+
+  it('uses P2 air.front for an airborne target spark X reference', () => {
+    const result = resolveConfiguredHit({
+      targetStateType: 'A', hitFlag: 'A', sparkNo: 'S5001', sparkXY: [0, 0], pauseTime: [0, 0],
+    });
+    expect(result.hitEvents[0].spark).toMatchObject({ x: 278, y: 285 });
   });
 
   it('separates guard spark/sound from normal hit effects', () => {
@@ -311,7 +333,8 @@ physics = S
       spark: { animNo: 5002, scope: 'attacker', available: true },
       sound: { group: 3, index: 4, scope: 'attacker' },
     });
-    expect(result.hitDiagnosticLines?.join('\n')).toContain('kind=guard spark=attacker:5002');
+    expect(result.hitDiagnosticLines?.join('\n')).toContain('kind=guard contact=');
+    expect(result.hitDiagnosticLines?.join('\n')).toContain('spark=attacker:5002');
   });
 
   it('keeps missing effect assets safe and diagnoses unavailable animation/audio runtime', () => {
@@ -1049,6 +1072,9 @@ function resolveConfiguredHit({
   groundVelocity,
   airVelocity,
   attackerFacing,
+  targetFacing,
+  attackerY,
+  targetY,
   pauseTime,
   hitId,
   hitOnce,
@@ -1113,6 +1139,9 @@ function resolveConfiguredHit({
   groundVelocity?: [number, number];
   airVelocity?: [number, number];
   attackerFacing?: 1 | -1;
+  targetFacing?: 1 | -1;
+  attackerY?: number;
+  targetY?: number;
   pauseTime?: [number, number];
   hitId?: number;
   hitOnce?: boolean;
@@ -1258,6 +1287,7 @@ ${guardLines}
   players[attackerIndex] = {
     ...players[attackerIndex],
     x: attackerX ?? (resolvedFacing === 1 ? 240 : 290),
+    y: attackerY ?? players[attackerIndex].y,
     facing: resolvedFacing,
     stateNo: 200,
     animNo: 200,
@@ -1267,6 +1297,8 @@ ${guardLines}
   players[targetIndex] = {
     ...players[targetIndex],
     x: targetX ?? (resolvedFacing === 1 ? 290 : 240),
+    y: targetY ?? players[targetIndex].y,
+    facing: targetFacing ?? players[targetIndex].facing,
     animNo: 0,
     life: targetLife ?? players[targetIndex].life,
     hitBy: targetHitBy,

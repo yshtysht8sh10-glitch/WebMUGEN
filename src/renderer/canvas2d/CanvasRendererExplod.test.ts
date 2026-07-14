@@ -9,7 +9,8 @@ describe('CanvasRenderer Explod integration', () => {
   it('draws the owner AIR/SFF frame with Explod facing and vfacing exactly once', () => {
     const drawImage = vi.fn();
     const scale = vi.fn();
-    const context = fakeContext({ drawImage, scale });
+    const translate = vi.fn();
+    const context = fakeContext({ drawImage, scale, translate });
     const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
     const state = createInitialGameState();
     state.explods.entries = [entry()];
@@ -24,14 +25,15 @@ describe('CanvasRenderer Explod integration', () => {
     const diagnostics = renderer.render(state);
 
     expect(drawImage).toHaveBeenCalledWith(image, -2, -7);
-    expect(scale).toHaveBeenCalledWith(-1, -1);
+    expect(translate).toHaveBeenCalledWith(320, 240);
+    expect(scale).toHaveBeenCalledWith(-2, -3);
     expect(diagnostics).toContainEqual(expect.stringContaining('raw.explod_draw internalId=9'));
     expect(diagnostics).toContainEqual(expect.stringContaining('result=drawn'));
   });
 
   it('does not draw a placeholder when the sprite is missing', () => {
     const drawImage = vi.fn();
-    const context = fakeContext({ drawImage, scale: vi.fn() });
+    const context = fakeContext({ drawImage, scale: vi.fn(), translate: vi.fn() });
     const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
     const state = createInitialGameState();
     state.explods.entries = [entry()];
@@ -46,11 +48,11 @@ describe('CanvasRenderer Explod integration', () => {
   });
 });
 
-function fakeContext(spies: { drawImage: ReturnType<typeof vi.fn>; scale: ReturnType<typeof vi.fn> }): CanvasRenderingContext2D {
+function fakeContext(spies: { drawImage: ReturnType<typeof vi.fn>; scale: ReturnType<typeof vi.fn>; translate: ReturnType<typeof vi.fn> }): CanvasRenderingContext2D {
   return {
-    clearRect: vi.fn(), save: vi.fn(), restore: vi.fn(), translate: vi.fn(), fillRect: vi.fn(), strokeRect: vi.fn(),
+    clearRect: vi.fn(), save: vi.fn(), restore: vi.fn(), fillRect: vi.fn(), strokeRect: vi.fn(),
     beginPath: vi.fn(), arc: vi.fn(), ellipse: vi.fn(), fill: vi.fn(), fillText: vi.fn(), drawImage: spies.drawImage,
-    scale: spies.scale,
+    scale: spies.scale, translate: spies.translate,
   } as unknown as CanvasRenderingContext2D;
 }
 
@@ -65,6 +67,6 @@ function entry(): ExplodRuntimeEntry {
     position: { x: 320, y: 240 }, offset: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, acceleration: { x: 0, y: 0 },
     facing: -1, verticalFacing: -1, postype: 'p2', coordinateSpace: 'stage', bind: null, removeTime: null, removalReason: null,
     spritePriority: 2, onTop: false, pauseMoveTime: 0, superMoveTime: 0, removeOnGetHit: false, random: { x: 0, y: 0 },
-    render: { transparency: null, alpha: null, scaleX: 1, scaleY: 1, ownPalette: false, shadow: { red: 0, green: 0, blue: 0 } },
+    render: { transparency: null, alpha: null, scaleX: 2, scaleY: 3, ownPalette: false, shadow: { red: 0, green: 0, blue: 0 } },
   };
 }

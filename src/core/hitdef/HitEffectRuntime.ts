@@ -81,7 +81,7 @@ function integrateSpark(
       facing: state.players[event.attackerId - 1].facing,
       verticalFacing: 1,
       postype: 'none',
-      coordinateSpace: 'stage',
+      coordinateSpace: spark.coordinateSpace,
       bind: null,
       removeTime: -2,
       spritePriority: 5,

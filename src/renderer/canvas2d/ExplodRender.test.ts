@@ -5,7 +5,7 @@ import type { AirDocument } from '../../parser/air/AirTypes';
 import { getExplodsInDrawOrder, resolveExplodRenderFrames } from './ExplodRender';
 
 describe('Explod render resolution', () => {
-  it('selects AIR by owner and converts only stage-space X through the camera', () => {
+  it('selects AIR by owner and converts stage-space coordinates through the camera once', () => {
     const state = createInitialGameState();
     state.explods.entries = [
       entry({ runtimeId: 1, owner: { entityId: 1, rootPlayerId: 1 }, animNo: 100, position: { x: 250, y: 280 } }),
@@ -15,7 +15,7 @@ describe('Explod render resolution', () => {
     const result = resolveExplodRenderFrames(state, {}, {
       1: { airDocument: air(100, 10, 0) },
       2: { airDocument: air(200, 20, 0) },
-    }, undefined, 30);
+    }, undefined, 30, 20);
 
     expect(result.frames.map((frame) => ({
       owner: frame.entry.owner.rootPlayerId,
@@ -23,7 +23,7 @@ describe('Explod render resolution', () => {
       screen: [frame.screenX, frame.screenY],
       facing: frame.entry.facing,
     }))).toEqual([
-      { owner: 1, group: 10, screen: [220, 280], facing: 1 },
+      { owner: 1, group: 10, screen: [220, 260], facing: 1 },
       { owner: 2, group: 20, screen: [40, 50], facing: -1 },
     ]);
   });

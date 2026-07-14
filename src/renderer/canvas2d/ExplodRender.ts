@@ -30,6 +30,7 @@ export function resolveExplodRenderFrames(
   ownerAssets: Partial<Record<1 | 2, CharacterRenderAssets>> = {},
   fightFxAssets?: CharacterRenderAssets,
   cameraX = 0,
+  cameraY = 0,
 ): ExplodRenderResolution {
   const frames: ExplodRenderFrame[] = [];
   const diagnosticLines: string[] = [];
@@ -50,7 +51,7 @@ export function resolveExplodRenderFrames(
     }
 
     const screenX = entry.coordinateSpace === 'stage' ? entry.position.x - cameraX : entry.position.x;
-    const screenY = entry.position.y;
+    const screenY = entry.coordinateSpace === 'stage' ? entry.position.y - cameraY : entry.position.y;
     frames.push({ entry, currentElement, assets, screenX, screenY });
     diagnosticLines.push(
       `raw.explod_render internalId=${entry.runtimeId} mugenId=${entry.mugenId} anim=${entry.animationSource === 'fightfx' ? 'F' : ''}${entry.animNo} elem=${currentElement.elementIndex + 1} world=(${entry.position.x},${entry.position.y}) screen=(${screenX},${screenY}) facing=${entry.facing} vfacing=${entry.verticalFacing} result=resolved`,

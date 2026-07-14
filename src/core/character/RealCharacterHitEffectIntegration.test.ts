@@ -40,14 +40,14 @@ describe('real character HitDef effect integration', () => {
 
     const normal = applyHitEffectRuntime(withContact(activated, {
       attackerId: 1, defenderId: 2, damage: 50,
-      spark: { ...hitDef!.spark!, x: 300, y: 210 }, sound: hitDef!.hitSound,
+      spark: { ...hitDef!.spark!, x: 300, y: 210, coordinateSpace: 'stage' }, sound: hitDef!.hitSound,
     }), { ownerAir: () => air, ownerSounds: () => sounds });
     expect(normal.state.explods.entries[0]).toMatchObject({ animationSource: 'owner', animNo: 16100, effectKind: 'hit-spark' });
     expect(normal.soundEvents[0]).toMatchObject({ scope: 'character', group: 200, index: 0 });
 
     const guarded = applyHitEffectRuntime(withContact(activated, {
       attackerId: 1, defenderId: 2, damage: 10, guarded: true,
-      spark: { ...hitDef!.guardSpark!, x: 294, y: 214 }, sound: hitDef!.guardSound,
+      spark: { ...hitDef!.guardSpark!, x: 294, y: 214, coordinateSpace: 'stage' }, sound: hitDef!.guardSound,
     }), { ownerAir: () => air, ownerSounds: () => sounds });
     expect(guarded.state.explods.entries[0]).toMatchObject({ animNo: 16000, position: { x: 294, y: 214 } });
     expect(guarded.soundEvents[0]).toMatchObject({ group: 645, index: 1 });

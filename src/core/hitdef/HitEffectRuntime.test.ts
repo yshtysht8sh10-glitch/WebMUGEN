@@ -21,7 +21,7 @@ const commonSounds = soundDocument([[5, 6]]);
 describe('HitDef shared effect runtime', () => {
   it('routes one normal hit spark through Explod and one hitsound through SoundPlayEvent', () => {
     const result = applyHitEffectRuntime(withEvents([hitEvent({
-      spark: { animNo: 10, scope: 'attacker', x: 301, y: 202 },
+      spark: { animNo: 10, scope: 'attacker', x: 301, y: 202, coordinateSpace: 'stage' },
       sound: { group: 1, index: 2, scope: 'attacker' },
     })]), assets());
 
@@ -43,7 +43,7 @@ describe('HitDef shared effect runtime', () => {
   it('keeps guard spark and guardsound selection separate', () => {
     const result = applyHitEffectRuntime(withEvents([hitEvent({
       guarded: true,
-      spark: { animNo: 20, scope: 'attacker', x: 280, y: 210 },
+      spark: { animNo: 20, scope: 'attacker', x: 280, y: 210, coordinateSpace: 'stage' },
       sound: { group: 3, index: 4, scope: 'attacker' },
     })]), assets());
     expect(result.state.explods.entries[0]).toMatchObject({ animNo: 20, position: { x: 280, y: 210 } });
@@ -53,7 +53,7 @@ describe('HitDef shared effect runtime', () => {
 
   it('selects common fightfx AIR and common SND for unprefixed or F-scoped effects', () => {
     const result = applyHitEffectRuntime(withEvents([hitEvent({
-      spark: { animNo: 40, scope: 'common', x: 300, y: 200 },
+      spark: { animNo: 40, scope: 'common', x: 300, y: 200, coordinateSpace: 'stage' },
       sound: { group: 5, index: 6, scope: 'common' },
     })]), assets());
     expect(result.state.explods.entries[0]).toMatchObject({ animationSource: 'fightfx', animationOwner: null, animNo: 40 });
@@ -62,9 +62,9 @@ describe('HitDef shared effect runtime', () => {
 
   it('diagnoses missing/disabled assets without creating effects or sound events', () => {
     const result = applyHitEffectRuntime(withEvents([
-      hitEvent({ spark: { animNo: 999, scope: 'attacker', x: 0, y: 0 }, sound: { group: 9, index: 9, scope: 'attacker' } }),
-      hitEvent({ spark: { animNo: 40, scope: 'common', x: 0, y: 0 }, sound: { group: 5, index: 6, scope: 'common' } }),
-      hitEvent({ spark: { animNo: -1, scope: 'common', x: 0, y: 0 } }),
+      hitEvent({ spark: { animNo: 999, scope: 'attacker', x: 0, y: 0, coordinateSpace: 'stage' }, sound: { group: 9, index: 9, scope: 'attacker' } }),
+      hitEvent({ spark: { animNo: 40, scope: 'common', x: 0, y: 0, coordinateSpace: 'stage' }, sound: { group: 5, index: 6, scope: 'common' } }),
+      hitEvent({ spark: { animNo: -1, scope: 'common', x: 0, y: 0, coordinateSpace: 'stage' } }),
     ]), { ownerAir: () => ownerAir, ownerSounds: () => ownerSounds, fightFxAir: null, commonSounds: null });
     expect(result.state.explods.entries).toHaveLength(0);
     expect(result.soundEvents).toHaveLength(0);
@@ -78,7 +78,7 @@ describe('HitDef shared effect runtime', () => {
 
   it('is idempotent per HitEvent and excludes hit sparks from RemoveExplod ID selection', () => {
     const first = applyHitEffectRuntime(withEvents([hitEvent({
-      spark: { animNo: 10, scope: 'attacker', x: 301, y: 202 },
+      spark: { animNo: 10, scope: 'attacker', x: 301, y: 202, coordinateSpace: 'stage' },
       sound: { group: 1, index: 2, scope: 'attacker' },
     })]), assets());
     const second = applyHitEffectRuntime(first.state, assets());
@@ -93,7 +93,7 @@ describe('HitDef shared effect runtime', () => {
 
   it('resolves the created spark for same-frame Explod rendering', () => {
     const result = applyHitEffectRuntime(withEvents([hitEvent({
-      spark: { animNo: 10, scope: 'attacker', x: 321, y: 198 },
+      spark: { animNo: 10, scope: 'attacker', x: 321, y: 198, coordinateSpace: 'stage' },
     })]), assets());
     const rendered = resolveExplodRenderFrames(result.state, {}, { 1: { airDocument: ownerAir } }, { airDocument: commonAir });
     expect(rendered.frames[0]).toMatchObject({ screenX: 321, screenY: 198, entry: { effectKind: 'hit-spark', animNo: 10 } });

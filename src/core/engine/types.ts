@@ -124,6 +124,12 @@ export type PlayerState = {
   vx: number;
   vy: number;
   facing: 1 | -1;
+  collisionWidth?: {
+    groundFront: number;
+    groundBack: number;
+    airFront: number;
+    airBack: number;
+  };
   life: number;
   power?: number;
   sprPriority?: number;
@@ -215,7 +221,8 @@ export type HitEvent = {
   defenderId: 1 | 2;
   damage: number;
   guarded?: boolean;
-  spark?: { animNo: number; scope: 'common' | 'attacker'; x: number; y: number; available?: boolean; runtimeIntegrated?: boolean };
+  contact?: { x: number; y: number };
+  spark?: { animNo: number; scope: 'common' | 'attacker'; x: number; y: number; coordinateSpace: 'stage'; available?: boolean; runtimeIntegrated?: boolean };
   sound?: { group: number; index: number; scope: 'common' | 'attacker'; available?: boolean; runtimeIntegrated?: boolean };
   envShake?: { time: number; frequency: number; amplitude: number; phase: number };
 };

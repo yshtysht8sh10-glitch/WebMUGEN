@@ -52,13 +52,13 @@ describe('HitFeedback', () => {
       hitEvents: [
         {
           attackerId: 1 as const, defenderId: 2 as const, damage: 10,
-          spark: { animNo: 5001, scope: 'attacker' as const, x: 300, y: 220, available: true },
+          spark: { animNo: 5001, scope: 'attacker' as const, x: 300, y: 220, coordinateSpace: 'stage' as const, available: true },
           sound: { group: 1, index: 2, scope: 'attacker' as const },
           envShake: { time: 4, frequency: 90, amplitude: -4, phase: 90 },
         },
         {
           attackerId: 1 as const, defenderId: 2 as const, damage: 10,
-          spark: { animNo: 9999, scope: 'attacker' as const, x: 0, y: 0, available: false },
+          spark: { animNo: 9999, scope: 'attacker' as const, x: 0, y: 0, coordinateSpace: 'stage' as const, available: false },
         },
       ],
     };

@@ -173,6 +173,8 @@ Issue #34 extends `raw.explod_create` with the sampled random offset and `raw.ex
 
 `raw.explod_bindtime` records owner, requested MUGEN id, match count, and one indented `internalId`, old duration, and new duration line per duplicate. Missing id/time uses `id_missing`, `not_found`, or `time_missing`. Following `raw.explod_step` lines show the same-frame bind remainder, owner-relative position, follow, and release result.
 
+`raw.hit_effect` records the Clsn overlap contact separately from the resolved `sparkPos` and `sparkSpace`. For HitDef sparks, `sparkPos` is absolute stage-space: X uses P2's P1-facing character `Size` edge plus `sparkxy.x`, and Y uses P1's root axis plus `sparkxy.y`. Subsequent `raw.explod_create`, `raw.explod_render`, and `raw.explod_draw` lines expose the unchanged world point, one camera conversion, and final AIR/SFF draw transform.
+
 `raw.global_pause` records Pause/SuperPause activation kind, owner, time, movetime, darken, and the continuing-audio policy. CNS traces use `global_pause skip` with the pause kind or `resume_guard`. Frozen Explods emit `raw.explod_step ... result=frozen` with the matching allowance; allowed ticks emit `raw.explod_pause` with allowance before/after values.
 
 Browser audio foundation diagnostics use `audio_unsupported`, `audio_locked`, `audio_unlocked`, `decode_failed`, `playback_started`, `playback_stopped`, and `audio_closed`. They distinguish browser/autoplay/decode failures from missing character assets. PlaySnd-specific owner/channel diagnostics are added in Issues #28-#29/#40.

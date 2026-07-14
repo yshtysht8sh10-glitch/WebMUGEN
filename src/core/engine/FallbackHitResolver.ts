@@ -1,4 +1,5 @@
 import type { AirDocument } from '../../parser/air/AirTypes';
+import { readCnsConst } from '../cns/CnsConstants';
 import {
   anyIntersects,
   getPlayerAttackBoxes,
@@ -366,19 +367,46 @@ function createContactHitEvent(
     ? airDocument.actions.some((action) => action.actionNo === sparkRef.animNo)
     : undefined;
   const soundRef = guarded ? hitDef.guardSound : hitDef.hitSound;
+  const sparkPosition = calculateHitSparkPosition(attacker, target, offset);
   return {
     attackerId: attacker.id,
     defenderId: target.id,
     damage,
     guarded,
+    contact,
     ...(sparkRef ? { spark: {
       ...sparkRef,
-      x: contact.x + offset.x * attacker.facing,
-      y: contact.y + offset.y,
+      x: sparkPosition.x,
+      y: sparkPosition.y,
+      coordinateSpace: 'stage',
       available: sparkAvailable,
     } } : {}),
     ...(soundRef ? { sound: { ...soundRef } } : {}),
     ...(hitDef.envShake && hitDef.envShake.time > 0 ? { envShake: hitDef.envShake } : {}),
+  };
+}
+
+function calculateHitSparkPosition(
+  attacker: PlayerState,
+  target: PlayerState,
+  offset: { x: number; y: number },
+): { x: number; y: number } {
+  const towardAttacker = attacker.x < target.x ? -1 : attacker.x > target.x ? 1 : -attacker.facing;
+  const targetFrontFacesAttacker = target.facing === towardAttacker;
+  const widths = target.collisionWidth ?? {
+    groundFront: readCnsConst(undefined, 'size.ground.front'),
+    groundBack: readCnsConst(undefined, 'size.ground.back'),
+    airFront: readCnsConst(undefined, 'size.air.front'),
+    airBack: readCnsConst(undefined, 'size.air.back'),
+  };
+  const airborne = target.stateType === 'A';
+  const width = airborne
+    ? targetFrontFacesAttacker ? widths.airFront : widths.airBack
+    : targetFrontFacesAttacker ? widths.groundFront : widths.groundBack;
+  const targetSide = target.x + towardAttacker * width;
+  return {
+    x: targetSide + offset.x * towardAttacker,
+    y: attacker.y + offset.y,
   };
 }
 
@@ -404,7 +432,7 @@ function formatHitEffectDiagnostics(event: HitEvent, activeHitDefId: number | nu
   const sparkAvailability = event.spark?.available === false ? 'missing' : event.spark?.available === true ? 'available' : 'unknown';
   return [
     `raw.hit_effect attacker=p${event.attackerId} target=p${event.defenderId}`,
-    `  activeHitDefId=${activeHitDefId ?? 'none'} kind=${event.guarded ? 'guard' : 'hit'} spark=${event.spark ? `${event.spark.scope}:${event.spark.animNo}` : '-'} sparkAvailable=${sparkAvailability} sparkPos=${event.spark ? `${event.spark.x},${event.spark.y}` : '-'} sound=${event.sound ? `${event.sound.scope}:${event.sound.group},${event.sound.index}` : '-'} soundAvailable=${event.sound ? 'deferred' : '-'} envshake=${event.envShake ? `${event.envShake.time},${event.envShake.frequency},${event.envShake.amplitude},${event.envShake.phase}` : '-'} result=generated${event.spark?.available === false ? ' warning=missing_animation' : ''}`,
+    `  activeHitDefId=${activeHitDefId ?? 'none'} kind=${event.guarded ? 'guard' : 'hit'} contact=${event.contact ? `${event.contact.x},${event.contact.y}` : '-'} spark=${event.spark ? `${event.spark.scope}:${event.spark.animNo}` : '-'} sparkAvailable=${sparkAvailability} sparkPos=${event.spark ? `${event.spark.x},${event.spark.y}` : '-'} sparkSpace=${event.spark?.coordinateSpace ?? '-'} sound=${event.sound ? `${event.sound.scope}:${event.sound.group},${event.sound.index}` : '-'} soundAvailable=${event.sound ? 'deferred' : '-'} envshake=${event.envShake ? `${event.envShake.time},${event.envShake.frequency},${event.envShake.amplitude},${event.envShake.phase}` : '-'} result=generated${event.spark?.available === false ? ' warning=missing_animation' : ''}`,
   ];
 }
 

@@ -1,5 +1,6 @@
 import type { CnsDocument, CnsStateController, CnsStateDefinition, CnsTrigger, CnsValue } from '../../mugen/common/cnsTypes';
 import type { ActiveHitDef, GameState, PlayerState } from '../engine/types';
+import { readCnsConst } from './CnsConstants';
 import { calculateMugenAnimTime } from '../animation/AnimationDuration';
 import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 import { activateMoveContact, resetMoveContact } from '../hitdef/MoveContactState';
@@ -174,8 +175,14 @@ function stepPlayer(
   const originalStateNo = player.stateNo;
   const juggleMax = player.juggleMax ?? readAirJuggle(cns);
   const resetJuggle = player.stateType !== 'A' && player.stateType !== 'L' && player.moveType === 'I' && player.ctrl;
-  let next = {
+  let next: PlayerState = {
     ...player,
+    collisionWidth: {
+      groundFront: readCnsConst(cns, 'size.ground.front'),
+      groundBack: readCnsConst(cns, 'size.ground.back'),
+      airFront: readCnsConst(cns, 'size.air.front'),
+      airBack: readCnsConst(cns, 'size.air.back'),
+    },
     playerPush: true,
     hitDiagnosticLines: [],
     juggleMax,
