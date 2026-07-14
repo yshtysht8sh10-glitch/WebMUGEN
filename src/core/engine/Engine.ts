@@ -42,6 +42,10 @@ function stepPlayer(current: PlayerState, input: PlayerInput): PlayerState {
     next = stepAirState(next);
   } else if (next.stateNo === JUMP_LAND) {
     next = stepJumpLand(next);
+  } else if (!next.ctrl) {
+    // Engine.ts is a fallback input router. It must not override a CNS StateDef
+    // that has explicitly withheld control. State-local runtime/physics may still
+    // advance the entity, but player input cannot force stand/walk/jump/attack.
   } else if (input.attack) {
     next = enterState({ ...next, vx: 0 }, ATTACK);
   } else if (input.down) {
