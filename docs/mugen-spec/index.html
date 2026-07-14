@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MUGEN Spec Documentation</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #0f172a;
+      color: #e5e7eb;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.6;
+    }
+    main { max-width: 960px; margin: 0 auto; padding: 32px 20px 64px; }
+    h1 { margin-bottom: 8px; }
+    .lead { margin-top: 0; color: #94a3b8; }
+    .toolbar { margin: 24px 0; }
+    input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      background: #111827;
+      color: #e5e7eb;
+      font: inherit;
+    }
+    ul { list-style: none; padding: 0; }
+    li { margin: 8px 0; }
+    a {
+      display: block;
+      padding: 12px 14px;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      background: #111827;
+      color: #38bdf8;
+      text-decoration: none;
+      overflow-wrap: anywhere;
+    }
+    a:hover { border-color: #38bdf8; background: #172033; }
+    .path { display: block; color: #94a3b8; font-size: 13px; }
+    .status { color: #94a3b8; }
+    .error { color: #fca5a5; }
+    .back { display: inline-block; margin-bottom: 12px; color: #38bdf8; }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="back" href="../index.html">← Documentation top</a>
+    <h1>MUGEN Spec Documentation</h1>
+    <p class="lead">このフォルダにあるHTMLドキュメントを一覧表示します。</p>
+    <div class="toolbar"><input id="filter" type="search" placeholder="ファイル名・パスで検索" /></div>
+    <p id="status" class="status">HTMLファイルを取得しています…</p>
+    <ul id="documents"></ul>
+  </main>
+  <script>
+    const owner = 'yshtysht8sh10-glitch';
+    const repo = 'WebMUGEN';
+    const branch = 'main';
+    const rootPath = 'docs/mugen-spec';
+    const list = document.getElementById('documents');
+    const status = document.getElementById('status');
+    const filter = document.getElementById('filter');
+    let documents = [];
+
+    async function readDirectory(path) {
+      const endpoint = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
+      const response = await fetch(endpoint, { headers: { Accept: 'application/vnd.github+json' } });
+      if (!response.ok) throw new Error(`GitHub API: ${response.status}`);
+      return response.json();
+    }
+
+    async function collectHtml(path) {
+      const entries = await readDirectory(path);
+      const results = [];
+      for (const entry of entries) {
+        if (entry.type === 'dir') {
+          results.push(...await collectHtml(entry.path));
+        } else if (entry.type === 'file' && /\.html?$/i.test(entry.name) && entry.path !== `${rootPath}/index.html`) {
+          results.push(entry.path);
+        }
+      }
+      return results;
+    }
+
+    function render() {
+      const query = filter.value.trim().toLowerCase();
+      const visible = documents.filter(path => path.toLowerCase().includes(query));
+      list.replaceChildren(...visible.map(path => {
+        const item = document.createElement('li');
+        const link = document.createElement('a');
+        const relative = path.slice(rootPath.length + 1);
+        link.href = `./${relative}`;
+        link.textContent = relative.split('/').pop();
+        const pathLabel = document.createElement('span');
+        pathLabel.className = 'path';
+        pathLabel.textContent = relative;
+        link.appendChild(pathLabel);
+        item.appendChild(link);
+        return item;
+      }));
+      status.textContent = `${visible.length} / ${documents.length} files`;
+    }
+
+    filter.addEventListener('input', render);
+
+    collectHtml(rootPath)
+      .then(paths => {
+        documents = paths.sort((a, b) => a.localeCompare(b, 'ja'));
+        render();
+      })
+      .catch(error => {
+        status.className = 'error';
+        status.textContent = `一覧を取得できませんでした: ${error.message}`;
+      });
+  </script>
+</body>
+</html>
