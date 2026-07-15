@@ -273,11 +273,17 @@ function stepPlayer(
   const debugEnabled = shouldDebugRuntime(commands);
   if (player.hitPause > 0) {
     trace.debugLines.push(`hitpause skip remaining=${player.hitPause}`);
-    return { ...finishTrace(next, trace), targetOperations };
+    return { ...finishTrace(appendFallPauseDiagnostic(next, runtimeFrame, 'hitpause', player.hitPause, input.hitDiagnostics !== false), trace), targetOperations };
   }
   if (input.pauseState && (input.pauseState.resumeGuard || !canEntityMoveDuringPause(input.pauseState, player.id))) {
     trace.debugLines.push(`global_pause skip reason=${input.pauseState.resumeGuard ? 'resume_guard' : input.pauseState.kind ?? 'pause'} remaining=${Math.max(input.pauseState.pauseTime, input.pauseState.superPauseTime)} owner=p${input.pauseState.ownerEntityId ?? '-'}`);
-    return { ...finishTrace(next, trace), targetOperations };
+    return { ...finishTrace(appendFallPauseDiagnostic(
+      next,
+      runtimeFrame,
+      input.pauseState.kind ?? 'pause',
+      Math.max(input.pauseState.pauseTime, input.pauseState.superPauseTime),
+      input.hitDiagnostics !== false,
+    ), trace), targetOperations };
   }
 
   const stateDefBeforeNegative = findState(cns, next.stateNo);
@@ -1275,7 +1281,7 @@ function appendGetHitFrameDiagnostic(
   runtimeFrame: number,
   enabled: boolean,
 ): PlayerState {
-  if (!enabled || ![5000, 5001, 5010, 5011, 5020].includes(stateDef.stateNo)) return player;
+  if (!enabled || ![5000, 5001, 5010, 5011, 5020, 5030, 5035, 5040, 5050, 5070, 5071].includes(stateDef.stateNo)) return player;
   const hitStun = player.hitStun;
   const source = hitStun?.getHitVarYVelocitySource
     ?? (hitStun?.targetStateTypeAtHit === 'A' ? 'air.velocity.y' : 'ground.velocity.y');
@@ -1296,10 +1302,29 @@ function appendGetHitFrameDiagnostic(
       ...(player.hitDiagnosticLines ?? []),
       `raw.gethitvar_frame target=p${player.id}`,
       `  frame=${runtimeFrame} entity=p${player.id} state=${player.stateNo} prevState=${(player as ExtendedPlayerState).prevStateNo ?? '-'} stateTime=${player.stateTime} anim=${player.animNo} animTime=${player.animTime} ctrl=${player.ctrl ? 1 : 0} stateType=${player.stateType} moveType=${player.moveType} physics=${player.physics}`,
+      `  pos=${player.x},${player.y - DEFAULT_GROUND_Y} vel=${player.vx},${player.vy} yaccel=${readGetHitDiagnosticValue(player, 'yaccel')} ground=${player.y >= DEFAULT_GROUND_Y ? 1 : 0} landed=${player.y >= DEFAULT_GROUND_Y && player.vy > 0 ? 1 : 0} crossing=${player.y >= DEFAULT_GROUND_Y && player.vy > 0 ? 1 : 0} GroundClamp=${player.stateType === 'A' && player.moveType === 'H' ? 'defer_common_gethit' : 'normal'}`,
       `  activeHitDefId=${hitStun?.activeHitDefId ?? 'none'} hitStunElapsed=${hitStun?.elapsed ?? '-'} hitStunRemaining=${hitStun ? Math.max(0, hitStun.selectedHitTime - hitStun.elapsed) : '-'} hitPauseRemaining=${player.hitPause} hitShakeOver=${player.hitPause <= 0 ? 1 : 0} hitOver=${hitStun ? Number(hitStun.elapsed >= hitStun.selectedHitTime) : '-'}`,
       `  targetStateTypeAtHit=${hitStun?.targetStateTypeAtHit ?? '-'} animtype=${readGetHitDiagnosticValue(player, 'animtype')} air.animtype=${readGetHitDiagnosticValue(player, 'air.animtype')} fall.animtype=${readGetHitDiagnosticValue(player, 'fall.animtype')} groundtype=${readGetHitDiagnosticValue(player, 'groundtype')} airtype=${readGetHitDiagnosticValue(player, 'airtype')}`,
-      `  hittime=${readGetHitDiagnosticValue(player, 'hittime')} yvel=${readGetHitDiagnosticValue(player, 'yvel')} yvelSource=${source} fall=${readGetHitDiagnosticValue(player, 'fall')} groundVelocityY=${hitStun?.groundVelocityAtHit?.y ?? '-'} airVelocityY=${hitStun?.airVelocityAtHit?.y ?? '-'} fallYVelocity=${hitStun?.fallYVelocityAtHit ?? readGetHitDiagnosticValue(player, 'fall.yvel')}`,
+      `  hittime=${readGetHitDiagnosticValue(player, 'hittime')} yvel=${readGetHitDiagnosticValue(player, 'yvel')} yvelSource=${source} fall=${readGetHitDiagnosticValue(player, 'fall')} recover=${readGetHitDiagnosticValue(player, 'fall.recover')} recoverTime=${readGetHitDiagnosticValue(player, 'fall.recovertime')} CanRecover=${player.fallRecover !== false && hitElapsed >= (player.fallRecoverTime ?? 0) ? 1 : 0} recoveryInput=${commands?.has('recovery') ? 1 : 0} groundVelocityY=${hitStun?.groundVelocityAtHit?.y ?? '-'} airVelocityY=${hitStun?.airVelocityAtHit?.y ?? '-'} fallYVelocity=${hitStun?.fallYVelocityAtHit ?? readGetHitDiagnosticValue(player, 'fall.yvel')}`,
       ...routeLines,
+    ],
+  };
+}
+
+function appendFallPauseDiagnostic(
+  player: PlayerState,
+  runtimeFrame: number,
+  reason: string,
+  remaining: number,
+  enabled: boolean,
+): PlayerState {
+  if (!enabled || ![5030, 5035, 5040, 5050, 5070, 5071].includes(player.stateNo)) return player;
+  return {
+    ...player,
+    hitDiagnosticLines: [
+      ...(player.hitDiagnosticLines ?? []),
+      `raw.fall_pause target=p${player.id}`,
+      `  frame=${runtimeFrame} entity=p${player.id} state=${player.stateNo} stateTime=${player.stateTime} anim=${player.animNo} animTime=${player.animTime} pos=${player.x},${player.y - DEFAULT_GROUND_Y} vel=${player.vx},${player.vy} reason=${reason} remaining=${remaining} controllers=skipped clock=frozen`,
     ],
   };
 }

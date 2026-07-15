@@ -80,6 +80,10 @@ Issue #59 completes the 5000-family entry selection. HitDef recognizes Light, Me
 
 Air get-hit states with `MoveType = H` are not clamped before CNS sees their ground crossing. This preserves the `Pos Y`/`Vel Y` conditions used by common States 5030/5035/5040/5050 to choose recovery, fall, bounce, and down routes. `HitVelSet` restores the contact velocity after State 5020, while `HitFallVel` restores fall velocity during bounce. Non-hit air movement keeps the normal landing clamp behavior.
 
+Issue #60 audits the complete 5030 fall family against the unmodified common States. State 5030 restores contact velocity, 5035 handles the optional transition animation, 5040 handles non-fall recovery, and 5050 owns falling, recovery input, and contact with the ground. The number 5060 is an animation family selected by State 5050, not a `StateDef`. Trip State 5070 remains frozen through hitpause and enters 5071 only when `HitShakeOver`; 5071 then restores hit velocity and applies `GetHitVar(yaccel)`.
+
+`raw.gethitvar_frame` includes position/velocity, yaccel, ground crossing, fall/recover window, recovery input, and the ground-clamp decision for these States. `raw.gethit_changestate_eval` reports each ChangeState controller index and result. `raw.fall_pause` records hitpause or global pause frames with frozen state/animation clocks.
+
 HitDef `pausetime = p1, p2` initializes separate attacker and defender counters. While a counter is positive, CNS controllers, position, velocity integration, StateTime, and AnimTime are frozen; the physics step decrements the counter once per game frame. A counter of zero resumes normally without an extra frozen frame. Input buffering remains active outside this per-player freeze. Match-level Pause/SuperPause is separate: it freezes non-moving players and round/hit stepping, permits only the controller owner for `movetime`, and uses a resume guard before normal CNS execution restarts.
 
 ## Movement debugging

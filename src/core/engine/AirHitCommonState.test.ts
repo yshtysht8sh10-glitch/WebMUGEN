@@ -143,6 +143,69 @@ function traceUntil(
 }
 
 describe('air hit common-state integration', () => {
+  it('uses the 5060 animation family while descending instead of treating 5060 as a StateDef', () => {
+    const initial = createInitialGameState();
+    const player = {
+      ...airHitPlayer(true, false),
+      stateNo: 5050,
+      animNo: 5050,
+      animTime: 0,
+      vy: 1,
+    };
+    const result = stepCnsStateRuntime(
+      { ...initial, players: [initial.players[0], player] },
+      common,
+      { getAnimationDuration: (animNo) => ([5050, 5060].includes(animNo) ? 10 : null), hitDiagnostics: true },
+    );
+
+    expect(common.states.some((stateDef) => stateDef.stateNo === 5060)).toBe(false);
+    expect(result.state.players[1]).toMatchObject({ stateNo: 5050, animNo: 5060 });
+    expect(result.state.players[1].hitDiagnosticLines?.join('\n')).toContain('state=5050');
+  });
+
+  it('freezes the 5070 trip state during hitpause, then enters 5071 with the stored hit velocity', () => {
+    const initial = createInitialGameState();
+    let state: GameState = {
+      ...initial,
+      players: [initial.players[0], {
+        ...airHitPlayer(true, false),
+        stateNo: 5070,
+        animNo: 5070,
+        stateTime: 4,
+        animTime: 4,
+        hitPause: 1,
+        hitVelX: -2,
+        hitVelY: -4,
+      }],
+    };
+
+    const frozen = stepCnsStateRuntime(state, common, { hitDiagnostics: true }).state;
+    expect(frozen.players[1]).toMatchObject({ stateNo: 5070, stateTime: 4, animTime: 4, hitPause: 1 });
+    expect(frozen.players[1].hitDiagnosticLines?.join('\n')).toContain('raw.fall_pause');
+    state = stepCnsPhysicsMotion(frozen, common);
+    expect(state.players[1]).toMatchObject({ stateNo: 5070, stateTime: 4, animTime: 4, hitPause: 0 });
+
+    state = stepCnsStateRuntime(state, common, { hitDiagnostics: true }).state;
+    expect(state.players[1]).toMatchObject({ stateNo: 5071, vx: -2, vy: -3.4, stateType: 'A', moveType: 'H' });
+  });
+
+  it('routes a non-fall air hit through 5040 and lands only after a downward ground crossing', () => {
+    const initial = createInitialGameState();
+    let state: GameState = { ...initial, players: [initial.players[0], airHitPlayer(false)] };
+    const visited = new Set<number>();
+    let sawAboveGround5040 = false;
+    for (let frame = 0; frame < 80 && state.players[1].stateNo !== 0; frame += 1) {
+      state = tick(state);
+      const player = state.players[1];
+      visited.add(player.stateNo);
+      if (player.stateNo === 5040 && player.y < 285) sawAboveGround5040 = true;
+    }
+
+    expect(visited).toContain(5040);
+    expect(sawAboveGround5040).toBe(true);
+    expect(state.players[1]).toMatchObject({ stateNo: 0, prevStateNo: 52, y: 285, vy: 0 });
+  });
+
   it('restores configured hit velocity and follows non-fall recovery through landing', () => {
     const initial = createInitialGameState();
     let state: GameState = { ...initial, players: [initial.players[0], airHitPlayer(false)] };
