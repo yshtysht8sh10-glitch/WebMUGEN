@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseCnsText } from '../../parser/cns/CnsParser';
 import { createInitialGameState } from '../engine/GameState';
+import { stepCnsPhysicsMotion } from './CnsPhysicsStep';
 import { stepCnsStateRuntime } from './CnsStateRuntime';
 
 describe('CnsStateRuntime AnimTime', () => {
@@ -288,13 +289,19 @@ value = ifelse((vel x)=0, 44, ifelse((vel x)>0, 45, 46))+var(5)*4
     expect(result.state.players[0]).toMatchObject({
       prevStateNo: 6142,
       stateNo: 50,
-      stateTime: 0,
+      stateTime: -1,
       animNo: 6143,
       animTime: 0,
       ctrl: true,
     });
     expect(Number.isFinite(result.state.players[0].animNo)).toBe(true);
     expect(result.traces[0].executedControllers).toEqual(['ChangeState', 'ChangeState']);
+
+    const afterPhysics = stepCnsPhysicsMotion(result.state, cns);
+    expect(afterPhysics.players[0]).toMatchObject({ stateNo: 50, stateTime: 0, animNo: 6143 });
+    const nextTick = stepCnsStateRuntime(afterPhysics, cns);
+    expect(nextTick.state.players[0]).toMatchObject({ stateNo: 50, stateTime: 0, animNo: 44, animTime: 0 });
+    expect(nextTick.traces[0].executedControllers).toEqual(['ChangeAnim']);
   });
 
   it('returns from state 200 when MUGEN AnimTime reaches 0', () => {

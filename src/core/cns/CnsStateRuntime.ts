@@ -279,8 +279,14 @@ function stepPlayer(
     if (enteredState) {
       if (debugEnabled) appendDebug(trace, `enter target S${enteredState.stateNo} state=${next.stateNo}`);
       if (debugEnabled) appendDebug(trace, formatStateDefOverview(enteredState));
+      const enteredStateNo = next.stateNo;
       const enteredResult = executeStateControllers(next, opponent, enteredState, cns, input, commands, debugEnabled, undefined, runtimeFrame);
       next = enteredResult.player;
+      if (next.stateNo !== enteredStateNo && next.stateTime === 0) {
+        // This second destination has not run its own controllers yet. Keep its
+        // first Time = 0 pass available after the following physics increment.
+        next = { ...next, stateTime: -1 };
+      }
       trace.executedControllers.push(...enteredResult.executedControllers);
       trace.debugLines.push(...enteredResult.debugLines);
       targetOperations.push(...enteredResult.targetOperations);

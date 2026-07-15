@@ -68,7 +68,7 @@ The negative states execute before the current state. This is important for comm
 - `State -1`: command/state routing;
 - current state: behavior for the player's current `stateNo`.
 
-If a negative state changes `stateNo`, the old current State is not executed. The newly entered State is selected instead. Positive-State `ChangeState` stops the remaining controllers in that State; entered-State controllers may run in the same frame under the existing bounded pipeline.
+If a negative state changes `stateNo`, the old current State is not executed. The newly entered State is selected instead. Positive-State `ChangeState` stops the remaining controllers in that State; entered-State controllers may run in the same frame under the existing bounded pipeline. If that entered State immediately changes State again, the final unprocessed destination keeps `StateTime = 0` through the following physics increment, so its `Time = 0` controllers run on the next CNS tick.
 
 When a player's HitDef hit-pause counter is positive, CNS StateDef headers and controllers are skipped for that player. The following physics step decrements only the counter; position, velocity, StateTime, and AnimTime remain frozen. Input buffers are updated before CNS execution and therefore continue collecting input during hit pause. Hit pause is per player and separate from SuperPause.
 
