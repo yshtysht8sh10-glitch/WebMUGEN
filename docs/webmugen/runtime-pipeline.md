@@ -170,7 +170,7 @@ P1 input right=true
   ↓
 CommandResolver resolves fwd and holdfwd
   ↓
-State -1 finds Common Walk Forward
+State -1 finds Common Walk Forward only while State 0 is active
   ↓
 ChangeState value=20 executes when not already in State 20
   ↓
@@ -182,6 +182,10 @@ Debug shows state=20, vel x != 0, anim=20
 ```
 
 A state transition alone is not enough for visible walking. If the overlay says `state=20` but `vel=(0,0)` and `anim=0`, the route entered the state but movement/animation logic did not run.
+
+The common walk-start route is scoped to Stand State 0. A special standing State must not be
+interrupted merely because a preceding `ChangeState ctrl = 1` or a character `CtrlSet` temporarily
+made its control flag true; character-defined State -1 routes remain responsible for such states.
 
 ## Debugging checklist
 
