@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { SndDocument, SndSample } from '../../parser/snd/SndTypes';
 import { BrowserAudioRuntime, type AudioAdapter, type AudioPlaybackHandle } from './BrowserAudioRuntime';
 import type { SoundPlayEvent } from './SoundEvent';
@@ -34,6 +34,39 @@ describe('shared Sound runtime bridge', () => {
   it('diagnoses missing common assets and locked audio safely', () => {
     expect(processSoundRuntimeEvents([playEvent('common', 5, 6)], null, null, null)[0]).toContain('reason=common_sound_unavailable');
     expect(processSoundRuntimeEvents([playEvent('character', 1, 2)], soundDocument([[1, 2]]), null, null)[0]).toContain('reason=audio_locked');
+  });
+
+  it('retains PlaySnd and HitDef sound requests while the first gesture unlock is pending', async () => {
+    let resolveResume!: () => void;
+    const played: unknown[] = [];
+    const resume = vi.fn(() => new Promise<void>((resolve) => { resolveResume = resolve; }));
+    const runtime = new BrowserAudioRuntime((): AudioAdapter => ({
+      state: 'suspended',
+      resume,
+      async decode(bytes) { return bytes.byteLength; },
+      play(decoded): AudioPlaybackHandle { played.push(decoded); return { stop() {} }; },
+      setMasterGain() {},
+      async close() {},
+    }));
+    const unlock = runtime.unlock();
+    const lines = processSoundRuntimeEvents([
+      playEvent('character', 1, 2),
+      playEvent('character', 3, 4),
+    ], soundDocument([[1, 2], [3, 4]]), null, runtime);
+
+    expect(lines).toEqual([
+      expect.stringContaining('sample=1,2'),
+      expect.stringContaining('sample=3,4'),
+    ]);
+    expect(lines.every((line) => !line.includes('reason=audio_locked'))).toBe(true);
+    expect(played).toHaveLength(0);
+
+    resolveResume();
+    await unlock;
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(resume).toHaveBeenCalledTimes(1);
+    expect(played).toHaveLength(2);
   });
 });
 

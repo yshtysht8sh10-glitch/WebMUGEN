@@ -18,6 +18,63 @@ describe('BrowserAudioRuntime', () => {
     expect(fake.play).toHaveBeenCalledTimes(2);
   });
 
+  it('shares an in-flight unlock and lets the same gesture playback wait for resume', async () => {
+    let resolveResume!: () => void;
+    const fake = createFakeAdapter();
+    fake.resume.mockImplementation(() => new Promise<void>((resolve) => { resolveResume = resolve; }));
+    const factory = vi.fn(() => fake.adapter);
+    const runtime = new BrowserAudioRuntime(factory);
+
+    const firstUnlock = runtime.unlock();
+    const secondUnlock = runtime.unlock();
+    const playback = runtime.playSample('gesture:1,0', new Uint8Array([1]));
+
+    expect(runtime.isUnlockPending).toBe(true);
+    expect(factory).toHaveBeenCalledTimes(1);
+    expect(fake.resume).toHaveBeenCalledTimes(1);
+    expect(fake.play).not.toHaveBeenCalled();
+
+    resolveResume();
+    await expect(firstUnlock).resolves.toBe(true);
+    await expect(secondUnlock).resolves.toBe(true);
+    await expect(playback).resolves.toBe(true);
+    expect(runtime.isUnlockPending).toBe(false);
+    expect(fake.play).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries after resume rejection and treats an already running adapter as unlocked without resume', async () => {
+    const rejected = createFakeAdapter();
+    rejected.resume.mockRejectedValueOnce(new Error('gesture rejected'));
+    const runtime = new BrowserAudioRuntime(() => rejected.adapter);
+
+    await expect(runtime.unlock()).resolves.toBe(false);
+    await expect(runtime.unlock()).resolves.toBe(true);
+    expect(rejected.resume).toHaveBeenCalledTimes(2);
+
+    const running = createFakeAdapter();
+    Object.defineProperty(running.adapter, 'state', { value: 'running' });
+    const runningRuntime = new BrowserAudioRuntime(() => running.adapter);
+    await expect(runningRuntime.unlock()).resolves.toBe(true);
+    expect(running.resume).not.toHaveBeenCalled();
+  });
+
+  it('does not unlock or play through an adapter after cleanup wins an in-flight resume race', async () => {
+    let resolveResume!: () => void;
+    const fake = createFakeAdapter();
+    fake.resume.mockImplementation(() => new Promise<void>((resolve) => { resolveResume = resolve; }));
+    const runtime = new BrowserAudioRuntime(() => fake.adapter);
+    const unlock = runtime.unlock();
+    const playback = runtime.playSample('stale:1,0', new Uint8Array([1]));
+
+    await runtime.cleanup();
+    resolveResume();
+
+    await expect(unlock).resolves.toBe(false);
+    await expect(playback).resolves.toBe(false);
+    expect(runtime.status).toBe('closed');
+    expect(fake.play).not.toHaveBeenCalled();
+  });
+
   it('applies mute/master gain and stops/cleans up active sources', async () => {
     const fake = createFakeAdapter();
     const runtime = new BrowserAudioRuntime(() => fake.adapter);

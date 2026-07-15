@@ -1,5 +1,6 @@
 export type AudioRuntimeDiagnosticCode =
   | 'audio_unsupported'
+  | 'audio_unlock_requested'
   | 'audio_locked'
   | 'audio_unlocked'
   | 'decode_failed'
@@ -45,6 +46,9 @@ export class BrowserAudioRuntime {
   private readonly decodeCache = new Map<string, Promise<unknown>>();
   private readonly activeHandles = new Set<AudioPlaybackHandle>();
   private readonly channelHandles = new Map<string, AudioPlaybackHandle>();
+  private unlockPromise: Promise<boolean> | null = null;
+  private lifecycleRevision = 0;
+  private closed = false;
   private unlocked = false;
   private muted = false;
   private masterVolume = 1;
@@ -55,27 +59,56 @@ export class BrowserAudioRuntime {
   ) {}
 
   get status(): 'locked' | 'unlocked' | 'unsupported' | 'closed' {
+    if (this.closed) return 'closed';
     if (this.adapter === null) return 'unsupported';
     if (this.adapter === undefined) return 'locked';
     return this.unlocked ? 'unlocked' : 'locked';
   }
 
-  async unlock(): Promise<boolean> {
+  get isUnlockPending(): boolean {
+    return this.unlockPromise !== null;
+  }
+
+  unlock(userGestureType = 'manual'): Promise<boolean> {
+    if (this.closed) return Promise.resolve(false);
+    if (this.unlocked) return Promise.resolve(true);
+    if (this.unlockPromise) return this.unlockPromise;
     const adapter = this.ensureAdapter();
-    if (!adapter) return false;
+    if (!adapter) return Promise.resolve(false);
+    this.emit('audio_unlock_requested', `AudioContext unlock requested by ${userGestureType}; state=${adapter.state}.`);
+    if (adapter.state === 'running') {
+      this.finishUnlock();
+      return Promise.resolve(true);
+    }
+    const attempt = this.resumeAdapter(adapter, this.lifecycleRevision, userGestureType);
+    this.unlockPromise = attempt;
+    void attempt.then(() => {
+      if (this.unlockPromise === attempt) this.unlockPromise = null;
+    });
+    return attempt;
+  }
+
+  private async resumeAdapter(adapter: AudioAdapter, lifecycleRevision: number, userGestureType: string): Promise<boolean> {
     try {
       await adapter.resume();
-      this.unlocked = true;
-      this.applyMasterGain();
-      this.emit('audio_unlocked', 'AudioContext resumed after a user gesture.');
+      if (this.closed || this.lifecycleRevision !== lifecycleRevision || this.adapter !== adapter) return false;
+      this.finishUnlock();
       return true;
     } catch (error) {
-      this.emit('audio_locked', errorMessage('AudioContext resume failed', error));
+      this.emit('audio_locked', errorMessage(`AudioContext resume failed for ${userGestureType}`, error));
       return false;
     }
   }
 
+  private finishUnlock(): void {
+    this.unlocked = true;
+    this.applyMasterGain();
+    this.emit('audio_unlocked', 'AudioContext resumed after a user gesture.');
+  }
+
   async playSample(sampleKey: string, bytes: Uint8Array, options: AudioPlaybackOptions = {}): Promise<boolean> {
+    const pendingUnlock = this.unlockPromise;
+    if (pendingUnlock && !await pendingUnlock) return false;
     const adapter = this.ensureAdapter();
     if (!adapter) return false;
     if (!this.unlocked && adapter.state !== 'running') {
@@ -144,6 +177,9 @@ export class BrowserAudioRuntime {
   }
 
   async cleanup(): Promise<void> {
+    this.closed = true;
+    this.lifecycleRevision += 1;
+    this.unlockPromise = null;
     this.stopAll();
     this.decodeCache.clear();
     if (this.adapter) await this.adapter.close();
@@ -153,6 +189,7 @@ export class BrowserAudioRuntime {
   }
 
   private ensureAdapter(): AudioAdapter | null {
+    if (this.closed) return null;
     if (this.adapter === undefined) {
       this.adapter = this.createAdapter();
       if (!this.adapter) this.emit('audio_unsupported', 'Web Audio API is unavailable.');

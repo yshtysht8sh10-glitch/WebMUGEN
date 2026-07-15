@@ -28,7 +28,7 @@ export function processSoundRuntimeEvents(
     if (!sample) return `raw.sound_play_rejected owner=${event.ownerId} sample=${scopePrefix}${event.group},${event.index} reason=sample_not_found`;
     const volume = Math.min(1, Math.max(0, (event.volume / 100) * (event.volumeScale / 100)));
     const pan = Math.min(1, Math.max(-1, event.pan / 100));
-    if (!runtime || runtime.status !== 'unlocked') return `raw.sound_play_rejected owner=${event.ownerId} sample=${scopePrefix}${event.group},${event.index} reason=audio_locked`;
+    if (!runtime || (runtime.status !== 'unlocked' && !runtime.isUnlockPending)) return `raw.sound_play_rejected owner=${event.ownerId} sample=${scopePrefix}${event.group},${event.index} reason=audio_locked`;
     void runtime.playSample(`${event.scope}:${event.ownerId}:${sndSampleKey(event.group, event.index)}`, sample.bytes, {
       channelKey: event.channel === null ? undefined : `${event.ownerId}:${Math.trunc(event.channel)}`,
       volume,

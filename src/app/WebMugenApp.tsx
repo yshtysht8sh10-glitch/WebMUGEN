@@ -7,6 +7,7 @@ import type { CharacterSourceFile } from '../core/character/CharacterTypes';
 import type { SndDocument } from '../parser/snd/SndTypes';
 import { sndSampleKey } from '../parser/snd/SndTypes';
 import { BrowserAudioRuntime, type AudioRuntimeDiagnostic } from '../core/audio/BrowserAudioRuntime';
+import { installAudioGestureUnlock } from './AudioGestureUnlock';
 import type { SoundRuntimeEvent } from '../core/audio/SoundEvent';
 import { processSoundRuntimeEvents } from '../core/audio/SoundRuntimeBridge';
 import { adjustMasterVolumeFromKey, loadAudioSettings, normalizeAudioSettings, saveAudioSettings, type AudioSettings } from './AudioSettings';
@@ -242,22 +243,11 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
     runtime.setMuted(audioSettingsRef.current.muted);
     audioRuntimeRef.current = runtime;
 
-    const unlock = () => {
-      void runtime.unlock().then((unlocked) => {
-        setAudioStatus(unlocked ? 'unlocked' : runtime.status === 'unsupported' ? 'unsupported' : 'locked');
-        if (unlocked) {
-          window.removeEventListener('pointerdown', unlock);
-          window.removeEventListener('keydown', unlock);
-        }
-      });
-    };
-    window.addEventListener('pointerdown', unlock);
-    window.addEventListener('keydown', unlock);
+    const removeUnlockListeners = installAudioGestureUnlock(window, runtime, setAudioStatus);
 
     return () => {
       active = false;
-      window.removeEventListener('pointerdown', unlock);
-      window.removeEventListener('keydown', unlock);
+      removeUnlockListeners();
       void runtime.cleanup();
       audioRuntimeRef.current = null;
     };

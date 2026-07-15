@@ -1,6 +1,6 @@
 # Browser Audio Runtime
 
-Updated: 2026-07-14
+Updated: 2026-07-15
 
 ## Responsibility
 
@@ -19,6 +19,8 @@ The runtime provides:
 
 React re-renders do not create another context. The app-level effect owns the runtime for the component lifetime. Character reload and round restart stop active sources; component unmount stops sources, clears decoded data, and closes the context.
 
+Issue #51 closes the first-gesture race between browser unlock and the next game frame. Concurrent `pointerdown` / `keydown` unlock requests now share one in-flight `resume()` attempt. A PlaySnd or HitDef sound emitted while that gesture's resume is pending waits for the same bounded Promise and starts after a successful unlock; sound emitted before any gesture is still rejected instead of being accumulated. Resume rejection clears the pending attempt so the next gesture can retry. Cleanup invalidates an in-flight attempt, so an old adapter cannot unlock or play after unmount. Runtime tab changes are not part of this lifecycle.
+
 The Settings Audio panel exposes current status, an explicit unlock action, a keyboard-operable 0-100 master slider with current percentage, mute, and play/stop/pan test actions for the first loaded WAV sample. The safe first-run default is 50%. Volume and mute are stored under `webmugen.audioSettings.v1`; missing, malformed, old-shaped, out-of-range, inaccessible, and quota-blocked storage falls back without disabling the game. SSR/test execution without `localStorage` uses the same default.
 
 The audio graph is `individual Sound gain -> channel StereoPanner when supported -> shared master GainNode -> AudioContext destination`. A 100% master leaves CNS `PlaySnd volume` ratios unchanged, 50% halves the final graph output, and 0% silences without stopping sources or deleting channel state. Mute drives the same master node to zero and restores the stored slider value when released. Master changes use a 15 ms linear ramp and therefore affect already-playing one-shot and loop voices without recreating them. Settings changed before AudioContext unlock are retained and applied when the lazy adapter is created.
@@ -28,6 +30,7 @@ The audio graph is `individual Sound gain -> channel StereoPanner when supported
 Current diagnostic codes are:
 
 - `audio_unsupported`
+- `audio_unlock_requested`
 - `audio_locked`
 - `audio_unlocked`
 - `decode_failed`
@@ -36,6 +39,7 @@ Current diagnostic codes are:
 - `audio_closed`
 
 Autoplay/resume rejection is `audio_locked`, not a character load failure. Missing SND lookup is reported by the caller as `sound_asset_missing`.
+`audio_unlock_requested` records the gesture type and adapter state before `resume()`; it distinguishes a received first gesture from a missing listener or a rejected resume.
 
 ## Compatibility boundary
 
@@ -58,6 +62,8 @@ Issue #44 adds the persistent user master controls described above. This is an a
 ## Test expectations
 
 - adapter factory is called once across repeated unlock/play calls;
+- concurrent first gestures share one `resume()` attempt, and same-gesture playback waits for it;
+- resume rejection remains retryable while unmount invalidates pending unlock/playback;
 - playback before unlock is rejected safely;
 - identical sample keys decode once and can play multiple times;
 - master gain and mute produce deterministic adapter gain values;
