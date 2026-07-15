@@ -2,6 +2,7 @@ import type { PlayerInput } from '../core/engine/types';
 
 type KeyboardEventTarget = Pick<Window, 'addEventListener' | 'removeEventListener'>;
 type GamepadReader = Pick<Navigator, 'getGamepads'>;
+export type BrowserInputUserGesture = 'keydown';
 
 export type PlayerKeyboardMapping = {
   left: string;
@@ -75,6 +76,7 @@ export class BrowserInput {
   constructor(
     private readonly target: KeyboardEventTarget = window,
     private readonly gamepads: GamepadReader | null = getDefaultGamepadReader(),
+    private readonly onUserGesture: (gestureType: BrowserInputUserGesture) => void = () => {},
   ) {
     this.target.addEventListener('keydown', this.handleKeyDown);
     this.target.addEventListener('keyup', this.handleKeyUp);
@@ -97,6 +99,7 @@ export class BrowserInput {
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (isEditableControl(event.target)) return;
     this.pressedKeys.add(event.code);
+    this.onUserGesture('keydown');
     if (shouldPreventDefault(event.code)) {
       event.preventDefault();
     }

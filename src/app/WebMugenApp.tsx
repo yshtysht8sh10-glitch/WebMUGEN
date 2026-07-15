@@ -7,7 +7,7 @@ import type { CharacterSourceFile } from '../core/character/CharacterTypes';
 import type { SndDocument } from '../parser/snd/SndTypes';
 import { sndSampleKey } from '../parser/snd/SndTypes';
 import { BrowserAudioRuntime, formatAudioRuntimeDiagnostic, type AudioRuntimeDiagnostic } from '../core/audio/BrowserAudioRuntime';
-import { installAudioGestureUnlock } from './AudioGestureUnlock';
+import { createAudioUserGestureUnlock, installAudioGestureUnlock, type AudioUserGestureCallback } from './AudioGestureUnlock';
 import type { SoundRuntimeEvent } from '../core/audio/SoundEvent';
 import { processSoundRuntimeEvents } from '../core/audio/SoundRuntimeBridge';
 import { adjustMasterVolumeFromKey, loadAudioSettings, normalizeAudioSettings, saveAudioSettings, type AudioSettings } from './AudioSettings';
@@ -163,6 +163,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
   const runtimeSettingsRef = useRef<RuntimeSettings>(loadRuntimeSettings());
   const audioSettingsRef = useRef<AudioSettings>(loadAudioSettings());
   const audioRuntimeRef = useRef<BrowserAudioRuntime | null>(null);
+  const audioUserGestureRef = useRef<AudioUserGestureCallback>(() => {});
   const characterSoundsRef = useRef<SndDocument | null>(null);
   const lastFrameTickTimeRef = useRef<number | null>(null);
   const frameNoRef = useRef(0);
@@ -259,12 +260,16 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
     audioRuntimeRef.current = runtime;
     recordAudioHistory(`raw.audio_lifecycle event=mount runtimeInstanceId=${runtime.runtimeInstanceId}`);
 
-    const removeUnlockListeners = installAudioGestureUnlock(window, runtime, setAudioStatus);
+    const gestureUnlock = createAudioUserGestureUnlock(runtime, setAudioStatus);
+    audioUserGestureRef.current = gestureUnlock.onUserGesture;
+    const removeUnlockListeners = installAudioGestureUnlock(window, gestureUnlock.onUserGesture);
 
     return () => {
       recordAudioHistory(`raw.audio_lifecycle event=react_effect_cleanup runtimeInstanceId=${runtime.runtimeInstanceId}`);
       active = false;
+      audioUserGestureRef.current = () => {};
       removeUnlockListeners();
+      gestureUnlock.dispose();
       void runtime.cleanup();
       audioRuntimeRef.current = null;
     };
@@ -344,7 +349,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
         1: characterRenderAssets,
         2: characterRenderAssets,
       });
-      inputRef.current = new BrowserInput(window);
+      inputRef.current = new BrowserInput(window, undefined, (gestureType) => audioUserGestureRef.current(gestureType));
       p1CommandBufferRef.current = new InputBuffer(60);
       p2CommandBufferRef.current = new InputBuffer(60);
 

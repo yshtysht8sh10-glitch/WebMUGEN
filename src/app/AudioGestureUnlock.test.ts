@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BrowserAudioRuntime, type AudioAdapter } from '../core/audio/BrowserAudioRuntime';
-import { installAudioGestureUnlock } from './AudioGestureUnlock';
+import { createAudioUserGestureUnlock, installAudioGestureUnlock } from './AudioGestureUnlock';
 
 describe('app audio gesture unlock lifecycle', () => {
-  it('shares the first key/pointer unlock, removes both listeners on success, and does not depend on runtime tabs', async () => {
+  it('shares repeated key/pointer unlock callbacks through one runtime without depending on runtime tabs', async () => {
     let resolveResume!: () => void;
     let state = 'suspended';
     const resume = vi.fn(() => new Promise<void>((resolve) => { resolveResume = () => { state = 'running'; resolve(); }; }));
@@ -16,11 +16,11 @@ describe('app audio gesture unlock lifecycle', () => {
     }));
     const target = new FakeGestureTarget();
     const statuses: string[] = [];
-    const cleanup = installAudioGestureUnlock(target, runtime, (status) => statuses.push(status));
+    const gestureUnlock = createAudioUserGestureUnlock(runtime, (status) => statuses.push(status));
+    const cleanup = installAudioGestureUnlock(target, gestureUnlock.onUserGesture);
 
-    expect(target.listenerCount('keydown')).toBe(1);
     expect(target.listenerCount('pointerdown')).toBe(1);
-    target.dispatch('keydown');
+    gestureUnlock.onUserGesture('keydown');
     target.dispatch('pointerdown');
     expect(resume).toHaveBeenCalledTimes(1);
 
@@ -28,9 +28,10 @@ describe('app audio gesture unlock lifecycle', () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(statuses).toEqual(['unlocked', 'unlocked']);
-    expect(target.listenerCount('keydown')).toBe(0);
-    expect(target.listenerCount('pointerdown')).toBe(0);
+    expect(target.listenerCount('pointerdown')).toBe(1);
     cleanup();
+    gestureUnlock.dispose();
+    expect(target.listenerCount('pointerdown')).toBe(0);
   });
 
   it('keeps listeners for a rejected resume retry and suppresses stale status after cleanup', async () => {
@@ -47,34 +48,38 @@ describe('app audio gesture unlock lifecycle', () => {
     }));
     const target = new FakeGestureTarget();
     const statuses: string[] = [];
-    const cleanup = installAudioGestureUnlock(target, runtime, (status) => statuses.push(status));
+    const gestureUnlock = createAudioUserGestureUnlock(runtime, (status) => statuses.push(status));
+    const cleanup = installAudioGestureUnlock(target, gestureUnlock.onUserGesture);
 
-    target.dispatch('keydown');
+    gestureUnlock.onUserGesture('keydown');
     await Promise.resolve();
     await Promise.resolve();
     expect(statuses).toEqual(['locked']);
-    expect(target.listenerCount('keydown')).toBe(1);
+    expect(target.listenerCount('pointerdown')).toBe(1);
 
     target.dispatch('pointerdown');
     cleanup();
+    gestureUnlock.dispose();
     await Promise.resolve();
     await Promise.resolve();
     expect(statuses).toEqual(['locked']);
     expect(resume).toHaveBeenCalledTimes(2);
-    expect(target.listenerCount('keydown')).toBe(0);
     expect(target.listenerCount('pointerdown')).toBe(0);
   });
 
   it('survives a StrictMode-style mount, cleanup, and remount with a fresh runtime', async () => {
     const target = new FakeGestureTarget();
     const first = createGestureRuntime();
-    const firstCleanup = installAudioGestureUnlock(target, first.runtime, first.onStatus);
+    const firstGestureUnlock = createAudioUserGestureUnlock(first.runtime, first.onStatus);
+    const firstCleanup = installAudioGestureUnlock(target, firstGestureUnlock.onUserGesture);
     firstCleanup();
+    firstGestureUnlock.dispose();
     await first.runtime.cleanup();
 
     const second = createGestureRuntime();
-    const secondCleanup = installAudioGestureUnlock(target, second.runtime, second.onStatus);
-    target.dispatch('keydown');
+    const secondGestureUnlock = createAudioUserGestureUnlock(second.runtime, second.onStatus);
+    const secondCleanup = installAudioGestureUnlock(target, secondGestureUnlock.onUserGesture);
+    secondGestureUnlock.onUserGesture('keydown');
     await Promise.resolve();
     await Promise.resolve();
 
@@ -82,8 +87,8 @@ describe('app audio gesture unlock lifecycle', () => {
     expect(first.resume).not.toHaveBeenCalled();
     expect(second.statuses).toEqual(['unlocked']);
     expect(second.resume).toHaveBeenCalledTimes(1);
-    expect(target.listenerCount('keydown')).toBe(0);
     secondCleanup();
+    secondGestureUnlock.dispose();
   });
 });
 
@@ -104,21 +109,21 @@ function createGestureRuntime() {
 class FakeGestureTarget {
   private readonly listeners = new Map<string, Set<EventListener>>();
 
-  addEventListener(type: 'pointerdown' | 'keydown', listener: EventListener): void {
+  addEventListener(type: 'pointerdown', listener: EventListener): void {
     const listeners = this.listeners.get(type) ?? new Set<EventListener>();
     listeners.add(listener);
     this.listeners.set(type, listeners);
   }
 
-  removeEventListener(type: 'pointerdown' | 'keydown', listener: EventListener): void {
+  removeEventListener(type: 'pointerdown', listener: EventListener): void {
     this.listeners.get(type)?.delete(listener);
   }
 
-  dispatch(type: 'pointerdown' | 'keydown'): void {
+  dispatch(type: 'pointerdown'): void {
     for (const listener of this.listeners.get(type) ?? []) listener(new Event(type));
   }
 
-  listenerCount(type: 'pointerdown' | 'keydown'): number {
+  listenerCount(type: 'pointerdown'): number {
     return this.listeners.get(type)?.size ?? 0;
   }
 }

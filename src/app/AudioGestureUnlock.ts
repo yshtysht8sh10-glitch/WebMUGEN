@@ -1,34 +1,35 @@
 import type { BrowserAudioRuntime } from '../core/audio/BrowserAudioRuntime';
 
 export type AudioUnlockStatus = 'locked' | 'unlocked' | 'unsupported';
+export type AudioUserGestureType = 'pointerdown' | 'keydown';
+export type AudioUserGestureCallback = (gestureType: AudioUserGestureType) => void;
 
 type AudioGestureTarget = {
-  addEventListener(type: 'pointerdown' | 'keydown', listener: EventListener): void;
-  removeEventListener(type: 'pointerdown' | 'keydown', listener: EventListener): void;
+  addEventListener(type: 'pointerdown', listener: EventListener): void;
+  removeEventListener(type: 'pointerdown', listener: EventListener): void;
 };
 
-export function installAudioGestureUnlock(
-  target: AudioGestureTarget,
+export function createAudioUserGestureUnlock(
   runtime: BrowserAudioRuntime,
   onStatus: (status: AudioUnlockStatus) => void,
-): () => void {
+): { onUserGesture: AudioUserGestureCallback; dispose(): void } {
   let active = true;
-  const unlock: EventListener = (event) => {
-    void runtime.unlock(event.type).then((unlocked) => {
+  const onUserGesture: AudioUserGestureCallback = (gestureType) => {
+    void runtime.unlock(gestureType).then((unlocked) => {
       if (!active) return;
       onStatus(unlocked ? 'unlocked' : runtime.status === 'unsupported' ? 'unsupported' : 'locked');
-      if (unlocked) removeListeners();
     });
   };
-  const removeListeners = () => {
-    target.removeEventListener('pointerdown', unlock);
-    target.removeEventListener('keydown', unlock);
+  return {
+    onUserGesture,
+    dispose() { active = false; },
   };
+}
 
+export function installAudioGestureUnlock(target: AudioGestureTarget, onUserGesture: AudioUserGestureCallback): () => void {
+  const unlock: EventListener = () => onUserGesture('pointerdown');
   target.addEventListener('pointerdown', unlock);
-  target.addEventListener('keydown', unlock);
   return () => {
-    active = false;
-    removeListeners();
+    target.removeEventListener('pointerdown', unlock);
   };
 }
