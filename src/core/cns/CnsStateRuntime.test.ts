@@ -682,6 +682,86 @@ anim = 20
     expect(result.traces[0].executedControllers).toEqual(['VarSet', 'VarAdd', 'ChangeState']);
   });
 
+  it('applies the entered StateDef ctrl before the next tick State -1 scan', () => {
+    const cns = parseCnsText(`
+[Statedef -1]
+[State -1, Walk]
+type = ChangeState
+triggerall = command = "holdfwd"
+trigger1 = ctrl
+value = 20
+
+[Statedef 6001]
+type = S
+ctrl = 0
+
+[State 6001, EnterMovement]
+type = ChangeState
+trigger1 = time = 0
+value = 60011
+ctrl = 1
+
+[Statedef 60011]
+type = S
+ctrl = 0
+
+[Statedef 20]
+type = S
+ctrl = 1
+`);
+    const initial = createInitialGameState();
+    const entered = stepCnsStateRuntime({
+      ...initial,
+      players: [{ ...initial.players[0], stateNo: 6001, stateTime: 0 }, initial.players[1]],
+    }, cns);
+
+    expect(entered.state.players[0]).toMatchObject({ stateNo: 60011, ctrl: true });
+
+    const nextTick = stepCnsStateRuntime(entered.state, cns, {
+      p1Commands: new Set(['holdfwd']),
+      p2Commands: new Set(),
+    });
+
+    expect(nextTick.state.players[0]).toMatchObject({ stateNo: 60011, ctrl: false });
+    expect(nextTick.traces[0].executedControllers).not.toContain('ChangeState');
+  });
+
+  it('lets State -2 CtrlSet enable a following State -1 route in the same tick', () => {
+    const cns = parseCnsText(`
+[Statedef -2]
+[State -2, EnableControl]
+type = CtrlSet
+trigger1 = stateno = 60011
+value = 1
+
+[Statedef -1]
+[State -1, Walk]
+type = ChangeState
+triggerall = command = "holdfwd"
+trigger1 = ctrl
+value = 20
+
+[Statedef 60011]
+type = S
+ctrl = 0
+
+[Statedef 20]
+type = S
+ctrl = 1
+`);
+    const initial = createInitialGameState();
+    const result = stepCnsStateRuntime({
+      ...initial,
+      players: [{ ...initial.players[0], stateNo: 60011, ctrl: false }, initial.players[1]],
+    }, cns, {
+      p1Commands: new Set(['holdfwd']),
+      p2Commands: new Set(),
+    });
+
+    expect(result.state.players[0].stateNo).toBe(20);
+    expect(result.traces[0].executedControllers).toEqual(['CtrlSet', 'ChangeState']);
+  });
+
   it('evaluates negative-state reset controllers against the entry state after ChangeState', () => {
     const cns = parseCnsText(`
 [Statedef -1]

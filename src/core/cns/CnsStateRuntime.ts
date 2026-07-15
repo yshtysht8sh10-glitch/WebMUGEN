@@ -216,6 +216,12 @@ function stepPlayer(
     trace.debugLines.push(`global_pause skip reason=${input.pauseState.resumeGuard ? 'resume_guard' : input.pauseState.kind ?? 'pause'} remaining=${Math.max(input.pauseState.pauseTime, input.pauseState.superPauseTime)} owner=p${input.pauseState.ownerEntityId ?? '-'}`);
     return { ...finishTrace(next, trace), targetOperations };
   }
+
+  const stateDefBeforeNegative = findState(cns, next.stateNo);
+  if (stateDefBeforeNegative) {
+    next = applyStateHeader(next, stateDefBeforeNegative, false);
+    next = forceHitStunControl(next, `statedef:${stateDefBeforeNegative.stateNo}`, input.hitDiagnostics !== false);
+  }
   if (debugEnabled) {
     appendDebug(trace, `scan ${stateScanSummary(cns)} cmds=${formatCommands(commands)}`);
     appendDebug(trace, `pipeline start state=${next.stateNo} type=${next.stateType} ctrl=${next.ctrl ? 1 : 0} time=${next.stateTime}`);
@@ -257,8 +263,10 @@ function stepPlayer(
   }
   if (debugEnabled) appendDebug(trace, `enter current S${stateDef.stateNo} state=${next.stateNo}`);
   if (debugEnabled) appendDebug(trace, formatStateDefOverview(stateDef));
-  next = applyStateHeader(next, stateDef, false);
-  next = forceHitStunControl(next, `statedef:${stateDef.stateNo}`, input.hitDiagnostics !== false);
+  if (stateDef !== stateDefBeforeNegative) {
+    next = applyStateHeader(next, stateDef, false);
+    next = forceHitStunControl(next, `statedef:${stateDef.stateNo}`, input.hitDiagnostics !== false);
+  }
   next = appendGetHitFrameDiagnostic(next, opponent, stateDef, input, commands, runtimeFrame, input.hitDiagnostics !== false);
   if (debugEnabled) appendDebug(trace, `after header S${stateDef.stateNo} state=${next.stateNo} type=${next.stateType} ctrl=${next.ctrl ? 1 : 0}`);
   const result = executeStateControllers(next, opponent, stateDef, cns, input, commands, debugEnabled, undefined, runtimeFrame);
