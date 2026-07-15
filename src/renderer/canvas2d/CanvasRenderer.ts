@@ -62,7 +62,7 @@ export class CanvasRenderer {
     if (roundState) this.roundStateRenderer.render(ctx, roundState, roundScore);
     this.drawProjectiles(ctx, state.projectiles);
     const explodResolution = resolveExplodRenderFrames(state, this.defaultAssets(), this.ownerAssets, this.fightFxAssets);
-    const explodDiagnostics = [...explodResolution.diagnosticLines];
+    const renderDiagnostics = [...explodResolution.diagnosticLines];
     const regularDrawables = [
       ...getPlayersInSpritePriorityOrder(state).map((player) => ({
         kind: 'player' as const,
@@ -80,18 +80,18 @@ export class CanvasRenderer {
         })),
     ].sort((a, b) => a.priority - b.priority || Number(a.kind === 'explod') - Number(b.kind === 'explod') || a.stableId - b.stableId);
     for (const drawable of regularDrawables) {
-      if (drawable.kind === 'player') this.drawPlayer(ctx, drawable.player, drawable.player.id === 1 ? '#66ccff' : '#ff99aa');
-      else explodDiagnostics.push(this.drawExplod(ctx, drawable.frame));
+      if (drawable.kind === 'player') renderDiagnostics.push(this.drawPlayer(ctx, drawable.player, drawable.player.id === 1 ? '#66ccff' : '#ff99aa'));
+      else renderDiagnostics.push(this.drawExplod(ctx, drawable.frame));
     }
     if (hitFeedback) this.hitFeedbackRenderer.render(ctx, hitFeedback);
     for (const frame of getExplodsInDrawOrder(explodResolution.frames).filter((candidate) => candidate.entry.onTop)) {
-      explodDiagnostics.push(this.drawExplod(ctx, frame));
+      renderDiagnostics.push(this.drawExplod(ctx, frame));
     }
     this.drawDebugBoxes(ctx, state.players[0]);
     this.drawDebugBoxes(ctx, state.players[1]);
     this.drawProjectileDebugBoxes(ctx, state.projectiles);
     ctx.restore();
-    return [...powerDiagnostics, ...explodDiagnostics];
+    return [...powerDiagnostics, ...renderDiagnostics];
   }
 
   private defaultAssets(): CharacterRenderAssets {
@@ -157,17 +157,45 @@ export class CanvasRenderer {
     }
   }
 
-  private drawPlayer(ctx: CanvasRenderingContext2D, player: PlayerState, color: string): void {
-    const assets = this.ownerAssets[player.id] ?? this.defaultAssets();
+  private drawPlayer(ctx: CanvasRenderingContext2D, player: PlayerState, color: string): string {
+    const hasOwnerAssetMap = Object.keys(this.ownerAssets).length > 0;
+    const assets = this.ownerAssets[player.id] ?? (hasOwnerAssetMap ? undefined : this.defaultAssets());
+    const stateOwner = player.stateOwnerId ?? player.id;
+    const prefix = `raw.render entity=p${player.id} state=${player.stateNo} anim=${player.animNo} stateOwner=${stateOwner} animOwner=${player.id}`;
+    if (!assets) return `${prefix} result=skip reason=animation_owner_missing playerVisible=0 rendererDrawRequested=0`;
+
+    const assertSpecial = ((player as PlayerState & { runtime?: { assertSpecial?: string[] } }).runtime?.assertSpecial ?? [])
+      .map((flag) => flag.trim().toLowerCase());
+    if (assertSpecial.includes('invisible')) {
+      return `${prefix} result=skip reason=entity_invisible playerVisible=0 assertSpecialInvisible=1 rendererDrawRequested=0`;
+    }
+
+    if (!assets.airDocument && (assets.imageDataSpritePack || assets.spritePack)) {
+      return `${prefix} result=skip reason=animation_owner_missing animExists=0 playerVisible=0 rendererDrawRequested=0`;
+    }
+
+    const action = assets.airDocument?.actions.find((candidate) => candidate.actionNo === player.animNo);
+    if (assets.airDocument && !action) {
+      return `${prefix} result=skip reason=air_action_missing animExists=0 playerVisible=0 rendererDrawRequested=0`;
+    }
     const currentElement = assets.airDocument
       ? getCurrentAnimationElement(assets.airDocument, player.animNo, player.animTime)
       : null;
 
+    if (action && !currentElement) {
+      return `${prefix} result=skip reason=air_element_missing animExists=1 playerVisible=0 rendererDrawRequested=0`;
+    }
+
     if (currentElement) {
+      const { groupNo, imageNo } = currentElement.element;
+      const elementFields = `animExists=1 airElementIndex=${currentElement.elementIndex + 1} airElementSpriteGroup=${groupNo} airElementSpriteIndex=${imageNo}`;
+      if (groupNo < 0 || imageNo < 0) {
+        return `${prefix} ${elementFields} result=skip reason=intentional_invisible_element spriteExists=0 playerVisible=0 rendererDrawRequested=0`;
+      }
       const drawn = this.drawSpriteByElement(
         ctx,
-        currentElement.element.groupNo,
-        currentElement.element.imageNo,
+        groupNo,
+        imageNo,
         player.x,
         player.y,
         player.facing,
@@ -177,11 +205,14 @@ export class CanvasRenderer {
         assets,
       );
 
-      if (drawn.drawn) return;
-      if (assets.imageDataSpritePack || assets.spritePack) return;
+      if (drawn.drawn) return `${prefix} ${elementFields} spriteExists=1 result=drawn playerVisible=1 rendererDrawRequested=1 ${drawn.diagnostic}`;
+      if (assets.imageDataSpritePack || assets.spritePack) {
+        return `${prefix} ${elementFields} spriteExists=0 result=skip reason=sprite_missing playerVisible=0 rendererDrawRequested=0`;
+      }
     }
 
     this.drawFallbackPlayer(ctx, player, color, currentElement);
+    return `${prefix} result=fallback reason=no_character_sprite_assets playerVisible=1 rendererDrawRequested=1 rendererDrawSource=debug_fallback`;
   }
 
   private drawPowerBars(ctx: CanvasRenderingContext2D, state: GameState): string[] {

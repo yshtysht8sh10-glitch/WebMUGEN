@@ -14,10 +14,98 @@ describe('CanvasRenderer player sprite fallback', () => {
     const assets = { airDocument: air(0, 9999, 0), spritePack: missingSprites };
     const renderer = new CanvasRenderer(canvas, undefined, null, null, { 1: assets, 2: assets });
 
-    renderer.render(createInitialGameState());
+    const diagnostics = renderer.render(createInitialGameState()).join('\n');
 
     expect(fillRect).not.toHaveBeenCalledWith(-16, -58, 32, 58);
     expect(ellipse).not.toHaveBeenCalledWith(expect.any(Number), 305, 32, 8, 0, 0, Math.PI * 2);
+    expect(diagnostics).toContain('result=skip reason=sprite_missing');
+    expect(diagnostics).toContain('airElementSpriteGroup=9999 airElementSpriteIndex=0');
+  });
+
+  it('skips a missing AIR action without falling back to Anim 0', () => {
+    const fillRect = vi.fn();
+    const drawImage = vi.fn();
+    const context = fakeContext(fillRect, vi.fn(), drawImage);
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+    const assets = { airDocument: air(0, 10, 0), spritePack: spritePack(10, 0) };
+    const renderer = new CanvasRenderer(canvas, undefined, null, null, { 1: assets, 2: assets });
+    const state = createInitialGameState();
+    state.players[0] = { ...state.players[0], animNo: 9999 };
+
+    const diagnostics = renderer.render(state).join('\n');
+
+    expect(drawImage).toHaveBeenCalledTimes(1);
+    expect(fillRect).not.toHaveBeenCalledWith(-16, -58, 32, 58);
+    expect(diagnostics).toContain('entity=p1 state=0 anim=9999');
+    expect(diagnostics).toContain('result=skip reason=air_action_missing animExists=0');
+  });
+
+  it('treats a negative AIR sprite reference as intentional invisibility', () => {
+    const drawImage = vi.fn();
+    const context = fakeContext(vi.fn(), vi.fn(), drawImage);
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+    const assets = { airDocument: air(0, -1, -1), spritePack: spritePack(10, 0) };
+    const renderer = new CanvasRenderer(canvas, undefined, null, null, { 1: assets, 2: assets });
+
+    const diagnostics = renderer.render(createInitialGameState()).join('\n');
+
+    expect(drawImage).not.toHaveBeenCalled();
+    expect(diagnostics).toContain('reason=intentional_invisible_element');
+  });
+
+  it('skips AssertSpecial invisible players', () => {
+    const drawImage = vi.fn();
+    const context = fakeContext(vi.fn(), vi.fn(), drawImage);
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+    const assets = { airDocument: air(0, 10, 0), spritePack: spritePack(10, 0) };
+    const renderer = new CanvasRenderer(canvas, undefined, null, null, { 1: assets, 2: assets });
+    const state = createInitialGameState();
+    state.players[0] = { ...state.players[0], runtime: { assertSpecial: ['invisible'] } } as typeof state.players[0];
+
+    const diagnostics = renderer.render(state).join('\n');
+
+    expect(drawImage).toHaveBeenCalledTimes(1);
+    expect(diagnostics).toContain('entity=p1');
+    expect(diagnostics).toContain('reason=entity_invisible');
+  });
+
+  it('resumes normal drawing after a missing animation becomes valid', () => {
+    const drawImage = vi.fn();
+    const context = fakeContext(vi.fn(), vi.fn(), drawImage);
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+    const assets = { airDocument: air(0, 10, 0), spritePack: spritePack(10, 0) };
+    const renderer = new CanvasRenderer(canvas, undefined, null, null, { 1: assets, 2: assets });
+    const state = createInitialGameState();
+    state.players[0] = { ...state.players[0], animNo: 9999 };
+    renderer.render(state);
+    drawImage.mockClear();
+    state.players[0] = { ...state.players[0], animNo: 0 };
+
+    const diagnostics = renderer.render(state).join('\n');
+
+    expect(drawImage).toHaveBeenCalledTimes(2);
+    expect(diagnostics).toContain('entity=p1 state=0 anim=0');
+    expect(diagnostics).toContain('spriteExists=1 result=drawn');
+  });
+
+  it('never borrows another player owner sprite pack', () => {
+    const drawImage = vi.fn();
+    const context = fakeContext(vi.fn(), vi.fn(), drawImage);
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+    const renderer = new CanvasRenderer(canvas, air(0, 10, 0), spritePack(10, 0), null, {
+      1: { airDocument: air(0, 10, 0), spritePack: { sprites: new Map() } },
+      2: { airDocument: air(0, 20, 0), spritePack: spritePack(20, 0) },
+    });
+
+    const diagnostics = renderer.render(createInitialGameState()).join('\n');
+
+    expect(drawImage).toHaveBeenCalledTimes(1);
+    expect(diagnostics).toContain('entity=p1');
+    expect(diagnostics).toContain('airElementSpriteGroup=10');
+    expect(diagnostics).toContain('reason=sprite_missing');
+    expect(diagnostics).toContain('entity=p2');
+    expect(diagnostics).toContain('airElementSpriteGroup=20');
+    expect(diagnostics).toContain('spriteExists=1 result=drawn');
   });
 
   it('keeps the debug fallback when no SFF asset was loaded at all', () => {
@@ -32,12 +120,29 @@ describe('CanvasRenderer player sprite fallback', () => {
   });
 });
 
-function fakeContext(fillRect: ReturnType<typeof vi.fn>, ellipse: ReturnType<typeof vi.fn>): CanvasRenderingContext2D {
+function fakeContext(
+  fillRect: ReturnType<typeof vi.fn>,
+  ellipse: ReturnType<typeof vi.fn>,
+  drawImage: ReturnType<typeof vi.fn> = vi.fn(),
+): CanvasRenderingContext2D {
   return {
     clearRect: vi.fn(), save: vi.fn(), restore: vi.fn(), translate: vi.fn(), scale: vi.fn(),
     fillRect, strokeRect: vi.fn(), beginPath: vi.fn(), arc: vi.fn(), ellipse, fill: vi.fn(),
-    fillText: vi.fn(), drawImage: vi.fn(), strokeStyle: '', fillStyle: '', font: '',
+    fillText: vi.fn(), drawImage, strokeStyle: '', fillStyle: '', font: '',
   } as unknown as CanvasRenderingContext2D;
+}
+
+function spritePack(groupNo: number, imageNo: number): SpritePack {
+  return {
+    sprites: new Map([[`${groupNo},${imageNo}`, {
+      groupNo,
+      imageNo,
+      src: 'test.png',
+      xAxis: 0,
+      yAxis: 0,
+      image: {} as HTMLImageElement,
+    }]]),
+  };
 }
 
 function air(actionNo: number, groupNo: number, imageNo: number): AirDocument {

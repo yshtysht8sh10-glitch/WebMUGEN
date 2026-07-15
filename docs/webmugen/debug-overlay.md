@@ -148,6 +148,12 @@ The same line exposes resolved guard intent as `guard=back`, `guard=back+down`, 
 
 Custom-state ownership appears as `owner=current/self`, using stable player ids rather than P1/P2-specific branches. Borrowed-state entry, SelfState return, and missing owner State details are recorded by `raw.custom_state`.
 
+Player asset resolution is recorded by `raw.render`. It exposes `state`, `anim`, `stateOwner`,
+`animOwner`, AIR element/sprite ids, `spriteExists`, `playerVisible`, `rendererDrawRequested`, and a
+reason when drawing is skipped. Missing actions, missing elements, missing sprites, intentional
+negative sprite references, and `AssertSpecial invisible` must remain distinguishable. These lines are
+part of the copied AI runtime dump used for Issue #55 user verification.
+
 Canvas collision debug uses the same AIR world-coordinate boxes as the hit resolver. Labels identify attack/body kind, box index, default versus element source, animation number, and current element index; boundaries include player position, facing, and AIR element offsets.
 
 ## Minimum useful dump

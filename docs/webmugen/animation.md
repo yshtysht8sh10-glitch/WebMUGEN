@@ -92,10 +92,19 @@ HitDef spark events carry common or attacker scope, the requested animation numb
 
 Explod rendering resolves the current AIR element from the creating owner's asset scope, then uses the matching owner SFF sprite. World-space entries pass through camera X/Y conversion once while screen-space `front/back/left/right` entries do not. Explod Facing, vfacing, AIR flip, sprite priority, and `ontop` are applied in the effect layer; AIR element offset and SFF axis offset are each composed once before scale. Missing animation or sprite data is hidden with a diagnostic instead of a placeholder.
 
-Normal player rendering also treats an AIR element that references an unregistered SFF group/image as
-intentionally invisible. It does not draw the debug fallback player or its shadow. The fallback player
-is retained only when no SFF/SpritePack asset was loaded at all, so development/sample configurations
-remain distinguishable from valid character data that deliberately selects a missing sprite.
+Normal player rendering never substitutes Anim 0, Sprite 0, another player's SpritePack, or the debug
+fallback after a character asset scope has been loaded. Missing AIR actions, unresolved/empty AIR
+elements, missing SFF group/image pairs, negative `-1,-1` elements, and `AssertSpecial invisible` all
+skip that player's draw for the frame. They remain distinct diagnostic results rather than being
+collapsed into one fallback path. The debug fallback player is retained only when no character
+SpritePack asset was loaded at all, so development/sample configurations remain distinguishable from
+loaded character data with an asset-level omission.
+
+Player renderer diagnostics use `raw.render` and include the entity, State, Anim, State owner,
+animation owner, AIR element and sprite reference when available, `spriteExists`, visibility/draw
+flags, and one of `animation_owner_missing`, `air_action_missing`, `air_element_missing`,
+`intentional_invisible_element`, `sprite_missing`, or `entity_invisible`. A later valid Anim is resolved
+normally; a prior missing result does not latch invisibility.
 
 Explod lifecycle advances AIR time before each following-frame render. Finite non-loop actions reach AnimTime 0 and satisfy the default `removetime=-2`; `LoopStart` and negative-duration elements do not. A positive removetime counts the creation frame as its first displayed tick, `0` never reaches the renderer, and `-1` remains until an explicit later removal path.
 
