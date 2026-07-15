@@ -8,6 +8,7 @@ export type RoundState = {
   timer: number;
   frameInPhase: number;
   winner: 1 | 2 | 'draw' | null;
+  endReason?: 'ko' | 'double_ko' | 'time_over';
 };
 
 const INTRO_FRAMES = 90;
@@ -55,6 +56,7 @@ export function stepRoundState(round: RoundState, gameState: GameState): RoundSt
       phase: 'ko',
       frameInPhase: 0,
       winner: koWinner,
+      endReason: koWinner === 'draw' ? 'double_ko' : 'ko',
     };
   }
 
@@ -69,6 +71,7 @@ export function stepRoundState(round: RoundState, gameState: GameState): RoundSt
       timer: 0,
       frameInPhase: 0,
       winner: getTimeOverWinner(gameState),
+      endReason: 'time_over',
     };
   }
 
@@ -106,5 +109,5 @@ export function formatRoundState(round: RoundState): string {
         ? 'draw'
         : `p${round.winner}`;
 
-  return `round=${round.roundNo} phase=${round.phase} timer=${round.timer} winner=${winner}`;
+  return `round=${round.roundNo} phase=${round.phase} timer=${round.timer} winner=${winner} roundEndRequested=${round.phase === 'ko' || round.phase === 'timeOver' ? 1 : 0} roundEndReason=${round.endReason ?? '-'}`;
 }

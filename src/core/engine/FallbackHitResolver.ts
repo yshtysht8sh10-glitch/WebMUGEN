@@ -168,22 +168,35 @@ function resolveAttack(
     const guardHitTime = active.guardHitTime ?? active.groundHitTime ?? 12;
     const guardState = guardKind === 'stand' ? 150 : guardKind === 'crouch' ? 152 : 154;
     const lifeBefore = target.life;
+    const guardKo = active.guardKill !== false && guardDamage >= lifeBefore;
+    const reactionState = guardKo
+      ? target.stateType === 'A' ? AIR_HIT_SHAKE_STATE : target.stateType === 'C' ? CROUCH_HIT_STATE : STAND_HIT_STATE
+      : guardState;
+    const koVelocity = target.stateType === 'A' ? active.airVelocity : active.groundVelocity;
+    const reactionVelocity = guardKo
+      ? { x: koVelocity.x * -attacker.facing, y: koVelocity.y }
+      : appliedGuardVelocity;
+    const reactionAnim = guardKo
+      ? commonHitShakeAnim(target.stateType === 'A' ? active.airAnimType ?? active.animType : active.animType, target.stateType === 'A' ? active.airType : active.groundType, airDocument)
+      : reactionState;
+    const guardGetHitVars = createGetHitVarSnapshot(active, guardDamage, guardHitTime, target.stateType === 'A' ? 'air' : 'ground', guardKo ? koVelocity : guardVelocity);
+    if (guardKo) guardGetHitVars.fall = 1;
     const guardedAttacker = markAttackerHit(attacker, activeHitDefId, target.id, active.hitId, guardPause.attacker);
     const contactedAttacker = applyAttackerRequestedState(
       activeHitDefId === null ? guardedAttacker : recordMoveContact(guardedAttacker, activeHitDefId, 'guarded'),
       active,
     );
-    const guardedTarget = applyTargetRequestedState(applyGuardHit(applyHitDefSnap(target, attacker, active), guardDamage, active.guardKill !== false, guardState, appliedGuardVelocity, guardPause.defender, {
+    const guardedTarget = applyTargetRequestedState(applyGuardHit(applyHitDefSnap(target, attacker, active), guardDamage, active.guardKill !== false, reactionState, reactionVelocity, guardPause.defender, {
       activeHitDefId,
       selectedHitTime: guardHitTime,
       kind: target.stateType === 'A' ? 'air' : 'ground',
       source: active.guardHitTime === undefined ? 'hardcoded' : 'active_hitdef',
       targetStateTypeAtHit: target.stateType,
       elapsed: 0,
-      lastStateNo: guardState,
-      selectedAnim: guardState,
+      lastStateNo: reactionState,
+      selectedAnim: reactionAnim,
       ...(active.guardHitTime === undefined ? { fallbackReason: 'missing_guard_hittime' } : {}),
-    }, createGetHitVarSnapshot(active, guardDamage, guardHitTime, target.stateType === 'A' ? 'air' : 'ground', guardVelocity)), active, attacker.id);
+    }, guardGetHitVars), active, attacker.id);
     const auxiliary = applyHitDefAuxiliary(contactedAttacker, guardedTarget, attacker, target, active, true);
     const idText = activeHitDefId === null ? 'none' : String(activeHitDefId);
     const hitEvent = createContactHitEvent(attacker, target, active, true, guardDamage, overlap, attackBoxes, bodyBoxes, airDocument);
@@ -197,7 +210,7 @@ function resolveAttack(
       `raw.hit_damage target=p${target.id}`,
       `  activeHitDefId=${idText} lifeBefore=${lifeBefore} appliedDamage=${guardDamage} lifeAfter=${guardedTarget.life} source=guard_damage ko=${guardedTarget.life === 0 ? 1 : 0}`,
       `raw.guard_reaction target=p${target.id}`,
-      `  activeHitDefId=${idText} state=${guardState} kind=${guardKind} velocity=(${appliedGuardVelocity.x},${appliedGuardVelocity.y}) damage=${guardDamage} kill=${active.guardKill === false ? 0 : 1} hittime=${guardHitTime} ctrltime=${active.controlTime ?? guardHitTime} pausetime=${guardPause.defender}`,
+      `  activeHitDefId=${idText} state=${reactionState} kind=${guardKind} velocity=(${reactionVelocity.x},${reactionVelocity.y}) damage=${guardDamage} kill=${active.guardKill === false ? 0 : 1} koRoute=${guardKo ? 1 : 0} hittime=${guardHitTime} ctrltime=${active.controlTime ?? guardHitTime} pausetime=${guardPause.defender}`,
       ...formatRequestedStateDiagnostics(attacker, target, active, contactedAttacker, guardedTarget),
       ...formatHitEffectDiagnostics(hitEvent, activeHitDefId),
       ...formatHitAuxiliaryDiagnostics(activeHitDefId, attacker, target, auxiliary, active, true),
@@ -273,6 +286,9 @@ function resolveAttack(
     x: (active.fall?.xVelocity ?? 0) * attacker.facing,
     y: downLaunch && !active.downBounce ? 0 : active.fall?.yVelocity ?? -4.5,
   };
+  const hitGetHitVars = createGetHitVarSnapshot(active, damage, selectedHitTime, hitTimeKind, selectedVelocity);
+  const hitWillKo = active.kill !== false && damage >= lifeBefore;
+  if (hitWillKo) hitGetHitVars.fall = 1;
   const hitTarget = rememberHitDefId(applyTargetRequestedState(applyFallbackHit(applyHitDefSnap(target, attacker, active), damage, active.kill !== false, active.numHits ?? 1, reactionState, selectedAnim, appliedVelocity, fallVelocity, active.pauseTime.defender, {
     activeHitDefId,
     selectedHitTime,
@@ -287,7 +303,7 @@ function resolveAttack(
     airVelocityAtHit: { ...active.airVelocity },
     fallYVelocityAtHit: active.fall?.yVelocity ?? 0,
     ...(activeHitTime === undefined ? { fallbackReason: hitTimeFallbackReason } : {}),
-  }, createGetHitVarSnapshot(active, damage, selectedHitTime, hitTimeKind, selectedVelocity)), active, attacker.id), attacker.id, active.hitId);
+  }, hitGetHitVars), active, attacker.id), attacker.id, active.hitId);
   const idText = activeHitDefId === null ? 'none' : String(activeHitDefId);
   const auxiliary = applyHitDefAuxiliary(contactedAttacker, hitTarget, attacker, target, active, false);
   const targetedAttacker = activeHitDefId === null
@@ -528,6 +544,7 @@ function normalizePriorityType(value: string | undefined): 'Hit' | 'Miss' | 'Dod
 
 function evaluateHitEligibility(hitDef: NonNullable<PlayerState['activeHitDef']>, target: PlayerState): HitEligibility {
   const targetClass = classifyHitTarget(target);
+  if (target.life <= 0) return { accepted: false, reason: 'target_ko', targetClass };
   const hitFlag = (hitDef.hitFlag ?? 'MAF').replace(/\s+/g, '').toUpperCase();
   if (!/^[HLAFDM+-]+$/.test(hitFlag)) return { accepted: false, reason: 'unsupported_hitflag', targetClass };
   if (/[+-]/.test(hitFlag)) return { accepted: false, reason: 'unsupported_hitflag_modifier', targetClass };
@@ -748,9 +765,11 @@ function applyFallbackHit(
   getHitVars: Record<string, number>,
 ): PlayerState {
   const comboHitCount = (defender.comboHitCount ?? 0) + Math.max(0, Math.trunc(numHits));
+  const life = Math.max(canKill ? 0 : Math.min(1, defender.life), defender.life - damage);
   return {
     ...defender,
-    life: Math.max(canKill ? 0 : Math.min(1, defender.life), defender.life - damage),
+    life,
+    koReason: life <= 0 ? 'hit' : defender.koReason,
     comboHitCount,
     stateNo,
     animNo: selectedAnim,
@@ -787,12 +806,14 @@ function applyGuardHit(
   hitStun: NonNullable<PlayerState['hitStun']>,
   getHitVars: Record<string, number>,
 ): PlayerState {
+  const life = Math.max(canKill ? 0 : Math.min(1, defender.life), defender.life - damage);
   return {
     ...defender,
-    life: Math.max(canKill ? 0 : Math.min(1, defender.life), defender.life - damage),
+    life,
+    koReason: life <= 0 ? 'guard' : defender.koReason,
     stateNo,
     stateTime: 0,
-    animNo: stateNo,
+    animNo: hitStun.selectedAnim ?? stateNo,
     animTime: 0,
     moveType: 'H',
     physics: 'N',
@@ -850,6 +871,10 @@ function createGetHitVarSnapshot(
     fall: hitTimeKind === 'down' && selectedVelocity.y !== 0 ? 1 : fall.enabled ? 1 : 0,
     'fall.damage': fall.damage ?? 0,
     'fall.kill': fall.kill === false ? 0 : 1,
+    'fall.envshake.time': fall.envShake?.time ?? 0,
+    'fall.envshake.freq': fall.envShake?.frequency ?? 60,
+    'fall.envshake.ampl': fall.envShake?.amplitude ?? -4,
+    'fall.envshake.phase': fall.envShake?.phase ?? 90,
     'fall.xvel': fall.xVelocity ?? 0,
     'fall.yvel': hitTimeKind === 'down' && selectedVelocity.y !== 0 && !hitDef.downBounce ? 0 : fall.yVelocity ?? -4.5,
     'fall.recover': fall.recover === false ? 0 : 1,
@@ -859,6 +884,8 @@ function createGetHitVarSnapshot(
     xoff: hitDef.snap?.x ?? 0,
     yoff: hitDef.snap?.y ?? 0,
     guarded: 0,
+    kill: hitDef.kill === false ? 0 : 1,
+    'guard.kill': hitDef.guardKill === false ? 0 : 1,
     yaccel: hitDef.yAcceleration ?? 0.6,
     'down.xvel': hitDef.downVelocity?.x ?? 0,
     'down.yvel': hitDef.downVelocity?.y ?? 0,

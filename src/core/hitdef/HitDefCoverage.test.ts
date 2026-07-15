@@ -8,6 +8,7 @@ describe('Phase71 HitDefCoverage', () => {
     expect(classifyHitDefParam('guard.pausetime')).toEqual({ name: 'guard.pausetime', status: 'partial' });
     expect(classifyHitDefParam('nochainid')).toEqual({ name: 'nochainid', status: 'partial' });
     expect(classifyHitDefParam('fall.recover')).toEqual({ name: 'fall.recover', status: 'partial' });
+    expect(classifyHitDefParam('fall.envshake.time')).toEqual({ name: 'fall.envshake.time', status: 'partial' });
     expect(classifyHitDefParam('kill')).toEqual({ name: 'kill', status: 'partial' });
     expect(classifyHitDefParam('getpower')).toEqual({ name: 'getpower', status: 'partial' });
     expect(classifyHitDefParam('ground.cornerpush.veloff')).toEqual({ name: 'ground.cornerpush.veloff', status: 'partial' });

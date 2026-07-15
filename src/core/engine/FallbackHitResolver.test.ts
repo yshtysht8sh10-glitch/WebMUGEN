@@ -196,7 +196,9 @@ physics = S
       targetLife: 10, guardDamage: 20, guardKill: true, guardFlag: 'H',
       targetCommands: new Set(['holdback']), guardPauseTime: [0, 0],
     });
-    expect(lethalGuard.players[1].life).toBe(0);
+    expect(lethalGuard.players[1]).toMatchObject({ life: 0, stateNo: 5000, koReason: 'guard' });
+    expect(lethalGuard.players[1].getHitVars).toMatchObject({ guarded: 1, fall: 1 });
+    expect(lethalGuard.hitDiagnosticLines?.join('\n')).toContain('koRoute=1');
   });
 
   it.each([1, 2] as const)('routes a downed P%i target to State 5080 using down velocity and hittime', (targetId) => {
@@ -338,6 +340,17 @@ physics = S
       players: [{ ...result.players[0], hitPause: 0 }, { ...result.players[1], hitPause: 0, animNo: 0 }],
     }, air);
     expect(duplicate.hitEvents).toHaveLength(0);
+  });
+
+  it('snapshots fall.envshake values for the later common landing controller', () => {
+    const result = resolveConfiguredHit({ fall: true, fallEnvShake: [7, 75, -5, 45], pauseTime: [0, 0] });
+    expect(result.players[1].getHitVars).toMatchObject({
+      'fall.envshake.time': 7,
+      'fall.envshake.freq': 75,
+      'fall.envshake.ampl': -5,
+      'fall.envshake.phase': 45,
+    });
+    expect(result.hitDiagnosticLines?.join('\n')).toContain('envshake:7,75,-5,45');
   });
 
   it.each([
@@ -913,6 +926,13 @@ movetype = A
     expect(second.players[0].moveContact?.hitCount).toBe(2);
   });
 
+  it('rejects new collision against an already-KO target', () => {
+    const hit = resolveConfiguredHit({ targetLife: 0, hitFlag: 'MAFD', pauseTime: [0, 0] });
+    expect(hit.hitEvents).toHaveLength(0);
+    expect(hit.players[1].life).toBe(0);
+    expect(hit.hitDiagnosticLines?.join('\n')).toContain('result=rejected reason=target_ko');
+  });
+
   it('allows new ActiveHitDef generations with the same or different HitDef id', () => {
     const first = resolveConfiguredHit({ damage: 25, hitId: 10, pauseTime: [0, 0] });
     const previous = first.players[0].activeHitDef!;
@@ -1007,7 +1027,8 @@ movetype = A
     expect(nonLethal.hitDiagnosticLines?.join('\n')).toContain('kill=0 ko=0');
 
     const lethal = resolveConfiguredHit({ targetLife: 10, damage: 20, kill: true, pauseTime: [0, 0] });
-    expect(lethal.players[1].life).toBe(0);
+    expect(lethal.players[1]).toMatchObject({ life: 0, koReason: 'hit' });
+    expect(lethal.players[1].getHitVars).toMatchObject({ fall: 1 });
     expect(lethal.hitDiagnosticLines?.join('\n')).toContain('kill=1 ko=1');
   });
 
@@ -1210,6 +1231,7 @@ function resolveConfiguredHit({
   hitSound,
   guardSound,
   envShake,
+  fallEnvShake,
 }: {
   damage?: number;
   groundHitTime?: number;
@@ -1281,6 +1303,7 @@ function resolveConfiguredHit({
   hitSound?: string;
   guardSound?: string;
   envShake?: [number, number, number, number];
+  fallEnvShake?: [number, number, number, number];
 }) {
   const hitTimeLines = [
     groundHitTime === undefined ? '' : `ground.hittime = ${groundHitTime}`,
@@ -1316,6 +1339,7 @@ function resolveConfiguredHit({
     fallVelocity ? `fall.velocity = ${fallVelocity.join(', ')}` : '',
     fallRecover === undefined ? '' : `fall.recover = ${fallRecover ? 1 : 0}`,
     fallRecoverTime === undefined ? '' : `fall.recovertime = ${fallRecoverTime}`,
+    fallEnvShake === undefined ? '' : `fall.envshake.time = ${fallEnvShake[0]}\nfall.envshake.freq = ${fallEnvShake[1]}\nfall.envshake.ampl = ${fallEnvShake[2]}\nfall.envshake.phase = ${fallEnvShake[3]}`,
     downVelocity ? `down.velocity = ${downVelocity.join(', ')}` : '',
     downHitTime === undefined ? '' : `down.hittime = ${downHitTime}`,
     downBounce === undefined ? '' : `down.bounce = ${downBounce ? 1 : 0}`,

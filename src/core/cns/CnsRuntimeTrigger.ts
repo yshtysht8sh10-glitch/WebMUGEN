@@ -18,6 +18,8 @@ export type CnsRuntimeTriggerContext = {
   animElemTimes?: readonly number[];
   roundState?: number;
   roundNo?: number;
+  matchOver?: boolean;
+  roundWinner?: 1 | 2 | 'draw' | null;
   aiLevel?: number;
   teamSide?: number;
   gameTime?: number;
@@ -181,9 +183,10 @@ function getBooleanSource(name: string): BooleanSource | null {
     case 'movecontact': return (context) => context.player.moveContact?.contact === true;
     case 'movehit': return (context) => context.player.moveContact?.hit === true;
     case 'moveguarded': return (context) => context.player.moveContact?.guarded === true;
-    case 'win': return () => false;
-    case 'lose': return () => false;
-    case 'drawgame': return () => false;
+    case 'matchover': return (context) => context.matchOver === true;
+    case 'win': return (context) => context.roundWinner === context.player.id;
+    case 'lose': return (context) => context.roundWinner !== null && context.roundWinner !== undefined && context.roundWinner !== 'draw' && context.roundWinner !== context.player.id;
+    case 'drawgame': return (context) => context.roundWinner === 'draw';
     case 'roundsexisted': return () => true;
     case 'p2ctrl': return (context) => context.opponent?.ctrl ?? true;
     case 'root': return () => true;
@@ -355,6 +358,10 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'animelemno': return (context) => context.animElemNo ?? 1;
     case 'animelem': return (context) => context.animElemNo ?? null;
     case 'ctrl': return (context) => context.player.ctrl ? 1 : 0;
+    case 'matchover': return (context) => context.matchOver ? 1 : 0;
+    case 'win': return (context) => context.roundWinner === context.player.id ? 1 : 0;
+    case 'lose': return (context) => context.roundWinner !== null && context.roundWinner !== undefined && context.roundWinner !== 'draw' && context.roundWinner !== context.player.id ? 1 : 0;
+    case 'drawgame': return (context) => context.roundWinner === 'draw' ? 1 : 0;
     case 'stateno': return (context) => context.player.stateNo;
     case 'prevstateno': return (context) => readOptionalNumber(context.player, 'prevStateNo', context.player.stateNo);
     case 'roundstate': return (context) => context.roundState ?? 2;

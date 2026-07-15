@@ -64,9 +64,15 @@ export type CnsRuntimeInput = {
   onExplodRemove?: (event: ExplodRemoveEvent) => void;
   onExplodBindTime?: (event: ExplodBindTimeEvent) => void;
   onPause?: (event: PauseControllerEvent) => void;
+  onEnvironmentShake?: (event: { time: number; frequency: number; amplitude: number; phase: number }) => void;
   pauseState?: PauseState;
   screenWidth?: number;
   gameTime?: number;
+  roundState?: number;
+  roundNo?: number;
+  matchOver?: boolean;
+  roundWinner?: 1 | 2 | 'draw' | null;
+  roundEndReason?: 'ko' | 'double_ko' | 'time_over';
   constants?: CnsDocument;
   entityContext?: RuntimeEntityContext;
   numHelper?: (helperId?: number) => number;
@@ -136,7 +142,6 @@ const RECOGNIZED_NO_OP_CONTROLLERS = new Map<string, string>([
   ['displaytoclipboard', 'DisplayToClipboard'],
   ['envcolor', 'EnvColor'],
   ['envshake', 'EnvShake'],
-  ['fallenvshake', 'FallEnvShake'],
   ['forcefeedback', 'ForceFeedback'],
   ['gamemakeanim', 'GameMakeAnim'],
   ['gravity', 'Gravity'],
@@ -147,7 +152,6 @@ const RECOGNIZED_NO_OP_CONTROLLERS = new Map<string, string>([
   ['palfx', 'PalFX'],
   ['parentvaradd', 'ParentVarAdd'],
   ['parentvarset', 'ParentVarSet'],
-  ['posfreeze', 'PosFreeze'],
   ['projectile', 'Projectile'],
   ['reversaldef', 'ReversalDef'],
   ['screenbound', 'ScreenBound'],
@@ -253,6 +257,7 @@ function stepPlayer(
     juggleRemaining: resetJuggle ? juggleMax : player.juggleRemaining ?? juggleMax,
     guardIntent: commands?.has('holdback') ?? false,
     guardCrouchIntent: commands?.has('holddown') ?? false,
+    positionFrozen: false,
   };
   const trace: CnsRuntimeTrace = {
     playerId,
@@ -632,6 +637,10 @@ function createTriggerContext(
     animationExists: input.getAnimationDuration ? (animNo) => input.getAnimationDuration?.(animNo) !== null : undefined,
     constants: input.constants,
     gameTime: input.gameTime,
+    roundState: input.roundState,
+    roundNo: input.roundNo,
+    matchOver: input.matchOver,
+    roundWinner: input.roundWinner,
     isHelper: input.entityContext?.kind === 'helper',
     numHelper: input.numHelper,
   };
@@ -880,6 +889,7 @@ function executeController(
   if (type === 'veladd') return velAdd(player, opponent, controller, input, commands);
   if (type === 'velmul') return velMul(player, controller);
   if (type === 'posset') return posSet(player, controller);
+  if (type === 'posfreeze') return withPlayer({ ...player, positionFrozen: (num(controller, 'value') ?? 1) !== 0 }, true, 'PosFreeze');
   if (type === 'posadd') return withPlayer({ ...player, x: player.x + (num(controller, 'x') ?? 0), y: player.y + (num(controller, 'y') ?? 0) }, hasNum(controller, 'x') || hasNum(controller, 'y'), 'PosAdd');
   if (type === 'ctrlset') return setCtrl(player, controller);
   if (type === 'statetypeset') return stateTypeSet(player, controller);
@@ -909,6 +919,7 @@ function executeController(
   if (type === 'hitfallset') return hitFallSet(player, controller, input, commands, opponent);
   if (type === 'hitvelset') return hitVelSet(player, controller);
   if (type === 'hitfalldamage') return hitFallDamage(player, controller);
+  if (type === 'fallenvshake') return fallEnvShake(player, input);
   if (type === 'pause') return pauseController(player, opponent, controller, input, commands, false);
   if (type === 'superpause') return pauseController(player, opponent, controller, input, commands, true);
   if (type === 'playsnd') return playSound(player, opponent, controller, input, commands);
@@ -1226,6 +1237,7 @@ function hitFallDamage(player: PlayerState, controller: CnsStateController): Con
   return withPlayer({
     ...player,
     life,
+    koReason: lifeBefore > 0 && life <= 0 ? 'fall' : player.koReason,
     hitDiagnosticLines: [
       ...(player.hitDiagnosticLines ?? []),
       `raw.hit_fall_damage target=p${player.id}`,
@@ -1292,6 +1304,25 @@ function pauseController(
   return withPlayer({ ...player, pauseControllerLatch: { key, stateNo: player.stateNo, stateTime: player.stateTime } }, true, superPause ? 'SuperPause' : 'Pause');
 }
 
+function fallEnvShake(player: PlayerState, input: CnsRuntimeInput): ControllerResult {
+  const time = Number(player.getHitVars?.['fall.envshake.time'] ?? 0);
+  const event = {
+    time: Math.max(0, Number.isFinite(time) ? time : 0),
+    frequency: Number(player.getHitVars?.['fall.envshake.freq'] ?? 60),
+    amplitude: Number(player.getHitVars?.['fall.envshake.ampl'] ?? -4),
+    phase: Number(player.getHitVars?.['fall.envshake.phase'] ?? 90),
+  };
+  if (event.time > 0) input.onEnvironmentShake?.(event);
+  return withPlayer({
+    ...player,
+    hitDiagnosticLines: [
+      ...(player.hitDiagnosticLines ?? []),
+      `raw.fall_envshake target=p${player.id}`,
+      `  time=${event.time} frequency=${event.frequency} amplitude=${event.amplitude} phase=${event.phase} result=${event.time > 0 ? 'started' : 'skipped'}`,
+    ],
+  }, true, 'FallEnvShake');
+}
+
 function appendGetHitFrameDiagnostic(
   player: PlayerState,
   opponent: PlayerState,
@@ -1301,7 +1332,7 @@ function appendGetHitFrameDiagnostic(
   runtimeFrame: number,
   enabled: boolean,
 ): PlayerState {
-  if (!enabled || ![5000, 5001, 5010, 5011, 5020, 5030, 5035, 5040, 5050, 5070, 5071, 5080, 5081, 5100, 5101, 5110, 5120].includes(stateDef.stateNo)) return player;
+  if (!enabled || ![5000, 5001, 5010, 5011, 5020, 5030, 5035, 5040, 5050, 5070, 5071, 5080, 5081, 5100, 5101, 5110, 5120, 5150, 5200, 5201, 5210].includes(stateDef.stateNo)) return player;
   const hitStun = player.hitStun;
   const source = hitStun?.getHitVarYVelocitySource
     ?? (hitStun?.targetStateTypeAtHit === 'L' ? 'down.velocity.y' : hitStun?.targetStateTypeAtHit === 'A' ? 'air.velocity.y' : 'ground.velocity.y');
@@ -1330,6 +1361,7 @@ function appendGetHitFrameDiagnostic(
       `  targetStateTypeAtHit=${hitStun?.targetStateTypeAtHit ?? '-'} animtype=${readGetHitDiagnosticValue(player, 'animtype')} air.animtype=${readGetHitDiagnosticValue(player, 'air.animtype')} fall.animtype=${readGetHitDiagnosticValue(player, 'fall.animtype')} groundtype=${readGetHitDiagnosticValue(player, 'groundtype')} airtype=${readGetHitDiagnosticValue(player, 'airtype')}`,
       `  hittime=${readGetHitDiagnosticValue(player, 'hittime')} yvel=${readGetHitDiagnosticValue(player, 'yvel')} yvelSource=${source} fall=${readGetHitDiagnosticValue(player, 'fall')} recover=${readGetHitDiagnosticValue(player, 'fall.recover')} recoverTime=${readGetHitDiagnosticValue(player, 'fall.recovertime')} CanRecover=${player.fallRecover !== false && hitElapsed >= (player.fallRecoverTime ?? 0) ? 1 : 0} recoveryInput=${commands?.has('recovery') ? 1 : 0} groundVelocityY=${hitStun?.groundVelocityAtHit?.y ?? '-'} airVelocityY=${hitStun?.airVelocityAtHit?.y ?? '-'} fallYVelocity=${hitStun?.fallYVelocityAtHit ?? readGetHitDiagnosticValue(player, 'fall.yvel')}`,
       `  downHitTime=${readGetHitDiagnosticValue(player, 'down.hittime')} downHitRemaining=${Math.max(0, Number(readGetHitDiagnosticValue(player, 'down.hittime')) - hitElapsed) || 0} lieDownElapsed=${player.lieDownElapsed ?? '-'} lieDownTime=${player.lieDownTime ?? '-'} lieDownRemaining=${player.lieDownTime === undefined ? '-' : Math.max(0, player.lieDownTime - (player.lieDownElapsed ?? 0))}`,
+      `  ko=${player.life <= 0 ? 1 : 0} koReason=${player.koReason ?? '-'} hitKill=${readGetHitDiagnosticValue(player, 'kill')} guardKill=${readGetHitDiagnosticValue(player, 'guard.kill')} fallKill=${readGetHitDiagnosticValue(player, 'fall.kill')} lieDead=${player.stateNo === 5150 ? 1 : 0} roundState=${input.roundState ?? '-'} winner=${input.roundWinner ?? '-'} matchOver=${input.matchOver ? 1 : 0} roundEndRequested=${input.matchOver ? 1 : 0} roundEndReason=${input.roundEndReason ?? '-'}`,
       ...routeLines,
     ],
   };
@@ -1342,7 +1374,7 @@ function appendFallPauseDiagnostic(
   remaining: number,
   enabled: boolean,
 ): PlayerState {
-  if (!enabled || ![5030, 5035, 5040, 5050, 5070, 5071, 5080, 5081, 5100, 5101, 5110, 5120].includes(player.stateNo)) return player;
+  if (!enabled || ![5030, 5035, 5040, 5050, 5070, 5071, 5080, 5081, 5100, 5101, 5110, 5120, 5150, 5200, 5201, 5210].includes(player.stateNo)) return player;
   return {
     ...player,
     hitDiagnosticLines: [
@@ -1806,6 +1838,12 @@ function evaluateHitDefSnapshot(
       recoverTime: nonNegative(numValue('fall.recovertime')),
       damage: nonNegative(numValue('fall.damage')),
       kill: boolValue('fall.kill'),
+      envShake: {
+        time: nonNegative(numValue('fall.envshake.time')) ?? 0,
+        frequency: numValue('fall.envshake.freq') ?? 60,
+        amplitude: numValue('fall.envshake.ampl') ?? -4,
+        phase: numValue('fall.envshake.phase') ?? 90,
+      },
     },
     hitId: hitId !== undefined && hitId >= 1 ? hitId : undefined,
     chainId: chainId !== undefined && chainId >= 1 ? chainId : undefined,
@@ -1914,7 +1952,7 @@ function evaluateScopedNumber(
 
 function formatFall(value: ActiveHitDef['fall']): string {
   if (!value) return '-';
-  return `enabled:${value.enabled ?? '-'},anim:${value.animType ?? '-'},velocity:${value.xVelocity ?? '-'},${value.yVelocity ?? '-'},recover:${value.recover ?? '-'},recovertime:${value.recoverTime ?? '-'},damage:${value.damage ?? '-'},kill:${value.kill ?? '-'}`;
+  return `enabled:${value.enabled ?? '-'},anim:${value.animType ?? '-'},velocity:${value.xVelocity ?? '-'},${value.yVelocity ?? '-'},recover:${value.recover ?? '-'},recovertime:${value.recoverTime ?? '-'},damage:${value.damage ?? '-'},kill:${value.kill ?? '-'},envshake:${value.envShake?.time ?? 0},${value.envShake?.frequency ?? '-'},${value.envShake?.amplitude ?? '-'},${value.envShake?.phase ?? '-'}`;
 }
 
 function readGroundAnimType(value: CnsValue | undefined): ActiveHitDef['animType'] | null {

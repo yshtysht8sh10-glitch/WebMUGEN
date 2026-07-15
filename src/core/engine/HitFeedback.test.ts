@@ -3,6 +3,7 @@ import { createInitialGameState } from './GameState';
 import {
   createInitialHitFeedbackState,
   getScreenShakeOffset,
+  startEnvironmentShake,
   updateHitFeedback,
 } from './HitFeedback';
 
@@ -71,5 +72,10 @@ describe('HitFeedback', () => {
 
     const decayed = updateHitFeedback(feedback, createInitialGameState());
     expect(decayed.shake).toMatchObject({ remaining: 3, elapsed: 1 });
+  });
+
+  it('starts a controller-driven environment shake in the shared feedback state', () => {
+    const feedback = startEnvironmentShake(createInitialHitFeedbackState(), { time: 5, frequency: 80, amplitude: -6, phase: 30 });
+    expect(feedback.shake).toEqual({ time: 5, frequency: 80, amplitude: -6, phase: 30, remaining: 5, elapsed: 0 });
   });
 });

@@ -19,6 +19,8 @@ export type HitFeedbackState = {
   shake?: NonNullable<HitEvent['envShake']> & { remaining: number; elapsed: number };
 };
 
+export type EnvironmentShake = NonNullable<HitEvent['envShake']>;
+
 export function createInitialHitFeedbackState(): HitFeedbackState {
   return {
     sparks: [],
@@ -72,6 +74,10 @@ export function getScreenShakeOffset(feedback: HitFeedbackState | undefined): { 
   if (!feedback?.shake || feedback.shake.remaining <= 0) return { x: 0, y: 0 };
   const radians = ((feedback.shake.phase + feedback.shake.elapsed * feedback.shake.frequency) * Math.PI) / 180;
   return { x: 0, y: Math.sin(radians) * feedback.shake.amplitude };
+}
+
+export function startEnvironmentShake(feedback: HitFeedbackState, shake: EnvironmentShake): HitFeedbackState {
+  return { ...feedback, shake: { ...shake, remaining: Math.max(0, shake.time), elapsed: 0 } };
 }
 
 function getPlayer(players: [PlayerState, PlayerState], id: 1 | 2): PlayerState {

@@ -67,6 +67,7 @@ export type ActiveHitDef = {
     recoverTime?: number;
     damage?: number;
     kill?: boolean;
+    envShake?: { time: number; frequency: number; amplitude: number; phase: number };
   };
   hitId?: number;
   chainId?: number;
@@ -135,6 +136,7 @@ export type PlayerState = {
     yScale?: number;
   };
   life: number;
+  koReason?: 'hit' | 'guard' | 'fall';
   power?: number;
   powerMax?: number;
   sprPriority?: number;
@@ -149,6 +151,7 @@ export type PlayerState = {
   animTime: number;
   hitPause: number;
   pauseControllerLatch?: { key: string; stateNo: number; stateTime: number };
+  positionFrozen?: boolean;
   activeHitDef: ActiveHitDef | null;
   hitDefUsed: boolean;
   hitTargets?: Array<{ activeHitDefId: number; defenderId: number; hitDefId?: number }>;

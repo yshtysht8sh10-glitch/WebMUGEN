@@ -112,6 +112,12 @@ HitDef activation evaluates its major numeric expressions and pairs into a typed
 
 The fallback hit recovery layer must not terminate an active common fall/down lifecycle. Grounded launch hits can enter States 5030/5035 with `HitFall=1` even when `targetStateTypeAtHit` was S/C; after hit-stun ends, those reactions continue through common States 5050, 5100/5110, 5120, and finally State 0. States 5200/5210 remain CNS-controlled and require both `CanRecover` and `Command = "recovery"`.
 
+Issue #62 completes the common KO handoff. A lethal normal hit, guarded hit, or `HitFallDamage` records `koReason=hit`, `guard`, or `fall`, while independent `kill`, `guard.kill`, and `fall.kill` flags clamp their own nonlethal path at one Life. Hit pause finishes before State 5110 can route a defeated player into State 5150. Already-defeated players reject new HitDef collisions and are pruned from Target selection.
+
+Lethal normal and guarded contact force the get-hit fall flag so the existing common 5000/5030/5100/5110 data reaches 5150. A guarded KO remains a guarded contact for effects and MoveGuarded, but uses the normal get-hit reaction instead of returning to guard idle with zero Life. No direct State 5150 jump is hard-coded.
+
+State 5150 is the lying-dead state and never accepts recovery input. States 5200, 5201, and 5210 are fall-recovery states, not dead states. RoundState supplies `MatchOver`, winner/draw, and the distinct `ko`, `double_ko`, or `time_over` reason to the CNS context. See `common-ko-recovery-5150.md` for the state-by-state contract.
+
 ## Good next runtime improvements
 
 - richer controller execution tables;

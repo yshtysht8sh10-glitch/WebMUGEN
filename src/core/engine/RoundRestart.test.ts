@@ -18,6 +18,8 @@ describe('RoundRestart', () => {
     expect(restarted.roundState.roundNo).toBe(2);
     expect(restarted.roundState.phase).toBe('intro');
     expect(restarted.gameState.players[0].life).toBe(1000);
+    expect(restarted.gameState.players[0]).toMatchObject({ stateNo: 0, stateTime: 0, ctrl: true });
+    expect(restarted.gameState.players[0].koReason).toBeUndefined();
     expect(restarted.gameState.players[0].targets).toEqual([]);
     expect(restarted.gameState.explods).toEqual({ entries: [], nextRuntimeId: 1 });
     expect(restarted.hitFeedbackState).toEqual(createInitialHitFeedbackState());

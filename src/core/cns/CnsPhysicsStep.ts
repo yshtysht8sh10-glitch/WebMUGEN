@@ -87,6 +87,10 @@ export function stepPlayerCnsPhysics(player: PlayerState, cns?: CnsDocument | nu
     animTime: player.animTime + 1,
   };
 
+  if (player.positionFrozen) {
+    return { ...player, positionFrozen: false, ...nextTime };
+  }
+
   if (player.physics === 'S' || player.physics === 'C') {
     const nextVx = player.vx * GROUND_FRICTION;
     return {

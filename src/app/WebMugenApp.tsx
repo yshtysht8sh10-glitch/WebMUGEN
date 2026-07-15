@@ -33,7 +33,9 @@ import { applyHitEffectRuntime } from '../core/hitdef/HitEffectRuntime';
 import { applyFallbackHitRecovery } from '../core/engine/FallbackHitRecovery';
 import {
   createInitialHitFeedbackState,
+  startEnvironmentShake,
   updateHitFeedback,
+  type EnvironmentShake,
   type HitFeedbackState,
 } from '../core/engine/HitFeedback';
 import {
@@ -389,6 +391,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
         let nextFeedback = hitFeedbackRef.current;
         let nextScore = roundScoreRef.current;
         let nextCnsTraces = cnsTraceRef.current;
+        const environmentShakeEvents: EnvironmentShake[] = [];
 
         if (
           inputSnapshot.system.restartRound &&
@@ -403,7 +406,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           p1CommandBufferRef.current.clear();
           p2CommandBufferRef.current.clear();
           audioRuntimeRef.current?.stopAll();
-        } else if (nextRoundState.phase === 'fight') {
+        } else if (nextRoundState.phase !== 'intro') {
           const pauseAtFrameStart = nextState.pause ?? createInitialPauseState();
           if (ENABLE_RUNTIME_FALLBACKS) {
             nextState = applyFallbackControls(nextState, p1Input, p2Input);
@@ -431,8 +434,14 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             onExplodRemove: (event) => explodRuntimeEvents.push(event),
             onExplodBindTime: (event) => explodRuntimeEvents.push(event),
             onPause: (event) => pauseEvents.push(event),
+            onEnvironmentShake: (event) => environmentShakeEvents.push(event),
             pauseState: pauseAtFrameStart,
             screenWidth: canvas.width,
+            roundState: nextRoundState.phase === 'fight' ? 2 : 3,
+            roundNo: nextRoundState.roundNo,
+            matchOver: nextRoundState.phase === 'ko' || nextRoundState.phase === 'timeOver',
+            roundWinner: nextRoundState.winner,
+            roundEndReason: nextRoundState.endReason,
           });
           nextState = cnsResult.state;
           if (pauseEvents.length > 0) {
@@ -509,6 +518,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           nextScore = updateRoundScore(nextScore, nextRoundState);
           nextFeedback = updateHitFeedback(nextFeedback, nextState);
         }
+        for (const event of environmentShakeEvents) nextFeedback = startEnvironmentShake(nextFeedback, event);
 
         restartPressedRef.current = inputSnapshot.system.restartRound;
 
