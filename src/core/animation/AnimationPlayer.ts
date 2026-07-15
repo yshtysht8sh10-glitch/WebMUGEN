@@ -7,6 +7,14 @@ export type CurrentAnimationElement = {
   localTime: number;
 };
 
+export type AnimationTriggerInfo = {
+  elementNo: number;
+  elementTime: number;
+  elementStarted: boolean;
+  elementCount: number;
+  elementTimes: readonly number[];
+};
+
 export function getAnimationLength(document: AirDocument, actionNo: number): number {
   const action = findAction(document, actionNo);
   if (!action || action.elements.length === 0) {
@@ -67,6 +75,35 @@ export function getCurrentAnimationElement(
     element: action.elements[lastIndex],
     elementIndex: lastIndex,
     localTime: Math.max(0, animTime - cursor),
+  };
+}
+
+export function getAnimationTriggerInfo(
+  document: AirDocument,
+  actionNo: number,
+  animTime: number,
+): AnimationTriggerInfo | null {
+  const current = getCurrentAnimationElement(document, actionNo, animTime);
+  if (!current) return null;
+
+  const previous = animTime > 0
+    ? getCurrentAnimationElement(document, actionNo, animTime - 1)
+    : null;
+  const elementStarted = animTime === 0 || previous?.elementIndex !== current.elementIndex;
+  const normalizedTime = normalizeAnimationTime(current.action, animTime);
+  let cursor = 0;
+  const elementTimes = current.action.elements.map((element, index) => {
+    const time = normalizedTime - cursor;
+    cursor += Math.max(1, element.duration);
+    return elementStarted && index === current.elementIndex ? 0 : time;
+  });
+
+  return {
+    elementNo: current.elementIndex + 1,
+    elementTime: elementTimes[current.elementIndex] ?? current.localTime,
+    elementStarted,
+    elementCount: current.action.elements.length,
+    elementTimes,
   };
 }
 

@@ -48,15 +48,30 @@ describe('CnsRuntimeTrigger core expansion', () => {
     expect(evaluateCnsRuntimeTrigger('Facing = -1', { player })).toBe(false);
   });
 
-  it('evaluates simple Animelem approximation', () => {
-    expect(evaluateCnsRuntimeTrigger('AnimElem = 5', { player })).toBe(true);
-    expect(evaluateCnsRuntimeTrigger('AnimElem = 6', { player })).toBe(false);
+  it('evaluates AnimElem only when the requested AIR element starts', () => {
+    const context = {
+      player,
+      animElemNo: 5,
+      animElemTime: 0,
+      animElemStarted: true,
+      animElemCount: 6,
+      animElemTimes: [8, 6, 4, 2, 0, -3],
+    };
+    expect(evaluateCnsRuntimeTrigger('AnimElem = 5', context)).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('AnimElem = 5', { ...context, animElemStarted: false, animElemTime: 1 })).toBe(false);
+    expect(evaluateCnsRuntimeTrigger('AnimElem = 6', context)).toBe(false);
+    expect(evaluateCnsRuntimeTrigger('AnimElem = 7', context)).toBe(false);
+    expect(evaluateCnsRuntimeTrigger('AnimElem = 5, = 0', context)).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('AnimElem = 5, >= 0', context)).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('AnimElem = 6, < 0', context)).toBe(true);
   });
 
-  it('evaluates AnimelemTime approximation', () => {
-    expect(evaluateCnsRuntimeTrigger('AnimElemTime(5) = 0', { player })).toBe(true);
-    expect(evaluateCnsRuntimeTrigger('AnimElemTime(3) > 1', { player })).toBe(true);
-    expect(evaluateCnsRuntimeTrigger('AnimElemTime(7) < 0', { player })).toBe(true);
+  it('evaluates AnimelemTime from AIR element-relative times', () => {
+    const context = { player, animElemTimes: [8, 6, 4, 2, 0, -3] };
+    expect(evaluateCnsRuntimeTrigger('AnimElemTime(5) = 0', context)).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('AnimElemTime(3) > 1', context)).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('AnimElemTime(6) < 0', context)).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('AnimElemTime(7) != 0', context)).toBe(false);
   });
 
   it('evaluates common global and range triggers', () => {

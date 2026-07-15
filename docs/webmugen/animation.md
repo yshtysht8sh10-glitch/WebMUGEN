@@ -51,7 +51,8 @@ Current notes:
 - `AnimExist`: Partial, uses runtime lookup when provided;
 - `SelfAnimExist`: Partial, uses self animation lookup when provided;
 - `AnimElemNo`: Partial, uses runtime animation element lookup when provided;
-- `AnimElem` / `AnimElemTime`: simplified approximations need audit.
+- `AnimElem`: uses the AIR action's 1-based element number and is true only on the frame where that element starts. The start is detected again after both `LoopStart` and default whole-action loops. The legacy `AnimElem = N, op T` form compares the AIR-relative time for element N and rejects out-of-range element numbers.
+- `AnimElemTime`: uses the same AIR-relative element timeline instead of subtracting the element number from global `animTime`.
 
 ## Common failure patterns
 
@@ -70,7 +71,7 @@ Animation tests should include:
 - action exists / does not exist;
 - current animation number;
 - animation element at a given time;
-- looped and non-looped actions;
+- looped and non-looped actions, including the same `AnimElem` becoming true on later loops;
 - state entry setting animation;
 - `ChangeAnim` resetting `animTime` when animation changes.
 

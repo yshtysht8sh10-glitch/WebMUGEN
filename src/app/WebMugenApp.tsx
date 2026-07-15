@@ -51,7 +51,7 @@ import {
 } from '../core/engine/RoundScore';
 import { canRestartRound, restartRound } from '../core/engine/RoundRestart';
 import { calculateMugenAnimTime, getMugenAnimEndTime } from '../core/animation/AnimationDuration';
-import { getCurrentAnimationElement } from '../core/animation/AnimationPlayer';
+import { getAnimationTriggerInfo, getCurrentAnimationElement } from '../core/animation/AnimationPlayer';
 import { attachFallbackAttackStates } from '../core/cns/CnsFallbackDocument';
 import { readCnsConst } from '../core/cns/CnsConstants';
 import { analyzeCnsCoverage } from '../core/cns/CnsCoverageDiagnostics';
@@ -421,6 +421,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
               const element = getCurrentAnimationElement(character.air, animNo, animTime);
               return element ? element.elementIndex + 1 : null;
             },
+            getAnimationTriggerInfo: (animNo, animTime) => getAnimationTriggerInfo(character.air, animNo, animTime),
             hitDiagnostics: runtimeSettingsRef.current.hitDiagnostics,
             onSoundPlay: (event) => soundEvents.push(event),
             onSoundStop: (event) => soundEvents.push(event),

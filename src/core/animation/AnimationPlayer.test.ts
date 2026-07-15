@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseAirText } from '../../parser/air/AirParser';
-import { getAnimationLength, getCurrentAnimationElement } from './AnimationPlayer';
+import { getAnimationLength, getAnimationTriggerInfo, getCurrentAnimationElement } from './AnimationPlayer';
 
 describe('AnimationPlayer', () => {
   it('returns current animation element', () => {
@@ -50,6 +50,26 @@ LoopStart
     expect(getCurrentAnimationElement(air, 10, 0)?.element.imageNo).toBe(0);
     expect(getCurrentAnimationElement(air, 10, 5)?.element.imageNo).toBe(1);
     expect(getCurrentAnimationElement(air, 10, 15)?.element.imageNo).toBe(1);
+  });
+
+  it('reports a new element start again after explicit and default loops', () => {
+    const explicit = parseAirText(`
+Begin Action 10
+10,0, 0,0, 2
+LoopStart
+10,1, 0,0, 2
+10,2, 0,0, 2
+`);
+    expect(getAnimationTriggerInfo(explicit, 10, 2)).toMatchObject({ elementNo: 2, elementTime: 0, elementStarted: true });
+    expect(getAnimationTriggerInfo(explicit, 10, 6)).toMatchObject({ elementNo: 2, elementTime: 0, elementStarted: true });
+
+    const defaultLoop = parseAirText(`
+Begin Action 20
+20,0, 0,0, 2
+20,1, 0,0, 2
+`);
+    expect(getAnimationTriggerInfo(defaultLoop, 20, 0)).toMatchObject({ elementNo: 1, elementTime: 0, elementStarted: true });
+    expect(getAnimationTriggerInfo(defaultLoop, 20, 5)).toMatchObject({ elementNo: 1, elementTime: 0, elementStarted: true });
   });
 
   it('keeps duration -1 element forever', () => {

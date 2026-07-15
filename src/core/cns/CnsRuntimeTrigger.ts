@@ -12,6 +12,10 @@ export type CnsRuntimeTriggerContext = {
   commands?: ReadonlySet<string>;
   animTime?: number;
   animElemNo?: number;
+  animElemTime?: number;
+  animElemStarted?: boolean;
+  animElemCount?: number;
+  animElemTimes?: readonly number[];
   roundState?: number;
   roundNo?: number;
   aiLevel?: number;
@@ -23,7 +27,7 @@ export type CnsRuntimeTriggerContext = {
   constants?: CnsDocument;
 };
 
-type NumberSource = (context: CnsRuntimeTriggerContext) => number;
+type NumberSource = (context: CnsRuntimeTriggerContext) => number | null;
 type StringSource = (context: CnsRuntimeTriggerContext) => string;
 type BooleanSource = (context: CnsRuntimeTriggerContext) => boolean;
 
@@ -60,6 +64,22 @@ function evaluateBooleanExpression(expression: string, context: CnsRuntimeTrigge
 }
 
 function evaluateComparison(expression: string, context: CnsRuntimeTriggerContext): boolean {
+  const animElemMatch = expression.match(/^animelem\s*=\s*(-?\d+)(?:\s*,\s*(=|!=|>=|<=|>|<)?\s*(-?\d+))?$/i);
+  if (animElemMatch) {
+    const elementNo = Number(animElemMatch[1]);
+    if (!Number.isInteger(elementNo) || elementNo < 1 || (context.animElemCount !== undefined && elementNo > context.animElemCount)) {
+      return false;
+    }
+
+    if (animElemMatch[3] === undefined) {
+      return context.animElemNo === elementNo && context.animElemStarted === true;
+    }
+
+    const elementTime = context.animElemTimes?.[elementNo - 1];
+    if (elementTime === undefined) return false;
+    return compareNumber(elementTime, animElemMatch[2] ?? '=', Number(animElemMatch[3]));
+  }
+
   const timeModMatch = expression.match(/^timemod\s*(=|!=|>=|<=|>|<)\s*(-?\d+)\s*,\s*(-?\d+)$/i);
   if (timeModMatch) {
     const divisor = Number(timeModMatch[2]);
@@ -321,7 +341,7 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'animtime': return (context) => context.animTime ?? context.player.animTime;
     case 'anim': return (context) => context.player.animNo;
     case 'animelemno': return (context) => context.animElemNo ?? 1;
-    case 'animelem': return (context) => context.player.animTime;
+    case 'animelem': return (context) => context.animElemNo ?? null;
     case 'ctrl': return (context) => context.player.ctrl ? 1 : 0;
     case 'stateno': return (context) => context.player.stateNo;
     case 'prevstateno': return (context) => readOptionalNumber(context.player, 'prevStateNo', context.player.stateNo);
@@ -391,7 +411,7 @@ function getFunctionNumberSource(name: string): NumberSource | null {
   const animelemTimeMatch = name.match(/^animelemtime\((\d+)\)$/);
   if (animelemTimeMatch) {
     const elemNo = Number(animelemTimeMatch[1]);
-    return (context) => context.player.animTime - elemNo;
+    return (context) => context.animElemTimes?.[elemNo - 1] ?? null;
   }
 
   const projContactTimeMatch = name.match(/^projcontacttime\((\d+)\)$/);

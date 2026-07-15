@@ -26,7 +26,9 @@ Do not mark safe defaults as Complete.
 | `BodyDist Y` | Partial | Evaluates opponent/player Y coordinate difference like `P2BodyDist Y`. | Precise body-edge height and airborne body bounds need audit. |
 | `AnimExist` | Partial | Uses runtime animation lookup when provided. | AIR ownership, redirect behavior, and missing animation edge cases need audit. |
 | `SelfAnimExist` | Partial | Uses runtime self-animation lookup when provided. | Redirect-specific AIR ownership and helper/custom-state behavior need audit. |
+| `AnimElem` | Complete | Uses 1-based AIR element starts, comparison-time syntax, invalid-element false, and loop re-entry. | Focused trigger/AIR tests and bundled T-H-M-A State 101 PlaySnd regression cover the runtime path. |
 | `AnimElemNo` | Partial | Uses runtime animation element lookup when provided. | AIR timing edge cases and exact WinMUGEN element numbering need audit. |
+| `AnimElemTime` | Complete | Uses AIR element-relative times shared with `AnimElem`. | Focused positive, negative, and invalid-element tests cover comparison behavior. |
 | `Command` | Complete | Basic command set matching works. | CMD syntax/timing remains partially covered elsewhere. |
 | `StateNo` | Complete | Numeric state comparison. | None known for simple comparisons. |
 | `StateType` | Complete | Basic S/C/A/L comparison. | State header correctness still matters. |

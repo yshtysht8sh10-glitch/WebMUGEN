@@ -22,6 +22,7 @@ import {
   type RuntimeEntityRef,
 } from '../explod/ExplodSystem';
 import { addPlayerPower, setPlayerPower } from '../power/PowerGauge';
+import type { AnimationTriggerInfo } from '../animation/AnimationPlayer';
 
 export type CnsRuntimeTrace = {
   playerId: 1 | 2;
@@ -42,6 +43,7 @@ export type CnsRuntimeInput = {
   p2Commands?: ReadonlySet<string>;
   getAnimationDuration?: (animNo: number) => number | null;
   getAnimationElementNo?: (animNo: number, animTime: number) => number | null;
+  getAnimationTriggerInfo?: (animNo: number, animTime: number) => AnimationTriggerInfo | null;
   hitDiagnostics?: boolean;
   getCnsDocumentForPlayer?: (playerId: number) => CnsDocument | null | undefined;
   onSoundPlay?: (event: SoundPlayEvent) => void;
@@ -521,12 +523,17 @@ function createTriggerContext(
   commands?: ReadonlySet<string>,
   opponent?: PlayerState,
 ): CnsRuntimeTriggerContext {
+  const animationInfo = input.getAnimationTriggerInfo?.(player.animNo, player.animTime) ?? null;
   return {
     player,
     opponent,
     commands,
     animTime: mugenAnimTime(player, input),
-    animElemNo: input.getAnimationElementNo?.(player.animNo, player.animTime) ?? undefined,
+    animElemNo: animationInfo?.elementNo ?? input.getAnimationElementNo?.(player.animNo, player.animTime) ?? undefined,
+    animElemTime: animationInfo?.elementTime,
+    animElemStarted: animationInfo?.elementStarted,
+    animElemCount: animationInfo?.elementCount,
+    animElemTimes: animationInfo?.elementTimes,
     animationExists: input.getAnimationDuration ? (animNo) => input.getAnimationDuration?.(animNo) !== null : undefined,
     constants: input.constants,
   };

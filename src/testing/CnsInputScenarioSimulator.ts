@@ -1,5 +1,5 @@
 import { getAnimationDuration } from '../core/animation/AnimationDuration';
-import { getCurrentAnimationElement } from '../core/animation/AnimationPlayer';
+import { getAnimationTriggerInfo, getCurrentAnimationElement } from '../core/animation/AnimationPlayer';
 import type { CharacterAssets } from '../core/character/CharacterTypes';
 import { stepCnsPhysicsMotion } from '../core/cns/CnsPhysicsStep';
 import { stepCnsStateRuntime, type CnsRuntimeTrace } from '../core/cns/CnsStateRuntime';
@@ -66,6 +66,7 @@ export function simulateCnsInputScenario(
           const element = getCurrentAnimationElement(character.air, animNo, animTime);
           return element ? element.elementIndex + 1 : null;
         },
+        getAnimationTriggerInfo: (animNo, animTime) => getAnimationTriggerInfo(character.air, animNo, animTime),
       });
 
       state = stepCnsPhysicsMotion(cnsResult.state, character.cns);

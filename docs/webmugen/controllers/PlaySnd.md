@@ -8,6 +8,8 @@
 
 The CNS runtime evaluates parameters on every firing frame and emits an owner-scoped event. The app resolves the owner's character SND and plays it through the shared Browser Audio runtime.
 
+Issue #54 connects `AnimElem` to AIR element starts instead of global animation time. Repeating AIR loops therefore re-emit PlaySnd events at each configured element start; bundled T-H-M-A State 101 is covered for `AnimElem = 1` and `AnimElem = 4` across multiple loops. No dash-specific timer, State number, or SND number is hard-coded in the runtime.
+
 ## Supported syntax
 
 ```ini
@@ -46,6 +48,6 @@ Rejections use `sound_asset_missing`, `sample_not_found`, `common_sound_unavaila
 
 ## Remaining work
 
-PlaySnd remains Partial because common/fight SND is not loaded, exact WinMUGEN pan/volume edge ranges and `lowpriority` are not audited, and Helper/Projectile asset ownership is not connected. StopSnd owner/channel stopping is connected; SndPan is tracked by Issue #40.
+PlaySnd remains Partial because common/fight SND is not loaded, generic controller `persistent = 0 / N` semantics are not implemented, exact WinMUGEN pan/volume edge ranges and `lowpriority` are not audited, and Helper/Projectile asset ownership is not connected. StopSnd owner/channel stopping is connected; SndPan is tracked by Issue #40.
 
 The Issue #44 WebMUGEN master slider is a separate user output multiplier after PlaySnd gain, channel handling, and pan. Its first-run 50% default, mute, and persistence do not reinterpret `volume`/`volumescale`; 100% preserves the controller's existing output ratio exactly.

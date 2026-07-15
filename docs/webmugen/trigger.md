@@ -107,6 +107,12 @@ For `GetHitVar(yvel)`, contact StateType S/C selects `ground.velocity.y` and A s
 
 The three-character HitDef audit observed `BackEdgeBodyDist`, `FrontEdgeBodyDist`, `ScreenPos`, `StateTime`, and `TimeMod`. Body-edge distance uses the existing fixed fallback stage bounds/player center and remains Partial. ScreenPos X/Y uses runtime player coordinates and remains Partial. `StateTime` now aliases current `Time`, and `TimeMod = divisor, remainder` evaluates State-time modulo for a positive divisor; both remain Partial pending broader WinMUGEN-version syntax audit. These names have separate Matrix rows so their presence in real CNS files is not hidden by a generic safe default.
 
+## AnimElem timing
+
+`AnimElem = N` is evaluated from the current AIR action, using 1-based element numbering. It is true only when element N starts, including when the animation reaches that element again after an explicit `LoopStart` or a default whole-action loop. `AnimElem = N, op T` compares the element-relative time with `=`, `!=`, `<`, `>`, `<=`, or `>=`; an invalid element number returns false. `AnimElemTime(N)` reads the same AIR-relative timeline.
+
+Issue #54 identified the previous implementation error: bare `AnimElem` compared N with global `player.animTime`, so T-H-M-A State 101 emitted its `S100,1` footstep at the first global times only and never on later AIR loops. The production app now supplies AIR element timing to CNS evaluation, and focused real-character regression covers repeated elements 1 and 4.
+
 ## Move contact results
 
 MoveContact, MoveHit, MoveGuarded, and HitCount read an attacker-side result owned by the current ActiveHitDef generation. A normal hit sets contact/hit and increments the State-local count; a live guardflag-approved contact sets contact/guarded without MoveHit or hit-count increment. New HitDef activation clears result flags while retaining the State hit count. On State entry, `movehitpersist` controls result preservation and `hitcountpersist` controls count preservation independently. `MoveHitReset` clears flags without erasing target hit history or count.
@@ -135,7 +141,7 @@ Trigger tests should include:
 - positive and negative cases;
 - both command and non-command contexts when relevant;
 - opponent context for distance and p2 triggers;
-- animation lookup context for `AnimExist`, `SelfAnimExist`, `AnimElemNo`;
+- animation lookup context for `AnimExist`, `SelfAnimExist`, `AnimElemNo`, `AnimElem`, and `AnimElemTime`;
 - missing-data cases to confirm safe fallback behavior.
 
 ## Common mistakes
