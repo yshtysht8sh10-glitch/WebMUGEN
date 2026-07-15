@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { MutableRefObject } from 'react';
 import type { CnsRuntimeTrace } from '../core/cns/CnsStateRuntime';
-import { WebMugenApp, appendRuntimeHistoryIfNeeded, createSourceOutline, drawAirPreview, findAirActionForLine, stripReadableRuntimeValueSummaries } from './WebMugenApp';
+import { AudioStartOverlay, WebMugenApp, appendRuntimeHistoryIfNeeded, createSourceOutline, drawAirPreview, findAirActionForLine, stripReadableRuntimeValueSummaries } from './WebMugenApp';
 import type { ImageDataSpritePack } from '../core/sprite/ImageDataSpriteTypes';
 
 describe('WebMugenApp runtime history', () => {
@@ -16,6 +16,24 @@ describe('WebMugenApp runtime history', () => {
     expect(html).toContain('<canvas');
     expect(html).toContain('Static Info / Character Files');
     expect(html).not.toContain('<h2>Character Files</h2>');
+    expect(html).toContain('キャラクターを読み込んでいます');
+  });
+
+  it('renders the user gesture and explicit no-audio start controls without tab navigation', () => {
+    const onUserGesture = vi.fn();
+    const onContinueWithoutAudio = vi.fn();
+    const waiting = renderToStaticMarkup(createElement(AudioStartOverlay, {
+      state: 'waiting-for-user', onUserGesture, onContinueWithoutAudio,
+    }));
+    const unavailable = renderToStaticMarkup(createElement(AudioStartOverlay, {
+      state: 'audio-unavailable', onUserGesture, onContinueWithoutAudio,
+    }));
+
+    expect(waiting).toContain('クリックまたはキー入力で開始');
+    expect(unavailable).toContain('音声を再試行');
+    expect(unavailable).toContain('音声なしで開始');
+    expect(waiting).not.toContain('Runtime');
+    expect(waiting).not.toContain('Settings');
   });
 
   it('mounts static content on demand while retaining one game canvas across repeated page renders', () => {

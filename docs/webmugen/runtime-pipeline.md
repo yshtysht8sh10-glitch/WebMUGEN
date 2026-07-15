@@ -11,6 +11,10 @@ The development policy remains binding:
 - TypeScript is the execution engine, not the hidden rulebook;
 - keep the compatibility matrix current.
 
+## Startup gate
+
+`WebMugenApp` startup has two phases. The character loader first resolves DEF/CNS/CMD/AIR/SFF/SND assets and prepares a game-loop closure. While audio is not confirmed running, the canvas start overlay owns the user gesture and no `BrowserInput`, `CanvasRenderer`, or requestAnimationFrame loop exists. Its pointer/key handler calls `BrowserAudioRuntime.unlock()` directly. Only a true result plus `contextState=running` starts the prepared closure. Failure stays retryable; unsupported audio requires an explicit no-audio continuation. StrictMode cleanup disposes the prepared closure/gate and cancels old frame ids.
+
 ## High-level frame flow
 
 ```text
@@ -214,7 +218,7 @@ Do not skip directly to TypeScript changes before identifying the failing layer.
 
 ## UI lifetime
 
-The requestAnimationFrame loop, `CanvasRenderer`, `gameStateRef`, input buffers, round state, and the canvas DOM node are part of the live runtime. Debug top-level tabs must not unmount the game/canvas panel when switching to static source views. Keep the game/runtime panel mounted and switch its visibility with CSS/ARIA so the renderer continues to draw to the same canvas element and runtime state is not reinitialized. Heavy static/files contents may unmount while inactive and remount on demand.
+After the Audio Start Gate passes, the requestAnimationFrame loop, `CanvasRenderer`, `gameStateRef`, input buffers, round state, and the canvas DOM node are part of the live runtime. Debug top-level tabs must not unmount the game/canvas panel when switching to static source views. Keep the game/runtime panel mounted and switch its visibility with CSS/ARIA so the renderer continues to draw to the same canvas element and runtime state is not reinitialized. Heavy static/files contents may unmount while inactive and remount on demand.
 
 ## Common failure patterns
 

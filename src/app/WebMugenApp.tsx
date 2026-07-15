@@ -7,7 +7,7 @@ import type { CharacterSourceFile } from '../core/character/CharacterTypes';
 import type { SndDocument } from '../parser/snd/SndTypes';
 import { sndSampleKey } from '../parser/snd/SndTypes';
 import { BrowserAudioRuntime, formatAudioRuntimeDiagnostic, type AudioRuntimeDiagnostic } from '../core/audio/BrowserAudioRuntime';
-import { createAudioUserGestureUnlock, installAudioGestureUnlock, type AudioUserGestureCallback } from './AudioGestureUnlock';
+import { createAudioStartGate, type AudioStartGate, type AudioStartGateGesture, type RuntimeStartState } from './AudioStartGate';
 import type { SoundRuntimeEvent } from '../core/audio/SoundEvent';
 import { processSoundRuntimeEvents } from '../core/audio/SoundRuntimeBridge';
 import { adjustMasterVolumeFromKey, loadAudioSettings, normalizeAudioSettings, saveAudioSettings, type AudioSettings } from './AudioSettings';
@@ -163,7 +163,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
   const runtimeSettingsRef = useRef<RuntimeSettings>(loadRuntimeSettings());
   const audioSettingsRef = useRef<AudioSettings>(loadAudioSettings());
   const audioRuntimeRef = useRef<BrowserAudioRuntime | null>(null);
-  const audioUserGestureRef = useRef<AudioUserGestureCallback>(() => {});
+  const audioStartGateRef = useRef<AudioStartGate | null>(null);
   const characterSoundsRef = useRef<SndDocument | null>(null);
   const lastFrameTickTimeRef = useRef<number | null>(null);
   const frameNoRef = useRef(0);
@@ -209,6 +209,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
   const [audioMuted, setAudioMuted] = useState(audioSettingsRef.current.muted);
   const [audioMasterVolume, setAudioMasterVolume] = useState(audioSettingsRef.current.masterVolumePercent);
   const [audioDiagnostic, setAudioDiagnostic] = useState('audio=-');
+  const [runtimeStartState, setRuntimeStartState] = useState<RuntimeStartState>('loading');
   const [characterPath, setCharacterPathState] = useState(loadCharacterPath());
   const [cnsSourceFiles, setCnsSourceFiles] = useState<CharacterSourceFile[]>([]);
   const [loadedAir, setLoadedAir] = useState<AirDocument | null>(null);
@@ -260,16 +261,11 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
     audioRuntimeRef.current = runtime;
     recordAudioHistory(`raw.audio_lifecycle event=mount runtimeInstanceId=${runtime.runtimeInstanceId}`);
 
-    const gestureUnlock = createAudioUserGestureUnlock(runtime, setAudioStatus);
-    audioUserGestureRef.current = gestureUnlock.onUserGesture;
-    const removeUnlockListeners = installAudioGestureUnlock(window, gestureUnlock.onUserGesture);
-
     return () => {
       recordAudioHistory(`raw.audio_lifecycle event=react_effect_cleanup runtimeInstanceId=${runtime.runtimeInstanceId}`);
       active = false;
-      audioUserGestureRef.current = () => {};
-      removeUnlockListeners();
-      gestureUnlock.dispose();
+      audioStartGateRef.current?.dispose();
+      audioStartGateRef.current = null;
       void runtime.cleanup();
       audioRuntimeRef.current = null;
     };
@@ -278,10 +274,13 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
   useEffect(() => {
     let disposed = false;
     let frameId = 0;
+    let gate: AudioStartGate | null = null;
 
-    async function start() {
+    async function loadCharacterAssets() {
       const canvas = canvasRef.current;
       if (!canvas) return;
+
+      setRuntimeStartState('loading');
 
       gameStateRef.current = createInitialGameState();
       hitFeedbackRef.current = createInitialHitFeedbackState();
@@ -345,15 +344,17 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
       );
 
       const characterRenderAssets = { airDocument: character.air, imageDataSpritePack: character.sprites };
-      rendererRef.current = new CanvasRenderer(canvas, character.air, null, character.sprites, {
-        1: characterRenderAssets,
-        2: characterRenderAssets,
-      });
-      inputRef.current = new BrowserInput(window, undefined, (gestureType) => audioUserGestureRef.current(gestureType));
-      p1CommandBufferRef.current = new InputBuffer(60);
-      p2CommandBufferRef.current = new InputBuffer(60);
+      const startGameLoop = () => {
+        if (disposed) return;
+        rendererRef.current = new CanvasRenderer(canvas, character.air, null, character.sprites, {
+          1: characterRenderAssets,
+          2: characterRenderAssets,
+        });
+        inputRef.current = new BrowserInput(window);
+        p1CommandBufferRef.current = new InputBuffer(60);
+        p2CommandBufferRef.current = new InputBuffer(60);
 
-      const tick = (timestamp: number) => {
+        const tick = (timestamp: number) => {
         const frameIntervalMs = runtimeSettingsRef.current.frameIntervalMs;
         const lastTickTime = lastFrameTickTimeRef.current;
         if (lastTickTime !== null && timestamp - lastTickTime < frameIntervalMs) {
@@ -576,16 +577,35 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           setHistoryLines: setStateTransitionLogLines,
         });
 
+          frameId = requestAnimationFrame(tick);
+        };
+
         frameId = requestAnimationFrame(tick);
       };
 
-      frameId = requestAnimationFrame(tick);
+      const gateRuntime = audioRuntimeRef.current;
+      if (!gateRuntime) return;
+      gate = createAudioStartGate({
+        runtime: gateRuntime,
+        onStateChange(nextState) {
+          if (disposed) return;
+          recordAudioHistory(`raw.audio_start_gate state=${nextState} runtimeInstanceId=${gateRuntime.runtimeInstanceId} contextState=${gateRuntime.contextState}`);
+          setRuntimeStartState(nextState);
+          if (nextState === 'running' || nextState === 'audio-unavailable') {
+            setAudioStatus(gateRuntime.status === 'unlocked' ? 'unlocked' : gateRuntime.status === 'unsupported' ? 'unsupported' : 'locked');
+          }
+        },
+      });
+      audioStartGateRef.current = gate;
+      gate.prepare(startGameLoop);
     }
 
-    void start();
+    void loadCharacterAssets();
 
     return () => {
       disposed = true;
+      gate?.dispose();
+      if (audioStartGateRef.current === gate) audioStartGateRef.current = null;
       cancelAnimationFrame(frameId);
       clearRuntimeHistoryRenderTimer();
       inputRef.current?.dispose();
@@ -723,6 +743,15 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
     saveAudioSettings(next);
   };
 
+  const handleAudioStartGesture = (gestureType: AudioStartGateGesture) => {
+    const gate = audioStartGateRef.current;
+    if (gate) void gate.handleUserGesture(gestureType);
+  };
+
+  const continueWithoutAudio = () => {
+    audioStartGateRef.current?.continueWithoutAudio();
+  };
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -743,6 +772,13 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
                 width={960}
                 height={540}
               />
+              {runtimeStartState !== 'running' && (
+                <AudioStartOverlay
+                  state={runtimeStartState}
+                  onUserGesture={handleAudioStartGesture}
+                  onContinueWithoutAudio={continueWithoutAudio}
+                />
+              )}
               <div className="stage-debug-overlay" aria-label="stage debug overlay">
                 {stageDebugLines.map((line, index) => (
                   <div key={`${line}-${index}`}>{line}</div>
@@ -831,6 +867,55 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           </section>
         ) : null}
       </section>
+    </div>
+  );
+}
+
+export function AudioStartOverlay({
+  state,
+  onUserGesture,
+  onContinueWithoutAudio,
+}: {
+  state: Exclude<RuntimeStartState, 'running'>;
+  onUserGesture: (gestureType: AudioStartGateGesture) => void;
+  onContinueWithoutAudio: () => void;
+}) {
+  if (state === 'loading') {
+    return <div className="audio-start-overlay" role="status">キャラクターを読み込んでいます…</div>;
+  }
+  if (state === 'unlocking-audio') {
+    return <div className="audio-start-overlay" role="status">音声を開始しています…</div>;
+  }
+  if (state === 'waiting-for-user') {
+    return (
+      <div className="audio-start-overlay">
+        <button
+          autoFocus
+          className="audio-start-primary"
+          onPointerDown={() => onUserGesture('pointerdown')}
+          onKeyDown={() => onUserGesture('keydown')}
+          type="button"
+        >
+          クリックまたはキー入力で開始
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="audio-start-overlay" role="alert">
+      <p>音声を開始できませんでした。再試行するか、音声なしで開始してください。</p>
+      <div className="audio-start-actions">
+        <button
+          autoFocus
+          className="audio-start-primary"
+          onPointerDown={() => onUserGesture('pointerdown')}
+          onKeyDown={() => onUserGesture('keydown')}
+          type="button"
+        >
+          音声を再試行
+        </button>
+        <button onClick={onContinueWithoutAudio} type="button">音声なしで開始</button>
+      </div>
     </div>
   );
 }
