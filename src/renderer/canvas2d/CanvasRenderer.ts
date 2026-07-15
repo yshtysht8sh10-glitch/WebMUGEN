@@ -178,6 +178,7 @@ export class CanvasRenderer {
       );
 
       if (drawn.drawn) return;
+      if (assets.imageDataSpritePack || assets.spritePack) return;
     }
 
     this.drawFallbackPlayer(ctx, player, color, currentElement);

@@ -1,6 +1,6 @@
 # StateDef Header Compatibility Notes
 
-Updated: 2026-07-12
+Updated: 2026-07-16
 
 This document summarizes implementation notes for StateDef header fields. The compatibility matrix remains the source of truth:
 
@@ -16,7 +16,7 @@ Follow `docs/webmugen/development-policy.md`: do not modify `public/chars/common
 | `type` | Complete | Parsed and applied to `stateType`. | None known for simple states. |
 | `movetype` | Complete | Parsed and applied to `moveType`. | Full attack/hit semantics depend on HitDef subsystem. |
 | `physics` | Partial | Parsed and applied. Runtime physics behavior is still incomplete. | Air/stand/crouch physics need broader WinMUGEN verification. |
-| `anim` | Complete | Parsed and applied as initial animation. Animless state preservation exists. | Rendering/animation availability should still be checked per character. |
+| `anim` | Complete | Parsed and applied as initial animation. Runtime expressions such as `6142 + IfElse(...)` are evaluated on State entry; non-finite results preserve the prior animation. Animless state preservation exists. | Rendering/animation availability should still be checked per character. |
 | `velset` | Partial | Numeric X/Y pairs apply once on State entry before controllers; X is converted from Facing-relative CNS velocity. | Expression-valued header components and broader real-character coverage remain to audit. |
 | `ctrl` | Complete | Parsed and applied as control flag. | State-specific control handoff still depends on controller flow. |
 | `poweradd` | Complete | Parsed, applied once on state entry, and clamped through the player's 0..`powerMax` mutation path. | Helper ownership remains tied to the future Helper runtime. |
@@ -30,6 +30,8 @@ Follow `docs/webmugen/development-policy.md`: do not modify `public/chars/common
 ## Implementation guidance
 
 StateDef header fields should be applied when entering a state through `ChangeState`, `SelfState`, or equivalent centralized state-entry logic. Direct engine entry into a common get-hit State applies entry fields on its first active CNS frame after hit pause.
+
+Expression-valued `anim` headers are retained by the parser and evaluated against the entering player's runtime context. This matters when a same-tick ChangeState chain enters an expression-valued StateDef before reaching another State: no intermediate State may write `NaN` into `animNo`.
 
 `velset` changes live `vx`/`vy` only. It does not overwrite `hitVelX`/`hitVelY` or the `GetHitVar` snapshot. This distinction is required by State 5000: `velset = 0,0` freezes the shake while `GetHitVar(yvel)` can still classify the later ground/air route and `HitVelSet` can restore selected components.
 

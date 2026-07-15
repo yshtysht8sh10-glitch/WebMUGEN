@@ -400,7 +400,7 @@ function applyTargetOperations(
       if (operation.kind === 'state' && operation.value !== undefined) {
         const ownerId = owner?.id ?? operation.ownerId;
         const ownerCns = resolveCnsByOwner(ownerId, cns, input);
-        return { ...enterState(player, owner ?? player, operation.value, ownerCns), stateOwnerId: ownerId };
+        return { ...enterState(player, owner ?? player, operation.value, ownerCns, { ...input, constants: ownerCns }), stateOwnerId: ownerId };
       }
       if (operation.kind === 'velSet') return { ...player, vx: operation.x ?? player.vx, vy: operation.y ?? player.vy };
       if (operation.kind === 'velAdd') return { ...player, vx: player.vx + (operation.x ?? 0), vy: player.vy + (operation.y ?? 0) };
@@ -456,12 +456,22 @@ function readAirJuggle(cns: CnsDocument): number {
   return value !== null && Number.isFinite(value) && value >= 0 ? value : 15;
 }
 
-function enterState(player: PlayerState, opponent: PlayerState, stateNo: number, cns: CnsDocument): PlayerState {
+function enterState(
+  player: PlayerState,
+  opponent: PlayerState,
+  stateNo: number,
+  cns: CnsDocument,
+  input?: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): PlayerState {
   const stateDef = findState(cns, stateNo);
   if (!stateDef) return { ...player, stateNo, stateTime: 0 };
 
   const inferredAnimNo = inferDefaultAnimNo(stateNo, player.animNo);
-  const animNo = stateDef.initialAnim ?? inferredAnimNo;
+  const expressionAnimNo = stateDef.initialAnimExpression && input
+    ? cnsValueToNumber(stateDef.initialAnimExpression, player, input, commands, opponent)
+    : null;
+  const animNo = stateDef.initialAnim ?? expressionAnimNo ?? inferredAnimNo;
   const animChanged = player.animNo !== animNo;
   const powered = player as ExtendedPlayerState;
   const powerAdded = addPlayerPower(player, stateDef.powerAdd ?? 0);
@@ -832,7 +842,7 @@ function executeController(
     if (value === null) return withPlayer(player, false, 'SelfState');
     const selfOwnerId = player.selfStateOwnerId ?? player.id;
     const selfCns = resolveCnsByOwner(selfOwnerId, cns, input);
-    return withPlayer({ ...enterState(player, opponent, value, selfCns), stateOwnerId: selfOwnerId }, true, 'SelfState');
+    return withPlayer({ ...enterState(player, opponent, value, selfCns, { ...input, constants: selfCns }, commands), stateOwnerId: selfOwnerId }, true, 'SelfState');
   }
   if (type === 'turn') return withPlayer({ ...player, facing: player.facing === 1 ? -1 : 1 }, true, 'Turn');
   if (type === 'varset') return setVarController(player, controller, input, commands, opponent);
@@ -842,7 +852,7 @@ function executeController(
   if (type === 'changestate') {
     const value = num(controller, 'value', player, input, commands, opponent);
     if (value === null) return withPlayer(player, false, 'ChangeState');
-    const entered = enterState(player, opponent, value, cns);
+    const entered = enterState(player, opponent, value, cns, input, commands);
     const ctrl = num(controller, 'ctrl', player, input, commands, opponent);
     return withPlayer(ctrl === null ? entered : { ...entered, ctrl: ctrl !== 0 }, true, 'ChangeState');
   }
@@ -1918,7 +1928,7 @@ function cnsValueToNumber(
       ...createTriggerContext(player, input, commands),
       ...(opponent ? { opponent } : {}),
     });
-    if (evaluated !== null) return evaluated;
+    if (evaluated !== null && Number.isFinite(evaluated)) return evaluated;
   }
   const parsed = Number(String(value).trim());
   return Number.isFinite(parsed) ? parsed : null;

@@ -92,6 +92,11 @@ HitDef spark events carry common or attacker scope, the requested animation numb
 
 Explod rendering resolves the current AIR element from the creating owner's asset scope, then uses the matching owner SFF sprite. World-space entries pass through camera X/Y conversion once while screen-space `front/back/left/right` entries do not. Explod Facing, vfacing, AIR flip, sprite priority, and `ontop` are applied in the effect layer; AIR element offset and SFF axis offset are each composed once before scale. Missing animation or sprite data is hidden with a diagnostic instead of a placeholder.
 
+Normal player rendering also treats an AIR element that references an unregistered SFF group/image as
+intentionally invisible. It does not draw the debug fallback player or its shadow. The fallback player
+is retained only when no SFF/SpritePack asset was loaded at all, so development/sample configurations
+remain distinguishable from valid character data that deliberately selects a missing sprite.
+
 Explod lifecycle advances AIR time before each following-frame render. Finite non-loop actions reach AnimTime 0 and satisfy the default `removetime=-2`; `LoopStart` and negative-duration elements do not. A positive removetime counts the creation frame as its first displayed tick, `0` never reaches the renderer, and `-1` remains until an explicit later removal path.
 
 Issue #34 applies Explod scale after Facing/vfacing and AIR horizontal flip, and maps additive modes to Canvas `lighter`. `addalpha` source alpha maps to `globalAlpha`. Issues #45/#46 make normal player, AIR Preview, and Explod draws resolve the same owner-scoped AIR/SFF baked RGBA data. SFF v1 palette conversion preserves sprite-specific PCX palettes, subfile-order `samePalette` inheritance, linked-source pixels with linked-node palette context, and ACT-only reversed index lookup for shared character-palette sprites. The bitmap cache is isolated by asset identity, sprite id, palette key, and `ownpal`; runtime diagnostics include non-transparent/non-black RGBA counts and cache identity. Dynamic palette mutation after creation, destination alpha, subtractive blend, and a colored shadow pass remain diagnosed Partial behavior.

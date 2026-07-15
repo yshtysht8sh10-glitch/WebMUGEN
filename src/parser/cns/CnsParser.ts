@@ -128,7 +128,11 @@ function applyStateDefValue(state: CnsStateDefinition, key: string, value: CnsVa
       state.physics = String(value);
       break;
     case 'anim':
-      state.initialAnim = Number(value);
+      if (Number.isFinite(Number(value))) {
+        state.initialAnim = Number(value);
+      } else {
+        state.initialAnimExpression = String(value);
+      }
       break;
     case 'velset': {
       const parts = Array.isArray(value) ? value : [value];

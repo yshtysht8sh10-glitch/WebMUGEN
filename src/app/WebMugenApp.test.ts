@@ -3,8 +3,10 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { MutableRefObject } from 'react';
 import type { CnsRuntimeTrace } from '../core/cns/CnsStateRuntime';
-import { AudioStartOverlay, WebMugenApp, appendRuntimeHistoryIfNeeded, createSourceOutline, drawAirPreview, findAirActionForLine, stripReadableRuntimeValueSummaries } from './WebMugenApp';
+import { AudioStartOverlay, WebMugenApp, appendRuntimeHistoryIfNeeded, createSourceOutline, drawAirPreview, findAirActionForLine, formatSatisfiedStateDefTriggers, parseControllerValueText, stripReadableRuntimeValueSummaries } from './WebMugenApp';
 import type { ImageDataSpritePack } from '../core/sprite/ImageDataSpriteTypes';
+import { parseCnsText } from '../parser/cns/CnsParser';
+import { createInitialGameState } from '../core/engine/GameState';
 
 describe('WebMugenApp runtime history', () => {
   it('keeps the game panel mounted while leaving hidden static content unmounted', () => {
@@ -160,6 +162,27 @@ describe('WebMugenApp runtime history', () => {
       '**ChangeState -> 0** | NG @ char.cns:10',
       'OK `trigger1=AnimTime = 0',
     ].join('\n'));
+  });
+
+  it('shows raw and evaluated controller values in the Human Log summary', () => {
+    const cns = parseCnsText(`
+[Statedef 50]
+[State 50, JumpAnim]
+type = ChangeAnim
+trigger1 = Time = 0
+value = ifelse((vel x)=0, 44, ifelse((vel x)>0, 45, 46))+var(5)*4
+`);
+    const state = createInitialGameState();
+    const player = { ...state.players[0], stateNo: 50, stateTime: 0, vx: -3, vars: { 5: 1 } };
+    const lines = formatSatisfiedStateDefTriggers(cns.states[0], {
+      player,
+      opponent: state.players[1],
+      constants: cns,
+    });
+
+    expect(lines[0]).toContain('**ChangeAnim** | OK');
+    expect(lines[0]).toContain('value raw=`ifelse((vel x)=0, 44, ifelse((vel x)>0, 45, 46))+var(5)*4` evaluated=50');
+    expect(parseControllerValueText(lines[0])).toBe('value: ifelse((vel x)=0, 44, ifelse((vel x)>0, 45, 46))+var(5)*4 => 50');
   });
 
   it('builds source outlines for AIR, CNS, and CMD files', () => {

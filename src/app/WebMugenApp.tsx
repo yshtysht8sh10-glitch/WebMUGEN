@@ -2066,6 +2066,7 @@ function ReadableRuntimeHistoryLine({
   if (controllerMatch) {
     const passed = controllerMatch[2].includes('OK');
     const source = parseControllerSourceRef(controllerMatch[2]);
+    const valueText = parseControllerValueText(controllerMatch[2]);
     return (
       <div className={`readable-history-controller ${passed ? 'passed' : 'failed'}`}>
         {source ? (
@@ -2075,10 +2076,10 @@ function ReadableRuntimeHistoryLine({
             onClick={() => onOpenCnsSource(source)}
             title={`${source.path}:${source.line}`}
           >
-            {controllerMatch[1]}
+            {controllerMatch[1]}{valueText ? ` | ${valueText}` : ''}
           </button>
         ) : (
-          <strong>{controllerMatch[1]}</strong>
+          <strong>{controllerMatch[1]}{valueText ? ` | ${valueText}` : ''}</strong>
         )}
         <span>{passed ? '成立' : '不成立'}</span>
       </div>
@@ -2118,6 +2119,11 @@ function splitTriggerValueText(text: string): [string, string] {
   const index = text.indexOf(marker);
   if (index < 0) return [text, ''];
   return [text.slice(0, index), text.slice(index + marker.length)];
+}
+
+export function parseControllerValueText(text: string): string {
+  const match = text.match(/\|\s+value raw=`(.+?)` evaluated=(\S+)/);
+  return match ? `value: ${match[1]} => ${match[2]}` : '';
 }
 
 function parseControllerSourceRef(text: string): Exclude<CnsSourceSelection, null> | null {
@@ -3215,7 +3221,7 @@ function formatP1SatisfiedStateDefTriggerSummary(
 ): string {
   const [p1, p2] = state.players;
   const mugenAnimTime = calculateMugenAnimTime(p1.animTime, getAnimEndTime?.(p1.animNo));
-  const context = { player: p1, opponent: p2, commands, animTime: mugenAnimTime };
+  const context = { player: p1, opponent: p2, commands, animTime: mugenAnimTime, constants: cns, gameTime: state.frame };
   const summaries = cns.states
     .filter((stateDef) => stateDef.stateNo === p1.stateNo)
     .flatMap((stateDef) => formatSatisfiedStateDefTriggers(stateDef, context));
@@ -3223,7 +3229,7 @@ function formatP1SatisfiedStateDefTriggerSummary(
   return summaries.length > 0 ? summaries.join('\n') : '-';
 }
 
-function formatSatisfiedStateDefTriggers(
+export function formatSatisfiedStateDefTriggers(
   stateDef: CnsStateDefinition,
   context: Parameters<typeof evaluateCnsRuntimeTrigger>[1],
 ): string[] {
@@ -3234,7 +3240,7 @@ function formatSatisfiedStateDefTriggers(
 
   prioritized.visible.forEach((controller) => {
     const passed = evaluateReadableController(controller, context);
-    lines.push(formatReadableControllerHeaderOk(controller, passed));
+    lines.push(formatReadableControllerHeaderOk(controller, passed, context));
     lines.push(...controller.triggers.map((trigger) => `  ${formatReadableTriggerLineOk(trigger, context)}`));
   });
 
@@ -3277,12 +3283,30 @@ function formatReadableControllerHeader(controller: CnsStateController, passed: 
   return `**${controller.type}${value}** | ${passed ? '✅ 成立' : '✗ 不成立'}`;
 }
 
-function formatReadableControllerHeaderOk(controller: CnsStateController, passed: boolean): string {
+function formatReadableControllerHeaderOk(
+  controller: CnsStateController,
+  passed: boolean,
+  context: CnsRuntimeTriggerContext,
+): string {
   const value = controller.type.toLowerCase() === 'changestate'
     ? ` -> ${readParamNumber(controller, 'value') ?? '?'}`
     : '';
   const source = controller.sourceFile && controller.sourceLine ? ` @ ${controller.sourceFile}:${controller.sourceLine}` : '';
-  return `**${controller.type}${value}** | ${passed ? 'OK' : 'NG'}${source}`;
+  return `**${controller.type}${value}** | ${passed ? 'OK' : 'NG'}${formatReadableControllerValue(controller, context)}${source}`;
+}
+
+function formatReadableControllerValue(
+  controller: CnsStateController,
+  context: CnsRuntimeTriggerContext,
+): string {
+  const raw = controller.params.value;
+  if (raw === undefined) return '';
+  const rawText = Array.isArray(raw) ? raw.join(', ') : String(raw);
+  const evaluated = readNumberExpression(rawText, context);
+  const evaluatedText = evaluated === null
+    ? 'unresolved'
+    : Number.isFinite(evaluated) ? formatRuntimeNumber(evaluated) : 'NaN';
+  return ` | value raw=\`${rawText}\` evaluated=${evaluatedText}`;
 }
 
 function formatReadableTriggerLine(
@@ -3333,7 +3357,9 @@ function formatTriggerValueSummary(
 }
 
 export function stripReadableRuntimeValueSummaries(summary: string): string {
-  return summary.replace(/\s+\|\| values: .+$/gm, '');
+  return summary
+    .replace(/\s+\|\| values: .+$/gm, '')
+    .replace(/(\s+\|\s+value raw=`.+?`) evaluated=\S+/gm, '$1');
 }
 
 function collectTriggerValueNames(expression: string): string[] {

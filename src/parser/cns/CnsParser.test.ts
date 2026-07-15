@@ -33,6 +33,17 @@ ctrl = 1
     expect(doc.states[0].controllers[0].triggers[0].expression).toBe('command = "holdfwd"');
   });
 
+  it('preserves expression-valued StateDef anim fields for runtime evaluation', () => {
+    const doc = parseCnsText(`
+[StateDef 6142]
+type = A
+anim = 6142 + IfElse(var(11) = 1, 0, 1)
+`);
+
+    expect(doc.states[0].initialAnim).toBeUndefined();
+    expect(doc.states[0].initialAnimExpression).toBe('6142 + IfElse(var(11) = 1, 0, 1)');
+  });
+
   it('parses triggerall controllers used by CMD Statedef -1', () => {
     const doc = parseCnsText(`
 [Statedef -1]

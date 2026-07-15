@@ -91,6 +91,7 @@ The human-facing runtime history uses a lightweight frame index plus a selected 
 - The visible index is capped separately from the retained store, so older retained frames can still be copied or loaded by frame when exposed through tooling.
 - Frame index rows visually distinguish state numbers and animation numbers so repeated-state failures can be scanned quickly.
 - Human detail entries include a `StateDef` source link that opens the matching source file and line in `Character Files`.
+- Each visible State controller with a `value` parameter shows the raw CNS expression and its evaluated number for that Human Log frame. Invalid results appear as `evaluated=NaN` or `evaluated=unresolved`, including for `ChangeAnim`.
 - `Character Files` can be hidden on the static/files page. The Show button opens it even when no source link has been clicked yet.
 - Source links from human detail entries switch the main UI to the static/files page before opening `Character Files`, keeping the normal game/runtime page lighter.
 - A runtime log clear action resets retained human entries, the lightweight frame index, AI history, and signatures together.

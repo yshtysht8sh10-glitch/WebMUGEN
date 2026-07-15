@@ -103,6 +103,34 @@ value = 10
     expect(result.traces[0].executedControllers).toEqual(['ChangeState', 'ChangeAnim']);
   });
 
+  it('does not apply a ChangeAnim value that evaluates to NaN', () => {
+    const cns = parseCnsText(`
+[Statedef 50]
+type = A
+anim = 44
+
+[State 50, JumpAnim]
+type = ChangeAnim
+trigger1 = Time = 0
+value = ifelse((vel x)=0, 44, ifelse((vel x)>0, 45, 46))+var(5)*4
+`);
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime({
+      ...state,
+      players: [{
+        ...state.players[0],
+        stateNo: 50,
+        animNo: 44,
+        stateTime: 0,
+        vars: { 5: Number.NaN },
+      }, state.players[1]],
+    }, cns);
+
+    expect(result.state.players[0].animNo).toBe(44);
+    expect(Number.isFinite(result.state.players[0].animNo)).toBe(true);
+    expect(result.traces[0].executedControllers).not.toContain('ChangeAnim');
+  });
+
   it('runs Time = 0 controllers in an animless air state entered from jump start', () => {
     const cns = parseCnsText(`
 [Statedef 40]
@@ -209,6 +237,64 @@ value = ifelse((vel x)=0, 44, ifelse((vel x)>0, 45, 46))+var(5)*4
       animTime: 0,
     });
     expect(result.traces[0].executedControllers).toEqual(['ChangeState', 'ChangeAnim']);
+  });
+
+  it('keeps StateDef anim expressions finite across a same-tick transition chain', () => {
+    const cns = parseCnsText(`
+[Statedef 6141]
+type = A
+physics = N
+anim = 60991
+
+[State 6141, Finish]
+type = ChangeState
+trigger1 = Time = 10
+value = 6142
+
+[Statedef 6142]
+type = A
+physics = N
+anim = 6142 + IfElse(var(11) = 1, 0, 1)
+
+[State 6142, ReturnToJump]
+type = ChangeState
+trigger1 = Time = 0
+trigger1 = Anim = 6143
+value = 50
+ctrl = 1
+
+[Statedef 50]
+type = A
+physics = A
+
+[State 50, JumpAnim]
+type = ChangeAnim
+trigger1 = Time = 0
+value = ifelse((vel x)=0, 44, ifelse((vel x)>0, 45, 46))+var(5)*4
+`);
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime({
+      ...state,
+      players: [{
+        ...state.players[0],
+        stateNo: 6141,
+        stateTime: 10,
+        animNo: 60991,
+        animTime: 10,
+        vars: { 5: 0, 11: 0 },
+      }, state.players[1]],
+    }, cns);
+
+    expect(result.state.players[0]).toMatchObject({
+      prevStateNo: 6142,
+      stateNo: 50,
+      stateTime: 0,
+      animNo: 6143,
+      animTime: 0,
+      ctrl: true,
+    });
+    expect(Number.isFinite(result.state.players[0].animNo)).toBe(true);
+    expect(result.traces[0].executedControllers).toEqual(['ChangeState', 'ChangeState']);
   });
 
   it('returns from state 200 when MUGEN AnimTime reaches 0', () => {
