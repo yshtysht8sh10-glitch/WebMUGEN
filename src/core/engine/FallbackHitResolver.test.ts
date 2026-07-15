@@ -110,7 +110,7 @@ physics = S
     const hit = resolveConfiguredHit({ targetStateType: 'A', fall: true, downVelocity: [-1.5, -3], downHitTime: 11 });
     expect(hit.players[0].activeHitDef).toMatchObject({ downVelocity: { x: -1.5, y: -3 }, downHitTime: 11 });
     expect(hit.players[1].getHitVars).toMatchObject({ 'down.xvel': -1.5, 'down.yvel': -3, 'down.hittime': 11 });
-    expect(hit.players[1].hitFallVelocity).toEqual({ x: -1.5, y: -3 });
+    expect(hit.players[1].hitFallVelocity).toEqual({ x: 0, y: -4.5 });
   });
 
   it('consumes StateDef juggle only for an airborne target and rejects a new HitDef when points are insufficient', () => {
@@ -197,6 +197,42 @@ physics = S
       targetCommands: new Set(['holdback']), guardPauseTime: [0, 0],
     });
     expect(lethalGuard.players[1].life).toBe(0);
+  });
+
+  it.each([1, 2] as const)('routes a downed P%i target to State 5080 using down velocity and hittime', (targetId) => {
+    const hit = resolveConfiguredHit({
+      attackerId: targetId === 1 ? 2 : 1,
+      targetStateType: 'L',
+      targetMoveType: 'H',
+      hitFlag: 'D',
+      downVelocity: [-1.5, 0],
+      downHitTime: 11,
+      pauseTime: [0, 0],
+    });
+    const target = hit.players[targetId - 1];
+
+    expect(target).toMatchObject({ stateNo: 5080, stateType: 'L', vy: 0 });
+    expect(Math.abs(target.vx)).toBe(1.5);
+    expect(target.hitStun).toMatchObject({ selectedHitTime: 11, kind: 'down', targetStateTypeAtHit: 'L' });
+    expect(target.getHitVars).toMatchObject({ yvel: 0, 'down.xvel': -1.5, 'down.yvel': 0, 'down.hittime': 11 });
+    expect(hit.hitDiagnosticLines?.join('\n')).toContain('state=5080 source=down_common_state');
+  });
+
+  it('defaults omitted down.velocity to air.velocity as WinMUGEN specifies', () => {
+    const hit = resolveConfiguredHit({ targetStateType: 'L', targetMoveType: 'H', hitFlag: 'D', airVelocity: [-3, -6], pauseTime: [0, 0] });
+    expect(hit.players[1]).toMatchObject({ stateNo: 5080, vx: 3, vy: -6 });
+    expect(hit.players[1].getHitVars).toMatchObject({ 'down.xvel': -3, 'down.yvel': -6, 'down.hittime': 20 });
+  });
+
+  it.each([
+    { downBounce: false, expectedFallY: 0 },
+    { downBounce: true, expectedFallY: -4.5 },
+  ])('uses down.bounce=$downBounce to select the one-bounce fall velocity', ({ downBounce, expectedFallY }) => {
+    const hit = resolveConfiguredHit({
+      targetStateType: 'L', targetMoveType: 'H', hitFlag: 'D', downVelocity: [-2, -5], downBounce, pauseTime: [0, 0],
+    });
+    expect(hit.players[1]).toMatchObject({ stateNo: 5080, hitFall: true, hitFallVelocity: { x: 0, y: expectedFallY } });
+    expect(hit.players[1].getHitVars).toMatchObject({ fall: 1, 'fall.yvel': expectedFallY, 'down.bounce': downBounce ? 1 : 0 });
   });
 
   it.each([
@@ -1146,6 +1182,7 @@ function resolveConfiguredHit({
   fallRecoverTime,
   downVelocity,
   downHitTime,
+  downBounce,
   juggle,
   airJuggle,
   guardFlag,
@@ -1216,6 +1253,7 @@ function resolveConfiguredHit({
   fallRecoverTime?: number;
   downVelocity?: [number, number];
   downHitTime?: number;
+  downBounce?: boolean;
   juggle?: number;
   airJuggle?: number;
   guardFlag?: string;
@@ -1280,6 +1318,7 @@ function resolveConfiguredHit({
     fallRecoverTime === undefined ? '' : `fall.recovertime = ${fallRecoverTime}`,
     downVelocity ? `down.velocity = ${downVelocity.join(', ')}` : '',
     downHitTime === undefined ? '' : `down.hittime = ${downHitTime}`,
+    downBounce === undefined ? '' : `down.bounce = ${downBounce ? 1 : 0}`,
   ].filter(Boolean).join('\n');
   const guardLines = [
     guardFlag === undefined ? '' : `guardflag = ${guardFlag}`,

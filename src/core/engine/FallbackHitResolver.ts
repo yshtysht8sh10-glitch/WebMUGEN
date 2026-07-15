@@ -231,25 +231,31 @@ function resolveAttack(
 
   const lifeBefore = target.life;
   const targetStateTypeAtHit = target.stateType;
-  const hitTimeKind = targetStateTypeAtHit === 'A' ? 'air' : 'ground';
-  const activeHitTime = hitTimeKind === 'air' ? active?.airHitTime : active?.groundHitTime;
+  const hitTimeKind = targetStateTypeAtHit === 'L' ? 'down' : targetStateTypeAtHit === 'A' ? 'air' : 'ground';
+  const activeHitTime = hitTimeKind === 'down' ? active?.downHitTime : hitTimeKind === 'air' ? active?.airHitTime : active?.groundHitTime;
   const selectedHitTime = activeHitTime ?? 28;
   const hitTimeSource = activeHitTime === undefined ? 'hardcoded' : 'active_hitdef';
   const hitTimeFallbackReason = active
-    ? hitTimeKind === 'air'
+    ? hitTimeKind === 'down'
+      ? 'missing_down_hittime'
+      : hitTimeKind === 'air'
       ? active.airHitTimeFallbackReason ?? 'missing_air_hittime'
       : active.groundHitTimeFallbackReason ?? 'missing_ground_hittime'
     : 'active_hitdef_missing';
-  const reactionState = hitTimeKind === 'air'
+  const reactionState = hitTimeKind === 'down'
+    ? 5080
+    : hitTimeKind === 'air'
     ? AIR_HIT_SHAKE_STATE
     : targetStateTypeAtHit === 'C'
       ? CROUCH_HIT_STATE
       : STAND_HIT_STATE;
   const selectedAnimType = hitTimeKind === 'air' ? active.airAnimType ?? 'Light' : active.animType;
-  const selectedAnim = hitTimeKind === 'ground'
+  const selectedAnim = hitTimeKind === 'down'
+    ? target.animNo
+    : hitTimeKind === 'ground'
     ? commonHitShakeAnim(active?.animType, active.groundType, airDocument)
     : commonHitShakeAnim(selectedAnimType, active.airType, airDocument);
-  const selectedVelocity = hitTimeKind === 'air' ? active.airVelocity : active.groundVelocity;
+  const selectedVelocity = hitTimeKind === 'down' ? active.downVelocity ?? active.airVelocity : hitTimeKind === 'air' ? active.airVelocity : active.groundVelocity;
   // WinMUGEN HitDef X velocity is expressed in the defender's reaction direction:
   // the commonly used negative value must send the target away from the attacker.
   const worldHitVelocityX = selectedVelocity.x * -attacker.facing;
@@ -262,9 +268,10 @@ function resolveAttack(
     activeHitDefId === null ? hitAttacker : recordMoveContact(hitAttacker, activeHitDefId, 'hit'),
     active,
   );
+  const downLaunch = hitTimeKind === 'down' && selectedVelocity.y !== 0;
   const fallVelocity = {
-    x: (active.fall?.xVelocity ?? active.downVelocity?.x ?? 0) * attacker.facing,
-    y: active.fall?.yVelocity ?? active.downVelocity?.y ?? 0,
+    x: (active.fall?.xVelocity ?? 0) * attacker.facing,
+    y: downLaunch && !active.downBounce ? 0 : active.fall?.yVelocity ?? -4.5,
   };
   const hitTarget = rememberHitDefId(applyTargetRequestedState(applyFallbackHit(applyHitDefSnap(target, attacker, active), damage, active.kill !== false, active.numHits ?? 1, reactionState, selectedAnim, appliedVelocity, fallVelocity, active.pauseTime.defender, {
     activeHitDefId,
@@ -275,7 +282,7 @@ function resolveAttack(
     elapsed: 0,
     lastStateNo: reactionState,
     selectedAnim,
-    getHitVarYVelocitySource: hitTimeKind === 'air' ? 'air.velocity.y' : 'ground.velocity.y',
+    getHitVarYVelocitySource: hitTimeKind === 'down' ? 'down.velocity.y' : hitTimeKind === 'air' ? 'air.velocity.y' : 'ground.velocity.y',
     groundVelocityAtHit: { ...active.groundVelocity },
     airVelocityAtHit: { ...active.airVelocity },
     fallYVelocityAtHit: active.fall?.yVelocity ?? 0,
@@ -310,7 +317,7 @@ function resolveAttack(
       `  activeHitDefId=${idText} animType=${String(selectedAnimType ?? animType)} targetStateTypeAtHit=${targetStateTypeAtHit} requestedAnim=${selectedAnim} selectedAnim=${selectedAnim} animationExists=${animationExists ? 1 : 0} source=${hitTimeKind === 'air' && active.airAnimType ? 'cns_air' : animSource} fallbackReason=${hitTimeKind === 'ground' && animSource !== 'cns' ? 'winmugen_default_light' : hitTimeKind === 'air' && !active.airAnimType ? 'missing_air_animtype' : '-'}${animationExists ? '' : ' warning=missing_required_animation'}`,
     ],
     `raw.hit_reaction target=p${target.id}`,
-    `  state=${reactionState} source=${hitTimeKind === 'air' ? 'air_common_state' : 'ground_common_state'} anim=${selectedAnim} source=${hitTimeKind === 'ground' ? animSource : active.airAnimType ? 'cns_air' : 'existing_default'}`,
+    `  state=${reactionState} source=${hitTimeKind === 'down' ? 'down_common_state' : hitTimeKind === 'air' ? 'air_common_state' : 'ground_common_state'} anim=${selectedAnim} source=${hitTimeKind === 'down' ? 'preserve_until_5080' : hitTimeKind === 'ground' ? animSource : active.airAnimType ? 'cns_air' : 'existing_default'}`,
     `  velocity=(${appliedVelocity.x},${appliedVelocity.y}) source=active_hitdef velocityKind=${hitTimeKind} attackerFacing=${attacker.facing} pausetime=${active.pauseTime.defender} source=active_hitdef`,
     `  hittime=${selectedHitTime} source=${hitTimeSource} hittimeKind=${activeHitTime === undefined ? 'fallback' : hitTimeKind} targetStateTypeAtHit=${targetStateTypeAtHit}`,
     `  fall=${active.fall?.enabled ? 1 : 0} fallVelocity=(${fallVelocity.x},${fallVelocity.y}) recover=${active.fall?.recover === false ? 0 : 1} recoverTime=${active.fall?.recoverTime ?? 0} source=active_hitdef`,
@@ -533,6 +540,12 @@ function evaluateHitEligibility(hitDef: NonNullable<PlayerState['activeHitDef']>
   if (hitDef.invalidParameters?.includes('attr')) return { accepted: false, reason: 'invalid_attr', targetClass };
   if (target.hitBy && !hitAttributeMatchesFilter(hitDef.attr, target.hitBy)) return { accepted: false, reason: 'attr_not_allowed', targetClass };
   if (target.notHitBy && hitAttributeMatchesFilter(hitDef.attr, target.notHitBy)) return { accepted: false, reason: 'attr_blocked', targetClass };
+  for (const slot of target.hitAttributeSlots ?? []) {
+    if (!slot || slot.time <= 0) continue;
+    const matches = hitAttributeMatchesFilter(hitDef.attr, slot.value);
+    if (slot.mode === 'allow' && !matches) return { accepted: false, reason: 'attr_not_allowed', targetClass };
+    if (slot.mode === 'deny' && matches) return { accepted: false, reason: 'attr_blocked', targetClass };
+  }
   return { accepted: true, reason: 'accepted', targetClass };
 }
 
@@ -743,7 +756,7 @@ function applyFallbackHit(
     animNo: selectedAnim,
     stateTime: 0,
     animTime: 0,
-    stateType: stateNo === AIR_HIT_SHAKE_STATE ? 'A' : 'S',
+    stateType: stateNo === 5080 ? 'L' : stateNo === AIR_HIT_SHAKE_STATE ? 'A' : 'S',
     moveType: 'H',
     physics: 'N',
     ctrl: false,
@@ -810,7 +823,7 @@ function createGetHitVarSnapshot(
   hitDef: NonNullable<PlayerState['activeHitDef']>,
   damage: number,
   hitTime: number,
-  hitTimeKind: 'ground' | 'air',
+  hitTimeKind: 'ground' | 'air' | 'down',
   selectedVelocity: { x: number; y: number },
 ): Record<string, number> {
   const animType = hitAnimTypeCode(hitTimeKind === 'air'
@@ -834,11 +847,11 @@ function createGetHitVarSnapshot(
     'fall.animtype': hitAnimTypeCode(hitDef.fallAnimType ?? hitDef.fall?.animType ?? hitDef.airAnimType ?? hitDef.animType ?? 'Light'),
     airtype: airType,
     groundtype: groundType,
-    fall: fall.enabled ? 1 : 0,
+    fall: hitTimeKind === 'down' && selectedVelocity.y !== 0 ? 1 : fall.enabled ? 1 : 0,
     'fall.damage': fall.damage ?? 0,
     'fall.kill': fall.kill === false ? 0 : 1,
     'fall.xvel': fall.xVelocity ?? 0,
-    'fall.yvel': fall.yVelocity ?? 0,
+    'fall.yvel': hitTimeKind === 'down' && selectedVelocity.y !== 0 && !hitDef.downBounce ? 0 : fall.yVelocity ?? -4.5,
     'fall.recover': fall.recover === false ? 0 : 1,
     'fall.recovertime': fall.recoverTime ?? 0,
     hitid: hitDef.hitId ?? 0,
@@ -850,6 +863,7 @@ function createGetHitVarSnapshot(
     'down.xvel': hitDef.downVelocity?.x ?? 0,
     'down.yvel': hitDef.downVelocity?.y ?? 0,
     'down.hittime': hitDef.downHitTime ?? 20,
+    'down.bounce': hitDef.downBounce ? 1 : 0,
   };
 }
 

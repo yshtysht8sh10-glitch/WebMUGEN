@@ -216,11 +216,11 @@ describe('air hit common-state integration', () => {
     expect(state.players[1]).toMatchObject({ stateNo: 0, stateType: 'S', moveType: 'I', ctrl: true, y: 285, vy: 0 });
   });
 
-  it('follows fall through State 5050 to down and uses down.hittime for getup', () => {
+  it('follows fall through State 5050 to down and uses data.liedown.time for getup', () => {
     const initial = createInitialGameState();
     let state: GameState = { ...initial, players: [initial.players[0], airHitPlayer(true, false)] };
     const visited = new Set<number>();
-    for (let frame = 0; frame < 80 && state.players[1].stateNo !== 5120; frame += 1) {
+    for (let frame = 0; frame < 160 && state.players[1].stateNo !== 5120; frame += 1) {
       state = tick(state, new Set(['recovery']));
       visited.add(state.players[1].stateNo);
     }

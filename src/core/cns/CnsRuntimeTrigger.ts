@@ -473,7 +473,7 @@ function normalizeExpression(expression: string): string {
 }
 
 function normalizeName(name: string): string {
-  return name.trim().toLowerCase().replace(/\s+/g, ' ');
+  return name.trim().toLowerCase().replace(/\s+/g, ' ').replace(/([a-z][a-z0-9.]*)\s+\(/g, '$1(');
 }
 
 function splitTopLevel(expression: string, operator: '&&' | '||'): string[] {

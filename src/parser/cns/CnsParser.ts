@@ -233,7 +233,7 @@ function splitCommaValues(valueText: string): string[] {
   }
 
   parts.push(current.trim());
-  return parts.filter((part) => part.length > 0);
+  return parts;
 }
 
 function parseSingleValue(valueText: string): string | number | boolean {

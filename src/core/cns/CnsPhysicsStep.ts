@@ -16,6 +16,10 @@ export function stepCnsPhysicsMotion(state: GameState, cns?: CnsDocument | null)
     clampPlayerAfterCnsPhysics(movedPlayers[1]),
   ] as [PlayerState, PlayerState];
 
+  const landedPlayers = [
+    applyCnsAirLandingState(clampedPlayers[0], clampedPlayers[1], cns),
+    applyCnsAirLandingState(clampedPlayers[1], clampedPlayers[0], cns),
+  ] as [PlayerState, PlayerState];
   return {
     ...state,
     frame: state.frame + 1,
@@ -27,10 +31,47 @@ export function stepCnsPhysicsMotion(state: GameState, cns?: CnsDocument | null)
       })),
     },
     players: [
-      applyCnsAirLandingState(clampedPlayers[0], clampedPlayers[1], cns),
-      applyCnsAirLandingState(clampedPlayers[1], clampedPlayers[0], cns),
+      applyCommonDownRecovery(landedPlayers[0], cns, state.players[0].hitPause > 0),
+      applyCommonDownRecovery(landedPlayers[1], cns, state.players[1].hitPause > 0),
     ],
   };
+}
+
+function applyCommonDownRecovery(player: PlayerState, cns: CnsDocument | null | undefined, wasHitPaused: boolean): PlayerState {
+  if (player.stateNo !== 5110) {
+    return player.lieDownElapsed === undefined && player.lieDownTime === undefined
+      ? player
+      : { ...player, lieDownElapsed: undefined, lieDownTime: undefined };
+  }
+
+  const lieDownTime = Math.max(0, Math.trunc(readCnsConst(cns, 'data.liedown.time')));
+  const lieDownElapsed = (player.lieDownElapsed ?? 0) + (wasHitPaused ? 0 : 1);
+  const timed = {
+    ...player,
+    lieDownElapsed,
+    lieDownTime,
+    hitDiagnosticLines: [
+      ...(player.hitDiagnosticLines ?? []),
+      `raw.down_clock target=p${player.id}`,
+      `  state=5110 elapsed=${lieDownElapsed} duration=${lieDownTime} remaining=${Math.max(0, lieDownTime - lieDownElapsed)} hitPause=${wasHitPaused ? 1 : 0} ko=${player.life <= 0 ? 1 : 0} result=${player.life <= 0 ? 'ko_hold' : lieDownElapsed >= lieDownTime ? 'getup' : wasHitPaused ? 'frozen' : 'advance'}`,
+    ],
+  };
+  if (player.life <= 0 || lieDownElapsed < lieDownTime) return timed;
+
+  const getupState = cns?.states.find((stateDef) => stateDef.stateNo === 5120);
+  if (!getupState) return timed;
+  return {
+    ...timed,
+    prevStateNo: 5110,
+    stateNo: 5120,
+    stateTime: 0,
+    stateType: toStateType(getupState.stateType) ?? 'L',
+    moveType: toMoveType(getupState.moveType) ?? 'I',
+    physics: toPhysics(getupState.physics) ?? 'N',
+    ctrl: getupState.ctrl ?? false,
+    lieDownElapsed: undefined,
+    lieDownTime: undefined,
+  } as PlayerState;
 }
 
 export function stepPlayerCnsPhysics(player: PlayerState, cns?: CnsDocument | null): PlayerState {
@@ -84,7 +125,7 @@ function clampPlayerAfterCnsPhysics(player: PlayerState): PlayerState {
     return player;
   }
 
-  if (player.stateType === 'A' && player.moveType === 'H') {
+  if ((player.stateType === 'A' || player.stateType === 'L') && player.moveType === 'H') {
     return player;
   }
 

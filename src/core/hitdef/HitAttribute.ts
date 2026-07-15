@@ -12,17 +12,20 @@ export function normalizeHitAttribute(stateType: string, attackTypes: readonly s
 
 export function parseHitAttributeFilter(value: string | undefined): { stateTypes: string; attackTypes: string[] } | null {
   if (!value) return null;
-  const parts = value.split(',').map((part) => part.trim().toUpperCase()).filter(Boolean);
-  if (parts.length < 2 || !/^[SCA]+$/.test(parts[0])) return null;
+  const parts = value.split(',').map((part) => part.trim().toUpperCase());
+  const stateTypes = parts[0] || 'SCA';
+  if (!/^[SCA]+$/.test(stateTypes)) return null;
   const attackTypes = parts.slice(1).filter((part) => /^[NSH][ATP]$/.test(part));
-  if (attackTypes.length === 0) return null;
-  return { stateTypes: parts[0], attackTypes };
+  if (parts.slice(1).some((part) => part && !/^[NSH][ATP]$/.test(part))) return null;
+  return { stateTypes, attackTypes };
 }
 
 export function hitAttributeMatchesFilter(attribute: ActiveHitDef['attr'], filterValue: string | undefined): boolean {
   if (!attribute) return false;
   const filter = parseHitAttributeFilter(filterValue);
-  return Boolean(filter && filter.stateTypes.includes(attribute.stateType) && attribute.attackTypes.some((type) => filter.attackTypes.includes(type)));
+  return Boolean(filter
+    && filter.stateTypes.includes(attribute.stateType)
+    && (filter.attackTypes.length === 0 || attribute.attackTypes.some((type) => filter.attackTypes.includes(type))));
 }
 
 export function hitDefAttrMatches(attribute: ActiveHitDef['attr'], requestedStateTypes: string, requestedAttackTypes: readonly string[]): boolean {

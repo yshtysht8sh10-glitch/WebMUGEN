@@ -202,7 +202,7 @@ While hit stun remains active, `raw.hitstun_tick` records independent elapsed/re
 
 `raw.gethitvar_snapshot` records the keys captured on contact and `unsupportedKeys` that will currently return safe defaults. The snapshot stays on the defender across get-hit State transitions and is cleared when recovery ends.
 
-For common fall States 5030-5050 and trip States 5070/5071, `raw.gethitvar_frame` also records MUGEN-relative position, velocity, yaccel, ground/landed/crossing flags, `fall.recover`, `fall.recovertime`, `CanRecover`, recovery input, and `GroundClamp`. `raw.gethit_changestate_eval` gives the exact controller index and result. A frozen fall frame emits `raw.fall_pause` with hitpause/pause reason, remaining time, and `clock=frozen`.
+For common fall/down States 5030-5120, `raw.gethitvar_frame` also records MUGEN-relative position, velocity, yaccel, ground/landed/crossing flags, `fall.recover`, `fall.recovertime`, `CanRecover`, recovery input, down/lie timers, Life/KO, and `GroundClamp`. `raw.gethit_changestate_eval` gives the exact controller index and result. A frozen fall/down frame emits `raw.fall_pause` with hitpause/pause reason, remaining time, and `clock=frozen`. `raw.down_clock` reports the independent `[Data] liedown.time` schedule and never substitutes `down.hittime` or StateTime.
 
 `raw.move_contact` records generation id, contact/hit/guard flags, hit count, target, and accepted result. This is the source used by hit-confirm Trigger routes rather than the former ActiveHitDef/boolean approximation.
 

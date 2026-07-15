@@ -115,6 +115,7 @@ export type ActiveHitDef = {
   };
   downVelocity?: { x: number; y: number };
   downHitTime?: number;
+  downBounce?: boolean;
 };
 
 export type PlayerState = {
@@ -162,6 +163,8 @@ export type PlayerState = {
   hitVelY?: number;
   hitFallVelocity?: { x: number; y: number };
   hitReactionElapsed?: number;
+  lieDownElapsed?: number;
+  lieDownTime?: number;
   juggle?: number;
   juggleMax?: number;
   juggleRemaining?: number;
@@ -169,6 +172,11 @@ export type PlayerState = {
   guardCrouchIntent?: boolean;
   hitBy?: string;
   notHitBy?: string;
+  hitAttributeSlots?: Array<{
+    mode: 'allow' | 'deny';
+    value: string;
+    time: number;
+  } | null>;
   stateOwnerId?: number;
   selfStateOwnerId?: number;
   moveContact?: {
@@ -189,7 +197,7 @@ export type PlayerState = {
   hitStun?: {
     activeHitDefId: number | null;
     selectedHitTime: number;
-    kind: 'ground' | 'air' | 'fallback';
+    kind: 'ground' | 'air' | 'down' | 'fallback';
     source: 'active_hitdef' | 'hardcoded';
     targetStateTypeAtHit: PlayerState['stateType'];
     fallbackReason?: string;
@@ -197,7 +205,7 @@ export type PlayerState = {
     lastStateNo: number;
     blockedEvents?: string[];
     selectedAnim?: number;
-    getHitVarYVelocitySource?: 'ground.velocity.y' | 'air.velocity.y';
+    getHitVarYVelocitySource?: 'ground.velocity.y' | 'air.velocity.y' | 'down.velocity.y';
     groundVelocityAtHit?: { x: number; y: number };
     airVelocityAtHit?: { x: number; y: number };
     fallYVelocityAtHit?: number;

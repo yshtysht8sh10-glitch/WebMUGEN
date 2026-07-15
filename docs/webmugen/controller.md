@@ -157,6 +157,8 @@ Guard contact snapshots Facing-relative `holdback`/`holddown` intent before coll
 
 Normal `kill`, guarded `guard.kill`, and common-State fall damage `fall.kill` are independent. A disabled kill flag clamps its applicable damage at one Life. HitDef fall damage and kill are stored in GetHitVar and consumed by the existing `HitFallDamage` controllers, rather than modifying `common1.cns`.
 
+Lying targets use the HitDef `down.velocity`, `down.hittime`, and `down.bounce` branch and enter common State 5080. `down.hittime` is slide/hit-stun time for a zero-Y lying hit; it is not a get-up timer. Omitted down velocity inherits air velocity. `HitFallSet` now mutates fall/value/xvel/yvel, and `HitBy`/`NotHitBy` use two independently timed WinMUGEN attribute slots, including the state-only and attack-only forms used by common State 5120.
+
 Explicit `getpower` and `givepower` hit/guard pairs apply once per accepted contact and clamp each gauge to that player's `powerMax`. Omitted values still lack the `mugen.cfg` multiplier defaults and are documented Partial. `numhits` adds to the defender combo/GetHitVar(hitcount), while attacker HitCount remains one per successful target contact.
 
 The matching ground/air/down/guard/airguard cornerpush value changes attacker X velocity only when the contacted target is at the existing fallback stage boundary; the value is converted by attacker Facing once. `snap` places the target at attacker position plus Facing-relative X and absolute Y offsets. `p1sprpriority` and `p2sprpriority` update the two runtime sprite priority fields on hit or guard; Canvas draws lower priority first and higher priority later. Camera-relative boundaries and projectile/effect layering remain Partial.

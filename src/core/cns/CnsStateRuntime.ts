@@ -141,7 +141,6 @@ const RECOGNIZED_NO_OP_CONTROLLERS = new Map<string, string>([
   ['gamemakeanim', 'GameMakeAnim'],
   ['gravity', 'Gravity'],
   ['hitdef', 'HitDef'],
-  ['hitfallset', 'HitFallSet'],
   ['hitoverride', 'HitOverride'],
   ['makedust', 'MakeDust'],
   ['movehitreset', 'MoveHitReset'],
@@ -285,6 +284,8 @@ function stepPlayer(
       input.hitDiagnostics !== false,
     ), trace), targetOperations };
   }
+
+  next = tickHitAttributeSlots(next);
 
   const stateDefBeforeNegative = findState(cns, next.stateNo);
   if (stateDefBeforeNegative) {
@@ -899,12 +900,13 @@ function executeController(
   if (type === 'angleadd') return withExtendedPlayer(player, { angle: readAngle(player) + (num(controller, 'value') ?? 0) }, 'AngleAdd');
   if (type === 'anglemul') return withExtendedPlayer(player, { angle: readAngle(player) * (num(controller, 'value') ?? 1) }, 'AngleMul');
   if (type === 'angleset') return withExtendedPlayer(player, { angle: num(controller, 'value') ?? 0 }, 'AngleSet');
-  if (type === 'hitby') return withExtendedPlayer(player, { hitBy: str(controller, 'value') ?? str(controller, 'attr') }, 'HitBy');
-  if (type === 'nothitby') return withExtendedPlayer(player, { notHitBy: str(controller, 'value') ?? str(controller, 'attr') }, 'NotHitBy');
+  if (type === 'hitby') return hitAttributeController(player, controller, 'allow', 'HitBy');
+  if (type === 'nothitby') return hitAttributeController(player, controller, 'deny', 'NotHitBy');
   if (type === 'hitdef') return activateHitDef(player, controller, input, commands, opponent);
   if (type === 'movehitreset') return withPlayer(resetMoveContact(player), true, 'MoveHitReset');
   if (type.startsWith('target')) return executeTargetController(player, opponent, controller, input, commands);
   if (type === 'hitfallvel') return hitFallVel(player);
+  if (type === 'hitfallset') return hitFallSet(player, controller, input, commands, opponent);
   if (type === 'hitvelset') return hitVelSet(player, controller);
   if (type === 'hitfalldamage') return hitFallDamage(player, controller);
   if (type === 'pause') return pauseController(player, opponent, controller, input, commands, false);
@@ -1179,6 +1181,24 @@ function addPower(player: PlayerState, controller: CnsStateController): Controll
   return withPlayer(appendPowerDiagnostic(next, `raw.power entity=p${player.id} source=controller type=PowerAdd before=${player.power} value=${value} after=${next.power} max=${next.powerMax}`), true, 'PowerAdd');
 }
 
+function hitFallSet(
+  player: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands: ReadonlySet<string> | undefined,
+  opponent: PlayerState,
+): ControllerResult {
+  const value = num(controller, 'value', player, input, commands, opponent) ?? -1;
+  const x = num(controller, 'xvel', player, input, commands, opponent);
+  const y = num(controller, 'yvel', player, input, commands, opponent);
+  const current = player.hitFallVelocity ?? { x: player.vx, y: player.vy };
+  return withPlayer({
+    ...player,
+    hitFall: value < 0 ? player.hitFall : value !== 0,
+    hitFallVelocity: x === null && y === null ? player.hitFallVelocity : { x: x ?? current.x, y: y ?? current.y },
+  }, true, 'HitFallSet');
+}
+
 function setPower(player: PlayerState, controller: CnsStateController): ControllerResult {
   const value = num(controller, 'value');
   if (value === null) return withPlayer(player, false, 'PowerSet');
@@ -1281,13 +1301,16 @@ function appendGetHitFrameDiagnostic(
   runtimeFrame: number,
   enabled: boolean,
 ): PlayerState {
-  if (!enabled || ![5000, 5001, 5010, 5011, 5020, 5030, 5035, 5040, 5050, 5070, 5071].includes(stateDef.stateNo)) return player;
+  if (!enabled || ![5000, 5001, 5010, 5011, 5020, 5030, 5035, 5040, 5050, 5070, 5071, 5080, 5081, 5100, 5101, 5110, 5120].includes(stateDef.stateNo)) return player;
   const hitStun = player.hitStun;
   const source = hitStun?.getHitVarYVelocitySource
-    ?? (hitStun?.targetStateTypeAtHit === 'A' ? 'air.velocity.y' : 'ground.velocity.y');
+    ?? (hitStun?.targetStateTypeAtHit === 'L' ? 'down.velocity.y' : hitStun?.targetStateTypeAtHit === 'A' ? 'air.velocity.y' : 'ground.velocity.y');
   const hitTimeValue = readGetHitDiagnosticValue(player, 'hittime');
   const selectedHitTime = hitStun?.selectedHitTime ?? (typeof hitTimeValue === 'number' ? hitTimeValue : 0);
   const hitElapsed = hitStun?.elapsed ?? player.hitReactionElapsed ?? player.stateTime;
+  const animElem = input.getAnimationTriggerInfo?.(player.animNo, player.animTime)?.elementNo
+    ?? input.getAnimationElementNo?.(player.animNo, player.animTime)
+    ?? '-';
   const routeLines = stateDef.controllers.flatMap((controller, controllerIndex) => {
     if (controller.type.toLowerCase() !== 'changestate') return [];
     const run = shouldRun(controller, player, input, commands, opponent);
@@ -1301,11 +1324,12 @@ function appendGetHitFrameDiagnostic(
     hitDiagnosticLines: [
       ...(player.hitDiagnosticLines ?? []),
       `raw.gethitvar_frame target=p${player.id}`,
-      `  frame=${runtimeFrame} entity=p${player.id} state=${player.stateNo} prevState=${(player as ExtendedPlayerState).prevStateNo ?? '-'} stateTime=${player.stateTime} anim=${player.animNo} animTime=${player.animTime} ctrl=${player.ctrl ? 1 : 0} stateType=${player.stateType} moveType=${player.moveType} physics=${player.physics}`,
-      `  pos=${player.x},${player.y - DEFAULT_GROUND_Y} vel=${player.vx},${player.vy} yaccel=${readGetHitDiagnosticValue(player, 'yaccel')} ground=${player.y >= DEFAULT_GROUND_Y ? 1 : 0} landed=${player.y >= DEFAULT_GROUND_Y && player.vy > 0 ? 1 : 0} crossing=${player.y >= DEFAULT_GROUND_Y && player.vy > 0 ? 1 : 0} GroundClamp=${player.stateType === 'A' && player.moveType === 'H' ? 'defer_common_gethit' : 'normal'}`,
+      `  frame=${runtimeFrame} entity=p${player.id} state=${player.stateNo} prevState=${(player as ExtendedPlayerState).prevStateNo ?? '-'} stateTime=${player.stateTime} anim=${player.animNo} animTime=${player.animTime} animElem=${animElem} ctrl=${player.ctrl ? 1 : 0} stateType=${player.stateType} moveType=${player.moveType} physics=${player.physics} life=${player.life} ko=${player.life <= 0 ? 1 : 0}`,
+      `  pos=${player.x},${player.y - DEFAULT_GROUND_Y} vel=${player.vx},${player.vy} yaccel=${readGetHitDiagnosticValue(player, 'yaccel')} ground=${player.y >= DEFAULT_GROUND_Y ? 1 : 0} landed=${player.y >= DEFAULT_GROUND_Y && player.vy > 0 ? 1 : 0} crossing=${player.y >= DEFAULT_GROUND_Y && player.vy > 0 ? 1 : 0} GroundClamp=${(player.stateType === 'A' || player.stateType === 'L') && player.moveType === 'H' ? 'defer_common_gethit' : 'normal'}`,
       `  activeHitDefId=${hitStun?.activeHitDefId ?? 'none'} hitStunElapsed=${hitStun?.elapsed ?? '-'} hitStunRemaining=${hitStun ? Math.max(0, hitStun.selectedHitTime - hitStun.elapsed) : '-'} hitPauseRemaining=${player.hitPause} hitShakeOver=${player.hitPause <= 0 ? 1 : 0} hitOver=${hitStun ? Number(hitStun.elapsed >= hitStun.selectedHitTime) : '-'}`,
       `  targetStateTypeAtHit=${hitStun?.targetStateTypeAtHit ?? '-'} animtype=${readGetHitDiagnosticValue(player, 'animtype')} air.animtype=${readGetHitDiagnosticValue(player, 'air.animtype')} fall.animtype=${readGetHitDiagnosticValue(player, 'fall.animtype')} groundtype=${readGetHitDiagnosticValue(player, 'groundtype')} airtype=${readGetHitDiagnosticValue(player, 'airtype')}`,
       `  hittime=${readGetHitDiagnosticValue(player, 'hittime')} yvel=${readGetHitDiagnosticValue(player, 'yvel')} yvelSource=${source} fall=${readGetHitDiagnosticValue(player, 'fall')} recover=${readGetHitDiagnosticValue(player, 'fall.recover')} recoverTime=${readGetHitDiagnosticValue(player, 'fall.recovertime')} CanRecover=${player.fallRecover !== false && hitElapsed >= (player.fallRecoverTime ?? 0) ? 1 : 0} recoveryInput=${commands?.has('recovery') ? 1 : 0} groundVelocityY=${hitStun?.groundVelocityAtHit?.y ?? '-'} airVelocityY=${hitStun?.airVelocityAtHit?.y ?? '-'} fallYVelocity=${hitStun?.fallYVelocityAtHit ?? readGetHitDiagnosticValue(player, 'fall.yvel')}`,
+      `  downHitTime=${readGetHitDiagnosticValue(player, 'down.hittime')} downHitRemaining=${Math.max(0, Number(readGetHitDiagnosticValue(player, 'down.hittime')) - hitElapsed) || 0} lieDownElapsed=${player.lieDownElapsed ?? '-'} lieDownTime=${player.lieDownTime ?? '-'} lieDownRemaining=${player.lieDownTime === undefined ? '-' : Math.max(0, player.lieDownTime - (player.lieDownElapsed ?? 0))}`,
       ...routeLines,
     ],
   };
@@ -1318,7 +1342,7 @@ function appendFallPauseDiagnostic(
   remaining: number,
   enabled: boolean,
 ): PlayerState {
-  if (!enabled || ![5030, 5035, 5040, 5050, 5070, 5071].includes(player.stateNo)) return player;
+  if (!enabled || ![5030, 5035, 5040, 5050, 5070, 5071, 5080, 5081, 5100, 5101, 5110, 5120].includes(player.stateNo)) return player;
   return {
     ...player,
     hitDiagnosticLines: [
@@ -1752,8 +1776,9 @@ function evaluateHitDefSnapshot(
     pauseTime: { attacker: Math.max(0, pause[0] ?? 4), defender: Math.max(0, pause[1] ?? 8) },
     groundVelocity: { x: groundVelocity[0] ?? -3.5, y: groundVelocity[1] ?? 0 },
     airVelocity: { x: airVelocity[0] ?? -2.5, y: airVelocity[1] ?? -5.5 },
-    downVelocity: { x: downVelocity[0] ?? 0, y: downVelocity[1] ?? 0 },
-    downHitTime: nonNegative(numValue('down.hittime')),
+    downVelocity: { x: downVelocity[0] ?? airVelocity[0] ?? -2.5, y: downVelocity[1] ?? airVelocity[1] ?? -5.5 },
+    downHitTime: nonNegative(numValue('down.hittime')) ?? 20,
+    downBounce: boolValue('down.bounce') ?? false,
     attr: normalizedAttr,
     airAnimType: textValue('air.animtype'),
     groundAnimTypeRaw: textValue('animtype'),
@@ -1953,6 +1978,30 @@ function varRandom(player: PlayerState, controller: CnsStateController): Control
 
 function withExtendedPlayer(player: PlayerState, patch: Partial<ExtendedPlayerState>, name: string): ControllerResult {
   return withPlayer({ ...player, ...patch } as PlayerState, true, name);
+}
+
+function hitAttributeController(
+  player: PlayerState,
+  controller: CnsStateController,
+  mode: 'allow' | 'deny',
+  name: 'HitBy' | 'NotHitBy',
+): ControllerResult {
+  const value2 = str(controller, 'value2');
+  const value = value2 ?? str(controller, 'value') ?? str(controller, 'attr');
+  if (value === null) return withPlayer(player, false, name);
+  const slot = value2 === null ? 0 : 1;
+  const slots = [...(player.hitAttributeSlots ?? [null, null])];
+  slots[slot] = { mode, value, time: Math.max(0, Math.trunc(num(controller, 'time') ?? 1)) };
+  return withPlayer({
+    ...player,
+    hitAttributeSlots: slots,
+  }, true, name);
+}
+
+function tickHitAttributeSlots(player: PlayerState): PlayerState {
+  if (!player.hitAttributeSlots?.some((slot) => slot && slot.time > 0)) return player;
+  const slots = player.hitAttributeSlots.map((slot) => slot && slot.time > 1 ? { ...slot, time: slot.time - 1 } : null);
+  return { ...player, hitAttributeSlots: slots };
 }
 
 function readAngle(player: PlayerState): number {

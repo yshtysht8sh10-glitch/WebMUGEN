@@ -47,6 +47,7 @@ function readDefaultConst(name: string): number {
   switch (name) {
     case 'data.life': return 1000;
     case 'data.power': return 3000;
+    case 'data.liedown.time': return 60;
     case 'size.xscale': return 1;
     case 'size.yscale': return 1;
     case 'size.ground.back': return 15;

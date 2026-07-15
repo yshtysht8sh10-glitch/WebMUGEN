@@ -21,16 +21,6 @@ export function applyFallbackHitRecovery(state: GameState, diagnosticsEnabled = 
 function recoverPlayer(player: PlayerState, diagnosticsEnabled: boolean): { player: PlayerState; diagnosticLines: string[] } {
   if (!player.hitStun && player.hitReactionElapsed !== undefined) {
     if (player.moveType === 'H' || player.stateType === 'A' || player.stateType === 'L') {
-      const downHitTime = player.getHitVars?.['down.hittime'];
-      if (player.stateType === 'L' && player.moveType === 'H' && downHitTime !== undefined && player.stateTime >= downHitTime) {
-        return {
-          player: { ...player, stateNo: 5120, stateTime: 0, moveType: 'I', ctrl: false },
-          diagnosticLines: diagnosticsEnabled ? [
-            `raw.hit_down target=p${player.id}`,
-            `  event=getup downHitTime=${downHitTime} state=5120 source=active_hitdef`,
-          ] : [],
-        };
-      }
       return { player: { ...player, hitReactionElapsed: player.hitReactionElapsed + 1 }, diagnosticLines: [] };
     }
     return { player: {

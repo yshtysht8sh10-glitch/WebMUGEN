@@ -84,6 +84,10 @@ Issue #60 audits the complete 5030 fall family against the unmodified common Sta
 
 `raw.gethitvar_frame` includes position/velocity, yaccel, ground crossing, fall/recover window, recovery input, and the ground-clamp decision for these States. `raw.gethit_changestate_eval` reports each ChangeState controller index and result. `raw.fall_pause` records hitpause or global pause frames with frozen state/animation clocks.
 
+Issue #61 separates lying-hit time from get-up time. A HitDef contacting `StateType = L` enters State 5080 and uses `down.velocity` plus `down.hittime`; nonzero Y launches through the 5090 animation and 5030, while zero Y slides through 5081. `down.bounce` decides whether a launched lying target receives one fall bounce. Omitted `down.velocity` inherits `air.velocity`.
+
+State 5110 get-up scheduling uses an independent counter loaded from the defender's `[Data] liedown.time`. It freezes during hitpause/Pause, does not depend on StateTime or `down.hittime`, and never schedules 5120 at zero Life. `raw.down_clock` exposes elapsed/duration/remaining and the advance/frozen/getup/ko_hold result.
+
 HitDef `pausetime = p1, p2` initializes separate attacker and defender counters. While a counter is positive, CNS controllers, position, velocity integration, StateTime, and AnimTime are frozen; the physics step decrements the counter once per game frame. A counter of zero resumes normally without an extra frozen frame. Input buffering remains active outside this per-player freeze. Match-level Pause/SuperPause is separate: it freezes non-moving players and round/hit stepping, permits only the controller owner for `movetime`, and uses a resume guard before normal CNS execution restarts.
 
 ## Movement debugging
