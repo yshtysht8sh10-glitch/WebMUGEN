@@ -17,10 +17,10 @@ describe('character-specific common jump profile', () => {
 
   it.each([
     ['neutral', [], 0, 0, -8.4],
-    ['forward', ['holdfwd'], 0, 2.5, -8.1],
-    ['back', ['holdback'], 0, -2.55, -8.1],
-    ['run forward', ['holdfwd'], 100, 4, -8.1],
-    ['run back', ['holdback'], 105, -3.5, -8.2],
+    ['forward', ['holdfwd'], 0, 2.5, -8.4],
+    ['back', ['holdback'], 0, -2.55, -8.4],
+    ['run forward', ['holdfwd'], 100, 4, -8.4],
+    ['run back', ['holdback'], 105, -2.55, -8.4],
   ] as const)('selects %s velocity from [Velocity]', (_name, commands, prevStateNo, expectedX, expectedY) => {
     for (const facing of [1, -1] as const) {
       const player = startJump(profile, commands, prevStateNo, facing);
@@ -100,7 +100,7 @@ runjump.back = ${values.runBack.join(',')}
 [Movement]
 yaccel = ${values.yAccel}
 `);
-  return mergeMissingCnsStates(mergeMissingCnsStates(character, commonCmd), commonCns);
+  return mergeMissingCnsStates(mergeMissingCnsStates(character, commonCns), commonCmd);
 }
 
 function startJump(profile: ReturnType<typeof createProfile>, commands: readonly string[], prevStateNo: number, facing: 1 | -1): PlayerState {

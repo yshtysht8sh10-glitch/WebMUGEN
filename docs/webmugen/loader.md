@@ -35,6 +35,7 @@ CNS runtime
 Rules:
 
 - `common1.cns` is loaded as an external file.
+- Character CNS/CMD StateDefs and the DEF-selected `stcommon` are merged first, followed by external `common1.cns`; WebMUGEN `common.cmd` routing is merged last. Positive State bodies therefore come from the character or `common1.cns`, never an identically numbered replacement in `common.cmd`.
 - Do not embed another copy of `common1.cns` in TypeScript.
 - Do not patch `common1.cns` for WebMUGEN convenience.
 - Runtime incompatibilities should be fixed in parser/runtime/trigger/controller/physics layers.
@@ -122,6 +123,7 @@ Loader tests should verify:
 - character routes are preserved;
 - common routes fill missing baseline behavior;
 - `common1.cns` states are available without modifying the file;
+- a DEF-selected `stcommon` State wins over `common1.cns`, and `common1.cns` wins over an identically numbered State in `common.cmd`;
 - State -1 merge keeps trigger/controller data intact.
 - DEF-relative and ZIP-relative SND paths load through `arrayBuffer`;
 - group/index lookup returns the original WAV bytes;

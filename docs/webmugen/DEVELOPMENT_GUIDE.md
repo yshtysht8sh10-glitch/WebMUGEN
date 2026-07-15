@@ -79,7 +79,7 @@ The loader must preserve ownership boundaries.
 | Character CNS | Primary state source. |
 | Character CMD | Primary command definitions and character-specific command routes. |
 | `/chars/common1.cns` | Load if present; merge only missing states/routes. Never replace with embedded CNS. |
-| `/chars/common.cmd` | Load if present; merge common command definitions/routes. Editable control surface. |
+| `/chars/common.cmd` | Load after `common1.cns`; merge common command definitions/routes without replacing character/common1 State bodies. Editable control surface. |
 | Embedded common CMD fallback | Allowed only when `/chars/common.cmd` is unavailable. Minimal safety net. |
 | Embedded common CNS fallback | Not allowed. |
 

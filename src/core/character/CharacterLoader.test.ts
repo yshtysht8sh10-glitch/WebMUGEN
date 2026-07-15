@@ -63,7 +63,7 @@ describe('CharacterLoader', () => {
 
     const character = await loadCharacterFromDef('/chars/demo/demo.def', createTextOnlyFetcher(textAssets));
 
-    expect(character.cns.states.map((state) => state.stateNo)).toEqual([0, 200, -1, 40]);
+    expect(character.cns.states.map((state) => state.stateNo)).toEqual([0, 200, 40, -1]);
     expect(character.cns.states.find((state) => state.stateNo === 40)?.sourceLabel).toBe('stcommon');
   });
 
@@ -99,6 +99,23 @@ describe('CharacterLoader', () => {
     expect(character.cmd.commands.map((command) => command.name)).toContain('holdup');
     expect(character.cns.states.map((state) => state.stateNo)).toEqual([0, -1, 40]);
     expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([40, 200]);
+  });
+
+  it('prefers common1 CNS State bodies over same-numbered common CMD states', async () => {
+    const textAssets = new Map<string, string>([
+      ['/chars/demo/demo.def', '[Files]\ncmd = demo.cmd\ncns = demo.cns\nanim = demo.air\n'],
+      ['/chars/demo/demo.cns', '[StateDef 0]\ntype = S\nanim = 0\n'],
+      ['/chars/demo/demo.air', 'Begin Action 0\n0,0, 0,0, 5\n'],
+      ['/chars/demo/demo.cmd', '[Command]\nname = "a"\ncommand = a\n'],
+      ['/chars/common.cmd', '[StateDef 40]\ntype = S\nanim = 999\n'],
+      ['/chars/common1.cns', '[StateDef 40]\ntype = S\nanim = 40\n'],
+    ]);
+
+    const character = await loadCharacterFromDef('/chars/demo/demo.def', createTextOnlyFetcher(textAssets));
+    const state40 = character.cns.states.find((state) => state.stateNo === 40);
+
+    expect(state40?.sourceLabel).toBe('common1.cns');
+    expect(state40?.initialAnim).toBe(40);
   });
 
   it('prefers character command routes over common command routes', async () => {

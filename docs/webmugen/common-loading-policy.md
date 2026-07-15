@@ -25,7 +25,7 @@ The character loader may merge files, but it must preserve ownership boundaries:
 | Character `.cns` | Character | Load as the primary state source. |
 | Character `.cmd` | Character | Load command definitions and character-specific `Statedef -1` routes. |
 | `/chars/common1.cns` | Project/user compatibility asset | Load if present and merge only states/routes missing from the character. Never replace with embedded CNS. |
-| `/chars/common.cmd` | WebMUGEN common control surface | Load if present and merge common command definitions/routes. This file may be changed to represent common WinMUGEN control logic. |
+| `/chars/common.cmd` | WebMUGEN common control surface | Load after `common1.cns` and merge common command definitions/routes. It must not replace same-numbered State bodies supplied by the character or `common1.cns`. |
 | Embedded common CMD fallback | Engine safety fallback | Use only when `/chars/common.cmd` is unavailable. Provides minimal routing only. |
 | Embedded common CNS fallback | Not allowed | Do not use. State definitions must come from character CNS or external `common1.cns`. |
 
@@ -42,6 +42,8 @@ The corrected model is stricter:
 1. State bodies come from character CNS or real `common1.cns`.
 2. Command routing can be supplemented by common CMD routes.
 3. Missing movement should be fixed by routing/evaluation/runtime behavior, not by replacing `common1.cns`.
+
+The merge priority is `character CNS/CMD -> DEF stcommon -> common1.cns -> common.cmd`. `common.cmd` may define routing States such as `-1` and `-2` when they do not replace a State body in `common1.cns`; it must not duplicate positive common StateDefs such as State 40.
 
 ## Common CMD Routing Policy
 
@@ -121,6 +123,7 @@ As of this policy:
 - `CharacterLoader` no longer embeds replacement common CNS text.
 - `CharacterLoader` still provides embedded baseline common CMD text when `/chars/common.cmd` is missing.
 - `public/chars/common.cmd` is editable and should be the preferred place to expose common WinMUGEN-like routing logic.
+- `common1.cns` is merged before `common.cmd`, and `common.cmd` contains no duplicate positive State body such as State 40.
 - `mergeMissingCnsStates` keeps character-owned states first and appends missing common states only when absent.
 - Common command controllers are inserted before character modifier routes so baseline movement remains reachable.
 - Direction-only character routes can still override baseline direction routes.

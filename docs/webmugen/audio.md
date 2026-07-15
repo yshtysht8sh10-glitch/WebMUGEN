@@ -75,6 +75,8 @@ SndPan evaluates `channel` and `pan`/`abspan` on the firing frame. Relative `pan
 
 Issue #37 verifies real PlaySnd sample resolution for KFM, T-H-M-A, and Yes030_e-rada, real T-H-M-A StopSnd presence, bundled T-H-M-A ZIP SND loading, and cleanup of 240 channel-less voices through one adapter. SndPan has no occurrence in that set, so its focused production tests remain the evidence and its status stays Partial.
 
+The CharacterLoader merge order preserves a DEF-selected character `stcommon` before external `common1.cns`, then merges WebMUGEN `common.cmd` routing last. `common.cmd` no longer defines a replacement State 40. Bundled T-H-M-A therefore retains its `Time = 1` `PlaySnd S40,0` controller, and a production loader/runtime regression resolves that real SND sample.
+
 Issue #44 adds the persistent user master controls described above. This is an application safety/output multiplier after MUGEN sound semantics, so it does not increase the PlaySnd Matrix percentage or change controller compatibility claims.
 
 ## Test expectations

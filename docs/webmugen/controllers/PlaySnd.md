@@ -8,6 +8,8 @@
 
 The CNS runtime evaluates parameters on every firing frame and emits an owner-scoped event. The app resolves the owner's character SND and plays it through the shared Browser Audio runtime.
 
+Character loading gives DEF-selected `stcommon` StateDefs precedence over external `common1.cns`, while `common.cmd` remains a routing layer rather than a replacement State-body source. This is regression-tested with bundled T-H-M-A State 40, whose `Time = 1` controller emits character sample `S40,0` during jump startup.
+
 Issue #54 connects `AnimElem` to AIR element starts instead of global animation time. Repeating AIR loops therefore re-emit PlaySnd events at each configured element start; bundled T-H-M-A State 101 is covered for `AnimElem = 1` and `AnimElem = 4` across multiple loops. No dash-specific timer, State number, or SND number is hard-coded in the runtime.
 
 ## Supported syntax

@@ -173,23 +173,24 @@ export async function loadCharacterFromDef(
     parseCnsText(cnsText, { sourceFile: primaryCnsPath }),
     ...extraCnsTexts.map((entry) => parseCnsText(entry.text, { sourceFile: entry.path })),
   ];
-  const characterCns = commonCmdCnsDocuments.reduce(
-    (merged, commonCmdCns) => mergeMissingCnsStates(merged, commonCmdCns),
-    annotateCnsDocument(
-      mergeCnsDocuments(
-        mergeManyCnsDocuments(characterCnsDocuments),
-        parseCnsText(cmdText, { sourceFile: cmdPath }),
-      ),
-      'character',
-      'character',
+  const characterCns = annotateCnsDocument(
+    mergeCnsDocuments(
+      mergeManyCnsDocuments(characterCnsDocuments),
+      parseCnsText(cmdText, { sourceFile: cmdPath }),
     ),
+    'character',
+    'character',
   );
   const withCharacterCommonCns = characterCommonCnsText
     ? mergeMissingCnsStates(characterCns, annotateCnsDocument(parseCnsText(characterCommonCnsText, { sourceFile: characterCommonCnsPath ?? 'stcommon' }), 'character', 'stcommon'))
     : characterCns;
-  const cns = commonCnsText
+  const withCommonCns = commonCnsText
     ? mergeMissingCnsStates(withCharacterCommonCns, annotateCnsDocument(parseCnsText(commonCnsText, { sourceFile: COMMON_CNS_PATH }), 'common', 'common1.cns'))
     : withCharacterCommonCns;
+  const cns = commonCmdCnsDocuments.reduce(
+    (merged, commonCmdCns) => mergeMissingCnsStates(merged, commonCmdCns),
+    withCommonCns,
+  );
   const cnsSourceFiles: CharacterSourceFile[] = [
     { path: defPath, label: shortSourceLabel(defPath), text: defText, kind: 'def' },
     { path: primaryCnsPath, label: shortSourceLabel(primaryCnsPath), text: cnsText, kind: 'cns' },

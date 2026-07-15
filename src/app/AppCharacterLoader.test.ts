@@ -212,11 +212,11 @@ describe('AppCharacterLoader', () => {
         getAnimationDuration: (animNo) => getAnimationDuration(character!.air, animNo),
       });
       const jumpVelocityController = character!.cns.states.find((candidate) => candidate.stateNo === 40)?.controllers.find((controller) => controller.type.toLowerCase() === 'velset' && controller.params.y !== undefined);
-      expect(jumpVelocityController?.params.y).toContain('const(velocity.jump.fwd.y)');
+      expect(jumpVelocityController?.params.y).toContain('const(velocity.jump.y)');
       expect(character!.cns.states.find((candidate) => candidate.stateNo === 50)?.velocitySet).toBeUndefined();
       expect(readNumberExpression(String(jumpVelocityController!.params.y), { player: state.players[0], constants: character!.cns })).toBe(-9.1);
       expect(readNumberExpression(String(jumpVelocityController!.params.y), { player: { ...state.players[0], sysVars: { 1: 1 }, prevStateNo: 0 }, constants: character!.cns })).toBe(-9.1);
-      expect(delayedDirectional.state.players[0]).toMatchObject({ stateNo: 50, vx: 3.57, vy: -9.1 });
+      expect(delayedDirectional.state.players[0]).toMatchObject({ stateNo: 50, vx: 3.4, vy: -6.4 });
     } finally {
       globalThis.fetch = originalFetch;
     }
