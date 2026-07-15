@@ -129,6 +129,9 @@ export type PlayerState = {
     groundBack: number;
     airFront: number;
     airBack: number;
+    height?: number;
+    xScale?: number;
+    yScale?: number;
   };
   life: number;
   power?: number;

@@ -4,6 +4,40 @@ import { createInitialGameState } from '../engine/GameState';
 import { stepCnsPhysicsMotion } from './CnsPhysicsStep';
 import { stepCnsStateRuntime } from './CnsStateRuntime';
 
+describe('CnsStateRuntime Size constants', () => {
+  it('carries push dimensions and scale into PlayerState without pre-scaling them', () => {
+    const cns = parseCnsText(`
+[Size]
+ground.front = 20
+ground.back = 10
+air.front = 7
+air.back = 5
+height = 50
+xscale = 2
+yscale = 1.5
+
+[StateDef 0]
+type = S
+movetype = I
+physics = S
+anim = 0
+ctrl = 1
+`);
+
+    const result = stepCnsStateRuntime(createInitialGameState(), cns, {});
+
+    expect(result.state.players[0].collisionWidth).toEqual({
+      groundFront: 20,
+      groundBack: 10,
+      airFront: 7,
+      airBack: 5,
+      height: 50,
+      xScale: 2,
+      yScale: 1.5,
+    });
+  });
+});
+
 describe('CnsStateRuntime AnimTime', () => {
   it('faces the opponent when entering a StateDef with facep2', () => {
     const cns = parseCnsText(`

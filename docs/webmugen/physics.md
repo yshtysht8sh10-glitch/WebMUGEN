@@ -109,11 +109,11 @@ Focused trajectory tests record apex, airtime, and landing frame for two distinc
 
 ## Player push
 
-Fallback stage push uses a simple rectangular push box centered on each player's `x`, extending 22 units to either side and 80 units upward from the player's `y` position. Horizontal separation is applied only when both the horizontal and vertical ranges overlap. This preserves ground contact push while allowing an airborne player whose box has cleared the opponent vertically to cross over and change sides.
+Issue #57 removes the fixed 44x80 normal path. The runtime carries `[Size]` `ground.front/back`, `air.front/back`, `height`, `xscale`, and `yscale` into `PlayerState` as raw character constants. The push solver selects the ground or air pair from the current state, applies scale once, and maps front/back through the current Facing. When no CNS constants have reached a synthetic or legacy state, the documented WinMUGEN default Size values are used instead of the old generic rectangle.
 
-`PlayerPush = 0` disables separation for the frame in which the controller executes; it returns to enabled on the next CNS frame unless another `PlayerPush = 0` executes. Facing is updated from the players' horizontal order before separation, so a completed aerial cross-over faces both players toward each other. Vertical non-overlap skips push only when at least one player is airborne; two grounded players retain horizontal push.
+Horizontal separation is applied only when both Size rectangles overlap vertically and horizontally. `PlayerPush = 0` disables separation for the frame in which the controller executes; it returns to enabled on the next CNS frame unless another `PlayerPush = 0` executes. Grounded players automatically face the opponent. Airborne players preserve Facing through a cross-over; Facing changes on the landing path or through explicit `Turn`/`facep2` behavior.
 
-This remains Partial compatibility: the fixed box is a generic fallback and does not yet derive its bounds from character Width data or the current AIR `Clsn2` boxes.
+This remains Partial compatibility because dynamic `Width` controller overrides, camera-relative stage bounds, and broader multi-entity push behavior still need integration. `raw.push` records both resolved boxes, their Size source, overlap and skip/apply result; `raw.cross` records airborne status and Facing changes. Canvas debug draws the same resolved push rectangle in blue.
 
 ## HitDef cornerpush and snap
 

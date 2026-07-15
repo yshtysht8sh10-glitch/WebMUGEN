@@ -128,6 +128,7 @@ function readButtons(buttons: PlayerInput['buttons']): string[] {
 }
 
 function faceOpponent(player: PlayerState, opponent: PlayerState): PlayerState {
+  if (player.stateType === 'A' || player.physics === 'A') return player;
   return {
     ...player,
     facing: player.x <= opponent.x ? 1 : -1,

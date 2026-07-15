@@ -7,6 +7,7 @@ import {
 import type { GameState, PlayerState, ProjectileState, Rect } from '../../core/engine/types';
 import { getAttackBox, getBodyBox, isAttackActive } from '../../core/engine/SimpleCollision';
 import { getProjectileWorldBox } from '../../core/projectile/ProjectileSystem';
+import { buildPushBox } from '../../core/engine/FallbackStageRules';
 import { findSprite, spriteKey } from '../../core/sprite/SpritePackLoader';
 import type { SpritePack } from '../../core/sprite/SpriteTypes';
 import type { ImageDataSpritePack } from '../../core/sprite/ImageDataSpriteTypes';
@@ -366,6 +367,16 @@ export class CanvasRenderer {
   }
 
   private drawDebugBoxes(ctx: CanvasRenderingContext2D, player: PlayerState): void {
+    const pushBox = buildPushBox(player);
+    this.strokeRect(ctx, {
+      x: pushBox.left,
+      y: pushBox.top,
+      width: pushBox.right - pushBox.left,
+      height: pushBox.bottom - pushBox.top,
+    }, '#00bfff');
+    ctx.fillStyle = '#00bfff';
+    ctx.font = '9px monospace';
+    ctx.fillText(`push ${pushBox.mode} ${pushBox.source}`, pushBox.left, pushBox.top - 2);
     if (this.airDocument) {
       getPlayerBodyBoxes(player, this.airDocument).forEach((box) =>
         this.strokeCollisionRect(ctx, box, '#00ff00'),

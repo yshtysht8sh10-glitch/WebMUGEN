@@ -156,6 +156,8 @@ part of the copied AI runtime dump used for Issue #55 user verification.
 
 Canvas collision debug uses the same AIR world-coordinate boxes as the hit resolver. Labels identify attack/body kind, box index, default versus element source, animation number, and current element index; boundaries include player position, facing, and AIR element offsets.
 
+Issue #57 adds a blue Push Box using the same `[Size]`-derived rectangle as the stage solver. `raw.push` exposes owner, ground/air mode, character/default source, resolved edges, front/back/height, overlap, `PlayerPush`, and apply/skip result. `raw.cross` exposes airborne state plus Facing before/after so an unintended air auto-turn is visible in the copied runtime history.
+
 ## Minimum useful dump
 
 A useful dump includes:

@@ -34,7 +34,7 @@ Use **Fallback** for an implementation that produces some behavior using a diffe
 
 Examples:
 
-- fixed 44x80 push boxes instead of Width/AIR collision-derived boxes;
+- a generic fixed push rectangle instead of character Size/Width-derived boxes;
 - a TypeScript recovery shortcut instead of the normal common-state/GetHitVar flow;
 - a separate Explod, Helper, or Projectile prototype that is not connected to the CNS Controller runtime.
 
@@ -119,7 +119,7 @@ The HTML contains an override map for rows whose status cannot be inferred safel
 Use explicit overrides for:
 
 - major aggregate features such as HitDef;
-- known Fallback implementations such as fixed-box PlayerPush;
+- known Fallback implementations such as a push solver that ignores character Size/Width;
 - features with prepared Issues such as Explod/Sound Controllers;
 - rows whose progress depends on multiple subsystems or Issues;
 - entries where old notes use `Partial` for a safe no-op or placeholder.

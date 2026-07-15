@@ -49,7 +49,7 @@ ctrl = 1
       },
     );
 
-    expect(Math.abs(next.players[1].x - next.players[0].x)).toBeGreaterThanOrEqual(44);
+    expect(Math.abs(next.players[1].x - next.players[0].x)).toBeGreaterThanOrEqual(32);
   });
 
   it('honors PlayerPush = 0 during stage separation', () => {
@@ -105,6 +105,38 @@ value = 0
 
     expect(next.players[0].playerPush).toBe(true);
     expect(next.players[1].playerPush).toBe(true);
-    expect(Math.abs(next.players[1].x - next.players[0].x)).toBeGreaterThanOrEqual(44);
+    expect(Math.abs(next.players[1].x - next.players[0].x)).toBeGreaterThanOrEqual(32);
+  });
+
+  it('keeps airborne facing after the players cross', () => {
+    const airCns = parseCnsText(`
+[Size]
+air.front = 7
+air.back = 5
+height = 50
+xscale = 2
+
+[StateDef 50]
+type = A
+movetype = I
+physics = A
+anim = 0
+ctrl = 0
+`);
+    const state = createInitialGameState();
+    const next = stepGameByCns(
+      {
+        ...state,
+        players: [
+          { ...state.players[0], stateNo: 50, stateType: 'A', physics: 'A', x: 340, y: 180, facing: 1 },
+          { ...state.players[1], stateNo: 50, stateType: 'A', physics: 'A', x: 300, y: 180, facing: -1 },
+        ],
+      },
+      airCns,
+      { p1: { left: false, right: false, up: false, down: false, attack: false } },
+    );
+
+    expect(next.players[0].facing).toBe(1);
+    expect(next.players[1].facing).toBe(-1);
   });
 });
