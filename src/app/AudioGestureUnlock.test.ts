@@ -5,9 +5,10 @@ import { installAudioGestureUnlock } from './AudioGestureUnlock';
 describe('app audio gesture unlock lifecycle', () => {
   it('shares the first key/pointer unlock, removes both listeners on success, and does not depend on runtime tabs', async () => {
     let resolveResume!: () => void;
-    const resume = vi.fn(() => new Promise<void>((resolve) => { resolveResume = resolve; }));
+    let state = 'suspended';
+    const resume = vi.fn(() => new Promise<void>((resolve) => { resolveResume = () => { state = 'running'; resolve(); }; }));
     const runtime = new BrowserAudioRuntime((): AudioAdapter => ({
-      state: 'suspended', resume,
+      get state() { return state; }, resume,
       async decode() { return {}; },
       play() { return { stop() {} }; },
       setMasterGain() {},
@@ -33,11 +34,12 @@ describe('app audio gesture unlock lifecycle', () => {
   });
 
   it('keeps listeners for a rejected resume retry and suppresses stale status after cleanup', async () => {
+    let state = 'suspended';
     const resume = vi.fn()
       .mockRejectedValueOnce(new Error('gesture rejected'))
-      .mockResolvedValueOnce(undefined);
+      .mockImplementationOnce(async () => { state = 'running'; });
     const runtime = new BrowserAudioRuntime((): AudioAdapter => ({
-      state: 'suspended', resume,
+      get state() { return state; }, resume,
       async decode() { return {}; },
       play() { return { stop() {} }; },
       setMasterGain() {},
@@ -62,7 +64,42 @@ describe('app audio gesture unlock lifecycle', () => {
     expect(target.listenerCount('keydown')).toBe(0);
     expect(target.listenerCount('pointerdown')).toBe(0);
   });
+
+  it('survives a StrictMode-style mount, cleanup, and remount with a fresh runtime', async () => {
+    const target = new FakeGestureTarget();
+    const first = createGestureRuntime();
+    const firstCleanup = installAudioGestureUnlock(target, first.runtime, first.onStatus);
+    firstCleanup();
+    await first.runtime.cleanup();
+
+    const second = createGestureRuntime();
+    const secondCleanup = installAudioGestureUnlock(target, second.runtime, second.onStatus);
+    target.dispatch('keydown');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(first.statuses).toEqual([]);
+    expect(first.resume).not.toHaveBeenCalled();
+    expect(second.statuses).toEqual(['unlocked']);
+    expect(second.resume).toHaveBeenCalledTimes(1);
+    expect(target.listenerCount('keydown')).toBe(0);
+    secondCleanup();
+  });
 });
+
+function createGestureRuntime() {
+  let state = 'suspended';
+  const resume = vi.fn(async () => { state = 'running'; });
+  const statuses: string[] = [];
+  const runtime = new BrowserAudioRuntime((): AudioAdapter => ({
+    get state() { return state; }, resume,
+    async decode() { return {}; },
+    play() { return { stop() {} }; },
+    setMasterGain() {},
+    async close() {},
+  }));
+  return { runtime, resume, statuses, onStatus: (status: string) => statuses.push(status) };
+}
 
 class FakeGestureTarget {
   private readonly listeners = new Map<string, Set<EventListener>>();

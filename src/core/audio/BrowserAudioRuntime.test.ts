@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { BrowserAudioRuntime, createWebAudioAdapter, type AudioAdapter, type AudioPlaybackHandle } from './BrowserAudioRuntime';
+import { BrowserAudioRuntime, createWebAudioAdapter, formatAudioRuntimeDiagnostic, type AudioAdapter, type AudioPlaybackHandle, type AudioRuntimeDiagnostic } from './BrowserAudioRuntime';
 
 describe('BrowserAudioRuntime', () => {
   it('creates one adapter, unlocks once, caches decode by sample key, and plays after unlock', async () => {
@@ -34,6 +34,7 @@ describe('BrowserAudioRuntime', () => {
     expect(fake.resume).toHaveBeenCalledTimes(1);
     expect(fake.play).not.toHaveBeenCalled();
 
+    fake.setState('running');
     resolveResume();
     await expect(firstUnlock).resolves.toBe(true);
     await expect(secondUnlock).resolves.toBe(true);
@@ -73,6 +74,72 @@ describe('BrowserAudioRuntime', () => {
     await expect(playback).resolves.toBe(false);
     expect(runtime.status).toBe('closed');
     expect(fake.play).not.toHaveBeenCalled();
+  });
+
+  it('keeps a resolved-but-suspended context locked and retries on the next gesture', async () => {
+    const diagnostics: AudioRuntimeDiagnostic[] = [];
+    const fake = createFakeAdapter();
+    fake.resume.mockResolvedValue(undefined);
+    const runtime = new BrowserAudioRuntime(() => fake.adapter, (item) => diagnostics.push(item));
+
+    await expect(runtime.unlock('keydown')).resolves.toBe(false);
+    expect(runtime.status).toBe('locked');
+    expect(diagnostics[diagnostics.length - 1]).toMatchObject({
+      code: 'audio_locked',
+      userGestureType: 'keydown',
+      contextStateAfterResume: 'suspended',
+      runtimeUnlockedFlag: false,
+    });
+
+    fake.resume.mockImplementationOnce(async () => { fake.setState('running'); });
+    await expect(runtime.unlock('pointerdown')).resolves.toBe(true);
+    expect(fake.resume).toHaveBeenCalledTimes(2);
+    expect(runtime.status).toBe('unlocked');
+  });
+
+  it('gives first mount, StrictMode remount, and fresh reload runtimes distinct lifecycle identities', async () => {
+    const diagnostics: AudioRuntimeDiagnostic[] = [];
+    const firstFake = createFakeAdapter();
+    const first = new BrowserAudioRuntime(() => firstFake.adapter, (item) => diagnostics.push(item));
+    await first.unlock('keydown');
+    await first.cleanup();
+
+    const remountFake = createFakeAdapter();
+    const remount = new BrowserAudioRuntime(() => remountFake.adapter, (item) => diagnostics.push(item));
+    await remount.unlock('keydown');
+    await remount.cleanup();
+
+    const reloadFake = createFakeAdapter();
+    const reload = new BrowserAudioRuntime(() => reloadFake.adapter, (item) => diagnostics.push(item));
+    await reload.unlock('keydown');
+
+    const created = diagnostics.filter((item) => item.code === 'audio_runtime_created');
+    expect(new Set(created.map((item) => item.runtimeInstanceId)).size).toBe(3);
+    expect(diagnostics.filter((item) => item.code === 'audio_cleanup_started')).toHaveLength(2);
+    expect(diagnostics.filter((item) => item.code === 'audio_context_closed')).toHaveLength(2);
+  });
+
+  it('records muted, zero-volume, decode, source start, and closed-runtime rejection details', async () => {
+    const diagnostics: AudioRuntimeDiagnostic[] = [];
+    const fake = createFakeAdapter();
+    const runtime = new BrowserAudioRuntime(() => fake.adapter, (item) => diagnostics.push(item));
+    runtime.setMuted(true);
+    runtime.setMasterVolume(0);
+    await runtime.unlock('keydown');
+    await expect(runtime.playSample('known:1,0', new Uint8Array([1]))).resolves.toBe(true);
+
+    expect(diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'audio_play_sample_started', sampleKey: 'known:1,0', muted: true, masterVolume: 0 }),
+      expect.objectContaining({ code: 'audio_decode_started', sampleKey: 'known:1,0' }),
+      expect.objectContaining({ code: 'audio_decode_completed', sampleKey: 'known:1,0' }),
+      expect.objectContaining({ code: 'audio_source_started', sampleKey: 'known:1,0' }),
+      expect.objectContaining({ code: 'playback_started', sampleKey: 'known:1,0' }),
+    ]));
+
+    await runtime.cleanup();
+    await expect(runtime.playSample('known:1,0', new Uint8Array([1]))).resolves.toBe(false);
+    expect(diagnostics[diagnostics.length - 1]).toMatchObject({ code: 'audio_playback_rejected', runtimeStatus: 'closed' });
+    expect(formatAudioRuntimeDiagnostic(diagnostics[diagnostics.length - 1]!)).toContain('runtimeStatus=closed');
   });
 
   it('applies mute/master gain and stops/cleans up active sources', async () => {
@@ -225,7 +292,8 @@ describe('BrowserAudioRuntime', () => {
 
 function createFakeAdapter(supportsPan = true) {
   const stop = vi.fn();
-  const resume = vi.fn(async () => {});
+  let state = 'suspended';
+  const resume = vi.fn(async () => { state = 'running'; });
   const decode = vi.fn(async () => ({ decoded: true }));
   const endedCallbacks: Array<() => void> = [];
   const pans: number[] = [];
@@ -237,11 +305,11 @@ function createFakeAdapter(supportsPan = true) {
   const close = vi.fn(async () => {});
   const gains: number[] = [];
   const adapter: AudioAdapter = {
-    state: 'suspended', resume, decode, play,
+    get state() { return state; }, resume, decode, play,
     setMasterGain(value) { gains.push(value); },
     close,
   };
-  return { adapter, stop, resume, decode, play, close, gains, endedCallbacks, pans };
+  return { adapter, stop, resume, decode, play, close, gains, endedCallbacks, pans, setState(value: string) { state = value; } };
 }
 
 function createFakeWebAudioGraph() {

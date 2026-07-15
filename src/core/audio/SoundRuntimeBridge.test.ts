@@ -24,24 +24,28 @@ describe('shared Sound runtime bridge', () => {
     ], character, common, runtime);
     await Promise.resolve();
     await Promise.resolve();
-    expect(lines).toEqual([
-      expect.stringContaining('scope=character sample=1,2'),
-      expect.stringContaining('scope=common sample=F5,6'),
-    ]);
+    expect(lines).toEqual(expect.arrayContaining([
+      expect.stringContaining('raw.sound_runtime_event type=play'),
+      expect.stringContaining('raw.sound_lookup owner=1 scope=character sample=1,2 result=found'),
+      expect.stringContaining('raw.sound_play owner=1 scope=character sample=1,2'),
+      expect.stringContaining('raw.sound_lookup owner=1 scope=common sample=F5,6 result=found'),
+      expect.stringContaining('raw.sound_play owner=1 scope=common sample=F5,6'),
+    ]));
     expect(played).toHaveLength(2);
   });
 
   it('diagnoses missing common assets and locked audio safely', () => {
-    expect(processSoundRuntimeEvents([playEvent('common', 5, 6)], null, null, null)[0]).toContain('reason=common_sound_unavailable');
-    expect(processSoundRuntimeEvents([playEvent('character', 1, 2)], soundDocument([[1, 2]]), null, null)[0]).toContain('reason=audio_locked');
+    expect(processSoundRuntimeEvents([playEvent('common', 5, 6)], null, null, null).join('\n')).toContain('reason=common_sound_unavailable');
+    expect(processSoundRuntimeEvents([playEvent('character', 1, 2)], soundDocument([[1, 2]]), null, null).join('\n')).toContain('reason=audio_locked');
   });
 
   it('retains PlaySnd and HitDef sound requests while the first gesture unlock is pending', async () => {
     let resolveResume!: () => void;
+    let state = 'suspended';
     const played: unknown[] = [];
-    const resume = vi.fn(() => new Promise<void>((resolve) => { resolveResume = resolve; }));
+    const resume = vi.fn(() => new Promise<void>((resolve) => { resolveResume = () => { state = 'running'; resolve(); }; }));
     const runtime = new BrowserAudioRuntime((): AudioAdapter => ({
-      state: 'suspended',
+      get state() { return state; },
       resume,
       async decode(bytes) { return bytes.byteLength; },
       play(decoded): AudioPlaybackHandle { played.push(decoded); return { stop() {} }; },
@@ -54,7 +58,7 @@ describe('shared Sound runtime bridge', () => {
       playEvent('character', 3, 4),
     ], soundDocument([[1, 2], [3, 4]]), null, runtime);
 
-    expect(lines).toEqual([
+    expect(lines.filter((line) => line.startsWith('raw.sound_play '))).toEqual([
       expect.stringContaining('sample=1,2'),
       expect.stringContaining('sample=3,4'),
     ]);

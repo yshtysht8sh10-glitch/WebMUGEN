@@ -1,18 +1,47 @@
 export type AudioRuntimeDiagnosticCode =
+  | 'audio_runtime_created'
+  | 'audio_context_created'
   | 'audio_unsupported'
   | 'audio_unlock_requested'
+  | 'audio_resume_requested'
+  | 'audio_resume_resolved'
+  | 'audio_resume_rejected'
   | 'audio_locked'
   | 'audio_unlocked'
+  | 'audio_play_sample_started'
+  | 'audio_playback_rejected'
+  | 'audio_decode_started'
+  | 'audio_decode_completed'
   | 'decode_failed'
+  | 'audio_source_started'
   | 'playback_started'
   | 'playback_stopped'
+  | 'audio_cleanup_started'
+  | 'audio_context_close_requested'
+  | 'audio_context_closed'
+  | 'audio_context_close_rejected'
   | 'audio_closed';
 
 export type AudioRuntimeDiagnostic = {
   code: AudioRuntimeDiagnosticCode;
   message: string;
+  runtimeInstanceId: number;
   sampleKey?: string;
+  userGestureType?: string;
+  contextCreated?: boolean;
+  contextState?: string;
+  contextStateBeforeResume?: string;
+  contextStateAfterResume?: string;
+  resumeRequested?: boolean;
+  resumeResolved?: boolean;
+  resumeRejected?: boolean;
+  runtimeUnlockedFlag?: boolean;
+  runtimeStatus?: BrowserAudioRuntime['status'];
+  muted?: boolean;
+  masterVolume?: number;
 };
+
+type AudioRuntimeDiagnosticDetails = Omit<Partial<AudioRuntimeDiagnostic>, 'code' | 'message' | 'runtimeInstanceId'>;
 
 export type AudioPlaybackOptions = {
   loop?: boolean;
@@ -41,7 +70,33 @@ export interface AudioAdapter {
 
 export type AudioAdapterFactory = () => AudioAdapter | null;
 
+let nextRuntimeInstanceId = 1;
+
+export function formatAudioRuntimeDiagnostic(diagnostic: AudioRuntimeDiagnostic): string {
+  const fields: Array<[string, string | number | boolean | undefined]> = [
+    ['runtimeInstanceId', diagnostic.runtimeInstanceId],
+    ['contextCreated', diagnostic.contextCreated],
+    ['userGestureType', diagnostic.userGestureType],
+    ['contextStateBeforeResume', diagnostic.contextStateBeforeResume],
+    ['resumeRequested', diagnostic.resumeRequested],
+    ['resumeResolved', diagnostic.resumeResolved],
+    ['resumeRejected', diagnostic.resumeRejected],
+    ['contextStateAfterResume', diagnostic.contextStateAfterResume],
+    ['runtimeUnlockedFlag', diagnostic.runtimeUnlockedFlag],
+    ['runtimeStatus', diagnostic.runtimeStatus],
+    ['contextState', diagnostic.contextState],
+    ['muted', diagnostic.muted],
+    ['masterVolume', diagnostic.masterVolume],
+    ['sampleKey', diagnostic.sampleKey],
+  ];
+  return `raw.audio code=${diagnostic.code} ${fields
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => `${key}=${typeof value === 'boolean' ? (value ? 1 : 0) : value}`)
+    .join(' ')}`.trimEnd();
+}
+
 export class BrowserAudioRuntime {
+  readonly runtimeInstanceId = nextRuntimeInstanceId++;
   private adapter: AudioAdapter | null | undefined;
   private readonly decodeCache = new Map<string, Promise<unknown>>();
   private readonly activeHandles = new Set<AudioPlaybackHandle>();
@@ -56,7 +111,9 @@ export class BrowserAudioRuntime {
   constructor(
     private readonly createAdapter: AudioAdapterFactory = createWebAudioAdapter,
     private readonly onDiagnostic: (diagnostic: AudioRuntimeDiagnostic) => void = () => {},
-  ) {}
+  ) {
+    this.emit('audio_runtime_created', 'BrowserAudioRuntime instance created.', { contextCreated: false });
+  }
 
   get status(): 'locked' | 'unlocked' | 'unsupported' | 'closed' {
     if (this.closed) return 'closed';
@@ -69,15 +126,32 @@ export class BrowserAudioRuntime {
     return this.unlockPromise !== null;
   }
 
+  get contextState(): string {
+    return this.adapter?.state ?? (this.adapter === null ? 'unsupported' : 'not_created');
+  }
+
+  get isMuted(): boolean {
+    return this.muted;
+  }
+
+  get masterVolumeValue(): number {
+    return this.masterVolume;
+  }
+
   unlock(userGestureType = 'manual'): Promise<boolean> {
     if (this.closed) return Promise.resolve(false);
     if (this.unlocked) return Promise.resolve(true);
     if (this.unlockPromise) return this.unlockPromise;
     const adapter = this.ensureAdapter();
     if (!adapter) return Promise.resolve(false);
-    this.emit('audio_unlock_requested', `AudioContext unlock requested by ${userGestureType}; state=${adapter.state}.`);
+    const contextStateBeforeResume = adapter.state;
+    this.emit('audio_unlock_requested', `AudioContext unlock requested by ${userGestureType}; state=${adapter.state}.`, {
+      userGestureType,
+      contextStateBeforeResume,
+      resumeRequested: adapter.state !== 'running',
+    });
     if (adapter.state === 'running') {
-      this.finishUnlock();
+      this.finishUnlock(userGestureType, contextStateBeforeResume);
       return Promise.resolve(true);
     }
     const attempt = this.resumeAdapter(adapter, this.lifecycleRevision, userGestureType);
@@ -89,30 +163,73 @@ export class BrowserAudioRuntime {
   }
 
   private async resumeAdapter(adapter: AudioAdapter, lifecycleRevision: number, userGestureType: string): Promise<boolean> {
+    const contextStateBeforeResume = adapter.state;
+    this.emit('audio_resume_requested', `AudioContext resume() called for ${userGestureType}.`, {
+      userGestureType,
+      contextStateBeforeResume,
+      resumeRequested: true,
+    });
     try {
       await adapter.resume();
       if (this.closed || this.lifecycleRevision !== lifecycleRevision || this.adapter !== adapter) return false;
-      this.finishUnlock();
+      const contextStateAfterResume = adapter.state;
+      this.emit('audio_resume_resolved', `AudioContext resume() resolved; state=${contextStateAfterResume}.`, {
+        userGestureType,
+        contextStateBeforeResume,
+        contextStateAfterResume,
+        resumeRequested: true,
+        resumeResolved: true,
+      });
+      if (contextStateAfterResume !== 'running') {
+        this.emit('audio_locked', `AudioContext resume() resolved without reaching running; state=${contextStateAfterResume}.`, {
+          userGestureType,
+          contextStateBeforeResume,
+          contextStateAfterResume,
+          resumeRequested: true,
+          resumeResolved: true,
+        });
+        return false;
+      }
+      this.finishUnlock(userGestureType, contextStateBeforeResume);
       return true;
     } catch (error) {
-      this.emit('audio_locked', errorMessage(`AudioContext resume failed for ${userGestureType}`, error));
+      const contextStateAfterResume = adapter.state;
+      const details = { userGestureType, contextStateBeforeResume, contextStateAfterResume, resumeRequested: true, resumeRejected: true };
+      this.emit('audio_resume_rejected', errorMessage(`AudioContext resume failed for ${userGestureType}`, error), details);
+      this.emit('audio_locked', errorMessage(`AudioContext resume failed for ${userGestureType}`, error), details);
       return false;
     }
   }
 
-  private finishUnlock(): void {
+  private finishUnlock(userGestureType: string, contextStateBeforeResume: string): void {
     this.unlocked = true;
     this.applyMasterGain();
-    this.emit('audio_unlocked', 'AudioContext resumed after a user gesture.');
+    this.emit('audio_unlocked', 'AudioContext is running after a user gesture.', {
+      userGestureType,
+      contextStateBeforeResume,
+      contextStateAfterResume: this.adapter?.state,
+    });
   }
 
   async playSample(sampleKey: string, bytes: Uint8Array, options: AudioPlaybackOptions = {}): Promise<boolean> {
+    this.emit('audio_play_sample_started', 'Audio sample playback request entered the runtime.', { sampleKey });
+    if (this.closed) {
+      this.emit('audio_playback_rejected', 'Playback rejected because the audio runtime was cleaned up.', { sampleKey });
+      return false;
+    }
     const pendingUnlock = this.unlockPromise;
-    if (pendingUnlock && !await pendingUnlock) return false;
+    if (pendingUnlock && !await pendingUnlock) {
+      this.emit('audio_playback_rejected', 'Playback rejected because the pending unlock did not reach running.', { sampleKey });
+      return false;
+    }
     const adapter = this.ensureAdapter();
-    if (!adapter) return false;
+    if (!adapter) {
+      this.emit('audio_playback_rejected', 'Playback rejected because Web Audio is unavailable.', { sampleKey });
+      return false;
+    }
     if (!this.unlocked && adapter.state !== 'running') {
-      this.emit('audio_locked', 'Playback rejected until AudioContext is unlocked.', sampleKey);
+      this.emit('audio_locked', 'Playback rejected until AudioContext is unlocked.', { sampleKey });
+      this.emit('audio_playback_rejected', 'Playback rejected until AudioContext is unlocked.', { sampleKey });
       return false;
     }
 
@@ -120,10 +237,16 @@ export class BrowserAudioRuntime {
       let decoded = this.decodeCache.get(sampleKey);
       if (!decoded) {
         const copy = bytes.slice().buffer;
+        this.emit('audio_decode_started', 'Audio sample decode started.', { sampleKey });
         decoded = adapter.decode(copy);
         this.decodeCache.set(sampleKey, decoded);
+        void decoded.then(
+          () => this.emit('audio_decode_completed', 'Audio sample decode completed.', { sampleKey }),
+          () => {},
+        );
       }
       const handle = adapter.play(await decoded, options);
+      this.emit('audio_source_started', 'Audio adapter executed source.start().', { sampleKey });
       if (options.channelKey) {
         const previous = this.channelHandles.get(options.channelKey);
         if (previous) {
@@ -134,11 +257,11 @@ export class BrowserAudioRuntime {
       }
       this.activeHandles.add(handle);
       handle.setOnEnded?.(() => this.releaseHandle(handle, options.channelKey));
-      this.emit('playback_started', 'Audio sample playback started.', sampleKey);
+      this.emit('playback_started', 'Audio sample playback started.', { sampleKey });
       return true;
     } catch (error) {
       this.decodeCache.delete(sampleKey);
-      this.emit('decode_failed', errorMessage('Audio sample decode/playback failed', error), sampleKey);
+      this.emit('decode_failed', errorMessage('Audio sample decode/playback failed', error), { sampleKey });
       return false;
     }
   }
@@ -177,12 +300,29 @@ export class BrowserAudioRuntime {
   }
 
   async cleanup(): Promise<void> {
+    if (this.closed) return;
+    this.emit('audio_cleanup_started', 'Audio runtime cleanup started.');
     this.closed = true;
     this.lifecycleRevision += 1;
     this.unlockPromise = null;
     this.stopAll();
     this.decodeCache.clear();
-    if (this.adapter) await this.adapter.close();
+    if (this.adapter) {
+      const contextStateBeforeResume = this.adapter.state;
+      this.emit('audio_context_close_requested', 'AudioContext close() called.', { contextStateBeforeResume });
+      try {
+        await this.adapter.close();
+        this.emit('audio_context_closed', 'AudioContext close() resolved.', {
+          contextStateBeforeResume,
+          contextStateAfterResume: this.adapter.state,
+        });
+      } catch (error) {
+        this.emit('audio_context_close_rejected', errorMessage('AudioContext close() failed', error), {
+          contextStateBeforeResume,
+          contextStateAfterResume: this.adapter.state,
+        });
+      }
+    }
     this.adapter = undefined;
     this.unlocked = false;
     this.emit('audio_closed', 'Audio runtime resources were released.');
@@ -192,7 +332,8 @@ export class BrowserAudioRuntime {
     if (this.closed) return null;
     if (this.adapter === undefined) {
       this.adapter = this.createAdapter();
-      if (!this.adapter) this.emit('audio_unsupported', 'Web Audio API is unavailable.');
+      if (!this.adapter) this.emit('audio_unsupported', 'Web Audio API is unavailable.', { contextCreated: false });
+      else this.emit('audio_context_created', `AudioContext created; state=${this.adapter.state}.`, { contextCreated: true });
     }
     return this.adapter;
   }
@@ -206,8 +347,18 @@ export class BrowserAudioRuntime {
     if (channelKey && this.channelHandles.get(channelKey) === handle) this.channelHandles.delete(channelKey);
   }
 
-  private emit(code: AudioRuntimeDiagnosticCode, message: string, sampleKey?: string): void {
-    this.onDiagnostic({ code, message, ...(sampleKey ? { sampleKey } : {}) });
+  private emit(code: AudioRuntimeDiagnosticCode, message: string, details: AudioRuntimeDiagnosticDetails = {}): void {
+    this.onDiagnostic({
+      code,
+      message,
+      runtimeInstanceId: this.runtimeInstanceId,
+      contextState: this.contextState,
+      runtimeUnlockedFlag: this.unlocked,
+      runtimeStatus: this.status,
+      muted: this.muted,
+      masterVolume: this.masterVolume,
+      ...details,
+    });
   }
 }
 

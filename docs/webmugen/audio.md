@@ -19,7 +19,7 @@ The runtime provides:
 
 React re-renders do not create another context. The app-level effect owns the runtime for the component lifetime. Character reload and round restart stop active sources; component unmount stops sources, clears decoded data, and closes the context.
 
-Issue #51 closes the first-gesture race between browser unlock and the next game frame. Concurrent `pointerdown` / `keydown` unlock requests now share one in-flight `resume()` attempt. A PlaySnd or HitDef sound emitted while that gesture's resume is pending waits for the same bounded Promise and starts after a successful unlock; sound emitted before any gesture is still rejected instead of being accumulated. Resume rejection clears the pending attempt so the next gesture can retry. Cleanup invalidates an in-flight attempt, so an old adapter cannot unlock or play after unmount. Runtime tab changes are not part of this lifecycle.
+Issue #51 closes the first-gesture race between browser unlock and the next game frame. Concurrent `pointerdown` / `keydown` unlock requests now share one in-flight `resume()` attempt. A PlaySnd or HitDef sound emitted while that gesture's resume is pending waits for the same bounded Promise and starts after a successful unlock; sound emitted before any gesture is still rejected instead of being accumulated. A resolved `resume()` is successful only when the adapter subsequently reports `running`. A resolved-but-still-`suspended` context remains locked, clears the pending attempt, and can retry on the next gesture. Cleanup invalidates an in-flight attempt, so an old adapter cannot unlock or play after unmount. Runtime tab changes are not part of this lifecycle.
 
 The Settings Audio panel exposes current status, an explicit unlock action, a keyboard-operable 0-100 master slider with current percentage, mute, and play/stop/pan test actions for the first loaded WAV sample. The safe first-run default is 50%. Volume and mute are stored under `webmugen.audioSettings.v1`; missing, malformed, old-shaped, out-of-range, inaccessible, and quota-blocked storage falls back without disabling the game. SSR/test execution without `localStorage` uses the same default.
 
@@ -29,17 +29,33 @@ The audio graph is `individual Sound gain -> channel StereoPanner when supported
 
 Current diagnostic codes are:
 
+- `audio_runtime_created`
+- `audio_context_created`
 - `audio_unsupported`
 - `audio_unlock_requested`
+- `audio_resume_requested`
+- `audio_resume_resolved`
+- `audio_resume_rejected`
 - `audio_locked`
 - `audio_unlocked`
+- `audio_play_sample_started`
+- `audio_playback_rejected`
+- `audio_decode_started`
+- `audio_decode_completed`
 - `decode_failed`
+- `audio_source_started`
 - `playback_started`
 - `playback_stopped`
+- `audio_cleanup_started`
+- `audio_context_close_requested`
+- `audio_context_closed`
+- `audio_context_close_rejected`
 - `audio_closed`
 
 Autoplay/resume rejection is `audio_locked`, not a character load failure. Missing SND lookup is reported by the caller as `sound_asset_missing`.
-`audio_unlock_requested` records the gesture type and adapter state before `resume()`; it distinguishes a received first gesture from a missing listener or a rejected resume.
+Every `raw.audio` line includes `runtimeInstanceId`, runtime/context state, unlocked flag, mute, and master volume. Unlock lines additionally record gesture type, before/after state, and requested/resolved/rejected flags. Playback lines cover runtime entry, decode start/completion/failure, adapter `source.start()`, and final `playback_started`. `raw.audio_lifecycle` preserves mount, React effect cleanup, and character-path `stopAll` records across the character-history reset, so StrictMode remount and F5-created fresh runtimes can be distinguished without switching debug tabs.
+
+`raw.sound_runtime_event` proves SoundRuntimeEvent generation and `raw.sound_lookup` proves the selected SND scope/sample lookup before `raw.sound_play` or `raw.sound_play_rejected`. Focused tests use a known in-memory WAV sample rather than State 230 collision, whose current `clsn1_missing` rejection cannot prove the HitDef sound path.
 
 ## Compatibility boundary
 

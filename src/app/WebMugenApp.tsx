@@ -6,7 +6,7 @@ import { createSampleCharacterAssets, loadAppCharacter } from './AppCharacterLoa
 import type { CharacterSourceFile } from '../core/character/CharacterTypes';
 import type { SndDocument } from '../parser/snd/SndTypes';
 import { sndSampleKey } from '../parser/snd/SndTypes';
-import { BrowserAudioRuntime, type AudioRuntimeDiagnostic } from '../core/audio/BrowserAudioRuntime';
+import { BrowserAudioRuntime, formatAudioRuntimeDiagnostic, type AudioRuntimeDiagnostic } from '../core/audio/BrowserAudioRuntime';
 import { installAudioGestureUnlock } from './AudioGestureUnlock';
 import type { SoundRuntimeEvent } from '../core/audio/SoundEvent';
 import { processSoundRuntimeEvents } from '../core/audio/SoundRuntimeBridge';
@@ -167,6 +167,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
   const lastFrameTickTimeRef = useRef<number | null>(null);
   const frameNoRef = useRef(0);
   const runtimeHistoryRef = useRef<string[]>([]);
+  const audioLifecycleHistoryRef = useRef<string[]>([]);
   const readableEntryStoreRef = useRef<Map<string, ReadableRuntimeEntry>>(new Map());
   const readableIndexStoreRef = useRef<RuntimeLogIndexEntry[]>([]);
   const nextRuntimeLogEntryIdRef = useRef(1);
@@ -233,19 +234,35 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
     }, RUNTIME_HISTORY_RENDER_THROTTLE_MS);
   };
 
+  const recordAudioHistory = (line: string) => {
+    const entry = [
+      `===== AI_RUNTIME frame=${frameNoRef.current} timestamp=${new Date().toISOString()} source=audio =====`,
+      line,
+    ];
+    audioLifecycleHistoryRef.current = [...entry, ...audioLifecycleHistoryRef.current].slice(0, 400);
+    runtimeHistoryRef.current = limitRuntimeHistoryEntries(
+      [...entry, ...runtimeHistoryRef.current],
+      'ai',
+      RUNTIME_HISTORY_STORE_LIMIT,
+    );
+    scheduleRuntimeHistoryRender();
+  };
+
   useEffect(() => {
     let active = true;
     const runtime = new BrowserAudioRuntime(undefined, (diagnostic: AudioRuntimeDiagnostic) => {
-      if (!active) return;
-      setAudioDiagnostic(`audio ${diagnostic.code}${diagnostic.sampleKey ? ` sample=${diagnostic.sampleKey}` : ''} ${diagnostic.message}`);
+      recordAudioHistory(formatAudioRuntimeDiagnostic(diagnostic));
+      if (active) setAudioDiagnostic(`audio ${diagnostic.code}${diagnostic.sampleKey ? ` sample=${diagnostic.sampleKey}` : ''} ${diagnostic.message}`);
     });
     runtime.setMasterVolume(audioSettingsRef.current.masterVolumePercent / 100);
     runtime.setMuted(audioSettingsRef.current.muted);
     audioRuntimeRef.current = runtime;
+    recordAudioHistory(`raw.audio_lifecycle event=mount runtimeInstanceId=${runtime.runtimeInstanceId}`);
 
     const removeUnlockListeners = installAudioGestureUnlock(window, runtime, setAudioStatus);
 
     return () => {
+      recordAudioHistory(`raw.audio_lifecycle event=react_effect_cleanup runtimeInstanceId=${runtime.runtimeInstanceId}`);
       active = false;
       removeUnlockListeners();
       void runtime.cleanup();
@@ -266,7 +283,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
       roundStateRef.current = createInitialRoundState(runtimeSettingsRef.current.roundTime);
       roundScoreRef.current = createInitialRoundScore();
       cnsTraceRef.current = [];
-      runtimeHistoryRef.current = [];
+      runtimeHistoryRef.current = [...audioLifecycleHistoryRef.current];
       readableEntryStoreRef.current = new Map();
       readableIndexStoreRef.current = [];
       nextRuntimeLogEntryIdRef.current = 1;
@@ -290,7 +307,9 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
       setSelectedCnsSource(null);
       setLoadedAir(null);
       setLoadedSprites(null);
-      audioRuntimeRef.current?.stopAll();
+      const audioRuntime = audioRuntimeRef.current;
+      recordAudioHistory(`raw.audio_lifecycle event=character_path_effect_stop_all runtimeInstanceId=${audioRuntime?.runtimeInstanceId ?? '-'} characterPath=${characterPath}`);
+      audioRuntime?.stopAll();
       characterSoundsRef.current = null;
       setStateTransitionLogLines(['StateNoが変化すると、ここに遷移だけが残ります。']);
 
@@ -626,6 +645,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
 
   const clearRuntimeLogs = () => {
     runtimeHistoryRef.current = [];
+    audioLifecycleHistoryRef.current = [];
     clearReadableRuntimeLogStores({
       indexStore: readableIndexStoreRef.current,
       entryStore: readableEntryStoreRef.current,
