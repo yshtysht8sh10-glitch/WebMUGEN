@@ -1,71 +1,94 @@
-import type { PlayerState } from '../engine/types';
+import type { CnsDocument } from '../../mugen/common/cnsTypes';
+import type { HelperEntity, HelperRuntimeState, PlayerState } from '../engine/types';
 
-export type HelperEntity = {
-  id: number;
-  ownerId: 1 | 2;
+export type HelperSpawnRequest = {
+  helperId: number;
+  rootEntityId: 1 | 2;
+  parentEntityId: number;
+  ownerCharacterId: 1 | 2;
+  stateOwnerId: 1 | 2;
+  animationOwnerId: 1 | 2;
   stateNo: number;
   x: number;
   y: number;
   facing: 1 | -1;
-  lifeTime: number | null;
+  keyCtrl: boolean;
+  ownPal: boolean;
+  spawnFrame: number;
+  parent: PlayerState;
 };
 
-export type HelperState = {
-  helpers: HelperEntity[];
-  nextHelperId: number;
-};
-
-export function createInitialHelperState(): HelperState {
-  return {
-    helpers: [],
-    nextHelperId: 1,
-  };
+export function createInitialHelperState(): HelperRuntimeState {
+  return { entries: [], nextEntityId: 3 };
 }
 
-export function spawnHelper(
-  state: HelperState,
-  owner: PlayerState,
-  ownerId: 1 | 2,
-  input: { id?: number; stateNo: number; x?: number; y?: number; lifeTime?: number | null },
-): HelperState {
-  const id = input.id ?? state.nextHelperId;
-
-  return {
-    helpers: [
-      ...state.helpers,
-      {
-        id,
-        ownerId,
-        stateNo: input.stateNo,
-        x: owner.x + (input.x ?? 0),
-        y: owner.y + (input.y ?? 0),
-        facing: owner.facing,
-        lifeTime: input.lifeTime ?? null,
-      },
-    ],
-    nextHelperId: Math.max(state.nextHelperId, id + 1),
+export function spawnHelper(state: HelperRuntimeState, request: HelperSpawnRequest, cns?: CnsDocument | null): HelperRuntimeState {
+  const stateDef = cns?.states.find((candidate) => candidate.stateNo === request.stateNo);
+  const player: PlayerState = {
+    ...request.parent,
+    id: request.rootEntityId,
+    x: request.x,
+    y: request.y,
+    vx: stateDef?.velocitySet?.x ? stateDef.velocitySet.x * request.facing : 0,
+    vy: stateDef?.velocitySet?.y ?? 0,
+    facing: request.facing,
+    stateNo: request.stateNo,
+    prevStateNo: request.stateNo,
+    stateTime: 0,
+    stateType: normalizeStateType(stateDef?.stateType) ?? 'S',
+    moveType: normalizeMoveType(stateDef?.moveType) ?? 'I',
+    physics: normalizePhysics(stateDef?.physics) ?? 'N',
+    ctrl: stateDef?.ctrl ?? false,
+    animNo: stateDef?.initialAnim ?? request.stateNo,
+    animTime: 0,
+    hitPause: 0,
+    activeHitDef: null,
+    hitDefUsed: false,
+    hitTargets: [],
+    targets: [],
+    moveContact: undefined,
+    stateOwnerId: request.stateOwnerId,
+    selfStateOwnerId: request.ownerCharacterId,
+    vars: {},
+    fvars: {},
+    sysVars: {},
+    hitDiagnosticLines: [],
+  } as PlayerState;
+  const entity: HelperEntity = {
+    entityId: state.nextEntityId,
+    helperId: request.helperId,
+    rootEntityId: request.rootEntityId,
+    parentEntityId: request.parentEntityId,
+    ownerCharacterId: request.ownerCharacterId,
+    stateOwnerId: request.stateOwnerId,
+    animationOwnerId: request.animationOwnerId,
+    keyCtrl: request.keyCtrl,
+    ownPal: request.ownPal,
+    spawnFrame: request.spawnFrame,
+    player,
   };
+  return { entries: [...state.entries, entity], nextEntityId: state.nextEntityId + 1 };
 }
 
-export function destroyHelper(state: HelperState, id: number): HelperState {
-  return {
-    ...state,
-    helpers: state.helpers.filter((helper) => helper.id !== id),
-  };
+export function destroyHelper(state: HelperRuntimeState, entityId: number): HelperRuntimeState {
+  return { ...state, entries: state.entries.filter((helper) => helper.entityId !== entityId) };
 }
 
-export function countHelpers(state: HelperState, ownerId?: 1 | 2): number {
-  return ownerId ? state.helpers.filter((helper) => helper.ownerId === ownerId).length : state.helpers.length;
+export function countHelpers(state: HelperRuntimeState, rootEntityId: 1 | 2, helperId?: number): number {
+  return state.entries.filter((helper) => helper.rootEntityId === rootEntityId && (helperId === undefined || helper.helperId === helperId)).length;
 }
 
-export function stepHelpers(state: HelperState): HelperState {
-  return {
-    ...state,
-    helpers: state.helpers
-      .map((helper) => ({
-        ...helper,
-        lifeTime: helper.lifeTime === null ? null : Math.max(0, helper.lifeTime - 1),
-      }))
-      .filter((helper) => helper.lifeTime === null || helper.lifeTime > 0),
-  };
+function normalizeStateType(value: string | null | undefined): PlayerState['stateType'] | null {
+  const normalized = value?.trim().toUpperCase();
+  return normalized === 'S' || normalized === 'C' || normalized === 'A' || normalized === 'L' ? normalized : null;
+}
+
+function normalizeMoveType(value: string | null | undefined): PlayerState['moveType'] | null {
+  const normalized = value?.trim().toUpperCase();
+  return normalized === 'I' || normalized === 'A' || normalized === 'H' ? normalized : null;
+}
+
+function normalizePhysics(value: string | null | undefined): PlayerState['physics'] | null {
+  const normalized = value?.trim().toUpperCase();
+  return normalized === 'S' || normalized === 'C' || normalized === 'A' || normalized === 'N' ? normalized : null;
 }

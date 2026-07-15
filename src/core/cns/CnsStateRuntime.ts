@@ -23,6 +23,15 @@ import {
 } from '../explod/ExplodSystem';
 import { addPlayerPower, setPlayerPower } from '../power/PowerGauge';
 import type { AnimationTriggerInfo } from '../animation/AnimationPlayer';
+import { countHelpers, createInitialHelperState, destroyHelper, spawnHelper, type HelperSpawnRequest } from '../helper/HelperSystem';
+
+type RuntimeEntityContext = {
+  kind: 'root' | 'helper';
+  entityId: number;
+  rootEntityId: 1 | 2;
+  parentEntityId: number | null;
+  ownerCharacterId: 1 | 2;
+};
 
 export type CnsRuntimeTrace = {
   playerId: 1 | 2;
@@ -36,6 +45,7 @@ export type CnsRuntimeTrace = {
   stateFound: boolean;
   executedControllers: string[];
   debugLines: string[];
+  entityId?: number;
 };
 
 export type CnsRuntimeInput = {
@@ -56,7 +66,12 @@ export type CnsRuntimeInput = {
   onPause?: (event: PauseControllerEvent) => void;
   pauseState?: PauseState;
   screenWidth?: number;
+  gameTime?: number;
   constants?: CnsDocument;
+  entityContext?: RuntimeEntityContext;
+  numHelper?: (helperId?: number) => number;
+  onHelperSpawn?: (request: HelperSpawnRequest) => void;
+  onHelperDestroy?: (entityId: number) => void;
 };
 
 export type CnsRuntimeResult = { state: GameState; traces: CnsRuntimeTrace[] };
@@ -118,7 +133,6 @@ const RECOGNIZED_NO_OP_CONTROLLERS = new Map<string, string>([
   ['bindtotarget', 'BindToTarget'],
   ['changeanim2', 'ChangeAnim2'],
   ['clearclipboard', 'ClearClipboard'],
-  ['destroyself', 'DestroySelf'],
   ['displaytoclipboard', 'DisplayToClipboard'],
   ['envcolor', 'EnvColor'],
   ['envshake', 'EnvShake'],
@@ -126,7 +140,6 @@ const RECOGNIZED_NO_OP_CONTROLLERS = new Map<string, string>([
   ['forcefeedback', 'ForceFeedback'],
   ['gamemakeanim', 'GameMakeAnim'],
   ['gravity', 'Gravity'],
-  ['helper', 'Helper'],
   ['hitdef', 'HitDef'],
   ['hitfallset', 'HitFallSet'],
   ['hitoverride', 'HitOverride'],
@@ -148,13 +161,60 @@ const EMPTY_CNS_DOCUMENT: CnsDocument = { states: [], metadataSections: [] };
 export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, input: CnsRuntimeInput = {}): CnsRuntimeResult {
   if (!cns) return { state, traces: [missingTrace(1, state.players[0], input), missingTrace(2, state.players[1], input)] };
 
+  const initialHelpers = state.helpers ?? createInitialHelperState();
+  const pendingSpawns: HelperSpawnRequest[] = [];
+  const pendingDestroys = new Set<number>();
+  const helperInput = (context: RuntimeEntityContext): CnsRuntimeInput => ({
+    ...input,
+    gameTime: state.frame,
+    entityContext: context,
+    numHelper: (helperId) => countHelpers(initialHelpers, context.rootEntityId, helperId),
+    onHelperSpawn: (request) => pendingSpawns.push(request),
+    onHelperDestroy: (entityId) => pendingDestroys.add(entityId),
+  });
   const p1Cns = resolvePlayerCns(state.players[0], cns, input);
   const p2Cns = resolvePlayerCns(state.players[1], cns, input);
-  const p1 = stepPlayer(state.players[0], state.players[1], 1, p1Cns, { ...input, constants: p1Cns }, input.p1Commands, state.frame);
-  const p2 = stepPlayer(state.players[1], state.players[0], 2, p2Cns, { ...input, constants: p2Cns }, input.p2Commands, state.frame);
+  const p1Context: RuntimeEntityContext = { kind: 'root', entityId: 1, rootEntityId: 1, parentEntityId: null, ownerCharacterId: 1 };
+  const p2Context: RuntimeEntityContext = { kind: 'root', entityId: 2, rootEntityId: 2, parentEntityId: null, ownerCharacterId: 2 };
+  const p1 = stepPlayer(state.players[0], state.players[1], 1, p1Cns, { ...helperInput(p1Context), constants: p1Cns }, input.p1Commands, state.frame);
+  const p2 = stepPlayer(state.players[1], state.players[0], 2, p2Cns, { ...helperInput(p2Context), constants: p2Cns }, input.p2Commands, state.frame);
 
   const players = applyTargetOperations([p1.player, p2.player], [...p1.targetOperations, ...p2.targetOperations], cns, input);
-  return { state: { ...state, players }, traces: [p1.trace, p2.trace] };
+  const helperTraces: CnsRuntimeTrace[] = [];
+  let helpers = {
+    ...initialHelpers,
+    entries: initialHelpers.entries.map((helper) => {
+      const helperCns = resolveCnsByOwner(helper.stateOwnerId, cns, input);
+      const opponent = players[helper.rootEntityId === 1 ? 1 : 0];
+      const context: RuntimeEntityContext = {
+        kind: 'helper', entityId: helper.entityId, rootEntityId: helper.rootEntityId,
+        parentEntityId: helper.parentEntityId, ownerCharacterId: helper.ownerCharacterId,
+      };
+      const commands = helper.keyCtrl ? (helper.rootEntityId === 1 ? input.p1Commands : input.p2Commands) : undefined;
+      const stepped = stepPlayer(helper.player, opponent, helper.rootEntityId, helperCns, { ...helperInput(context), constants: helperCns }, commands, state.frame);
+      stepped.trace.entityId = helper.entityId;
+      helperTraces.push(stepped.trace);
+      const stateOwnerId = stepped.player.stateOwnerId === 1 || stepped.player.stateOwnerId === 2
+        ? stepped.player.stateOwnerId
+        : helper.stateOwnerId;
+      return { ...helper, stateOwnerId, player: stepped.player };
+    }),
+  };
+  for (const entityId of pendingDestroys) helpers = destroyHelper(helpers, entityId);
+  for (const request of pendingSpawns) {
+    helpers = spawnHelper(helpers, request, resolveCnsByOwner(request.stateOwnerId, cns, input));
+  }
+  const helperDiagnostics = [
+    ...pendingSpawns.map((request, index) => {
+      const entity = helpers.entries[helpers.entries.length - pendingSpawns.length + index];
+      return `raw.helper event=spawn entityId=${entity?.entityId ?? '-'} helperId=${request.helperId} root=${request.rootEntityId} parent=${request.parentEntityId} owner=${request.ownerCharacterId} state=${request.stateNo} anim=${entity?.player.animNo ?? '-'} frame=${state.frame} firstStep=next_frame`;
+    }),
+    ...Array.from(pendingDestroys, (entityId) => `raw.helper event=destroy entityId=${entityId} frame=${state.frame} result=removed`),
+  ];
+  return {
+    state: { ...state, players, helpers, hitDiagnosticLines: [...(state.hitDiagnosticLines ?? []), ...helperDiagnostics] },
+    traces: [p1.trace, p2.trace, ...helperTraces],
+  };
 }
 
 function resolvePlayerCns(player: PlayerState, fallback: CnsDocument, input: CnsRuntimeInput): CnsDocument {
@@ -388,6 +448,7 @@ function executeStateControllers(
         }
         break;
       }
+      if (type === 'destroyself') break;
     }
   }
 
@@ -563,6 +624,9 @@ function createTriggerContext(
     animElemTimes: animationInfo?.elementTimes,
     animationExists: input.getAnimationDuration ? (animNo) => input.getAnimationDuration?.(animNo) !== null : undefined,
     constants: input.constants,
+    gameTime: input.gameTime,
+    isHelper: input.entityContext?.kind === 'helper',
+    numHelper: input.numHelper,
   };
 }
 
@@ -846,6 +910,12 @@ function executeController(
   if (type === 'modifyexplod') return modifyExplod(player, opponent, controller, input, commands);
   if (type === 'removeexplod') return removeExplod(player, opponent, controller, input, commands);
   if (type === 'explodbindtime') return setExplodBindTime(player, opponent, controller, input, commands);
+  if (type === 'helper') return createHelper(player, opponent, controller, input, commands);
+  if (type === 'destroyself') {
+    if (input.entityContext?.kind !== 'helper') return withPlayer(player, false, 'DestroySelf');
+    input.onHelperDestroy?.(input.entityContext.entityId);
+    return withPlayer(player, true, 'DestroySelf');
+  }
   if (type === 'selfstate') {
     const value = num(controller, 'value');
     if (value === null) return withPlayer(player, false, 'SelfState');
@@ -870,6 +940,51 @@ function executeController(
   if (noOpName) return withPlayer(player, true, noOpName);
 
   return withPlayer(player, false, controller.type);
+}
+
+function createHelper(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const context = input.entityContext;
+  if (!context || !input.onHelperSpawn) return withPlayer(player, false, 'Helper');
+  const stateNo = num(controller, 'stateno', player, input, commands, opponent);
+  if (stateNo === null) return withPlayer(player, false, 'Helper');
+  const offset = pair(controller, 'pos', player, input, commands, opponent, 0, 0);
+  const postype = (str(controller, 'postype') ?? 'p1').replace(/^['"]|['"]$/g, '').toLowerCase();
+  const screenWidth = input.screenWidth ?? 960;
+  let x = player.x + offset.x * player.facing;
+  let y = player.y + offset.y;
+  if (postype === 'left') x = offset.x;
+  else if (postype === 'right') x = screenWidth - offset.x;
+  else if (postype === 'front') x = player.facing === 1 ? screenWidth - offset.x : offset.x;
+  else if (postype === 'back') x = player.facing === 1 ? offset.x : screenWidth - offset.x;
+  else if (postype === 'p2') {
+    x = opponent.x + offset.x * opponent.facing;
+    y = opponent.y + offset.y;
+  }
+  const facingValue = num(controller, 'facing', player, input, commands, opponent) ?? 1;
+  const facing = (facingValue < 0 ? -player.facing : player.facing) as 1 | -1;
+  input.onHelperSpawn({
+    helperId: Math.trunc(num(controller, 'id', player, input, commands, opponent) ?? 0),
+    rootEntityId: context.rootEntityId,
+    parentEntityId: context.entityId,
+    ownerCharacterId: context.ownerCharacterId,
+    stateOwnerId: context.ownerCharacterId,
+    animationOwnerId: context.ownerCharacterId,
+    stateNo: Math.trunc(stateNo),
+    x,
+    y,
+    facing,
+    keyCtrl: (num(controller, 'keyctrl', player, input, commands, opponent) ?? 0) !== 0,
+    ownPal: (num(controller, 'ownpal', player, input, commands, opponent) ?? 0) !== 0,
+    spawnFrame: input.gameTime ?? 0,
+    parent: player,
+  });
+  return withPlayer(player, true, 'Helper');
 }
 
 function executeTargetController(

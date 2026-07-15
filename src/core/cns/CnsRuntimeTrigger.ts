@@ -25,6 +25,8 @@ export type CnsRuntimeTriggerContext = {
   screenHeight?: number;
   animationExists?: (animNo: number) => boolean;
   constants?: CnsDocument;
+  isHelper?: boolean;
+  numHelper?: (helperId?: number) => number;
 };
 
 type NumberSource = (context: CnsRuntimeTriggerContext) => number | null;
@@ -302,6 +304,16 @@ function getNumberSource(rawName: string): NumberSource | null {
   const numProjIdMatch = name.match(/^numprojid\((\d+)\)$/);
   if (numProjIdMatch) return () => 0;
 
+  const numHelperMatch = name.match(/^numhelper(?:\((.+)\))?$/);
+  if (numHelperMatch) {
+    return (context) => {
+      const helperId = numHelperMatch[1] === undefined
+        ? undefined
+        : readNumberExpression(numHelperMatch[1], context) ?? undefined;
+      return context.numHelper?.(helperId) ?? 0;
+    };
+  }
+
   const targetMatch = name.match(/^(numtarget|targetid|targetstateno)(?:\((.+)\))?$/);
   if (targetMatch) {
     return (context) => {
@@ -378,12 +390,11 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'movehit': return (context) => context.player.moveContact?.hit ? 1 : 0;
     case 'moveguarded': return (context) => context.player.moveContact?.guarded ? 1 : 0;
     case 'numenemy': return (context) => (context.opponent ? 1 : 1);
-    case 'numhelper': return () => 0;
     case 'numproj': return () => 0;
     case 'numexplod': return () => 0;
     case 'numpartner': return () => 0;
     case 'numcommand': return (context) => context.commands?.size ?? 0;
-    case 'ishelper': return () => 0;
+    case 'ishelper': return (context) => context.isHelper ? 1 : 0;
     case 'backedgedist': return (context) => context.player.x;
     case 'frontedgedist': return (context) => (context.screenWidth ?? 960) - context.player.x;
     case 'p2life': return (context) => context.opponent?.life ?? 1000;

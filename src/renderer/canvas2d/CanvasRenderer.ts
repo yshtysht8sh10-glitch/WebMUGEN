@@ -71,6 +71,12 @@ export class CanvasRenderer {
         stableId: player.id,
         player,
       })),
+      ...state.helpers.entries.map((helper) => ({
+        kind: 'player' as const,
+        priority: helper.player.sprPriority ?? 0,
+        stableId: helper.entityId,
+        player: helper.player,
+      })),
       ...getExplodsInDrawOrder(explodResolution.frames)
         .filter((frame) => !frame.entry.onTop)
         .map((frame) => ({
@@ -90,6 +96,7 @@ export class CanvasRenderer {
     }
     this.drawDebugBoxes(ctx, state.players[0]);
     this.drawDebugBoxes(ctx, state.players[1]);
+    state.helpers.entries.forEach((helper) => this.drawDebugBoxes(ctx, helper.player));
     this.drawProjectileDebugBoxes(ctx, state.projectiles);
     ctx.restore();
     return [...powerDiagnostics, ...renderDiagnostics];

@@ -204,6 +204,25 @@ export type PlayerState = {
   };
 };
 
+export type HelperEntity = {
+  entityId: number;
+  helperId: number;
+  rootEntityId: 1 | 2;
+  parentEntityId: number;
+  ownerCharacterId: 1 | 2;
+  stateOwnerId: 1 | 2;
+  animationOwnerId: 1 | 2;
+  keyCtrl: boolean;
+  ownPal: boolean;
+  spawnFrame: number;
+  player: PlayerState;
+};
+
+export type HelperRuntimeState = {
+  entries: HelperEntity[];
+  nextEntityId: number;
+};
+
 export type ProjectileState = {
   id: number;
   ownerId: 1 | 2;
@@ -237,6 +256,7 @@ export type GameState = {
   projectiles: ProjectileState[];
   hitEvents: HitEvent[];
   explods: ExplodRuntimeState;
+  helpers: HelperRuntimeState;
   pause?: PauseState;
   hitDiagnosticLines?: string[];
   commandBuffers?: [InputBuffer, InputBuffer];

@@ -81,14 +81,14 @@ When adding expression support, update Expression rows in the matrix, not unrela
 
 ## Safe defaults
 
-`Power` reads the currently evaluated player's durable gauge value, and `PowerMax` reads that player's `[Data] power`-derived limit. P1 and P2 are independent. Root/Helper redirects remain Partial because Helper runtime ownership is not yet connected.
+`Power` reads the currently evaluated player's durable gauge value, and `PowerMax` reads that player's `[Data] power`-derived limit. P1 and P2 are independent. Issue #58 Phase1 gives Helper evaluation an explicit root/parent/owner identity, but root/parent redirect syntax remains Partial.
 
 Safe defaults are useful but should not be overclaimed.
 
 Examples:
 
 - `CanRecover` reads snapshotted `fall.recover` and `fall.recovertime` during an air-fall reaction. Common recovery states still require the CNS `Command = "recovery"` trigger; `CanRecover` alone must not auto-enter States 5200/5210;
-- `NumHelper` may return 0 before Helper lookup exists;
+- `NumHelper` counts committed Helpers owned by the current root and optionally filters by MUGEN Helper ID; same-frame pending spawns become visible only at the commit point;
 - projectile contact time may return -1 before projectile contact is integrated.
 
 These should generally remain Partial.

@@ -10,6 +10,7 @@ export function createInitialGameState(powerMax: number = DEFAULT_MAX_POWER): Ga
     projectiles: [],
     hitEvents: [],
     explods: createInitialExplodRuntimeState(),
+    helpers: { entries: [], nextEntityId: 3 },
     pause: createInitialPauseState(),
   };
 }

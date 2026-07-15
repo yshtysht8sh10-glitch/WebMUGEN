@@ -34,6 +34,7 @@ function createState(player: PlayerState): GameState {
     projectiles: [],
     hitEvents: [],
     explods: createInitialExplodRuntimeState(),
+    helpers: { entries: [], nextEntityId: 3 },
   };
 }
 

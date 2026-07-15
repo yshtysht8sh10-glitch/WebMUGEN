@@ -10,10 +10,11 @@ describe('Phase65 RuntimeHelperIntegration', () => {
       { type: 'helper', id: 1000, ownerId: 1, stateNo: 3000, x: 10, y: -20, lifeTime: null },
     ], game.players);
 
-    expect(spawned.helpers).toHaveLength(1);
-    expect(spawned.helpers[0]).toMatchObject({ id: 1000, ownerId: 1, stateNo: 3000 });
+    expect(spawned.entries).toHaveLength(1);
+    expect(spawned.entries[0]).toMatchObject({ helperId: 1000, rootEntityId: 1 });
+    expect(spawned.entries[0].player.stateNo).toBe(3000);
 
     const destroyed = applyHelperRuntimeEvents(spawned, [{ type: 'destroyHelper', id: 1000 }], game.players);
-    expect(destroyed.helpers).toHaveLength(0);
+    expect(destroyed.entries).toHaveLength(0);
   });
 });

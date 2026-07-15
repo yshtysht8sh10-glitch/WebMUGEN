@@ -19,6 +19,13 @@ export function stepCnsPhysicsMotion(state: GameState, cns?: CnsDocument | null)
   return {
     ...state,
     frame: state.frame + 1,
+    helpers: {
+      ...state.helpers,
+      entries: state.helpers.entries.map((helper) => ({
+        ...helper,
+        player: helper.spawnFrame === state.frame ? helper.player : stepPlayerCnsPhysics(helper.player, cns),
+      })),
+    },
     players: [
       applyCnsAirLandingState(clampedPlayers[0], clampedPlayers[1], cns),
       applyCnsAirLandingState(clampedPlayers[1], clampedPlayers[0], cns),
@@ -26,7 +33,7 @@ export function stepCnsPhysicsMotion(state: GameState, cns?: CnsDocument | null)
   };
 }
 
-function stepPlayerCnsPhysics(player: PlayerState, cns?: CnsDocument | null): PlayerState {
+export function stepPlayerCnsPhysics(player: PlayerState, cns?: CnsDocument | null): PlayerState {
   if (player.hitPause > 0) {
     return {
       ...player,

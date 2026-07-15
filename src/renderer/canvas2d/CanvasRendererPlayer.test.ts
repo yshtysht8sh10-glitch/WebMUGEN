@@ -118,6 +118,27 @@ describe('CanvasRenderer player sprite fallback', () => {
 
     expect(fillRect).toHaveBeenCalledWith(-16, -58, 32, 58);
   });
+
+  it('renders Helpers through their owner character AIR/SFF scope', () => {
+    const drawImage = vi.fn();
+    const context = fakeContext(vi.fn(), vi.fn(), drawImage);
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+    const assets = { airDocument: air(1000, 10, 0), spritePack: spritePack(10, 0) };
+    const renderer = new CanvasRenderer(canvas, undefined, null, null, { 1: assets, 2: assets });
+    const state = createInitialGameState();
+    state.players = [{ ...state.players[0], animNo: 1000 }, { ...state.players[1], animNo: 1000 }];
+    state.helpers.entries = [{
+      entityId: 3, helperId: 100, rootEntityId: 1, parentEntityId: 1,
+      ownerCharacterId: 1, stateOwnerId: 1, animationOwnerId: 1,
+      keyCtrl: false, ownPal: false, spawnFrame: 0,
+      player: { ...state.players[0], x: 300, animNo: 1000 },
+    }];
+
+    const diagnostics = renderer.render(state).join('\n');
+
+    expect(drawImage).toHaveBeenCalledTimes(3);
+    expect(diagnostics.match(/spriteExists=1 result=drawn/g)).toHaveLength(3);
+  });
 });
 
 function fakeContext(

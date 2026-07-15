@@ -162,7 +162,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | ClearClipboard | Safe no-op | Recognized by the runtime without changing game state. Recognized safe no-op. Debug clipboard not implemented. |
 | CtrlSet | Complete | Basic implementation exists. |
 | DefenceMulSet | Partial 50% | Implemented: Stores defense multiplier field only. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| DestroySelf | Safe no-op | Recognized by the runtime without changing game state. Recognized safe no-op. Helper destruction not implemented. |
+| DestroySelf | Partial 60% | Implemented: Issue #58 Phase1 queues destruction for the current Helper entity and removes it at the controller-pass commit point, before later rendering/physics. Root execution does not destroy the player. Missing: child-parent disappearance policy, pause allowances, and HitDef/collision cleanup. Evidence: focused Helper lifecycle tests. |
 | DisplayToClipboard | Safe no-op | Recognized by the runtime without changing game state. Recognized safe no-op. Debug clipboard not implemented. |
 | EnvColor | Safe no-op | Recognized by the runtime without changing game state. Recognized safe no-op. Screen color flash not implemented. |
 | EnvShake | Safe no-op | Recognized by the runtime without changing game state. Recognized safe no-op. Screen shake not implemented. |
@@ -172,7 +172,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | ForceFeedback | Safe no-op | Recognized by the runtime without changing game state. Recognized safe no-op. Input device feedback not implemented. |
 | GameMakeAnim | Safe no-op | Recognized by the runtime without changing game state. Recognized safe no-op. Global animation effect not implemented. |
 | Gravity | Safe no-op | Recognized by the runtime without changing game state. Recognized safe no-op. Physics layer applies gravity separately. |
-| Helper | Fallback 20% | Implemented: Recognized safe no-op in CNS runtime; Helper system exists separately. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current approximate behavior, runtime inventory, and focused-test inventory. |
+| Helper | Partial 45% | Implemented: Issue #58 Phase1 connects CNS Helper controllers to an independent GameState entity collection with unique runtime IDs separate from duplicate MUGEN IDs, root/parent/owner/state/animation ownership, requested State/Anim, deferred first step, P1/P2 and nested spawning, owner AIR/SFF rendering, NumHelper, DestroySelf, diagnostics, and round-reset cleanup. Missing: redirect evaluation, keyctrl details, palette mutation, Bind/ParentVar, push/collision/HitDef/Target, and pause semantics. Evidence: focused entity/runtime/render/lifecycle tests. |
 | HitAdd | Partial 50% | Implemented: Stores hit count field only. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
 | HitBy | Partial 40% | Implemented: Normalized HitDef attr must match the stored allowed state/attack filter before live contact. Duration/stacking remains incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
 | HitDef | Partial 85% | Implemented: Issue #36 routes one normal/guard contact effect per HitEvent into shared Explod and Sound runtimes. `S`-scoped expression animations/sounds use attacker AIR/SFF/SND; unprefixed/`F` use injected common assets. Bundled common fightfx/SND assets, Helper/projectile parity, modifiers, and mixed priority edges remain incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
@@ -351,7 +351,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | ID | Not started | Player/helper id trigger not implemented. |
 | IfElse | Complete | Numeric conditional function supported in runtime trigger evaluator. |
 | InGuardDist | Fallback 40% | Implemented: Simple distance approximation. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current approximate behavior, runtime inventory, and focused-test inventory. |
-| IsHelper | Safe no-op | Recognized by the runtime without changing game state. Safe default 0. |
+| IsHelper | Partial 60% | Implemented: Returns 1 while evaluating a Helper entity and 0 for root players in the Phase1 runtime. Missing: redirect/custom-state and non-player entity audit. Evidence: focused root/helper trigger test. |
 | IsHomeTeam | Not started | Team metadata not implemented. |
 | Life | Complete | Numeric comparison. |
 | LifeMax | Partial 40% | Implemented: Default 1000. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
@@ -370,7 +370,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | Name | Partial 40% | Implemented: String source exists; metadata defaults empty. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
 | NumEnemy | Safe no-op | Recognized by the runtime without changing game state. Safe default 1. |
 | NumExplod | Safe no-op | Recognized by the runtime without changing game state. Production Explod entries now exist, but this trigger still returns safe default 0; owner plus optional MUGEN id lookup remains unconnected. |
-| NumHelper | Safe no-op | Recognized by the runtime without changing game state. Safe default 0. |
+| NumHelper | Partial 65% | Implemented: Counts current committed Helpers for the evaluating entity's root and optionally filters duplicate-capable MUGEN Helper IDs. Spawn requests become visible at the frame commit point. Missing: redirect/team/custom-state edge audit. Evidence: focused count, duplicate ID, P1/P2, and nested Helper tests. |
 | NumPartner | Safe no-op | Recognized by the runtime without changing game state. Safe default 0. |
 | NumProj | Safe no-op | Recognized by the runtime without changing game state. Safe default 0. |
 | NumProjID | Safe no-op | Recognized by the runtime without changing game state. Safe default 0. |
