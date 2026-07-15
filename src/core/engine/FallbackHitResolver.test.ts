@@ -62,7 +62,7 @@ describe('FallbackHitResolver', () => {
     expect(hit.players[1].getHitVars).toMatchObject({
       damage: 100, hittime: 20, slidetime: 20, ctrltime: 20,
       xveladd: -4, yveladd: -1, xvel: -4, yvel: -1,
-      type: 0, animtype: 1, airtype: 0, groundtype: 0,
+      type: 1, animtype: 1, airtype: 1, groundtype: 1,
       fall: 0, 'fall.damage': 0, 'fall.recover': 1,
       hitid: 0, chainid: -1, guarded: 0, yaccel: 0.6,
     });
@@ -90,10 +90,11 @@ physics = S
     expect(hit.hitDiagnosticLines?.join('\n')).toContain('raw.gethitvar_snapshot target=p2');
   });
 
-  it('preserves out-of-scope Back as GetHitVar(animtype)=3 without changing Issue #1 fallback Anim', () => {
+  it('preserves Back as GetHitVar(animtype)=3 and selects the common back-hit Anim', () => {
     const hit = resolveConfiguredHit({ animType: 'Back' });
-    expect(hit.players[1].animNo).toBe(5000);
+    expect(hit.players[1].animNo).toBe(5030);
     expect(hit.players[1].getHitVars?.animtype).toBe(3);
+    expect(hit.players[0].activeHitDef?.animTypeSource).toBe('cns');
   });
   it.each([
     [[2, 5] as [number, number], 2, 5],
@@ -425,6 +426,26 @@ statetype = A
   });
 
   it.each([
+    ['S', 'Low', 'Light', 5000, 5010],
+    ['C', 'Low', 'Light', 5010, 5010],
+    ['A', 'Low', 'Hard', 5020, 5012],
+  ] as const)('routes %s contact with %s reaction and %s animtype through State %i / Anim %i', (targetStateType, reactionType, animType, stateNo, animNo) => {
+    const hit = resolveConfiguredHit({
+      targetStateType,
+      groundType: reactionType,
+      airType: reactionType,
+      animType,
+      airAnimType: animType,
+    });
+    expect(hit.players[1]).toMatchObject({ stateNo, animNo });
+    expect(hit.players[1].getHitVars).toMatchObject({
+      animtype: animNo % 10 === 2 ? 2 : 0,
+      groundtype: 2,
+      airtype: 2,
+    });
+  });
+
+  it.each([
     ['Medium', 5001],
     ['Hard', 5002],
   ] as const)('keeps required Anim %i selected when it is missing', (animType, selectedAnim) => {
@@ -440,13 +461,28 @@ statetype = A
     const hit = resolveConfiguredHit({});
     expect(hit.players[1].animNo).toBe(5000);
     expect(hit.hitDiagnosticLines?.join('\n')).toContain('animType=Light targetStateTypeAtHit=S requestedAnim=5000 selectedAnim=5000');
-    expect(hit.hitDiagnosticLines?.join('\n')).toContain('source=existing_fallback fallbackReason=existing_fixed_5000');
+    expect(hit.hitDiagnosticLines?.join('\n')).toContain('source=winmugen_default fallbackReason=winmugen_default_light');
   });
 
-  it.each(['Back', 'Up', 'DiagUp'])('does not implement out-of-scope animtype %s', (animType) => {
+  it.each([
+    ['Back', 5030],
+    ['Up', 5030],
+    ['DiagUp', 5030],
+  ] as const)('selects common fallback for animtype %s when optional Anim %i is missing', (animType, selectedAnim) => {
     const hit = resolveConfiguredHit({ animType });
-    expect(hit.players[1].animNo).toBe(5000);
-    expect(hit.players[0].activeHitDef?.animTypeSource).toBe('existing_fallback');
+    expect(hit.players[1].animNo).toBe(selectedAnim);
+    expect(hit.players[0].activeHitDef?.animTypeSource).toBe('cns');
+  });
+
+  it.each([
+    ['Up', 5051],
+    ['DiagUp', 5052],
+  ] as const)('selects optional common Anim for animtype %s when Anim %i is present', (animType, selectedAnim) => {
+    const optionalAction = parseAirText(`[Begin Action ${selectedAnim}]\n0,0, 0,0, 5`).actions[0];
+    const withOptionalAnim = { ...air, actions: [...air.actions, optionalAction] };
+    const hit = resolveConfiguredHit({ animType, airDocument: withOptionalAnim });
+    expect(hit.players[1].animNo).toBe(selectedAnim);
+    expect(hit.players[1].getHitVars?.animtype).toBe(selectedAnim - 5047);
   });
 
   it('routes an airborne target through State 5020 without applying grounded animtype', () => {
@@ -1102,6 +1138,8 @@ function resolveConfiguredHit({
   attackerX,
   targetX,
   airAnimType,
+  groundType,
+  airType,
   fall,
   fallVelocity,
   fallRecover,
@@ -1170,6 +1208,8 @@ function resolveConfiguredHit({
   attackerX?: number;
   targetX?: number;
   airAnimType?: string;
+  groundType?: string;
+  airType?: string;
   fall?: boolean;
   fallVelocity?: [number, number];
   fallRecover?: boolean;
@@ -1232,6 +1272,8 @@ function resolveConfiguredHit({
   ].filter(Boolean).join('\n');
   const fallLines = [
     airAnimType === undefined ? '' : `air.animtype = ${airAnimType}`,
+    groundType === undefined ? '' : `ground.type = ${groundType}`,
+    airType === undefined ? '' : `air.type = ${airType}`,
     fall === undefined ? '' : `fall = ${fall ? 1 : 0}`,
     fallVelocity ? `fall.velocity = ${fallVelocity.join(', ')}` : '',
     fallRecover === undefined ? '' : `fall.recover = ${fallRecover ? 1 : 0}`,

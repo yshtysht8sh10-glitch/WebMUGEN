@@ -1275,16 +1275,19 @@ function appendGetHitFrameDiagnostic(
   runtimeFrame: number,
   enabled: boolean,
 ): PlayerState {
-  if (!enabled || stateDef.stateNo !== 5000) return player;
+  if (!enabled || ![5000, 5001, 5010, 5011, 5020].includes(stateDef.stateNo)) return player;
   const hitStun = player.hitStun;
   const source = hitStun?.getHitVarYVelocitySource
     ?? (hitStun?.targetStateTypeAtHit === 'A' ? 'air.velocity.y' : 'ground.velocity.y');
-  const routeLines = stateDef.controllers.flatMap((controller) => {
+  const hitTimeValue = readGetHitDiagnosticValue(player, 'hittime');
+  const selectedHitTime = hitStun?.selectedHitTime ?? (typeof hitTimeValue === 'number' ? hitTimeValue : 0);
+  const hitElapsed = hitStun?.elapsed ?? player.hitReactionElapsed ?? player.stateTime;
+  const routeLines = stateDef.controllers.flatMap((controller, controllerIndex) => {
     if (controller.type.toLowerCase() !== 'changestate') return [];
     const run = shouldRun(controller, player, input, commands, opponent);
     return [
       `raw.gethit_changestate_eval target=p${player.id}`,
-      `  frame=${runtimeFrame} state=5000 stateTime=${player.stateTime} value=${num(controller, 'value') ?? '?'} result=${run ? 1 : 0} yvel=${readGetHitDiagnosticValue(player, 'yvel')} fall=${readGetHitDiagnosticValue(player, 'fall')} hitShakeOver=${player.hitPause <= 0 ? 1 : 0}`,
+      `  frame=${runtimeFrame} state=${stateDef.stateNo} controllerIndex=${controllerIndex} source=${controller.sourceFile ?? '-'}:${controller.sourceLine ?? '-'} stateTime=${player.stateTime} value=${num(controller, 'value') ?? '?'} result=${run ? 1 : 0} yvel=${readGetHitDiagnosticValue(player, 'yvel')} fall=${readGetHitDiagnosticValue(player, 'fall')} hitShakeOver=${player.hitPause <= 0 ? 1 : 0} hitOver=${hitElapsed >= selectedHitTime ? 1 : 0}`,
     ];
   });
   return {
@@ -1292,8 +1295,10 @@ function appendGetHitFrameDiagnostic(
     hitDiagnosticLines: [
       ...(player.hitDiagnosticLines ?? []),
       `raw.gethitvar_frame target=p${player.id}`,
-      `  frame=${runtimeFrame} state=${player.stateNo} stateTime=${player.stateTime} stateType=${player.stateType} moveType=${player.moveType} physics=${player.physics} targetStateTypeAtHit=${hitStun?.targetStateTypeAtHit ?? '-'} yvel=${readGetHitDiagnosticValue(player, 'yvel')} yvelSource=${source} fall=${readGetHitDiagnosticValue(player, 'fall')} groundtype=${readGetHitDiagnosticValue(player, 'groundtype')} animtype=${readGetHitDiagnosticValue(player, 'animtype')}`,
-      `  groundVelocityY=${hitStun?.groundVelocityAtHit?.y ?? '-'} airVelocityY=${hitStun?.airVelocityAtHit?.y ?? '-'} fallYVelocity=${hitStun?.fallYVelocityAtHit ?? readGetHitDiagnosticValue(player, 'fall.yvel')}`,
+      `  frame=${runtimeFrame} entity=p${player.id} state=${player.stateNo} prevState=${(player as ExtendedPlayerState).prevStateNo ?? '-'} stateTime=${player.stateTime} anim=${player.animNo} animTime=${player.animTime} ctrl=${player.ctrl ? 1 : 0} stateType=${player.stateType} moveType=${player.moveType} physics=${player.physics}`,
+      `  activeHitDefId=${hitStun?.activeHitDefId ?? 'none'} hitStunElapsed=${hitStun?.elapsed ?? '-'} hitStunRemaining=${hitStun ? Math.max(0, hitStun.selectedHitTime - hitStun.elapsed) : '-'} hitPauseRemaining=${player.hitPause} hitShakeOver=${player.hitPause <= 0 ? 1 : 0} hitOver=${hitStun ? Number(hitStun.elapsed >= hitStun.selectedHitTime) : '-'}`,
+      `  targetStateTypeAtHit=${hitStun?.targetStateTypeAtHit ?? '-'} animtype=${readGetHitDiagnosticValue(player, 'animtype')} air.animtype=${readGetHitDiagnosticValue(player, 'air.animtype')} fall.animtype=${readGetHitDiagnosticValue(player, 'fall.animtype')} groundtype=${readGetHitDiagnosticValue(player, 'groundtype')} airtype=${readGetHitDiagnosticValue(player, 'airtype')}`,
+      `  hittime=${readGetHitDiagnosticValue(player, 'hittime')} yvel=${readGetHitDiagnosticValue(player, 'yvel')} yvelSource=${source} fall=${readGetHitDiagnosticValue(player, 'fall')} groundVelocityY=${hitStun?.groundVelocityAtHit?.y ?? '-'} airVelocityY=${hitStun?.airVelocityAtHit?.y ?? '-'} fallYVelocity=${hitStun?.fallYVelocityAtHit ?? readGetHitDiagnosticValue(player, 'fall.yvel')}`,
       ...routeLines,
     ],
   };
@@ -1547,7 +1552,7 @@ function activateHitDef(
   const airHitTime = snapshot.airHitTime;
   const animTypeParam = controller.params.animtype;
   const animType = readGroundAnimType(animTypeParam);
-  const animTypeSource = animTypeParam === undefined || animType === null ? 'existing_fallback' : 'cns';
+  const animTypeSource = animTypeParam === undefined ? 'winmugen_default' : animType === null ? 'winmugen_default' : 'cns';
   const selectedAnimType = animType ?? 'Light';
   const groundHitTimeFallbackReason = groundHitTime === undefined
     ? controller.params['ground.hittime'] === undefined ? 'missing_ground_hittime' : 'invalid_ground_hittime'
@@ -1868,6 +1873,9 @@ function readGroundAnimType(value: CnsValue | undefined): ActiveHitDef['animType
   if (normalized === 'light') return 'Light';
   if (normalized === 'medium' || normalized === 'med') return 'Medium';
   if (normalized === 'hard' || normalized === 'heavy') return 'Hard';
+  if (normalized === 'back') return 'Back';
+  if (normalized === 'up') return 'Up';
+  if (normalized === 'diagup') return 'DiagUp';
   return null;
 }
 

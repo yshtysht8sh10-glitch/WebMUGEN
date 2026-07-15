@@ -246,14 +246,16 @@ function resolveAttack(
       ? CROUCH_HIT_STATE
       : STAND_HIT_STATE;
   const selectedAnimType = hitTimeKind === 'air' ? active.airAnimType ?? 'Light' : active.animType;
-  const selectedAnim = hitTimeKind === 'ground' ? groundHitAnim(active?.animType) : airHitAnim(selectedAnimType, active.airType);
+  const selectedAnim = hitTimeKind === 'ground'
+    ? commonHitShakeAnim(active?.animType, active.groundType, airDocument)
+    : commonHitShakeAnim(selectedAnimType, active.airType, airDocument);
   const selectedVelocity = hitTimeKind === 'air' ? active.airVelocity : active.groundVelocity;
   // WinMUGEN HitDef X velocity is expressed in the defender's reaction direction:
   // the commonly used negative value must send the target away from the attacker.
   const worldHitVelocityX = selectedVelocity.x * -attacker.facing;
   const appliedVelocity = { x: Object.is(worldHitVelocityX, -0) ? 0 : worldHitVelocityX, y: selectedVelocity.y };
   const animType = active?.animType ?? 'Light';
-  const animSource = active?.animTypeSource ?? 'existing_fallback';
+  const animSource = active?.animTypeSource ?? 'winmugen_default';
   const animationExists = airDocumentHasAction(airDocument, selectedAnim);
   const hitAttacker = markAttackerHit(attacker, activeHitDefId, target.id, active.hitId, active.pauseTime.attacker);
   const contactedAttacker = applyAttackerRequestedState(
@@ -305,7 +307,7 @@ function resolveAttack(
     `  activeHitDefId=${idText} keys=${Object.keys(hitTarget.getHitVars ?? {}).sort().join(',')} unsupportedKeys=${hitTarget.getHitVarUnsupportedKeys?.join(',') || '-'}`,
     ...[
       `raw.hit_anim_select target=p${target.id}`,
-      `  activeHitDefId=${idText} animType=${String(selectedAnimType ?? animType)} targetStateTypeAtHit=${targetStateTypeAtHit} requestedAnim=${selectedAnim} selectedAnim=${selectedAnim} animationExists=${animationExists ? 1 : 0} source=${hitTimeKind === 'air' && active.airAnimType ? 'cns_air' : animSource} fallbackReason=${hitTimeKind === 'ground' && animSource !== 'cns' ? 'existing_fixed_5000' : hitTimeKind === 'air' && !active.airAnimType ? 'missing_air_animtype' : '-'}${animationExists ? '' : ' warning=missing_required_animation'}`,
+      `  activeHitDefId=${idText} animType=${String(selectedAnimType ?? animType)} targetStateTypeAtHit=${targetStateTypeAtHit} requestedAnim=${selectedAnim} selectedAnim=${selectedAnim} animationExists=${animationExists ? 1 : 0} source=${hitTimeKind === 'air' && active.airAnimType ? 'cns_air' : animSource} fallbackReason=${hitTimeKind === 'ground' && animSource !== 'cns' ? 'winmugen_default_light' : hitTimeKind === 'air' && !active.airAnimType ? 'missing_air_animtype' : '-'}${animationExists ? '' : ' warning=missing_required_animation'}`,
     ],
     `raw.hit_reaction target=p${target.id}`,
     `  state=${reactionState} source=${hitTimeKind === 'air' ? 'air_common_state' : 'ground_common_state'} anim=${selectedAnim} source=${hitTimeKind === 'ground' ? animSource : active.airAnimType ? 'cns_air' : 'existing_default'}`,
@@ -828,6 +830,8 @@ function createGetHitVarSnapshot(
     yvel: selectedVelocity.y,
     type: hitTimeKind === 'air' ? airType : groundType,
     animtype: animType,
+    'air.animtype': hitAnimTypeCode(hitDef.airAnimType ?? 'Light'),
+    'fall.animtype': hitAnimTypeCode(hitDef.fallAnimType ?? hitDef.fall?.animType ?? hitDef.airAnimType ?? hitDef.animType ?? 'Light'),
     airtype: airType,
     groundtype: groundType,
     fall: fall.enabled ? 1 : 0,
@@ -856,19 +860,17 @@ function hitAnimTypeCode(value: string): number {
 
 function hitReactionTypeCode(value: string | undefined): number {
   const codes: Record<string, number> = { none: 0, high: 1, low: 2, trip: 3 };
-  return value ? codes[value.trim().toLowerCase()] ?? 0 : 0;
+  return value ? codes[value.trim().toLowerCase()] ?? 0 : 1;
 }
 
-function groundHitAnim(animType: NonNullable<PlayerState['activeHitDef']>['animType']): number {
-  if (animType === 'Medium') return 5001;
-  if (animType === 'Hard') return 5002;
-  return 5000;
-}
-
-function airHitAnim(value: string | undefined, airType: string | undefined): number {
+function commonHitShakeAnim(value: string | undefined, reactionType: string | undefined, document: AirDocument | null): number {
   const code = hitAnimTypeCode(value ?? 'Light');
-  if (code >= 3) return code === 3 ? 5030 : 5047 + code;
-  return (airType?.trim().toLowerCase() === 'low' ? 5010 : 5000) + code;
+  if (code === 3) return 5030;
+  if (code >= 4) {
+    const requested = 5047 + code;
+    return airDocumentHasAction(document, requested) ? requested : 5030;
+  }
+  return (reactionType === undefined || reactionType.trim().toLowerCase() === 'high' ? 5000 : 5010) + code;
 }
 
 function airDocumentHasAction(document: AirDocument | null, actionNo: number): boolean {

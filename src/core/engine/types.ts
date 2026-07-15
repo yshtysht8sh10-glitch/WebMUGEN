@@ -39,9 +39,9 @@ export type ActiveHitDef = {
   airHitTimeSource?: 'cns' | 'hardcoded';
   groundHitTimeFallbackReason?: string;
   airHitTimeFallbackReason?: string;
-  animType?: 'Light' | 'Medium' | 'Hard';
+  animType?: 'Light' | 'Medium' | 'Hard' | 'Back' | 'Up' | 'DiagUp';
   groundAnimTypeRaw?: string;
-  animTypeSource?: 'cns' | 'existing_fallback';
+  animTypeSource?: 'cns' | 'winmugen_default';
   snapshotSignature?: string;
   attr?: { stateType: string; attackTypes: string[] };
   airAnimType?: string;
