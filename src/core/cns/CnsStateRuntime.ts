@@ -21,6 +21,7 @@ import {
   type ExplodRemoveEvent,
   type RuntimeEntityRef,
 } from '../explod/ExplodSystem';
+import { addPlayerPower, setPlayerPower } from '../power/PowerGauge';
 
 export type CnsRuntimeTrace = {
   playerId: 1 | 2;
@@ -81,7 +82,6 @@ type ControllerExecutionResult = {
 };
 
 type ExtendedPlayerState = PlayerState & {
-  power?: number;
   hitCount?: number;
   attackMultiplier?: number;
   defenseMultiplier?: number;
@@ -396,8 +396,9 @@ function applyTargetOperations(
       if (operation.kind === 'velAdd') return { ...player, vx: player.vx + (operation.x ?? 0), vy: player.vy + (operation.y ?? 0) };
       if (operation.kind === 'lifeAdd') return { ...player, life: Math.max(0, player.life + (operation.value ?? 0)) };
       if (operation.kind === 'powerAdd') {
-        const extended = player as ExtendedPlayerState;
-        return { ...player, power: Math.max(0, (extended.power ?? 0) + (operation.value ?? 0)) } as PlayerState;
+        const value = operation.value ?? 0;
+        const next = addPlayerPower(player, value);
+        return appendPowerDiagnostic(next, `raw.power entity=p${player.id} source=controller type=TargetPowerAdd before=${player.power} value=${value} after=${next.power} max=${next.powerMax}`);
       }
       if (operation.kind === 'facing') {
         const ownerFacing = operation.ownerFacing ?? owner?.facing ?? 1;
@@ -453,7 +454,7 @@ function enterState(player: PlayerState, opponent: PlayerState, stateNo: number,
   const animNo = stateDef.initialAnim ?? inferredAnimNo;
   const animChanged = player.animNo !== animNo;
   const powered = player as ExtendedPlayerState;
-  const power = Math.max(0, (powered.power ?? 0) + (stateDef.powerAdd ?? 0));
+  const powerAdded = addPlayerPower(player, stateDef.powerAdd ?? 0);
   const preserveHitDef = stateDef.hitDefPersist === true;
   const preservedMoveContact = preserveMoveContact(player, stateDef.moveHitPersist === true, stateDef.hitCountPersist === true);
   const hitDiagnosticLines = player.activeHitDef?.diagnosticId ? [
@@ -462,8 +463,8 @@ function enterState(player: PlayerState, opponent: PlayerState, stateNo: number,
     `  event=${preserveHitDef ? 'preserve' : 'discard'} reason=state_change hitdefpersist=${preserveHitDef ? 1 : 0} movehitpersist=${stateDef.moveHitPersist ? 1 : 0} hitcountpersist=${stateDef.hitCountPersist ? 1 : 0} hitCount=${player.moveContact?.hitCount ?? 0}`,
   ] : player.hitDiagnosticLines;
 
-  return {
-    ...player,
+  const entered = {
+    ...powerAdded,
     prevStateNo: player.stateNo,
     stateNo,
     stateTime: 0,
@@ -476,7 +477,6 @@ function enterState(player: PlayerState, opponent: PlayerState, stateNo: number,
     physics: toPhysics(stateDef.physics ?? null) ?? player.physics,
     ctrl: stateDef.ctrl ?? inferDefaultCtrl(stateNo, player.ctrl),
     facing: stateDef.faceP2 ? faceToward(player, opponent) : player.facing,
-    power,
     juggle: stateDef.juggle ?? powered.juggle,
     activeHitDef: preserveHitDef ? player.activeHitDef : null,
     hitDefUsed: preserveHitDef ? player.hitDefUsed : false,
@@ -485,6 +485,9 @@ function enterState(player: PlayerState, opponent: PlayerState, stateNo: number,
     pauseControllerLatch: undefined,
     hitDiagnosticLines,
   } as PlayerState;
+  return stateDef.powerAdd === undefined
+    ? entered
+    : appendPowerDiagnostic(entered, `raw.power entity=p${player.id} source=statedef state=${stateNo} before=${player.power} delta=${stateDef.powerAdd} after=${entered.power} max=${entered.powerMax}`);
 }
 
 function faceToward(player: PlayerState, opponent: PlayerState): PlayerState['facing'] {
@@ -1016,13 +1019,20 @@ function setLife(player: PlayerState, controller: CnsStateController): Controlle
 
 function addPower(player: PlayerState, controller: CnsStateController): ControllerResult {
   const value = num(controller, 'value');
-  const powered = player as ExtendedPlayerState;
-  return value === null ? withPlayer(player, false, 'PowerAdd') : withPlayer({ ...player, power: Math.max(0, (powered.power ?? 0) + value) } as PlayerState, true, 'PowerAdd');
+  if (value === null) return withPlayer(player, false, 'PowerAdd');
+  const next = addPlayerPower(player, value);
+  return withPlayer(appendPowerDiagnostic(next, `raw.power entity=p${player.id} source=controller type=PowerAdd before=${player.power} value=${value} after=${next.power} max=${next.powerMax}`), true, 'PowerAdd');
 }
 
 function setPower(player: PlayerState, controller: CnsStateController): ControllerResult {
   const value = num(controller, 'value');
-  return value === null ? withPlayer(player, false, 'PowerSet') : withPlayer({ ...player, power: Math.max(0, value) } as PlayerState, true, 'PowerSet');
+  if (value === null) return withPlayer(player, false, 'PowerSet');
+  const next = setPlayerPower(player, value);
+  return withPlayer(appendPowerDiagnostic(next, `raw.power entity=p${player.id} source=controller type=PowerSet before=${player.power} value=${value} after=${next.power} max=${next.powerMax}`), true, 'PowerSet');
+}
+
+function appendPowerDiagnostic(player: PlayerState, line: string): PlayerState {
+  return { ...player, hitDiagnosticLines: [...(player.hitDiagnosticLines ?? []), line] };
 }
 
 function hitAdd(player: PlayerState, controller: CnsStateController): ControllerResult {

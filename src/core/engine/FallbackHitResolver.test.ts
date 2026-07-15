@@ -961,6 +961,12 @@ movetype = A
     expect(guard.players[0].power).toBe(130);
     expect(guard.players[1].power).toBe(110);
     expect(guard.hitDiagnosticLines?.join('\n')).toContain('kind=guard getpower=30');
+
+    const characterLimit = resolveConfiguredHit({
+      getPower: [500, 0], givePower: [1000, 0], attackerPower: 8800, targetPower: 8500, powerMax: 9000, pauseTime: [0, 0],
+    });
+    expect(characterLimit.players[0].power).toBe(9000);
+    expect(characterLimit.players[1].power).toBe(9000);
   });
 
   it('uses numhits for the defender combo count without changing attacker HitCount or contact damage', () => {
@@ -1092,6 +1098,7 @@ function resolveConfiguredHit({
   p2SprPriority,
   attackerPower,
   targetPower,
+  powerMax,
   attackerX,
   targetX,
   airAnimType,
@@ -1159,6 +1166,7 @@ function resolveConfiguredHit({
   p2SprPriority?: number;
   attackerPower?: number;
   targetPower?: number;
+  powerMax?: number;
   attackerX?: number;
   targetX?: number;
   airAnimType?: string;
@@ -1279,7 +1287,7 @@ ${auxiliaryLines}
 ${fallLines}
 ${guardLines}
 `);
-  const initial = createInitialGameState();
+  const initial = createInitialGameState(powerMax);
   const attackerIndex = attackerId - 1;
   const targetIndex = attackerId === 1 ? 1 : 0;
   const players = [...initial.players] as typeof initial.players;

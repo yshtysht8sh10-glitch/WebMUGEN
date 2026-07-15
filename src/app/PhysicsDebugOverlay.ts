@@ -15,7 +15,7 @@ function formatPlayerPhysicsDebug(label: string, player: PlayerState): string {
     `physics=${player.physics}`,
     `ctrl=${player.ctrl ? 1 : 0}`,
     `facing=${player.facing}`,
-    `power=${readPower(player)}`,
+    `power=${player.power ?? 0}/${player.powerMax ?? 3000}`,
     `juggle=${readJuggle(player)}`,
     `juggleRemaining=${player.juggleRemaining ?? '-'}/${player.juggleMax ?? '-'}`,
     `guard=${player.guardIntent ? 'back' : '-'}${player.guardCrouchIntent ? '+down' : ''}`,
@@ -25,10 +25,6 @@ function formatPlayerPhysicsDebug(label: string, player: PlayerState): string {
     `time=${player.stateTime}`,
     `anim=${player.animNo}:${player.animTime}`,
   ].join(' ');
-}
-
-function readPower(player: PlayerState): number {
-  return (player as PlayerState & { power?: number }).power ?? 0;
 }
 
 function readJuggle(player: PlayerState): string {

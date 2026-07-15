@@ -74,6 +74,8 @@ State entry should handle:
 - entry-only effects such as `poweradd`;
 - facing changes such as `facep2`.
 
+Power is durable player state. A loaded character starts each round at `power = 0`; `[Data] power` supplies `powerMax` (default 3000), not the initial gauge value. StateDef `poweradd`, PowerAdd/PowerSet, TargetPowerAdd, and explicit HitDef getpower/givepower all use the same 0..powerMax clamp. State transitions preserve both values, while round restart resets only the current value. Helper/root power ownership remains Partial until the Helper entity model is connected.
+
 If a field is applied on every frame instead of on state entry, compatibility bugs become subtle and hard to diagnose.
 
 ## Debug trace

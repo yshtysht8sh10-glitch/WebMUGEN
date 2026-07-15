@@ -4,6 +4,7 @@ import { selectTargets } from '../hitdef/TargetState';
 import { hitDefAttrMatches } from '../hitdef/HitAttribute';
 import type { CnsDocument } from '../../mugen/common/cnsTypes';
 import { readCnsConst } from './CnsConstants';
+import { readPlayerPowerMax } from '../power/PowerGauge';
 
 export type CnsRuntimeTriggerContext = {
   player: PlayerState;
@@ -329,7 +330,7 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'ailevel': return (context) => context.aiLevel ?? 0;
     case 'teamside': return (context) => context.teamSide ?? context.player.id;
     case 'power': return (context) => readOptionalNumber(context.player, 'power', 0);
-    case 'powermax': return () => 3000;
+    case 'powermax': return (context) => readPlayerPowerMax(context.player);
     case 'life': return (context) => context.player.life;
     case 'lifemax': return () => 1000;
     case 'random': return () => 500;

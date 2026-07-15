@@ -19,7 +19,7 @@ Follow `docs/webmugen/development-policy.md`: do not modify `public/chars/common
 | `anim` | Complete | Parsed and applied as initial animation. Animless state preservation exists. | Rendering/animation availability should still be checked per character. |
 | `velset` | Partial | Numeric X/Y pairs apply once on State entry before controllers; X is converted from Facing-relative CNS velocity. | Expression-valued header components and broader real-character coverage remain to audit. |
 | `ctrl` | Complete | Parsed and applied as control flag. | State-specific control handoff still depends on controller flow. |
-| `poweradd` | Complete | Parsed and applied once on state entry. | Should not be re-applied while staying in the same state. |
+| `poweradd` | Complete | Parsed, applied once on state entry, and clamped through the player's 0..`powerMax` mutation path. | Helper ownership remains tied to the future Helper runtime. |
 | `juggle` | Partial | Parsed as the active attack State cost and consumed from the airborne target's `[Data] airjuggle` pool on accepted HitDef contact. | Helper/projectile/team pools and advanced reset flags remain incomplete. |
 | `facep2` | Complete | Parsed and applied on state entry; Debug Overlay exposes facing. | Edge cases with custom states/helpers still need verification. |
 | `hitdefpersist` | Partial | Entering a State with value 1 preserves the ActiveHitDef, its consumed-target generation history, and used flag; value 0 discards them. | Helper/projectile and multi-player HitDef ownership remain incomplete. |

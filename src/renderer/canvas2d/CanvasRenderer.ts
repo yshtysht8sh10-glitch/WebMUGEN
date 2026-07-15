@@ -10,6 +10,7 @@ import { getProjectileWorldBox } from '../../core/projectile/ProjectileSystem';
 import { findSprite, spriteKey } from '../../core/sprite/SpritePackLoader';
 import type { SpritePack } from '../../core/sprite/SpriteTypes';
 import type { ImageDataSpritePack } from '../../core/sprite/ImageDataSpriteTypes';
+import { getPlayerPowerRatio } from '../../core/power/PowerGauge';
 import { ImageDataSpriteRenderer } from './ImageDataSpriteRenderer';
 import { getScreenShakeOffset, type HitFeedbackState } from '../../core/engine/HitFeedback';
 import { HitFeedbackRenderer } from './HitFeedbackRenderer';
@@ -28,6 +29,8 @@ export class CanvasRenderer {
   private readonly imageDataSpriteRenderer = new ImageDataSpriteRenderer();
   private readonly hitFeedbackRenderer = new HitFeedbackRenderer();
   private readonly roundStateRenderer = new RoundStateRenderer();
+  private lastPowerHudSignature = '';
+  private reportedInitialPower = false;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -55,6 +58,7 @@ export class CanvasRenderer {
     ctx.translate(shake.x, shake.y);
     this.drawStage(ctx);
     this.drawLifeBars(ctx, state);
+    const powerDiagnostics = this.drawPowerBars(ctx, state);
     if (roundState) this.roundStateRenderer.render(ctx, roundState, roundScore);
     this.drawProjectiles(ctx, state.projectiles);
     const explodResolution = resolveExplodRenderFrames(state, this.defaultAssets(), this.ownerAssets, this.fightFxAssets);
@@ -87,7 +91,7 @@ export class CanvasRenderer {
     this.drawDebugBoxes(ctx, state.players[1]);
     this.drawProjectileDebugBoxes(ctx, state.projectiles);
     ctx.restore();
-    return explodDiagnostics;
+    return [...powerDiagnostics, ...explodDiagnostics];
   }
 
   private defaultAssets(): CharacterRenderAssets {
@@ -177,6 +181,38 @@ export class CanvasRenderer {
     }
 
     this.drawFallbackPlayer(ctx, player, color, currentElement);
+  }
+
+  private drawPowerBars(ctx: CanvasRenderingContext2D, state: GameState): string[] {
+    const [p1, p2] = state.players;
+    const p1Ratio = getPlayerPowerRatio(p1);
+    const p2Ratio = getPlayerPowerRatio(p2);
+    ctx.fillStyle = '#111827';
+    ctx.fillRect(20, 342, 260, 8);
+    ctx.fillRect(360, 342, 260, 8);
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillRect(20, 342, 260 * p1Ratio, 8);
+    ctx.fillRect(620 - 260 * p2Ratio, 342, 260 * p2Ratio, 8);
+    ctx.strokeStyle = '#fff';
+    ctx.strokeRect(20, 342, 260, 8);
+    ctx.strokeRect(360, 342, 260, 8);
+
+    const p1Power = p1.power ?? 0;
+    const p2Power = p2.power ?? 0;
+    const p1PowerMax = p1.powerMax ?? 3000;
+    const p2PowerMax = p2.powerMax ?? 3000;
+    const signature = `${p1Power}/${p1PowerMax}|${p2Power}/${p2PowerMax}`;
+    if (signature === this.lastPowerHudSignature) return [];
+    this.lastPowerHudSignature = signature;
+    const diagnostics = [`raw.power_hud p1=${p1Power}/${p1PowerMax} width=${260 * p1Ratio} p2=${p2Power}/${p2PowerMax} width=${260 * p2Ratio}`];
+    if (!this.reportedInitialPower) {
+      this.reportedInitialPower = true;
+      diagnostics.unshift(
+        `raw.power entity=p1 source=initial before=0 delta=${p1Power} after=${p1Power} max=${p1PowerMax}`,
+        `raw.power entity=p2 source=initial before=0 delta=${p2Power} after=${p2Power} max=${p2PowerMax}`,
+      );
+    }
+    return diagnostics;
   }
 
   private drawExplod(ctx: CanvasRenderingContext2D, frame: ExplodRenderFrame): string {

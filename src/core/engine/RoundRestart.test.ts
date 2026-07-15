@@ -22,4 +22,13 @@ describe('RoundRestart', () => {
     expect(restarted.gameState.explods).toEqual({ entries: [], nextRuntimeId: 1 });
     expect(restarted.hitFeedbackState).toEqual(createInitialHitFeedbackState());
   });
+
+  it('resets current power while preserving the character power maximum', () => {
+    const restarted = restartRound(1, undefined, 9000);
+
+    expect(restarted.gameState.players.map((player) => [player.power, player.powerMax])).toEqual([
+      [0, 9000],
+      [0, 9000],
+    ]);
+  });
 });

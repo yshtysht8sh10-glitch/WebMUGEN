@@ -53,6 +53,7 @@ import { canRestartRound, restartRound } from '../core/engine/RoundRestart';
 import { calculateMugenAnimTime, getMugenAnimEndTime } from '../core/animation/AnimationDuration';
 import { getCurrentAnimationElement } from '../core/animation/AnimationPlayer';
 import { attachFallbackAttackStates } from '../core/cns/CnsFallbackDocument';
+import { readCnsConst } from '../core/cns/CnsConstants';
 import { analyzeCnsCoverage } from '../core/cns/CnsCoverageDiagnostics';
 import type { CnsCoverageDiagnostics } from '../core/cns/CnsCoverageDiagnostics';
 import {
@@ -327,6 +328,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           ? attachFallbackAttackStates(loadedCharacter.cns)
           : loadedCharacter.cns,
       };
+      const characterPowerMax = readCnsConst(character.cns, 'data.power');
+      gameStateRef.current = createInitialGameState(characterPowerMax);
       setCnsSourceFiles(character.cnsSourceFiles ?? []);
       setLoadedAir(character.air);
       setLoadedSprites(character.sprites);
@@ -392,7 +395,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           !restartPressedRef.current &&
           canRestartRound(nextRoundState)
         ) {
-          const restarted = restartRound(nextRoundState.roundNo, runtimeSettingsRef.current.roundTime);
+          const restarted = restartRound(nextRoundState.roundNo, runtimeSettingsRef.current.roundTime, characterPowerMax);
           nextState = synchronizeRuntimeFrame(restarted.gameState, frameNoRef.current);
           nextRoundState = restarted.roundState;
           nextFeedback = restarted.hitFeedbackState;

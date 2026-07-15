@@ -1,4 +1,5 @@
 import { createInitialGameState } from './GameState';
+import { DEFAULT_MAX_POWER } from '../power/PowerGauge';
 import {
   createInitialRoundState,
   type RoundState,
@@ -15,9 +16,9 @@ export type RoundRuntimeState = {
   hitFeedbackState: HitFeedbackState;
 };
 
-export function restartRound(currentRoundNo: number, timer?: number): RoundRuntimeState {
+export function restartRound(currentRoundNo: number, timer?: number, powerMax: number = DEFAULT_MAX_POWER): RoundRuntimeState {
   return {
-    gameState: createInitialGameState(),
+    gameState: createInitialGameState(powerMax),
     roundState: {
       ...createInitialRoundState(timer),
       roundNo: currentRoundNo + 1,

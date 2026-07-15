@@ -81,6 +81,8 @@ When adding expression support, update Expression rows in the matrix, not unrela
 
 ## Safe defaults
 
+`Power` reads the currently evaluated player's durable gauge value, and `PowerMax` reads that player's `[Data] power`-derived limit. P1 and P2 are independent. Root/Helper redirects remain Partial because Helper runtime ownership is not yet connected.
+
 Safe defaults are useful but should not be overclaimed.
 
 Examples:

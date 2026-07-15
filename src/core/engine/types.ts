@@ -132,6 +132,7 @@ export type PlayerState = {
   };
   life: number;
   power?: number;
+  powerMax?: number;
   sprPriority?: number;
   comboHitCount?: number;
   stateNo: number;

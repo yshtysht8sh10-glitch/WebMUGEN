@@ -34,6 +34,8 @@ cns p1 state=0->20 anim=0->20 time=0->0 found=1 exec=ChangeState,VelSet,ChangeAn
 
 Each line should answer a specific question:
 
+The live physics line shows `power=current/max`. Canvas renders a bottom Power gauge from the same PlayerState values; a value change emits `raw.power_hud` with both ratios and resolved widths.
+
 | Line | Question answered |
 |---|---|
 | `keys=` | Did the browser see the key? |

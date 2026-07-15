@@ -51,6 +51,8 @@ Examples:
 
 These mutate state identity or state flags.
 
+`PowerAdd` and `PowerSet` mutate the current player's durable Power through the shared 0..powerMax clamp. StateDef `poweradd`, TargetPowerAdd, and HitDef getpower/givepower use that same path so a character limit such as 9000 is not silently reduced to 3000. Each controller mutation emits a `raw.power` diagnostic. Helper ownership remains Partial.
+
 `ChangeState` preserves the current State owner. `SelfState` resolves the player's `selfStateOwnerId`, enters that owner's CNS document, and clears borrowed ownership. In an ordinary StateDef, a successfully executed ChangeState or SelfState terminates that StateDef's remaining controller list; the entered State may then execute on the same frame. Negative common command states retain their existing entry-snapshot scan semantics. Helper/animation ownership remains Partial.
 
 ### Motion and position
@@ -151,7 +153,7 @@ Guard contact snapshots Facing-relative `holdback`/`holddown` intent before coll
 
 Normal `kill`, guarded `guard.kill`, and common-State fall damage `fall.kill` are independent. A disabled kill flag clamps its applicable damage at one Life. HitDef fall damage and kill are stored in GetHitVar and consumed by the existing `HitFallDamage` controllers, rather than modifying `common1.cns`.
 
-Explicit `getpower` and `givepower` hit/guard pairs apply once per accepted contact and clamp both gauges to 0..3000. Omitted values still lack the `mugen.cfg` multiplier defaults and are documented Partial. `numhits` adds to the defender combo/GetHitVar(hitcount), while attacker HitCount remains one per successful target contact.
+Explicit `getpower` and `givepower` hit/guard pairs apply once per accepted contact and clamp each gauge to that player's `powerMax`. Omitted values still lack the `mugen.cfg` multiplier defaults and are documented Partial. `numhits` adds to the defender combo/GetHitVar(hitcount), while attacker HitCount remains one per successful target contact.
 
 The matching ground/air/down/guard/airguard cornerpush value changes attacker X velocity only when the contacted target is at the existing fallback stage boundary; the value is converted by attacker Facing once. `snap` places the target at attacker position plus Facing-relative X and absolute Y offsets. `p1sprpriority` and `p2sprpriority` update the two runtime sprite priority fields on hit or guard; Canvas draws lower priority first and higher priority later. Camera-relative boundaries and projectile/effect layering remain Partial.
 

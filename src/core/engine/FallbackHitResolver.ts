@@ -9,7 +9,7 @@ import type { GameState, HitEvent, PlayerState } from './types';
 import { recordMoveContact } from '../hitdef/MoveContactState';
 import { pruneTargets, registerTarget } from '../hitdef/TargetState';
 import { hitAttributeMatchesFilter } from '../hitdef/HitAttribute';
-import { addPower } from '../power/PowerGauge';
+import { addPlayerPower } from '../power/PowerGauge';
 import { isAtFallbackStageEdge } from './FallbackStageRules';
 
 const STAND_HIT_STATE = 5000;
@@ -637,16 +637,21 @@ function applyHitDefAuxiliary(
         : hitDef.cornerPush?.ground;
   const attacker = {
     ...attackerAfterContact,
-    ...(attackerPower === undefined ? {} : { power: addPower(attackerPowerBefore, attackerPower) }),
     ...(hitDef.p1SprPriority === undefined ? {} : { sprPriority: hitDef.p1SprPriority }),
     ...(atEdge && cornerVelocity !== undefined ? { vx: attackerAfterContact.vx + cornerVelocity * attackerBefore.facing } : {}),
   };
   const target = {
     ...targetAfterContact,
-    ...(targetPower === undefined ? {} : { power: addPower(targetPowerBefore, targetPower) }),
     ...(hitDef.p2SprPriority === undefined ? {} : { sprPriority: hitDef.p2SprPriority }),
   };
-  return { attacker, target, attackerPowerBefore, targetPowerBefore, atEdge, cornerVelocity };
+  return {
+    attacker: attackerPower === undefined ? attacker : addPlayerPower(attacker, attackerPower),
+    target: targetPower === undefined ? target : addPlayerPower(target, targetPower),
+    attackerPowerBefore,
+    targetPowerBefore,
+    atEdge,
+    cornerVelocity,
+  };
 }
 
 function formatHitAuxiliaryDiagnostics(

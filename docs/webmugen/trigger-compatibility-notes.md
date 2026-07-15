@@ -32,6 +32,7 @@ Do not mark safe defaults as Complete.
 | `StateType` | Complete | Basic S/C/A/L comparison. | State header correctness still matters. |
 | `Ctrl` | Complete | Bare `Ctrl` and numeric `Ctrl = 1` / `Ctrl = 0` comparisons are covered, including the bundled T-H-M-A State -1 route. | Control handoff semantics depend on state/controller flow. |
 | `Time` | Complete | State time comparison. | Previous-state and transition timing still need broader route tests. |
+| `Power` / `PowerMax` | Partial | Reads the evaluated P1/P2 player's durable current value and `[Data] power`-derived maximum; focused tests cover threshold routes and 9000 limits. | Helper/root redirect ownership awaits the Helper runtime. |
 | `MoveContact` / `MoveHit` / `MoveGuarded` / `HitCount` | Partial | Reads ActiveHitDef-generation contact/hit/guard flags and State-local hit count; live normal and guarded routes are tested. | Persist headers and Helper/projectile parity remain incomplete. |
 | `HitDefAttr` | Partial | Compares requested State/category sets with the normalized ActiveHitDef attr shared by HitBy/NotHitBy collision filtering. | Redirect and malformed multi-attr edge cases remain incomplete. |
 | `GetHitVar` | Partial | Reads a contact snapshot for damage, hit/slide/control time, velocities, type/animation codes, fall values, ids, guarded, and yaccel across get-hit State changes. | Offset/fall-time keys and later guard/fall semantics still use diagnosed safe defaults. |
