@@ -121,6 +121,10 @@ MoveContact, MoveHit, MoveGuarded, and HitCount read an attacker-side result own
 
 Successful HitDef contact registers `{playerId, hitDefId, activeHitDefId}` on the attacker. NumTarget optionally filters by HitDef id; TargetID and TargetStateNo select the first matching entry. The storage permits multiple targets and is pruned for KO/destroyed players; round restart creates an empty list. Current TargetStateNo lookup is verified for the two-player runtime, while Helper/multi-player lookup remains Partial.
 
+Issue #65 connects that same registry to redirect expressions. `target(ID), MoveType` treats `ID` as the HitDef `id`, selects the first matching live Target entry, resolves its runtime player, and then evaluates `MoveType` on that player. It does not compare `ID` with StateNo or runtime entity id. A missing id/player produces SFalse for both equality and inequality instead of falling back to self or the ordinary opponent.
+
+Trigger record grouping remains `triggerall` AND every numbered group, repeated records with the same `triggerN` are AND, and different numbered groups are OR. `PrevStateNo` is written from the immediate source on every State entry, including multiple same-frame ChangeState entries; `MoveHit` remains owned by the accepted ActiveHitDef contact lifecycle described above. `raw.target_composite_trigger` records the three layers together for routes such as T-H-M-A 1015 -> 1016.
+
 ## Debug output
 
 For a route under investigation, expose:

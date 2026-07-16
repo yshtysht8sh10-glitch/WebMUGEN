@@ -32,7 +32,7 @@ export type CnsRuntimeTriggerContext = {
 };
 
 type NumberSource = (context: CnsRuntimeTriggerContext) => number | null;
-type StringSource = (context: CnsRuntimeTriggerContext) => string;
+type StringSource = (context: CnsRuntimeTriggerContext) => string | null;
 type BooleanSource = (context: CnsRuntimeTriggerContext) => boolean;
 
 export function evaluateCnsRuntimeTrigger(
@@ -116,7 +116,8 @@ function evaluateComparison(expression: string, context: CnsRuntimeTriggerContex
 
     const source = getStringSource(stringMatch[1]);
     if (!source) return false;
-    return compareString(source(context), stringMatch[2], stringMatch[3]);
+    const actual = source(context);
+    return actual !== null && compareString(actual, stringMatch[2], stringMatch[3]);
   }
 
   const numberComparison = splitTopLevelComparison(expression);
@@ -132,7 +133,8 @@ function evaluateComparison(expression: string, context: CnsRuntimeTriggerContex
   if (enumMatch) {
     const source = getStringSource(enumMatch[1]);
     if (!source) return false;
-    return compareString(source(context), enumMatch[2], enumMatch[3]);
+    const actual = source(context);
+    return actual !== null && compareString(actual, enumMatch[2], enumMatch[3]);
   }
 
   return false;
@@ -445,34 +447,60 @@ function getFunctionNumberSource(name: string): NumberSource | null {
 }
 
 function getRedirectNumberSource(name: string): NumberSource | null {
-  const redirectMatch = name.match(/^(enemynear|enemy|target|parent|root)\s*,\s*(.+)$/);
-  if (!redirectMatch) return null;
-
-  const redirect = redirectMatch[1];
-  const redirectedExpression = redirectMatch[2];
+  const parsed = parseRedirect(name);
+  if (!parsed) return null;
 
   return (context) => {
-    const redirectedPlayer = redirect === 'parent' || redirect === 'root'
-      ? context.player
-      : context.opponent ?? context.player;
-    return readNumberExpression(redirectedExpression, { ...context, player: redirectedPlayer, opponent: context.player }) ?? 0;
+    const redirectedPlayer = resolveRedirectPlayer(parsed.kind, parsed.argument, context);
+    if (!redirectedPlayer) return null;
+    return readNumberExpression(parsed.expression, { ...context, player: redirectedPlayer, opponent: context.player });
   };
 }
 
 function getRedirectStringSource(name: string): StringSource | null {
-  const redirectMatch = name.match(/^(enemynear|enemy|target|parent|root)\s*,\s*(.+)$/);
-  if (!redirectMatch) return null;
-
-  const redirect = redirectMatch[1];
-  const redirectedExpression = redirectMatch[2];
+  const parsed = parseRedirect(name);
+  if (!parsed) return null;
 
   return (context) => {
-    const redirectedPlayer = redirect === 'parent' || redirect === 'root'
-      ? context.player
-      : context.opponent ?? context.player;
-    const source = getStringSource(redirectedExpression);
-    return source ? source({ ...context, player: redirectedPlayer, opponent: context.player }) : '';
+    const redirectedPlayer = resolveRedirectPlayer(parsed.kind, parsed.argument, context);
+    if (!redirectedPlayer) return null;
+    const source = getStringSource(parsed.expression);
+    return source ? source({ ...context, player: redirectedPlayer, opponent: context.player }) : null;
   };
+}
+
+type RedirectKind = 'enemynear' | 'enemy' | 'target' | 'parent' | 'root';
+
+function parseRedirect(name: string): { kind: RedirectKind; argument?: string; expression: string } | null {
+  const match = name.match(/^(enemynear|enemy|target|parent|root)(?:\(([^)]*)\))?\s*,\s*(.+)$/);
+  if (!match) return null;
+  return { kind: match[1] as RedirectKind, argument: match[2]?.trim() || undefined, expression: match[3] };
+}
+
+export function resolveCnsRuntimeRedirect(
+  kind: RedirectKind,
+  argument: string | undefined,
+  context: CnsRuntimeTriggerContext,
+): PlayerState | undefined {
+  return resolveRedirectPlayer(kind, argument, context);
+}
+
+function resolveRedirectPlayer(
+  kind: RedirectKind,
+  argument: string | undefined,
+  context: CnsRuntimeTriggerContext,
+): PlayerState | undefined {
+  if (kind === 'parent' || kind === 'root') return context.player;
+  if (kind === 'target') {
+    const requestedId = argument === undefined ? undefined : readNumberExpression(argument, context);
+    if (argument !== undefined && requestedId === null) return undefined;
+    const selected = selectTargets(context.player, requestedId ?? undefined)[0];
+    return selected && context.opponent?.id === selected.playerId ? context.opponent : undefined;
+  }
+
+  const requestedIndex = argument === undefined ? 0 : readNumberExpression(argument, context);
+  if (requestedIndex !== 0) return undefined;
+  return context.opponent;
 }
 
 function normalizeExpression(expression: string): string {

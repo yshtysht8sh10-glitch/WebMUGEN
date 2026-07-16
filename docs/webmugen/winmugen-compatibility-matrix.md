@@ -369,7 +369,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | MatchOver | Partial 75% | Implemented: Becomes true for the live KO/time-over round phase and drives common State 5150's match-over animation. Missing: full match-series and team-mode rules. Evidence: focused State 5150 MatchOver animation and RoundState tests. |
 | MoveContact | Partial 80% | Implemented: Reads real hit or guarded contact state for the current ActiveHitDef generation; `movehitpersist` independently preserves or resets result flags on State entry. MoveReversed/team semantics remain incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
 | MoveGuarded | Partial 75% | Implemented: Guardflag-approved live contact sets guarded without setting MoveHit; persist headers remain incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| MoveHit | Partial 80% | Implemented: Reads accepted-hit state and drives tested hit-confirm cancel routes; persistence remains incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| MoveHit | Partial 85% | Implemented: Reads accepted-hit state and drives tested hit-confirm cancel routes, including Issue #65 repeated-trigger target redirect integration. Missing: Helper/projectile parity and broader WinMUGEN lifetime cases. Evidence: focused MoveContact, live HitDef, and bundled T-H-M-A State 1015 tests. |
 | MoveReversed | Not started | Reversal/contact state not implemented. |
 | MoveType | Complete | Basic support. |
 | Name | Partial 40% | Implemented: String source exists; metadata defaults empty. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
@@ -403,7 +403,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | Pos Y | Complete | Basic Y comparison. |
 | Power | Partial 80% | Implemented: Reads the evaluated P1/P2 player's durable value; threshold command routes, state preservation, consumption, independence, and round reset are focused-tested. Missing: Helper/root redirect ownership pending Issue #58. Evidence: Issue #52 focused runtime tests and `raw.power`. |
 | PowerMax | Partial 80% | Implemented: Reads each P1/P2 player's `[Data] power`-derived maximum (default 3000), including bundled 9000-limit characters. Missing: Helper/root redirect ownership pending Issue #58. Evidence: Issue #52 loader/runtime tests and HUD integration. |
-| PrevStateNo | Partial 40% | Implemented: Optional field read; previous-state tracking incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| PrevStateNo | Partial 80% | Implemented: Records the immediate source on State entry, re-entry, and multiple same-frame transitions; round reset has no stale value. Missing: Helper/custom-state ownership and broader real-character audit. Evidence: Issue #65 focused and bundled T-H-M-A integration tests. |
 | ProjCancelTime | Safe no-op | Recognized by the runtime without changing game state. Safe default -1. |
 | ProjContact | Not started | Boolean projectile contact not implemented. |
 | ProjContactTime | Safe no-op | Recognized by the runtime without changing game state. Safe default -1. |
@@ -451,7 +451,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | parent | Fallback 40% | Implemented: Safe self fallback for non-helper runtime. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current approximate behavior, runtime inventory, and focused-test inventory. |
 | partner | Not started | Team mode not implemented. |
 | root | Fallback 40% | Implemented: Safe self fallback for non-helper runtime. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current approximate behavior, runtime inventory, and focused-test inventory. |
-| target | Fallback 40% | Implemented: Safe opponent/self fallback; true target list not implemented. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current approximate behavior, runtime inventory, and focused-test inventory. |
+| target | Partial 70% | Implemented: Resolves optional HitDef id through the attacker's live Target registry, evaluates the selected two-player runtime entity, and returns SFalse when absent. Missing: Helper/team/multi-target selection parity and other redirected trigger families. Evidence: Issue #65 positive/negative and bundled T-H-M-A integration tests plus Runtime History diagnostics. |
 | playerid | Not started | Player lookup by id not implemented. |
 
 ## Expression / Operator Support
@@ -481,7 +481,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | `var(n)` | Complete | Basic integer var lookup supported. |
 | `sysvar(n)` | Complete | Basic system var lookup supported. |
 | `fvar(n)` | Partial 40% | Implemented: Float var lookup defaults to 0. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| Redirect expression chain | Partial 40% | Implemented: `enemynear, stateno` style basic support. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| Redirect expression chain | Partial 65% | Implemented: Parses bare and indexed `enemy`/`enemynear` plus optional HitDef-id `target(ID)` before evaluating numeric or enum child triggers; missing redirect is SFalse. Missing: Helper/parent/root ownership and team/multi-entity selection. Evidence: Issue #65 focused evaluator/runtime diagnostics and integration tests. |
 
 ## CMD Compatibility
 

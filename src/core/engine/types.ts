@@ -143,6 +143,7 @@ export type PlayerState = {
   sprPriority?: number;
   comboHitCount?: number;
   stateNo: number;
+  prevStateNo?: number;
   stateTime: number;
   stateType: 'S' | 'C' | 'A' | 'L';
   moveType: 'I' | 'A' | 'H';

@@ -6,7 +6,7 @@ import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 import { activateMoveContact, resetMoveContact } from '../hitdef/MoveContactState';
 import { removeTarget, selectTargets } from '../hitdef/TargetState';
 import { normalizeHitAttribute } from '../hitdef/HitAttribute';
-import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, readNumberExpression, type CnsRuntimeTriggerContext } from './CnsRuntimeTrigger';
+import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, readNumberExpression, resolveCnsRuntimeRedirect, type CnsRuntimeTriggerContext } from './CnsRuntimeTrigger';
 import type { SoundPanEvent, SoundPlayEvent, SoundStopEvent } from '../audio/SoundEvent';
 import { canEntityMoveDuringPause, type PauseControllerEvent, type PauseState } from '../pause/PauseSystem';
 import {
@@ -404,6 +404,7 @@ function executeStateControllers(
       ? withTriggerStateSnapshot(next, negativeStateEntry)
       : next;
     const run = shouldRun(controller, triggerPlayer, input, commands, opponent);
+    next = appendTargetCompositeTriggerDiagnostic(next, triggerPlayer, opponent, stateDef, controller, input, commands, runtimeFrame, run);
     const debugLine = debugControllerCheck(stateDef, controller, triggerPlayer, input, commands, run);
     if (debugEnabled && debugLine) {
       pushDebug(debugLines, executedControllers, debugLine);
@@ -959,6 +960,44 @@ function executeController(
   if (noOpName) return withPlayer(player, true, noOpName);
 
   return withPlayer(player, false, controller.type);
+}
+
+function appendTargetCompositeTriggerDiagnostic(
+  outputPlayer: PlayerState,
+  triggerPlayer: PlayerState,
+  opponent: PlayerState,
+  stateDef: CnsStateDefinition,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands: ReadonlySet<string> | undefined,
+  runtimeFrame: number,
+  aggregateResult: boolean,
+): PlayerState {
+  if (input.hitDiagnostics === false) return outputPlayer;
+  const targetTrigger = controller.triggers.find((trigger) => /target\s*\(/i.test(trigger.expression));
+  if (!targetTrigger || !controller.triggers.some((trigger) => /prevstateno|movecontact|movehit|moveguarded/i.test(trigger.expression))) {
+    return outputPlayer;
+  }
+
+  const context = createTriggerContext(triggerPlayer, input, commands, opponent);
+  const requestedText = targetTrigger.expression.match(/target\s*\(([^)]*)\)/i)?.[1]?.trim();
+  const requestedId = requestedText === undefined ? undefined : readNumberExpression(requestedText, context);
+  const redirected = resolveCnsRuntimeRedirect('target', requestedText, context);
+  const contact = triggerPlayer.moveContact;
+  const triggerResults = controller.triggers.map((trigger, index) =>
+    `  trigger[${index}] ${trigger.name} expression=${trigger.expression} result=${evaluateCnsRuntimeTrigger(trigger.expression, context) ? 1 : 0}`,
+  );
+  return {
+    ...outputPlayer,
+    hitDiagnosticLines: [
+      ...(outputPlayer.hitDiagnosticLines ?? []),
+      `raw.target_composite_trigger frame=${runtimeFrame} entity=p${triggerPlayer.id} controller=${controller.type} state=${stateDef.stateNo}`,
+      `  StateNo=${triggerPlayer.stateNo} PrevStateNo=${triggerPlayer.prevStateNo ?? triggerPlayer.stateNo} MoveContact=${contact?.contact ? 1 : 0} MoveHit=${contact?.hit ? 1 : 0} MoveGuarded=${contact?.guarded ? 1 : 0}`,
+      `  activeTargetIds=${(triggerPlayer.targets ?? []).map((entry) => `${entry.hitDefId}->p${entry.playerId}`).join(',') || 'none'} targetRedirectRequestedId=${requestedId ?? 'invalid'} targetRedirectResolvedEntityId=${redirected?.id ?? 'none'} targetRedirectFound=${redirected ? 1 : 0} targetStateNo=${redirected?.stateNo ?? 'SFalse'} targetMoveType=${redirected?.moveType ?? 'SFalse'}`,
+      ...triggerResults,
+      `  triggerGroup aggregateResult=${aggregateResult ? 1 : 0} ChangeState=${controller.type.toLowerCase() === 'changestate' && aggregateResult ? 'eligible' : 'not_executed'} targetState=${num(controller, 'value', triggerPlayer, input, commands, opponent) ?? '-'} ctrlBefore=${triggerPlayer.ctrl ? 1 : 0} requestedCtrl=${num(controller, 'ctrl', triggerPlayer, input, commands, opponent) ?? 'statedef'}`,
+    ],
+  };
 }
 
 function createHelper(

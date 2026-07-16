@@ -122,11 +122,13 @@ Issue #63 audits the entire accepted-HitDef-to-recovery/KO pipeline rather than 
 
 Issue #64 adds an explicitly non-compatibility Power Infinite runtime setting. Selected root players are normalized to their real `powerMax` at the game-frame boundary before CNS evaluation; ordinary Power controllers, StateDef `poweradd`, HitDef transfers, and later same-frame triggers still observe normal ordered mutations until the following frame. Modes, persistence, reset behavior, HUD marking, and the Helper phase boundary are documented in `infinite-power-settings.md`.
 
+Issue #65 routes `target(ID)` through the accepted-HitDef Target registry rather than treating its argument as StateNo/runtime entity id or falling back to self. The T-H-M-A 1015 -> 1016 path is covered with `PrevStateNo`, accepted `MoveHit`, redirected target `MoveType=H`, repeated-trigger AND aggregation, terminal ChangeState, and controller `ctrl=1`; miss, guard, missing-id, and wrong-previous-State cases remain out of the route.
+
 ## Good next runtime improvements
 
 - richer controller execution tables;
 - cleaner trigger group diagnostics;
-- previous-state tracking for `PrevStateNo` and related triggers;
+- previous-state ownership beyond the verified root-player ChangeState path;
 - Helper and animation ownership beyond the implemented HitDef/TargetState/SelfState CNS owner ids;
 - runtime events for HitDef/contact lifecycle.
 

@@ -160,6 +160,8 @@ Issue #57 adds a blue Push Box using the same `[Size]`-derived rectangle as the 
 
 Runtime Settings `Power Infinite` is separate from CNS compatibility. The Canvas power gauge displays `∞` for each selected root player, while `raw.power_hud infinite=off|p1|p2|both` exposes the current selection. An actual refill or mode transition produces `raw.power_infinite timing=frame_start` with the real before/after and `powerMax`; normal controller and HitDef power diagnostics continue to show later mutations in that frame.
 
+Issue #65 adds `raw.target_composite_trigger` for controllers that combine a target redirect with `PrevStateNo` or MoveContact-family conditions. It records State/PrevState, MoveContact/MoveHit/MoveGuarded, registered `hitDefId -> runtime player` targets, requested target id, resolved entity/State/MoveType, every trigger record result, the numbered-group aggregate, ChangeState target, and control request. A missing redirect is printed as `targetRedirectFound=0` and `SFalse` rather than silently reading self/opponent.
+
 ## Minimum useful dump
 
 A useful dump includes:
