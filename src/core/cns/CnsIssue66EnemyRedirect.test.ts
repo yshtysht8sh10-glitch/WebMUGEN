@@ -159,4 +159,43 @@ value = 2
     expect(seen).toContain(102);
     expect(restartRound(1).gameState.players[ownerIndex]).toMatchObject({ stateNo: 0, activeHitDef: null });
   });
+
+  it.each([1, 2] as const)('does not let the bundled negative-State command re-enter 3405 from 3415 for P%i', async (ownerId) => {
+    const [moveSource, cmdSource, airSource] = await Promise.all([
+      readFile('public/chars/T-H-M-A/T-H-M-A/T-H-M-Atyouhi.cns', 'utf8'),
+      readFile('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.cmd', 'utf8'),
+      readFile('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.air', 'utf8'),
+    ]);
+    const moveCns = parseCnsText(moveSource);
+    const cmdCns = parseCnsText(cmdSource);
+    const cns = { states: [...cmdCns.states, ...moveCns.states], metadataSections: [...cmdCns.metadataSections, ...moveCns.metadataSections] };
+    const air = parseAirText(airSource);
+    const route = cmdCns.states.find((state) => state.stateNo === -1)?.controllers.find((controller) =>
+      controller.type.toLowerCase() === 'changestate' && controller.params.value === 3405,
+    );
+    const commandName = route?.triggers.map((trigger) => trigger.expression.match(/^command\s*=\s*"([^"]+)"$/i)?.[1]).find(Boolean);
+    expect(commandName).toBeTruthy();
+
+    let state = createInitialGameState();
+    const ownerIndex = ownerId - 1;
+    const inputBase = {
+      getAnimationDuration: (animNo: number) => getMugenAnimEndTime(air, animNo),
+      getAnimationTriggerInfo: (animNo: number, animTime: number) => getAnimationTriggerInfo(air, animNo, animTime),
+    };
+    const seen: number[] = [];
+    for (let frame = 0; frame < 18; frame += 1) {
+      const active = frame === 0 ? new Set([commandName!.toLowerCase()]) : new Set<string>();
+      state = stepCnsStateRuntime(state, cns, {
+        ...inputBase,
+        p1Commands: ownerId === 1 ? active : new Set(),
+        p2Commands: ownerId === 2 ? active : new Set(),
+      }).state;
+      seen.push(state.players[ownerIndex].stateNo);
+      state = stepCnsPhysicsMotion(state, cns);
+    }
+
+    expect(seen).toContain(3405);
+    expect(seen).toContain(3415);
+    expect(seen.slice(seen.indexOf(3415))).not.toContain(3405);
+  });
 });
