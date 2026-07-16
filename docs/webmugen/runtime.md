@@ -120,6 +120,8 @@ State 5150 is the lying-dead state and never accepts recovery input. States 5200
 
 Issue #63 audits the entire accepted-HitDef-to-recovery/KO pipeline rather than treating each State family in isolation. The consolidated invariants, exact StateDef inventory, bundled T-H-M-A State 215 scenarios, and user confirmation boundary are recorded in `common-state-chain-audit.md`.
 
+Issue #64 adds an explicitly non-compatibility Power Infinite runtime setting. Selected root players are normalized to their real `powerMax` at the game-frame boundary before CNS evaluation; ordinary Power controllers, StateDef `poweradd`, HitDef transfers, and later same-frame triggers still observe normal ordered mutations until the following frame. Modes, persistence, reset behavior, HUD marking, and the Helper phase boundary are documented in `infinite-power-settings.md`.
+
 ## Good next runtime improvements
 
 - richer controller execution tables;

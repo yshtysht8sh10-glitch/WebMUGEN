@@ -237,14 +237,20 @@ export class CanvasRenderer {
     ctx.strokeRect(20, 342, 260, 8);
     ctx.strokeRect(360, 342, 260, 8);
 
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 15px sans-serif';
+    if (p1.infinitePower) ctx.fillText('∞', 284, 350);
+    if (p2.infinitePower) ctx.fillText('∞', 344, 350);
+
     const p1Power = p1.power ?? 0;
     const p2Power = p2.power ?? 0;
     const p1PowerMax = p1.powerMax ?? 3000;
     const p2PowerMax = p2.powerMax ?? 3000;
-    const signature = `${p1Power}/${p1PowerMax}|${p2Power}/${p2PowerMax}`;
+    const infiniteMode = p1.infinitePower && p2.infinitePower ? 'both' : p1.infinitePower ? 'p1' : p2.infinitePower ? 'p2' : 'off';
+    const signature = `${p1Power}/${p1PowerMax}|${p2Power}/${p2PowerMax}|${infiniteMode}`;
     if (signature === this.lastPowerHudSignature) return [];
     this.lastPowerHudSignature = signature;
-    const diagnostics = [`raw.power_hud p1=${p1Power}/${p1PowerMax} width=${260 * p1Ratio} p2=${p2Power}/${p2PowerMax} width=${260 * p2Ratio}`];
+    const diagnostics = [`raw.power_hud p1=${p1Power}/${p1PowerMax} width=${260 * p1Ratio} p2=${p2Power}/${p2PowerMax} width=${260 * p2Ratio} infinite=${infiniteMode}`];
     if (!this.reportedInitialPower) {
       this.reportedInitialPower = true;
       diagnostics.unshift(

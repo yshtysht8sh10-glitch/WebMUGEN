@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState, type MutableRefObject } fro
 import { CanvasRenderer } from '../renderer/canvas2d/CanvasRenderer';
 import { createInitialGameState } from '../core/engine/GameState';
 import type { GameState } from '../core/engine/types';
+import { applyInfinitePowerAtFrameStart } from '../core/power/InfinitePower';
 import { createSampleCharacterAssets, loadAppCharacter } from './AppCharacterLoader';
 import type { CharacterSourceFile } from '../core/character/CharacterTypes';
 import type { SndDocument } from '../parser/snd/SndTypes';
@@ -52,6 +53,14 @@ import {
   type RoundScore,
 } from '../core/engine/RoundScore';
 import { canRestartRound, restartRound } from '../core/engine/RoundRestart';
+import {
+  DEFAULT_FRAME_INTERVAL_MS,
+  DEFAULT_RUNTIME_SETTINGS,
+  loadRuntimeSettings,
+  normalizeRuntimeSettings,
+  saveRuntimeSettings,
+  type RuntimeSettings,
+} from './RuntimeSettings';
 import { calculateMugenAnimTime, getMugenAnimEndTime } from '../core/animation/AnimationDuration';
 import { getAnimationTriggerInfo, getCurrentAnimationElement } from '../core/animation/AnimationPlayer';
 import { attachFallbackAttackStates } from '../core/cns/CnsFallbackDocument';
@@ -106,22 +115,8 @@ const READABLE_STATE_STATUS_ALWAYS_SHOW_TYPES = new Set(['changestate', 'changea
 const READABLE_STATE_STATUS_EXTRA_CONTROLLER_LIMIT = 10;
 const INPUT_CONFIG_STORAGE_KEY = 'webmugen.inputConfig.v1';
 const CHARACTER_PATH_STORAGE_KEY = 'webmugen.characterPath.v1';
-const RUNTIME_SETTINGS_STORAGE_KEY = 'webmugen.runtimeSettings.v1';
 const CHARACTER_PATH_OPTIONS = ['/chars/T-H-M-A.zip', '/chars/kfm/kfm.def'] as const;
-const DEFAULT_FRAME_INTERVAL_MS = 1000 / 60;
 const RUNTIME_HISTORY_RENDER_THROTTLE_MS = 250;
-
-type RuntimeSettings = {
-  roundTime: number;
-  frameIntervalMs: number;
-  hitDiagnostics: boolean;
-};
-
-const DEFAULT_RUNTIME_SETTINGS: RuntimeSettings = {
-  roundTime: DEFAULT_ROUND_TIMER,
-  frameIntervalMs: DEFAULT_FRAME_INTERVAL_MS,
-  hitDiagnostics: true,
-};
 
 type AppPage = 'play' | 'static-files';
 type DebugTab = 'runtime-human' | 'runtime-ai' | 'manual' | 'settings';
@@ -385,7 +380,10 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
         setInputDebugLines(nextInputDebugLines);
         setCommandDebugLines(nextCommandDebugLines);
 
-        let nextState = synchronizeRuntimeFrame(gameStateRef.current, frameNoRef.current);
+        let nextState = applyInfinitePowerAtFrameStart(
+          synchronizeRuntimeFrame(gameStateRef.current, frameNoRef.current),
+          runtimeSettingsRef.current.infinitePower,
+        );
         let nextReadableHistoryState = nextState;
         let nextRoundState = roundStateRef.current;
         let nextFeedback = hitFeedbackRef.current;
@@ -399,7 +397,10 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           canRestartRound(nextRoundState)
         ) {
           const restarted = restartRound(nextRoundState.roundNo, runtimeSettingsRef.current.roundTime, characterPowerMax);
-          nextState = synchronizeRuntimeFrame(restarted.gameState, frameNoRef.current);
+          nextState = applyInfinitePowerAtFrameStart(
+            synchronizeRuntimeFrame(restarted.gameState, frameNoRef.current),
+            runtimeSettingsRef.current.infinitePower,
+          );
           nextRoundState = restarted.roundState;
           nextFeedback = restarted.hitFeedbackState;
           nextCnsTraces = [];
@@ -1183,6 +1184,22 @@ function RuntimeSettingsPanel({
           />
         </label>
         <label>
+          Power Infinite
+          <select
+            aria-label="Power Infinite"
+            value={settings.infinitePower}
+            onChange={(event) => onChange({
+              ...settings,
+              infinitePower: event.currentTarget.value as RuntimeSettings['infinitePower'],
+            })}
+          >
+            <option value="off">OFF</option>
+            <option value="p1">P1</option>
+            <option value="p2">P2</option>
+            <option value="both">P1 + P2</option>
+          </select>
+        </label>
+        <label>
           <input
             type="checkbox"
             checked={settings.hitDiagnostics}
@@ -1414,31 +1431,6 @@ function loadCharacterPath(): string {
 function saveCharacterPath(path: string): void {
   if (typeof localStorage === 'undefined') return;
   localStorage.setItem(CHARACTER_PATH_STORAGE_KEY, path);
-}
-
-function loadRuntimeSettings(): RuntimeSettings {
-  if (typeof localStorage === 'undefined') return { ...DEFAULT_RUNTIME_SETTINGS };
-  try {
-    const raw = localStorage.getItem(RUNTIME_SETTINGS_STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_RUNTIME_SETTINGS };
-    return normalizeRuntimeSettings(JSON.parse(raw));
-  } catch {
-    return { ...DEFAULT_RUNTIME_SETTINGS };
-  }
-}
-
-function saveRuntimeSettings(settings: RuntimeSettings): void {
-  if (typeof localStorage === 'undefined') return;
-  localStorage.setItem(RUNTIME_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-}
-
-function normalizeRuntimeSettings(value: unknown): RuntimeSettings {
-  const source = value && typeof value === 'object' ? value as Partial<RuntimeSettings> : {};
-  return {
-    roundTime: clampInteger(source.roundTime, 0, 999, DEFAULT_RUNTIME_SETTINGS.roundTime),
-    frameIntervalMs: clampNumber(source.frameIntervalMs, 1, 1000, DEFAULT_RUNTIME_SETTINGS.frameIntervalMs),
-    hitDiagnostics: source.hitDiagnostics ?? DEFAULT_RUNTIME_SETTINGS.hitDiagnostics,
-  };
 }
 
 function normalizeInputConfig(value: unknown): InputConfig {

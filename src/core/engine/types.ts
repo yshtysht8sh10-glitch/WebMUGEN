@@ -139,6 +139,7 @@ export type PlayerState = {
   koReason?: 'hit' | 'guard' | 'fall';
   power?: number;
   powerMax?: number;
+  infinitePower?: boolean;
   sprPriority?: number;
   comboHitCount?: number;
   stateNo: number;

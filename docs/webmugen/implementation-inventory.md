@@ -41,6 +41,7 @@ This document is a high-level inventory of WebMUGEN implementation areas. It is 
 | Hit effects | Contact envelopes feed same-frame shared Explod sparks, shared Browser Audio cues, and envshake offsets once per HitEvent. Character `S` scope is production-connected; bundled common fightfx/SND assets are absent and remain diagnosed Partial. |
 | Browser audio | Shared lazy AudioContext adapter supports user-gesture unlock, decode cache, owner/channel gain and pan, a ramped persistent 0-100 master/mute UI (default 50%), stop/cleanup, and safe diagnostics. Common SND and advanced ownership remain incomplete. |
 | Static debug | Character load, StateDef list, command routes, and coverage are visible. |
+| Runtime settings | Persistent Game time, frame interval, hit diagnostics, and root-player Power Infinite modes exist. Power Infinite uses real `powerMax`, frame-start replenishment, HUD/Runtime History diagnostics, and does not alter normal CNS Power semantics. |
 
 ## Documentation layer
 
@@ -57,6 +58,7 @@ This document is a high-level inventory of WebMUGEN implementation areas. It is 
 | Animation | `animation.md` |
 | Debug Overlay | `debug-overlay.md` |
 | Runtime History | `runtime-history.md` |
+| Power Infinite setting | `infinite-power-settings.md` |
 | Matrix maintenance | `matrix-maintenance.md` |
 | StateDef header notes | `state-def-header-notes.md` |
 | Trigger notes | `trigger-compatibility-notes.md` |
