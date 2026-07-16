@@ -6,7 +6,7 @@ import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 import { activateMoveContact, resetMoveContact } from '../hitdef/MoveContactState';
 import { removeTarget, selectTargets } from '../hitdef/TargetState';
 import { normalizeHitAttribute } from '../hitdef/HitAttribute';
-import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, readNumberExpression, resolveCnsRuntimeRedirect, type CnsRuntimeTriggerContext } from './CnsRuntimeTrigger';
+import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, inspectCnsRuntimeRedirect, readNumberExpression, resolveCnsRuntimeRedirect, type CnsRuntimeTriggerContext } from './CnsRuntimeTrigger';
 import type { SoundPanEvent, SoundPlayEvent, SoundStopEvent } from '../audio/SoundEvent';
 import { canEntityMoveDuringPause, type PauseControllerEvent, type PauseState } from '../pause/PauseSystem';
 import {
@@ -404,6 +404,7 @@ function executeStateControllers(
       ? withTriggerStateSnapshot(next, negativeStateEntry)
       : next;
     const run = shouldRun(controller, triggerPlayer, input, commands, opponent);
+    next = appendRedirectTriggerDiagnostics(next, triggerPlayer, opponent, stateDef, controller, input, commands, runtimeFrame, run);
     next = appendTargetCompositeTriggerDiagnostic(next, triggerPlayer, opponent, stateDef, controller, input, commands, runtimeFrame, run);
     const debugLine = debugControllerCheck(stateDef, controller, triggerPlayer, input, commands, run);
     if (debugEnabled && debugLine) {
@@ -644,6 +645,17 @@ function createTriggerContext(
     roundWinner: input.roundWinner,
     isHelper: input.entityContext?.kind === 'helper',
     numHelper: input.numHelper,
+    getRedirectAnimationContext: (candidate) => {
+      const info = input.getAnimationTriggerInfo?.(candidate.animNo, candidate.animTime) ?? null;
+      return {
+        animTime: mugenAnimTime(candidate, input),
+        animElemNo: info?.elementNo ?? input.getAnimationElementNo?.(candidate.animNo, candidate.animTime) ?? undefined,
+        animElemTime: info?.elementTime,
+        animElemStarted: info?.elementStarted,
+        animElemCount: info?.elementCount,
+        animElemTimes: info?.elementTimes,
+      };
+    },
   };
 }
 
@@ -998,6 +1010,33 @@ function appendTargetCompositeTriggerDiagnostic(
       `  triggerGroup aggregateResult=${aggregateResult ? 1 : 0} ChangeState=${controller.type.toLowerCase() === 'changestate' && aggregateResult ? 'eligible' : 'not_executed'} targetState=${num(controller, 'value', triggerPlayer, input, commands, opponent) ?? '-'} ctrlBefore=${triggerPlayer.ctrl ? 1 : 0} requestedCtrl=${num(controller, 'ctrl', triggerPlayer, input, commands, opponent) ?? 'statedef'}`,
     ],
   };
+}
+
+function appendRedirectTriggerDiagnostics(
+  outputPlayer: PlayerState,
+  triggerPlayer: PlayerState,
+  opponent: PlayerState,
+  stateDef: CnsStateDefinition,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands: ReadonlySet<string> | undefined,
+  runtimeFrame: number,
+  aggregateResult: boolean,
+): PlayerState {
+  if (input.hitDiagnostics === false) return outputPlayer;
+  const context = createTriggerContext(triggerPlayer, input, commands, opponent);
+  const redirectLines = controller.triggers.flatMap((trigger, index) => {
+    const detail = inspectCnsRuntimeRedirect(trigger.expression, context);
+    if (!detail) return [];
+    const group = /^triggerall$/i.test(trigger.name) ? 'all' : trigger.name.match(/^trigger(\d+)$/i)?.[1] ?? '1';
+    return [
+      `raw.trigger frame=${runtimeFrame} entity=p${triggerPlayer.id} state=${stateDef.stateNo} controller=${controller.sourceFile ?? '-'}:${controller.sourceLine ?? '-'} type=${controller.type}`,
+      `  group=${group} line=${index + 1} expression="${trigger.expression}" parser=recognized evaluator=redirect redirect=${detail.redirect}${detail.argument === undefined ? '' : `(${detail.argument})`} resolvedEntity=${detail.resolvedEntityId === undefined ? 'none' : `p${detail.resolvedEntityId}`} value=${detail.value ?? 'SFalse'} result=${detail.result ? 1 : 0} selfFallback=0`,
+      `  groupAggregate=${aggregateResult ? 1 : 0} ChangeStateValue=${controller.type.toLowerCase() === 'changestate' ? num(controller, 'value', triggerPlayer, input, commands, opponent) ?? '-' : '-'} ChangeStateExecuted=${controller.type.toLowerCase() === 'changestate' && aggregateResult ? 1 : 0} ChangeStateTerminal=${controller.type.toLowerCase() === 'changestate' && aggregateResult && stateDef.stateNo >= 0 ? 1 : 0} activeHitDefId=${triggerPlayer.activeHitDef?.diagnosticId ?? 'none'}`,
+    ];
+  });
+  if (redirectLines.length === 0) return outputPlayer;
+  return { ...outputPlayer, hitDiagnosticLines: [...(outputPlayer.hitDiagnosticLines ?? []), ...redirectLines] };
 }
 
 function createHelper(

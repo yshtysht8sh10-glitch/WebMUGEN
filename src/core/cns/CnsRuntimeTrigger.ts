@@ -29,6 +29,10 @@ export type CnsRuntimeTriggerContext = {
   constants?: CnsDocument;
   isHelper?: boolean;
   numHelper?: (helperId?: number) => number;
+  getRedirectAnimationContext?: (player: PlayerState) => Pick<
+    CnsRuntimeTriggerContext,
+    'animTime' | 'animElemNo' | 'animElemTime' | 'animElemStarted' | 'animElemCount' | 'animElemTimes'
+  >;
 };
 
 type NumberSource = (context: CnsRuntimeTriggerContext) => number | null;
@@ -194,7 +198,7 @@ function getBooleanSource(name: string): BooleanSource | null {
     case 'root': return () => true;
     case 'parent': return () => true;
     case 'enemynear': return (context) => Boolean(context.opponent);
-    default: return null;
+    default: return getRedirectBooleanSource(name);
   }
 }
 
@@ -360,6 +364,7 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'animelemno': return (context) => context.animElemNo ?? 1;
     case 'animelem': return (context) => context.animElemNo ?? null;
     case 'ctrl': return (context) => context.player.ctrl ? 1 : 0;
+    case 'alive': return (context) => context.player.life > 0 ? 1 : 0;
     case 'matchover': return (context) => context.matchOver ? 1 : 0;
     case 'win': return (context) => context.roundWinner === context.player.id ? 1 : 0;
     case 'lose': return (context) => context.roundWinner !== null && context.roundWinner !== undefined && context.roundWinner !== 'draw' && context.roundWinner !== context.player.id ? 1 : 0;
@@ -453,7 +458,7 @@ function getRedirectNumberSource(name: string): NumberSource | null {
   return (context) => {
     const redirectedPlayer = resolveRedirectPlayer(parsed.kind, parsed.argument, context);
     if (!redirectedPlayer) return null;
-    return readNumberExpression(parsed.expression, { ...context, player: redirectedPlayer, opponent: context.player });
+    return readNumberExpression(parsed.expression, createRedirectContext(context, redirectedPlayer));
   };
 }
 
@@ -465,7 +470,21 @@ function getRedirectStringSource(name: string): StringSource | null {
     const redirectedPlayer = resolveRedirectPlayer(parsed.kind, parsed.argument, context);
     if (!redirectedPlayer) return null;
     const source = getStringSource(parsed.expression);
-    return source ? source({ ...context, player: redirectedPlayer, opponent: context.player }) : null;
+    return source ? source(createRedirectContext(context, redirectedPlayer)) : null;
+  };
+}
+
+function getRedirectBooleanSource(name: string): BooleanSource | null {
+  const parsed = parseRedirect(name);
+  if (!parsed) return null;
+  return (context) => {
+    const redirectedPlayer = resolveRedirectPlayer(parsed.kind, parsed.argument, context);
+    if (!redirectedPlayer) return false;
+    const redirectedContext = createRedirectContext(context, redirectedPlayer);
+    const source = getBooleanSource(parsed.expression);
+    if (source) return source(redirectedContext);
+    const numeric = readNumberExpression(parsed.expression, redirectedContext);
+    return numeric !== null && numeric !== 0;
   };
 }
 
@@ -501,6 +520,58 @@ function resolveRedirectPlayer(
   const requestedIndex = argument === undefined ? 0 : readNumberExpression(argument, context);
   if (requestedIndex !== 0) return undefined;
   return context.opponent;
+}
+
+function createRedirectContext(context: CnsRuntimeTriggerContext, player: PlayerState): CnsRuntimeTriggerContext {
+  const animation = context.getRedirectAnimationContext?.(player);
+  return {
+    ...context,
+    player,
+    opponent: context.player,
+    animTime: animation?.animTime,
+    animElemNo: animation?.animElemNo,
+    animElemTime: animation?.animElemTime,
+    animElemStarted: animation?.animElemStarted,
+    animElemCount: animation?.animElemCount,
+    animElemTimes: animation?.animElemTimes,
+  };
+}
+
+export type CnsRedirectDiagnostic = {
+  redirect: RedirectKind;
+  argument?: string;
+  expression: string;
+  resolvedEntityId?: number;
+  value: number | string | boolean | null;
+  result: boolean;
+};
+
+export function inspectCnsRuntimeRedirect(
+  expression: string,
+  context: CnsRuntimeTriggerContext,
+): CnsRedirectDiagnostic | null {
+  const normalized = normalizeExpression(expression);
+  const comparison = splitTopLevelComparison(normalized);
+  const sourceExpression = comparison?.left ?? normalized;
+  const parsed = parseRedirect(sourceExpression);
+  if (!parsed) return null;
+  const redirectedPlayer = resolveRedirectPlayer(parsed.kind, parsed.argument, context);
+  if (!redirectedPlayer) {
+    return { redirect: parsed.kind, argument: parsed.argument, expression: parsed.expression, value: null, result: false };
+  }
+  const redirectedContext = createRedirectContext(context, redirectedPlayer);
+  const stringSource = getStringSource(parsed.expression);
+  const booleanSource = getBooleanSource(parsed.expression);
+  const numericValue = readNumberExpression(parsed.expression, redirectedContext);
+  const value = numericValue ?? stringSource?.(redirectedContext) ?? booleanSource?.(redirectedContext) ?? null;
+  return {
+    redirect: parsed.kind,
+    argument: parsed.argument,
+    expression: parsed.expression,
+    resolvedEntityId: redirectedPlayer.id,
+    value,
+    result: evaluateCnsRuntimeTrigger(expression, context),
+  };
 }
 
 function normalizeExpression(expression: string): string {

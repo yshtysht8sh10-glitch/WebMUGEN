@@ -125,6 +125,19 @@ Issue #65 connects that same registry to redirect expressions. `target(ID), Move
 
 Trigger record grouping remains `triggerall` AND every numbered group, repeated records with the same `triggerN` are AND, and different numbered groups are OR. `PrevStateNo` is written from the immediate source on every State entry, including multiple same-frame ChangeState entries; `MoveHit` remains owned by the accepted ActiveHitDef contact lifecycle described above. `raw.target_composite_trigger` records the three layers together for routes such as T-H-M-A 1015 -> 1016.
 
+## Enemy redirects
+
+Issue #66 routes `enemy`, `enemynear`, `enemy(0)`, and `enemynear(0)` through the same redirect parser/evaluator used by `target(ID)`. In the current two-root-player runtime, the other root player is both the sole enemy and nearest enemy; index zero selects it, while any other index is unresolved. Numeric, enum, and bare-boolean child expressions execute against the redirected player. Animation children receive that player's Anim, AnimTime, AnimElem, and AnimElemTime context rather than the caller's precomputed AIR values.
+
+| Trigger form | Parser | Evaluator | Resolution | Failure | Self fallback |
+|---|---|---|---|---|---|
+| `enemy, expr` | Preserved | Numeric/string/boolean/AIR child | Other root player | SFalse | No |
+| `enemynear, expr` | Preserved | Numeric/string/boolean/AIR child | Nearest enemy; sole other root in Phase 1 | SFalse | No |
+| `enemy(n), expr` | Preserved with index | Same child evaluator | Index 0 in current two-player roster | SFalse for absent index | No |
+| `enemynear(n), expr` | Preserved with index | Same child evaluator | Nearest index 0 in current two-player roster | SFalse for absent index | No |
+
+Focused tests cover P1/P2 symmetry, MoveType, StateNo, Pos, Vel, Ctrl, Alive, Anim/AnimElem/AnimTime, GetHitVar, repeated-trigger AND, numbered-group OR, missing enemy, indexed lookup, and bundled T-H-M-A 3405/3415 execution. Team/multi-enemy ordering remains Partial.
+
 ## Debug output
 
 For a route under investigation, expose:

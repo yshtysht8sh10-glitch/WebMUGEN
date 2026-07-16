@@ -445,8 +445,8 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 
 | Redirect | Status | Notes |
 |---|---|---|
-| enemy | Partial 50% | Implemented: Redirect parser support exists; maps to opponent when present. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| enemynear | Partial 50% | Implemented: Redirect parser support exists; maps to opponent when present. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| enemy | Partial 80% | Implemented: Resolves the other root symmetrically, supports bare/index-0 numeric/string/boolean/AIR child evaluation, and returns SFalse without self fallback. Missing: team/multi-enemy indexes and Helper ownership. Evidence: Issue #66 focused evaluator, diagnostics, and bundled T-H-M-A 3405/3415 tests. |
+| enemynear | Partial 75% | Implemented: Resolves the sole other root as nearest, supports bare/index-0 child evaluation, and returns SFalse without self fallback. Missing: distance ordering with multiple enemies, teams, and Helper ownership. Evidence: Issue #66 P1/P2, indexed, child-family, grouping, and real-data tests. |
 | helper | Not started | Helper lookup by id/name not implemented. |
 | parent | Fallback 40% | Implemented: Safe self fallback for non-helper runtime. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current approximate behavior, runtime inventory, and focused-test inventory. |
 | partner | Not started | Team mode not implemented. |
@@ -481,7 +481,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | `var(n)` | Complete | Basic integer var lookup supported. |
 | `sysvar(n)` | Complete | Basic system var lookup supported. |
 | `fvar(n)` | Partial 40% | Implemented: Float var lookup defaults to 0. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| Redirect expression chain | Partial 65% | Implemented: Parses bare and indexed `enemy`/`enemynear` plus optional HitDef-id `target(ID)` before evaluating numeric or enum child triggers; missing redirect is SFalse. Missing: Helper/parent/root ownership and team/multi-entity selection. Evidence: Issue #65 focused evaluator/runtime diagnostics and integration tests. |
+| Redirect expression chain | Partial 80% | Implemented: Parses bare/indexed `enemy`/`enemynear` and HitDef-id `target(ID)`, evaluates numeric/string/boolean/AIR children in redirected context, and uses SFalse without self fallback. Missing: Helper/parent/root ownership and team/multi-entity ordering. Evidence: Issues #65/#66 focused evaluator, Runtime History, grouping, and bundled character integration tests. |
 
 ## CMD Compatibility
 

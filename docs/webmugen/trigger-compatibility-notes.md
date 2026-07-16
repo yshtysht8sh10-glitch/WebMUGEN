@@ -40,6 +40,7 @@ Do not mark safe defaults as Complete.
 | `GetHitVar` | Partial | Reads a contact snapshot for damage, hit/slide/control time, velocities, type/animation codes, fall values, ids, guarded, and yaccel across get-hit State changes. | Offset/fall-time keys and later guard/fall semantics still use diagnosed safe defaults. |
 | `NumTarget` / `TargetID` / `TargetStateNo` | Partial | Reads a multi-entry attacker Target list, supports HitDef id filtering, and returns current two-player target State. `target(ID),MoveType` uses the same registry and SFalse on lookup failure. | Helper/team/multi-player selection and other redirected trigger families remain incomplete. |
 | `PrevStateNo` | Partial | Stores the immediate source State on entry, including re-entry and multiple same-frame transitions; round reset starts without stale history. | Helper/custom-state ownership and broader real-character routes remain incomplete. |
+| `enemy` / `enemynear` redirects | Partial | Root P1/P2, index 0, numeric/string/boolean/AIR child context, SFalse failure, grouping, diagnostics, and bundled 3405/3415 are tested. | Team/multiple-enemy nearest/index ordering and Helper ownership remain incomplete. |
 | Projectile triggers | Partial / Unsupported | Some `Proj*Time` safe defaults exist; boolean projectile triggers are incomplete. | Requires projectile subsystem integration. |
 
 ## Trigger group policy

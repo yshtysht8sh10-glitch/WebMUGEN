@@ -124,6 +124,10 @@ Issue #64 adds an explicitly non-compatibility Power Infinite runtime setting. S
 
 Issue #65 routes `target(ID)` through the accepted-HitDef Target registry rather than treating its argument as StateNo/runtime entity id or falling back to self. The T-H-M-A 1015 -> 1016 path is covered with `PrevStateNo`, accepted `MoveHit`, redirected target `MoveType=H`, repeated-trigger AND aggregation, terminal ChangeState, and controller `ctrl=1`; miss, guard, missing-id, and wrong-previous-State cases remain out of the route.
 
+Issue #66's State extraction found that 3405 owns two transitions to 3415: `AnimTime=0` plus redirected enemy hitcount 0..17, or `Time=1` plus hitcount >=18. State 3415 itself has no transition to 3405; its two terminal routes require `StateType=S/A` AND `Time=10` and go to 102/6140. Therefore any observed 3415 -> 3405 is a negative-State CMD/AI re-entry, not a 3415 current-State controller.
+
+The common redirect layer now keeps bare/indexed enemy selection, child evaluation context, and SFalse failure observable and consistent. Bundled AIR/CNS tests verify the finite 5-tick Action 3405, entry to 3415, HitDef activation/retention, ten StateTime ticks in 3415, and the normal State 102 exit for P1/P2. No fixed hold time or state-number runtime branch is used; all timing comes from the character AIR/CNS.
+
 ## Good next runtime improvements
 
 - richer controller execution tables;

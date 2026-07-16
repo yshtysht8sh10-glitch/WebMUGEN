@@ -162,6 +162,8 @@ Runtime Settings `Power Infinite` is separate from CNS compatibility. The Canvas
 
 Issue #65 adds `raw.target_composite_trigger` for controllers that combine a target redirect with `PrevStateNo` or MoveContact-family conditions. It records State/PrevState, MoveContact/MoveHit/MoveGuarded, registered `hitDefId -> runtime player` targets, requested target id, resolved entity/State/MoveType, every trigger record result, the numbered-group aggregate, ChangeState target, and control request. A missing redirect is printed as `targetRedirectFound=0` and `SFalse` rather than silently reading self/opponent.
 
+Issue #66 adds a generic `raw.trigger` record for every controller trigger containing `enemy`, `enemynear`, `enemy(n)`, `enemynear(n)`, or another supported redirect. It reports source file/line, State/controller, trigger group/line, original expression, parser/evaluator classification, redirect and argument, resolved entity, actual child value, result, `selfFallback=0`, aggregate result, ChangeState value/executed/terminal flags, and the ActiveHitDef id. This makes a negative-State re-entry distinguishable from a current-State transition.
+
 ## Minimum useful dump
 
 A useful dump includes:
