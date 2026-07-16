@@ -5,9 +5,12 @@ import type { CnsDocument, CnsStateController, CnsStateDefinition } from '../../
 import { stepCnsStateRuntime } from '../cns/CnsStateRuntime';
 import { stepCnsPhysicsMotion } from '../cns/CnsPhysicsStep';
 import { analyzeCnsCoverage } from '../cns/CnsCoverageDiagnostics';
+import { getMugenAnimEndTime } from '../animation/AnimationDuration';
+import { getAnimationTriggerInfo, getCurrentAnimationElement } from '../animation/AnimationPlayer';
 import { createInitialGameState } from '../engine/GameState';
 import { applyFallbackHitRecovery } from '../engine/FallbackHitRecovery';
 import { resolveFallbackHits } from '../engine/FallbackHitResolver';
+import { createInitialRoundState, stepRoundState } from '../engine/RoundState';
 import type { GameState } from '../engine/types';
 import { loadCharacterFromDef, type CharacterAssetFetcher } from './CharacterLoader';
 
@@ -128,44 +131,76 @@ realCharacterDescribe('WinMUGEN real-character HitDef regression', () => {
 });
 
 describe('T-H-M-A State 215 launch regression', () => {
-  it.each(['ground', 'air'] as const)('keeps State 215 fall hit on the common down route for %s targets without recovery input', async (mode) => {
+  it.each([
+    { mode: 'ground' as const, attackerId: 1 as const, facing: 1 as const, ko: false },
+    { mode: 'air' as const, attackerId: 2 as const, facing: -1 as const, ko: false },
+    { mode: 'edge' as const, attackerId: 1 as const, facing: -1 as const, ko: false },
+    { mode: 'ko' as const, attackerId: 1 as const, facing: 1 as const, ko: true },
+    { mode: 'ko' as const, attackerId: 2 as const, facing: -1 as const, ko: true },
+  ])('audits State 215 $mode chain for P$attackerId facing=$facing', async ({ mode, attackerId, facing, ko }) => {
     const assets = await loadCharacterFromDef('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.def', createFileSystemFetcher());
-    const activated = activateState215HitDef(assets.cns);
-    expect(activated.players[0].activeHitDef?.fall?.enabled).toBe(true);
-    expect(activated.players[0].activeHitDef?.fall?.recoverTime).toBe(100);
+    const targetIndex = attackerId === 1 ? 1 : 0;
+    const activated = activateState215HitDef(assets.cns, attackerId);
+    expect(activated.players[attackerId - 1].activeHitDef?.fall?.enabled).toBe(true);
+    expect(activated.players[attackerId - 1].activeHitDef?.fall?.recoverTime).toBe(100);
 
     const attack = findActionCollisionElement(assets.air.actions, 215, 'attack');
     const body = findCollisionElement(assets.air.actions, 'body');
     expect(attack).not.toBeNull();
     expect(body).not.toBeNull();
 
-    const contacted = findContact(activated, assets.air, 1, attack!, body!, mode, 1);
-    expect(contacted, `State 215 ${mode} contact`).not.toBeNull();
+    const contacted = findContact(activated, assets.air, attackerId, attack!, body!, mode, facing);
+    expect(contacted, `State 215 ${mode} P${attackerId} facing=${facing} contact`).not.toBeNull();
+    if (ko) expect(contacted!.players[targetIndex].life, contacted!.hitDiagnosticLines?.join('\n')).toBe(0);
     let state = contacted!;
-    const visited: number[] = [];
+    let round = createInitialRoundState();
+    round = { ...round, phase: 'fight' };
+    const visited: number[] = [state.players[targetIndex].stateNo];
     const transitions: string[] = [];
     let sawGetup = false;
-    for (let frame = 0; frame < 220; frame += 1) {
-      const cns = stepCnsStateRuntime(state, assets.cns, { hitDiagnostics: true }).state;
-      transitions.push(...(cns.players[1].hitDiagnosticLines ?? []).filter((line) => line.includes('from=') && line.includes('to=')));
+    for (let frame = 0; frame < 240; frame += 1) {
+      const cns = stepCnsStateRuntime(state, assets.cns, {
+        hitDiagnostics: true,
+        getAnimationDuration: (animNo) => getMugenAnimEndTime(assets.air, animNo),
+        getAnimationElementNo: (animNo, animTime) => {
+          const element = getCurrentAnimationElement(assets.air, animNo, animTime);
+          return element ? element.elementIndex + 1 : null;
+        },
+        getAnimationTriggerInfo: (animNo, animTime) => getAnimationTriggerInfo(assets.air, animNo, animTime),
+        roundState: round.phase === 'fight' ? 2 : 3,
+        roundNo: round.roundNo,
+        matchOver: round.phase === 'ko' || round.phase === 'timeOver',
+        roundWinner: round.winner,
+        roundEndReason: round.endReason,
+      }).state;
+      transitions.push(...(cns.players[targetIndex].hitDiagnosticLines ?? []).filter((line) => line.includes('from=') && line.includes('to=')));
       const moved = stepCnsPhysicsMotion(cns, assets.cns);
       state = applyFallbackHitRecovery(moved, true);
-      visited.push(cns.players[1].stateNo, moved.players[1].stateNo, state.players[1].stateNo);
-      if (state.players[1].stateNo === 5120) sawGetup = true;
-      if (sawGetup && state.players[1].stateNo === 0) break;
+      round = stepRoundState(round, state);
+      visited.push(cns.players[targetIndex].stateNo, moved.players[targetIndex].stateNo, state.players[targetIndex].stateNo);
+      if (state.players[targetIndex].stateNo === 5120) sawGetup = true;
+      if (ko ? state.players[targetIndex].stateNo === 5150 : sawGetup && state.players[targetIndex].stateNo === 0) break;
     }
 
     const diagnostics = state.hitDiagnosticLines?.join('\n') ?? '';
     expect(diagnostics).toContain('hitDefId=215');
     expect(diagnostics).toContain('fall=1');
+    expect(visited).toContain(mode === 'air' ? 5020 : 5000);
     expect(visited).toContain(5035);
     expect(visited).toContain(5050);
     expect(transitions.join('\n')).toContain('to=5100');
     expect(visited).toContain(5110);
-    expect(visited).toContain(5120);
-    expect(visited).not.toContain(5200);
-    expect(visited).not.toContain(5210);
-    expect(state.players[1]).toMatchObject({ stateNo: 0, stateType: 'S', moveType: 'I' });
+    if (ko) {
+      expect(visited, `final=${JSON.stringify({ player: state.players[targetIndex], round })}`).toContain(5150);
+      expect(visited).not.toContain(5120);
+      expect(state.players[targetIndex]).toMatchObject({ life: 0, stateNo: 5150, ctrl: false });
+      expect(round).toMatchObject({ phase: 'ko', winner: attackerId, endReason: 'ko' });
+    } else {
+      expect(visited).toContain(5120);
+      expect(visited).not.toContain(5200);
+      expect(visited).not.toContain(5210);
+      expect(state.players[targetIndex]).toMatchObject({ stateNo: 0, stateType: 'S', moveType: 'I' });
+    }
   }, 30_000);
 });
 
@@ -267,7 +302,7 @@ function findActionCollisionElement(actions: AirAction[], actionNo: number, kind
   return null;
 }
 
-function activateState215HitDef(cns: CnsDocument): GameState {
+function activateState215HitDef(cns: CnsDocument, attackerId: 1 | 2 = 1): GameState {
   const state215 = cns.states.find((state) => state.stateNo === 215);
   const hitDef = state215?.controllers.find((controller) =>
     controller.type.trim().toLowerCase() === 'hitdef' && Number(controller.params.id) === 215);
@@ -278,7 +313,17 @@ function activateState215HitDef(cns: CnsDocument): GameState {
   };
   const initial = createInitialGameState();
   const players = [...initial.players] as GameState['players'];
-  players[0] = { ...players[0], stateNo: 215, stateType: 'S', moveType: 'A', physics: 'S', ctrl: false, animNo: 215 };
+  const attackerIndex = attackerId - 1;
+  players[attackerIndex] = {
+    ...players[attackerIndex],
+    stateNo: 215,
+    stateType: 'S',
+    moveType: 'A',
+    physics: 'S',
+    ctrl: false,
+    animNo: 215,
+    fvars: { 1: 1 },
+  } as GameState['players'][number];
   return stepCnsStateRuntime({ ...initial, players }, forcedCns, { hitDiagnostics: true }).state;
 }
 

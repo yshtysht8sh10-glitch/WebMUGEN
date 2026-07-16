@@ -7,7 +7,7 @@ This document is the working compatibility checklist for WebMUGEN. Every compati
 Status is intentionally conservative: **Complete** requires either focused tests or a confirmed app integration path. Runtime shims with no game effect are **Safe no-op**; approximate alternate paths are **Fallback**, never Partial or Complete.
 
 <!-- status-summary:start -->
-- Complete: 131
+- Complete: 132
 - Partial: 167
 - Fallback: 17
 - Safe no-op: 36
@@ -110,6 +110,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | 5050 | Fall state | Complete | Implemented: Issue #60 verifies 5050-to-5060 descending animation selection, gravity, independent fall.recover/recovertime plus recovery input gating, and ground-crossing routing to bounce/down. Recovery destination States 5200/5210 are tracked separately. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
 | 5060 | Fall animation family | Complete | Implemented: WinMUGEN common1.cns has no StateDef 5060. Issue #60 verifies that 5060 is selected as the descending animation while State 5050 remains active; no fabricated StateDef or state-number hack is used. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
 | 5070 | Trip fall state | Complete | Implemented: Issue #60 verifies State 5070 hit-shake freeze and terminal transition to 5071, then stored HitVelSet, yaccel, and ground routing in 5071. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| 5071 | Trip fall continuation state | Complete | Issue #63 audits the previously omitted Matrix row; Issue #60 focused tests verify HitVelSet, per-frame yaccel, animation transition, and ground routing to 5100/5110 through the unmodified common StateDef. |
 | 5080 | Downed get-hit state | Complete | Implemented: Issue #61 verifies lying-hit entry, HitShakeOver freeze, yvel-based 5080/5090 animation choice, down.hittime/down.velocity, and terminal routing to 5081 or 5030 for P1/P2. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
 | 5081 | Downed slide state | Complete | Implemented: Issue #61 verifies HitVelSet X, HitOver stop, ground friction, sysvar ground-frame suppression, and terminal State 5110 routing. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
 | 5090 | Downed launch animation family | Complete | Implemented: WinMUGEN common1.cns has no StateDef 5090. Issue #61 verifies that State 5080 selects Anim 5090 for a lying target launched by nonzero down.velocity.y, with fallback to Anim 5030 only when 5090 is absent. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |

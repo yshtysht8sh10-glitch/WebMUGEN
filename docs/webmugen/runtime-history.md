@@ -208,6 +208,8 @@ Issue #62 extends those frame diagnostics through States 5150, 5200, 5201, and 5
 
 `raw.fall_envshake` records the fall HitDef time, frequency, amplitude, phase, and whether shared screen shake started or was skipped for zero time.
 
+Issue #63's integrated trace gate requires one continuous sequence containing `raw.hitdef_activate`, accepted `raw.hit_collision`, `raw.hit_damage`, reaction/state transition records, fall/down frames, and either State 0 recovery or State 5150 plus RoundState winner/end reason. P1/P2 and Facing are asserted from the same diagnostic vocabulary.
+
 `raw.move_contact` records generation id, contact/hit/guard flags, hit count, target, and accepted result. This is the source used by hit-confirm Trigger routes rather than the former ActiveHitDef/boolean approximation.
 
 On State entry, `raw.hitdef_lifecycle` reports preserve/discard together with `hitdefpersist`, `movehitpersist`, `hitcountpersist`, and the prior hit count. This makes independent ActiveHitDef, result-flag, and count retention visible across State transitions.

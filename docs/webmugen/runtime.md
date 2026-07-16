@@ -118,6 +118,8 @@ Lethal normal and guarded contact force the get-hit fall flag so the existing co
 
 State 5150 is the lying-dead state and never accepts recovery input. States 5200, 5201, and 5210 are fall-recovery states, not dead states. RoundState supplies `MatchOver`, winner/draw, and the distinct `ko`, `double_ko`, or `time_over` reason to the CNS context. See `common-ko-recovery-5150.md` for the state-by-state contract.
 
+Issue #63 audits the entire accepted-HitDef-to-recovery/KO pipeline rather than treating each State family in isolation. The consolidated invariants, exact StateDef inventory, bundled T-H-M-A State 215 scenarios, and user confirmation boundary are recorded in `common-state-chain-audit.md`.
+
 ## Good next runtime improvements
 
 - richer controller execution tables;

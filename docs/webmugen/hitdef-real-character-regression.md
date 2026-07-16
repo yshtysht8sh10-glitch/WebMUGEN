@@ -47,6 +47,12 @@ With fewer than three configured paths, the external-asset suite is skipped inst
 - The audit exposed T-H-M-A `TimeMod = 7, 3` as a real unsupported route; StateTime/TimeMod compatibility and focused positive/negative tests were added.
 - `public/chars/common1.cns` was unchanged.
 
+## 2026-07-16 Common State chain audit
+
+Issue #63 expands the self-contained T-H-M-A State 215 regression from two nonlethal cases to five production-loader/AIR chains: grounded P1/right, airborne P2/left, edge/opposite Facing, and lethal P1/P2 routes. Nonlethal cases reach State 5120 and State 0; lethal cases traverse the same common fall/down states, reach State 5150 without recovery, and produce the correct RoundState winner. The focused file reports 5 passed and 3 optional external-asset tests skipped when `WEBMUGEN_REAL_CHARACTER_DEFS` is absent.
+
+This audit also supplies real animation timing callbacks used by the app, rather than treating AnimTime/SelfAnimExist as synthetic defaults. `public/chars/common1.cns` remains unchanged.
+
 Focused engine tests from Issues #3-#22 remain the behavioral evidence for multihit/chain persistence, Target mutation, custom-State ownership, guard/down/recovery, juggle, KO, power, cornerpush, snap, effects, and diagnostics. This harness proves those layers accept multiple real WinMUGEN data layouts and are not tied to KFM State numbers.
 
 ## Known constraints
