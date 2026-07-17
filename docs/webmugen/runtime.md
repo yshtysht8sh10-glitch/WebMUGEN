@@ -121,8 +121,14 @@ Issue #58 Phase 3 prepares Controller Trigger groups at CNS parse completion. No
 evaluation reads the cached `triggerall` and numbered groups, preserving the former source-order
 short-circuit behavior. For a Controller with one `triggerall` and two numbered groups, the former
 per-evaluation grouping allocations (`triggerall` array, two group arrays, `Map`, and values array)
-are replaced by zero grouping allocations after load. Expression evaluation is still string-based;
-compiled Trigger evaluation belongs to Phase 4.
+are replaced by zero grouping allocations after load.
+
+Issue #58 Phase 4 compiles Trigger expressions after the final character/common CNS merge. Runtime
+Controller decisions call the prepared evaluator associated with each Trigger record; normalization,
+boolean splitting, comparison matching, arithmetic tree construction, function argument splitting,
+and Redirect child compilation are not repeated per frame. The old string evaluator remains only as
+a test oracle. A local 33,665-evaluation itoko sample measured 288.87 ms through the legacy path and
+5.25 ms through the warmed compiled path (98.2% reduction in Trigger-evaluator time for that sample).
 
 ## Compatibility cautions
 

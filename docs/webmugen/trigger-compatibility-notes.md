@@ -64,6 +64,12 @@ This is especially important for command routes such as crouch, walk, jump, and 
 
 The matrix currently tracks expression features separately from triggers. Keep those separate.
 
+Issue #58 Phase 4 changes execution structure, not expression compatibility status. Character load
+compiles boolean operators, comparisons, numeric arithmetic/functions, and Redirect child expressions
+into reusable evaluators. Focused tests compare the compiled path with the retained legacy evaluator,
+including unsupported expressions and unused invalid `Cond` / `IfElse` branches. Existing per-Trigger
+Matrix rows retain their prior status because no Trigger result is intentionally broadened.
+
 For example, adding math support for `+`, `-`, `*`, `/`, `%`, `Sin`, `Cos`, or `IfElse` should update Expression rows, not arbitrary Trigger rows.
 
 ## Test expectations

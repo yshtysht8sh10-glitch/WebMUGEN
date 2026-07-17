@@ -1,4 +1,5 @@
 import type { CnsDocument, CnsStateController, CnsStateDefinition } from '../../mugen/common/cnsTypes';
+import { prepareCnsDocumentRuntimeTriggers } from '../cns/CnsRuntimeTrigger';
 import { parseAirText } from '../../parser/air/AirParser';
 import { parseCmdText } from '../../parser/cmd/CmdParser';
 import type { CmdDocument } from '../../parser/cmd/CmdTypes';
@@ -191,6 +192,7 @@ export async function loadCharacterFromDef(
     (merged, commonCmdCns) => mergeMissingCnsStates(merged, commonCmdCns),
     withCommonCns,
   );
+  prepareCnsDocumentRuntimeTriggers(cns);
   const cnsSourceFiles: CharacterSourceFile[] = [
     { path: defPath, label: shortSourceLabel(defPath), text: defText, kind: 'def' },
     { path: primaryCnsPath, label: shortSourceLabel(primaryCnsPath), text: cnsText, kind: 'cns' },

@@ -2,7 +2,7 @@ import type { PlayerState } from '../engine/types';
 import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 import { selectTargets } from '../hitdef/TargetState';
 import { hitDefAttrMatches } from '../hitdef/HitAttribute';
-import type { CnsDocument } from '../../mugen/common/cnsTypes';
+import type { CnsDocument, CnsTrigger } from '../../mugen/common/cnsTypes';
 import { readCnsConst } from './CnsConstants';
 import { readPlayerPowerMax } from '../power/PowerGauge';
 
@@ -39,11 +39,264 @@ type NumberSource = (context: CnsRuntimeTriggerContext) => number | null;
 type StringSource = (context: CnsRuntimeTriggerContext) => string | null;
 type BooleanSource = (context: CnsRuntimeTriggerContext) => boolean;
 
+export type CompiledCnsRuntimeTrigger = {
+  expression: string;
+  evaluate: BooleanSource;
+};
+
+const compiledTriggerCache = new Map<string, CompiledCnsRuntimeTrigger>();
+const compiledTriggerRecords = new WeakMap<CnsTrigger, CompiledCnsRuntimeTrigger>();
+
 export function evaluateCnsRuntimeTrigger(
   expression: string,
   context: CnsRuntimeTriggerContext,
 ): boolean {
+  return compileCnsRuntimeTrigger(expression).evaluate(context);
+}
+
+export function evaluateCnsRuntimeTriggerLegacy(
+  expression: string,
+  context: CnsRuntimeTriggerContext,
+): boolean {
   return evaluateBooleanExpression(normalizeExpression(expression), context);
+}
+
+export function compileCnsRuntimeTrigger(expression: string): CompiledCnsRuntimeTrigger {
+  const cached = compiledTriggerCache.get(expression);
+  if (cached) return cached;
+  const compiled = {
+    expression,
+    evaluate: compileBooleanExpression(normalizeExpression(expression)),
+  };
+  compiledTriggerCache.set(expression, compiled);
+  return compiled;
+}
+
+export function prepareCnsRuntimeTrigger(trigger: CnsTrigger): CompiledCnsRuntimeTrigger {
+  const cached = compiledTriggerRecords.get(trigger);
+  if (cached?.expression === trigger.expression) return cached;
+  const compiled = compileCnsRuntimeTrigger(trigger.expression);
+  compiledTriggerRecords.set(trigger, compiled);
+  return compiled;
+}
+
+export function prepareCnsDocumentRuntimeTriggers(document: CnsDocument): void {
+  for (const state of document.states) {
+    for (const controller of state.controllers) {
+      for (const trigger of controller.triggers) prepareCnsRuntimeTrigger(trigger);
+    }
+  }
+}
+
+export function evaluatePreparedCnsRuntimeTrigger(
+  trigger: CnsTrigger,
+  context: CnsRuntimeTriggerContext,
+): boolean {
+  return prepareCnsRuntimeTrigger(trigger).evaluate(context);
+}
+
+function compileBooleanExpression(expression: string): BooleanSource {
+  const trimmed = stripOuterParentheses(expression.trim());
+  if (!trimmed) return () => false;
+
+  const orParts = splitTopLevel(trimmed, '||');
+  if (orParts.length > 1) {
+    const sources = orParts.map(compileBooleanExpression);
+    return (context) => sources.some((source) => source(context));
+  }
+
+  const andParts = splitTopLevel(trimmed, '&&');
+  if (andParts.length > 1) {
+    const sources = andParts.map(compileBooleanExpression);
+    return (context) => sources.every((source) => source(context));
+  }
+
+  if (trimmed.startsWith('!')) {
+    const source = compileBooleanExpression(trimmed.slice(1));
+    return (context) => !source(context);
+  }
+  if (trimmed === '1') return () => true;
+  if (trimmed === '0') return () => false;
+
+  const bareBoolean = getBooleanSource(trimmed);
+  if (bareBoolean) return bareBoolean;
+
+  if (!splitTopLevelComparison(trimmed)) {
+    const numeric = compileNumberExpression(trimmed);
+    if (numeric) return (context) => {
+      const value = numeric(context);
+      return value !== null && value !== 0;
+    };
+  }
+
+  return compileComparison(trimmed);
+}
+
+function compileComparison(expression: string): BooleanSource {
+  const animElemMatch = expression.match(/^animelem\s*=\s*(-?\d+)(?:\s*,\s*(=|!=|>=|<=|>|<)?\s*(-?\d+))?$/i);
+  if (animElemMatch) {
+    const elementNo = Number(animElemMatch[1]);
+    const operator = animElemMatch[2] ?? '=';
+    const expected = animElemMatch[3] === undefined ? undefined : Number(animElemMatch[3]);
+    return (context) => {
+      if (!Number.isInteger(elementNo) || elementNo < 1 || (context.animElemCount !== undefined && elementNo > context.animElemCount)) return false;
+      if (expected === undefined) return context.animElemNo === elementNo && context.animElemStarted === true;
+      const elementTime = context.animElemTimes?.[elementNo - 1];
+      return elementTime !== undefined && compareNumber(elementTime, operator, expected);
+    };
+  }
+
+  const timeModMatch = expression.match(/^timemod\s*(=|!=|>=|<=|>|<)\s*(-?\d+)\s*,\s*(-?\d+)$/i);
+  if (timeModMatch) {
+    const divisor = Number(timeModMatch[2]);
+    const expected = Number(timeModMatch[3]);
+    const operator = timeModMatch[1];
+    return divisor <= 0 ? () => false : (context) => compareNumber(context.player.stateTime % divisor, operator, expected);
+  }
+
+  const hitDefAttrMatch = expression.match(/^hitdefattr\s*(=|!=)\s*([^,]+)\s*,\s*(.+)$/i);
+  if (hitDefAttrMatch) {
+    const operator = hitDefAttrMatch[1];
+    const stateTypes = hitDefAttrMatch[2];
+    const attackTypes = hitDefAttrMatch[3].split(',');
+    return (context) => {
+      const matches = hitDefAttrMatches(context.player.activeHitDef?.attr, stateTypes, attackTypes);
+      return operator === '=' ? matches : !matches;
+    };
+  }
+
+  const rangeMatch = expression.match(/^(.+?)\s*(=|!=)\s*\[\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]$/);
+  if (rangeMatch) {
+    const actual = compileNumberExpression(rangeMatch[1]);
+    if (!actual) return () => false;
+    const min = Math.min(Number(rangeMatch[3]), Number(rangeMatch[4]));
+    const max = Math.max(Number(rangeMatch[3]), Number(rangeMatch[4]));
+    const equals = rangeMatch[2] === '=';
+    return (context) => {
+      const value = actual(context);
+      if (value === null) return false;
+      const inside = value >= min && value <= max;
+      return equals ? inside : !inside;
+    };
+  }
+
+  const stringMatch = expression.match(/^(.+?)\s*(=|!=)\s*"([^"]*)"$/);
+  if (stringMatch) {
+    const name = stringMatch[1].trim();
+    const operator = stringMatch[2];
+    const expected = stringMatch[3];
+    if (name === 'command') {
+      return (context) => {
+        const active = context.commands?.has(expected.toLowerCase()) ?? false;
+        return operator === '=' ? active : !active;
+      };
+    }
+    const source = getStringSource(name);
+    if (!source) return () => false;
+    return (context) => {
+      const actual = source(context);
+      return actual !== null && compareString(actual, operator, expected);
+    };
+  }
+
+  const numberComparison = splitTopLevelComparison(expression);
+  if (numberComparison) {
+    const actual = compileNumberExpression(numberComparison.left);
+    const expected = compileNumberExpression(numberComparison.right);
+    if (actual && expected) return (context) => {
+      const left = actual(context);
+      const right = expected(context);
+      return left !== null && right !== null && compareNumber(left, numberComparison.operator, right);
+    };
+  }
+
+  const enumMatch = expression.match(/^(.+?)\s*(=|!=)\s*([a-z]+)$/i);
+  if (enumMatch) {
+    const source = getStringSource(enumMatch[1]);
+    if (!source) return () => false;
+    return (context) => {
+      const actual = source(context);
+      return actual !== null && compareString(actual, enumMatch[2], enumMatch[3]);
+    };
+  }
+
+  return () => false;
+}
+
+function compileNumberExpression(rawExpression: string): NumberSource | null {
+  const expression = stripOuterParentheses(normalizeName(rawExpression));
+  const numericLiteral = Number(expression);
+  if (Number.isFinite(numericLiteral)) return () => numericLiteral;
+
+  const additive = splitTopLevelArithmetic(expression, ['+', '-']);
+  if (additive) {
+    const left = compileNumberExpression(additive.left);
+    const right = compileNumberExpression(additive.right);
+    if (!left || !right) return null;
+    return (context) => {
+      const leftValue = left(context);
+      const rightValue = right(context);
+      if (leftValue === null || rightValue === null) return null;
+      return additive.operator === '+' ? leftValue + rightValue : leftValue - rightValue;
+    };
+  }
+
+  const multiplicative = splitTopLevelArithmetic(expression, ['*', '/', '%']);
+  if (multiplicative) {
+    const left = compileNumberExpression(multiplicative.left);
+    const right = compileNumberExpression(multiplicative.right);
+    if (!left || !right) return null;
+    return (context) => {
+      const leftValue = left(context);
+      const rightValue = right(context);
+      if (leftValue === null || rightValue === null) return null;
+      if (multiplicative.operator === '*') return leftValue * rightValue;
+      if (multiplicative.operator === '/') return rightValue === 0 ? null : leftValue / rightValue;
+      return rightValue === 0 ? null : leftValue % rightValue;
+    };
+  }
+
+  const unaryFunctions: Record<string, (value: number) => number | null> = {
+    abs: Math.abs,
+    floor: Math.floor,
+    ceil: Math.ceil,
+    acos: Math.acos,
+    asin: Math.asin,
+    atan: Math.atan,
+    cos: Math.cos,
+    exp: Math.exp,
+    ln: (value) => value > 0 ? Math.log(value) : null,
+    log: (value) => value > 0 ? Math.log10(value) : null,
+    sin: Math.sin,
+    tan: Math.tan,
+  };
+  const functionMatch = expression.match(/^(abs|floor|ceil|acos|asin|atan|cos|exp|ln|log|sin|tan)\((.+)\)$/);
+  if (functionMatch) {
+    const argument = compileNumberExpression(functionMatch[2]);
+    const operation = unaryFunctions[functionMatch[1]];
+    if (!argument) return null;
+    return (context) => {
+      const value = argument(context);
+      return value === null ? null : operation(value);
+    };
+  }
+
+  const conditionalMatch = expression.match(/^(cond|ifelse)\((.+)\)$/);
+  if (conditionalMatch) {
+    const args = splitTopLevelArguments(conditionalMatch[2]);
+    if (args.length !== 3) return null;
+    const condition = compileBooleanExpression(args[0]);
+    const whenTrue = compileNumberExpression(args[1]) ?? (() => null);
+    const whenFalse = compileNumberExpression(args[2]) ?? (() => null);
+    return (context) => (condition(context) ? whenTrue(context) : whenFalse(context));
+  }
+
+  if (splitTopLevelComparison(expression) || splitTopLevel(expression, '&&').length > 1 || splitTopLevel(expression, '||').length > 1 || expression.startsWith('!')) {
+    const boolean = compileBooleanExpression(expression);
+    return (context) => boolean(context) ? 1 : 0;
+  }
+
+  return getNumberSource(expression);
 }
 
 function evaluateBooleanExpression(expression: string, context: CnsRuntimeTriggerContext): boolean {
@@ -315,18 +568,20 @@ function getNumberSource(rawName: string): NumberSource | null {
 
   const numHelperMatch = name.match(/^numhelper(?:\((.+)\))?$/);
   if (numHelperMatch) {
+    const helperIdSource = numHelperMatch[1] === undefined ? null : compileNumberExpression(numHelperMatch[1]);
     return (context) => {
       const helperId = numHelperMatch[1] === undefined
         ? undefined
-        : readNumberExpression(numHelperMatch[1], context) ?? undefined;
+        : helperIdSource?.(context) ?? undefined;
       return context.numHelper?.(helperId) ?? 0;
     };
   }
 
   const targetMatch = name.match(/^(numtarget|targetid|targetstateno)(?:\((.+)\))?$/);
   if (targetMatch) {
+    const requestedIdSource = targetMatch[2] === undefined ? null : compileNumberExpression(targetMatch[2]);
     return (context) => {
-      const requestedId = targetMatch[2] === undefined ? undefined : readNumberExpression(targetMatch[2], context) ?? undefined;
+      const requestedId = targetMatch[2] === undefined ? undefined : requestedIdSource?.(context) ?? undefined;
       const targets = selectTargets(context.player, requestedId);
       if (targetMatch[1] === 'numtarget') return targets.length;
       const selected = targets[0];
@@ -338,16 +593,18 @@ function getNumberSource(rawName: string): NumberSource | null {
 
   const animExistMatch = name.match(/^animexist\(([^)]+)\)$/);
   if (animExistMatch) {
+    const animNoSource = compileNumberExpression(animExistMatch[1]);
     return (context) => {
-      const animNo = readNumberExpression(animExistMatch[1], context);
+      const animNo = animNoSource?.(context) ?? null;
       return animNo !== null && context.animationExists?.(animNo) ? 1 : 0;
     };
   }
 
   const selfAnimExistMatch = name.match(/^selfanimexist\(([^)]+)\)$/);
   if (selfAnimExistMatch) {
+    const animNoSource = compileNumberExpression(selfAnimExistMatch[1]);
     return (context) => {
-      const animNo = readNumberExpression(selfAnimExistMatch[1], context);
+      const animNo = animNoSource?.(context) ?? null;
       return animNo !== null && context.animationExists?.(animNo) ? 1 : 0;
     };
   }
@@ -454,37 +711,40 @@ function getFunctionNumberSource(name: string): NumberSource | null {
 function getRedirectNumberSource(name: string): NumberSource | null {
   const parsed = parseRedirect(name);
   if (!parsed) return null;
+  const resolvePlayer = compileRedirectPlayerResolver(parsed);
+  const source = compileNumberExpression(parsed.expression);
+  if (!source) return null;
 
   return (context) => {
-    const redirectedPlayer = resolveRedirectPlayer(parsed.kind, parsed.argument, context);
+    const redirectedPlayer = resolvePlayer(context);
     if (!redirectedPlayer) return null;
-    return readNumberExpression(parsed.expression, createRedirectContext(context, redirectedPlayer));
+    return source(createRedirectContext(context, redirectedPlayer));
   };
 }
 
 function getRedirectStringSource(name: string): StringSource | null {
   const parsed = parseRedirect(name);
   if (!parsed) return null;
+  const resolvePlayer = compileRedirectPlayerResolver(parsed);
+  const source = getStringSource(parsed.expression);
+  if (!source) return null;
 
   return (context) => {
-    const redirectedPlayer = resolveRedirectPlayer(parsed.kind, parsed.argument, context);
+    const redirectedPlayer = resolvePlayer(context);
     if (!redirectedPlayer) return null;
-    const source = getStringSource(parsed.expression);
-    return source ? source(createRedirectContext(context, redirectedPlayer)) : null;
+    return source(createRedirectContext(context, redirectedPlayer));
   };
 }
 
 function getRedirectBooleanSource(name: string): BooleanSource | null {
   const parsed = parseRedirect(name);
   if (!parsed) return null;
+  const resolvePlayer = compileRedirectPlayerResolver(parsed);
+  const source = compileBooleanExpression(parsed.expression);
   return (context) => {
-    const redirectedPlayer = resolveRedirectPlayer(parsed.kind, parsed.argument, context);
+    const redirectedPlayer = resolvePlayer(context);
     if (!redirectedPlayer) return false;
-    const redirectedContext = createRedirectContext(context, redirectedPlayer);
-    const source = getBooleanSource(parsed.expression);
-    if (source) return source(redirectedContext);
-    const numeric = readNumberExpression(parsed.expression, redirectedContext);
-    return numeric !== null && numeric !== 0;
+    return source(createRedirectContext(context, redirectedPlayer));
   };
 }
 
@@ -494,6 +754,23 @@ function parseRedirect(name: string): { kind: RedirectKind; argument?: string; e
   const match = name.match(/^(enemynear|enemy|target|parent|root)(?:\(([^)]*)\))?\s*,\s*(.+)$/);
   if (!match) return null;
   return { kind: match[1] as RedirectKind, argument: match[2]?.trim() || undefined, expression: match[3] };
+}
+
+function compileRedirectPlayerResolver(
+  parsed: { kind: RedirectKind; argument?: string },
+): (context: CnsRuntimeTriggerContext) => PlayerState | undefined {
+  const argumentSource = parsed.argument === undefined ? null : compileNumberExpression(parsed.argument);
+  return (context) => {
+    if (parsed.kind === 'parent' || parsed.kind === 'root') return context.player;
+    if (parsed.kind === 'target') {
+      const requestedId = parsed.argument === undefined ? undefined : argumentSource?.(context);
+      if (parsed.argument !== undefined && (requestedId === null || requestedId === undefined)) return undefined;
+      const selected = selectTargets(context.player, requestedId ?? undefined)[0];
+      return selected && context.opponent?.id === selected.playerId ? context.opponent : undefined;
+    }
+    const requestedIndex = parsed.argument === undefined ? 0 : argumentSource?.(context);
+    return requestedIndex === 0 ? context.opponent : undefined;
+  };
 }
 
 export function resolveCnsRuntimeRedirect(

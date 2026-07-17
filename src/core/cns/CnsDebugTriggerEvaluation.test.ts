@@ -5,12 +5,13 @@ vi.mock('./CnsRuntimeTrigger', async (importOriginal) => {
   return {
     ...actual,
     evaluateCnsRuntimeTrigger: vi.fn(actual.evaluateCnsRuntimeTrigger),
+    evaluatePreparedCnsRuntimeTrigger: vi.fn(actual.evaluatePreparedCnsRuntimeTrigger),
   };
 });
 
 import { parseCnsText } from '../../parser/cns/CnsParser';
 import { createInitialGameState } from '../engine/GameState';
-import { evaluateCnsRuntimeTrigger } from './CnsRuntimeTrigger';
+import { evaluateCnsRuntimeTrigger, evaluatePreparedCnsRuntimeTrigger } from './CnsRuntimeTrigger';
 import { stepCnsStateRuntime } from './CnsStateRuntime';
 
 describe('Issue #58 Phase 2 debug trigger evaluation gating', () => {
@@ -36,6 +37,7 @@ ctrl = 0
 
   beforeEach(() => {
     vi.mocked(evaluateCnsRuntimeTrigger).mockClear();
+    vi.mocked(evaluatePreparedCnsRuntimeTrigger).mockClear();
   });
 
   it('evaluates each production trigger once when trace diagnostics are disabled', () => {
@@ -50,7 +52,8 @@ ctrl = 0
     });
 
     expect(result.state.players[0].stateNo).toBe(10);
-    expect(evaluateCnsRuntimeTrigger).toHaveBeenCalledTimes(3);
+    expect(evaluatePreparedCnsRuntimeTrigger).toHaveBeenCalledTimes(3);
+    expect(evaluateCnsRuntimeTrigger).not.toHaveBeenCalled();
   });
 
   it('keeps the existing crouch-route diagnostics when debug tracing is enabled', () => {
@@ -64,7 +67,8 @@ ctrl = 0
     });
 
     expect(result.state.players[0].stateNo).toBe(10);
-    expect(evaluateCnsRuntimeTrigger).toHaveBeenCalledTimes(32);
+    expect(evaluatePreparedCnsRuntimeTrigger).toHaveBeenCalledTimes(9);
+    expect(evaluateCnsRuntimeTrigger).toHaveBeenCalledTimes(23);
     expect(result.traces[0].debugLines.some((line) => line.includes('eval=['))).toBe(true);
     expect(result.traces[0].debugLines.some((line) => line.includes('STATE10 05 final'))).toBe(true);
   });

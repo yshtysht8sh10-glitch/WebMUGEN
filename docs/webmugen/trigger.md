@@ -63,6 +63,14 @@ diagnostic view. Runtime controller decisions reuse those arrays directly; they 
 `Map` or grouping arrays each frame. Trigger expression parsing and evaluation are unchanged in
 this phase.
 
+Issue #58 Phase 4 compiles each Trigger expression into reusable boolean and numeric evaluator
+closures. Parentheses, `&&` / `||`, comparisons, arithmetic, functions, constants, variables, and
+Redirect child expressions are split and resolved during compilation. Production CharacterLoader
+warms every parsed Trigger after CNS/common/CMD merging; each frame calls the prepared evaluator
+with the current context. The legacy string evaluator remains exported for parity tests and is not
+used by normal Controller decisions. The compiled and legacy evaluators matched all 6,733 Trigger
+records in the local production-loaded itoko character check.
+
 ## Expression support
 
 Expression features are tracked separately from trigger names.

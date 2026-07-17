@@ -7,7 +7,7 @@ import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 import { activateMoveContact, resetMoveContact } from '../hitdef/MoveContactState';
 import { removeTarget, selectTargets } from '../hitdef/TargetState';
 import { normalizeHitAttribute } from '../hitdef/HitAttribute';
-import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, inspectCnsRuntimeRedirect, readNumberExpression, resolveCnsRuntimeRedirect, type CnsRuntimeTriggerContext } from './CnsRuntimeTrigger';
+import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, evaluatePreparedCnsRuntimeTrigger, inspectCnsRuntimeRedirect, readNumberExpression, resolveCnsRuntimeRedirect, type CnsRuntimeTriggerContext } from './CnsRuntimeTrigger';
 import type { SoundPanEvent, SoundPlayEvent, SoundStopEvent } from '../audio/SoundEvent';
 import { canEntityMoveDuringPause, type PauseControllerEvent, type PauseState } from '../pause/PauseSystem';
 import {
@@ -682,10 +682,10 @@ function createTriggerContext(
 
 function evaluateTriggerRecords(controller: CnsStateController, context: CnsRuntimeTriggerContext): boolean {
   const triggerGroups = prepareCnsControllerTriggerGroups(controller);
-  if (!triggerGroups.triggerAll.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context))) return false;
+  if (!triggerGroups.triggerAll.every((trigger) => evaluatePreparedCnsRuntimeTrigger(trigger, context))) return false;
   if (triggerGroups.groups.length === 0) return triggerGroups.triggerAll.length > 0;
   return triggerGroups.groups.some((group) =>
-    group.triggers.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context)),
+    group.triggers.every((trigger) => evaluatePreparedCnsRuntimeTrigger(trigger, context)),
   );
 }
 
