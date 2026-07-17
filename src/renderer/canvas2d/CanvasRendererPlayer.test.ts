@@ -5,6 +5,41 @@ import type { SpritePack } from '../../core/sprite/SpriteTypes';
 import { CanvasRenderer } from './CanvasRenderer';
 
 describe('CanvasRenderer player sprite fallback', () => {
+  it('skips every debug rectangle path while keeping normal sprite rendering enabled', () => {
+    const fillText = vi.fn();
+    const drawImage = vi.fn();
+    const context = {
+      ...fakeContext(vi.fn(), vi.fn(), drawImage),
+      fillText,
+    } as unknown as CanvasRenderingContext2D;
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+    const assets = { airDocument: air(0, 10, 0), spritePack: spritePack(10, 0) };
+    const renderer = new CanvasRenderer(canvas, undefined, null, null, { 1: assets, 2: assets });
+
+    const diagnostics = renderer.render(createInitialGameState(), undefined, undefined, undefined, {
+      collisionBoxesVisible: false,
+      diagnosticsEnabled: false,
+    });
+
+    expect(drawImage).toHaveBeenCalledTimes(2);
+    expect(fillText.mock.calls.some(([text]) => String(text).startsWith('push '))).toBe(false);
+    expect(diagnostics).toEqual([]);
+  });
+
+  it('draws Push and AIR collision labels when collision boxes are enabled', () => {
+    const fillText = vi.fn();
+    const context = {
+      ...fakeContext(vi.fn(), vi.fn()),
+      fillText,
+    } as unknown as CanvasRenderingContext2D;
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+    const renderer = new CanvasRenderer(canvas, air(0, 10, 0));
+
+    renderer.render(createInitialGameState(), undefined, undefined, undefined, { collisionBoxesVisible: true });
+
+    expect(fillText.mock.calls.some(([text]) => String(text).startsWith('push '))).toBe(true);
+  });
+
   it('renders nothing when AIR intentionally references a missing SFF sprite', () => {
     const fillRect = vi.fn();
     const ellipse = vi.fn();

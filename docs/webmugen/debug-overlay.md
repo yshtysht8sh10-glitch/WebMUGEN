@@ -4,6 +4,8 @@ Updated: 2026-07-09
 
 The Debug Overlay is part of the compatibility workflow. It is not only a UI convenience; it is how WebMUGEN identifies which runtime layer failed.
 
+Runtime Settings controls Human log capture, AI log capture, Canvas collision boxes, and the lower-left state history independently. All four default to OFF, and OFF stops the corresponding upstream capture/format/render path rather than only hiding markup. See `performance-debug-settings.md`.
+
 ## Purpose
 
 The overlay should make the current frame observable across the runtime pipeline:
@@ -155,6 +157,8 @@ negative sprite references, and `AssertSpecial invisible` must remain distinguis
 part of the copied AI runtime dump used for Issue #55 user verification.
 
 Canvas collision debug uses the same AIR world-coordinate boxes as the hit resolver. Labels identify attack/body kind, box index, default versus element source, animation number, and current element index; boundaries include player position, facing, and AIR element offsets.
+
+When `Collision boxes` is OFF, Canvas never enters the player/helper/projectile debug rectangle path. The lower-left history has its own setting and remains a separate 5 Hz lightweight stream.
 
 Issue #57 adds a blue Push Box using the same `[Size]`-derived rectangle as the stage solver. `raw.push` exposes owner, ground/air mode, character/default source, resolved edges, front/back/height, overlap, `PlayerPush`, and apply/skip result. `raw.cross` exposes airborne state plus Facing before/after so an unintended air auto-turn is visible in the copied runtime history.
 

@@ -12,6 +12,7 @@ export class ImageDataSpriteRenderer {
     groupNo: number,
     imageNo: number,
     ownPalette = false,
+    diagnosticsEnabled = true,
   ): { canvas: HTMLCanvasElement; diagnostic: string } | undefined {
     if (!spritePack) return undefined;
     let assetId = this.assetIds.get(spritePack);
@@ -25,12 +26,15 @@ export class ImageDataSpriteRenderer {
     if (!sprite) return undefined;
     const key = `asset=${assetId};sprite=${spriteId};palette=${sprite.paletteKey ?? 'baked-rgba'};ownpal=${ownPalette ? 1 : 0}`;
     const cached = this.canvasCache.get(key);
-    let stats = this.colorStats.get(sprite.imageData);
-    if (!stats) {
-      stats = getColorStats(sprite.imageData.data);
-      this.colorStats.set(sprite.imageData, stats);
+    let diagnostic = '';
+    if (diagnosticsEnabled) {
+      let stats = this.colorStats.get(sprite.imageData);
+      if (!stats) {
+        stats = getColorStats(sprite.imageData.data);
+        this.colorStats.set(sprite.imageData, stats);
+      }
+      diagnostic = `${key.replace(/;/g, ' ')} rgba_nontransparent=${stats.nonTransparent} rgba_nonblack=${stats.nonBlack} cache=${cached ? 'hit' : 'miss'}`;
     }
-    const diagnostic = `${key.replace(/;/g, ' ')} rgba_nontransparent=${stats.nonTransparent} rgba_nonblack=${stats.nonBlack} cache=${cached ? 'hit' : 'miss'}`;
     if (cached) return { canvas: cached, diagnostic };
 
     const canvas = document.createElement('canvas');

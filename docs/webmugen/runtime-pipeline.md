@@ -227,6 +227,8 @@ Do not skip directly to TypeScript changes before identifying the failing layer.
 
 After the Audio Start Gate passes, the requestAnimationFrame loop, `CanvasRenderer`, `gameStateRef`, input buffers, round state, and the canvas DOM node are part of the live runtime. Debug top-level tabs must not unmount the game/canvas panel when switching to static source views. Keep the game/runtime panel mounted and switch its visibility with CSS/ARIA so the renderer continues to draw to the same canvas element and runtime state is not reinitialized. Heavy static/files contents may unmount while inactive and remount on demand.
 
+Debug sink settings are read from a live ref inside the existing loop. Toggling Human log, AI log, collision boxes, or lower-left history changes the next processed frame without recreating the runtime or scheduling another requestAnimationFrame chain. See `performance-debug-settings.md`.
+
 ## Common failure patterns
 
 | Symptom | Likely failing layer |

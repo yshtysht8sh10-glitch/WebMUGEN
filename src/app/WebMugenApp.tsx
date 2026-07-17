@@ -108,6 +108,7 @@ import {
   type ReadableRuntimeEntry,
   type RuntimeLogIndexEntry,
 } from './RuntimeLogIndex';
+import { RuntimePerformanceMetrics } from './RuntimePerformanceMetrics';
 
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/T-H-M-A.zip';
 const ENABLE_RUNTIME_FALLBACKS = false;
@@ -117,6 +118,8 @@ const INPUT_CONFIG_STORAGE_KEY = 'webmugen.inputConfig.v1';
 const CHARACTER_PATH_STORAGE_KEY = 'webmugen.characterPath.v1';
 const CHARACTER_PATH_OPTIONS = ['/chars/T-H-M-A.zip', '/chars/kfm/kfm.def'] as const;
 const RUNTIME_HISTORY_RENDER_THROTTLE_MS = 250;
+const STATE_HISTORY_RENDER_THROTTLE_MS = 200;
+const HUMAN_LOG_CAPTURE_INTERVAL_MS = 100;
 
 type AppPage = 'play' | 'static-files';
 type DebugTab = 'runtime-human' | 'runtime-ai' | 'manual' | 'settings';
@@ -180,6 +183,10 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
   const lastStateNosRef = useRef<[number, number]>([0, 0]);
   const stateTransitionLogLastStateNosRef = useRef<[number, number]>([0, 0]);
   const runtimeHistoryRenderTimerRef = useRef<number | null>(null);
+  const lastStateHistoryRenderTimeRef = useRef(0);
+  const lastHumanLogCaptureTimeRef = useRef(0);
+  const performanceMetricsRef = useRef(new RuntimePerformanceMetrics());
+  const lastPerformancePublishTimeRef = useRef(0);
   const [loadMessage, setLoadMessage] = useState('Loading character...');
   const [inputDebugLines, setInputDebugLines] = useState<string[]>(['keys=-']);
   const [roundDebugLine, setRoundDebugLine] = useState(formatRoundState(createInitialRoundState()));
@@ -235,6 +242,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
   };
 
   const recordAudioHistory = (line: string) => {
+    if (!runtimeSettingsRef.current.aiLogEnabled) return;
     const entry = [
       `===== AI_RUNTIME frame=${frameNoRef.current} timestamp=${new Date().toISOString()} source=audio =====`,
       line,
@@ -362,6 +370,13 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           return;
         }
         lastFrameTickTimeRef.current = timestamp;
+        const measuredFrameTimeMs = lastTickTime === null ? frameIntervalMs : timestamp - lastTickTime;
+        const performanceFrameStartedAt = performance.now();
+        const aiSignatureBefore = lastRuntimeSignatureRef.current;
+        const humanBufferEntriesBefore = readableEntryStoreRef.current.size;
+        let cnsMs = 0;
+        let logSerializationMs = 0;
+        let debugUiUpdateMs = 0;
         frameNoRef.current += 1;
         const input = inputRef.current;
         const config = inputConfigRef.current;
@@ -375,15 +390,25 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
         const p1Commands = normalizeResolvedCommands(resolveCommands(character.cmd, p1Input, p1CommandBufferRef.current, currentPlayers[0].facing).activeCommandNames);
         const p2Commands = normalizeResolvedCommands(resolveCommands(character.cmd, p2Input, p2CommandBufferRef.current, currentPlayers[1].facing).activeCommandNames);
 
-        const nextInputDebugLines = formatInputDebugOverlay(inputSnapshot);
-        const nextCommandDebugLines = formatCnsCommandDebugOverlay(p1Commands, p2Commands);
-        setInputDebugLines(nextInputDebugLines);
-        setCommandDebugLines(nextCommandDebugLines);
+        const humanLogEnabled = runtimeSettingsRef.current.humanLogEnabled;
+        const aiLogEnabled = runtimeSettingsRef.current.aiLogEnabled;
+        const traceDiagnosticsEnabled = humanLogEnabled || aiLogEnabled;
+        const nextInputDebugLines = traceDiagnosticsEnabled ? formatInputDebugOverlay(inputSnapshot) : [];
+        const nextCommandDebugLines = traceDiagnosticsEnabled ? formatCnsCommandDebugOverlay(p1Commands, p2Commands) : [];
+        if (humanLogEnabled) {
+          setInputDebugLines(nextInputDebugLines);
+          setCommandDebugLines(nextCommandDebugLines);
+        }
 
-        let nextState = applyInfinitePowerAtFrameStart(
-          synchronizeRuntimeFrame(gameStateRef.current, frameNoRef.current),
-          runtimeSettingsRef.current.infinitePower,
-        );
+        const synchronizedState = synchronizeRuntimeFrame(gameStateRef.current, frameNoRef.current);
+        let nextState = applyInfinitePowerAtFrameStart({
+          ...synchronizedState,
+          hitDiagnosticLines: [],
+          players: [
+            { ...synchronizedState.players[0], hitDiagnosticLines: [] },
+            { ...synchronizedState.players[1], hitDiagnosticLines: [] },
+          ],
+        }, runtimeSettingsRef.current.infinitePower);
         let nextReadableHistoryState = nextState;
         let nextRoundState = roundStateRef.current;
         let nextFeedback = hitFeedbackRef.current;
@@ -397,10 +422,15 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           canRestartRound(nextRoundState)
         ) {
           const restarted = restartRound(nextRoundState.roundNo, runtimeSettingsRef.current.roundTime, characterPowerMax);
-          nextState = applyInfinitePowerAtFrameStart(
-            synchronizeRuntimeFrame(restarted.gameState, frameNoRef.current),
-            runtimeSettingsRef.current.infinitePower,
-          );
+          const synchronizedRestartState = synchronizeRuntimeFrame(restarted.gameState, frameNoRef.current);
+          nextState = applyInfinitePowerAtFrameStart({
+            ...synchronizedRestartState,
+            hitDiagnosticLines: [],
+            players: [
+              { ...synchronizedRestartState.players[0], hitDiagnosticLines: [] },
+              { ...synchronizedRestartState.players[1], hitDiagnosticLines: [] },
+            ],
+          }, runtimeSettingsRef.current.infinitePower);
           nextRoundState = restarted.roundState;
           nextFeedback = restarted.hitFeedbackState;
           nextCnsTraces = [];
@@ -417,6 +447,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           const explodRuntimeEvents: ExplodControllerEvent[] = [];
           const pauseEvents: PauseControllerEvent[] = [];
           const runtimeEventDiagnosticLines: string[] = [];
+          const cnsStartedAt = performance.now();
           const cnsResult = stepCnsStateRuntime(nextState, character.cns, {
             p1Commands,
             p2Commands,
@@ -426,7 +457,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
               return element ? element.elementIndex + 1 : null;
             },
             getAnimationTriggerInfo: (animNo, animTime) => getAnimationTriggerInfo(character.air, animNo, animTime),
-            hitDiagnostics: runtimeSettingsRef.current.hitDiagnostics,
+            hitDiagnostics: aiLogEnabled && runtimeSettingsRef.current.hitDiagnostics,
+            traceDiagnostics: traceDiagnosticsEnabled,
             onSoundPlay: (event) => soundEvents.push(event),
             onSoundStop: (event) => soundEvents.push(event),
             onSoundPan: (event) => soundEvents.push(event),
@@ -444,6 +476,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             roundWinner: nextRoundState.winner,
             roundEndReason: nextRoundState.endReason,
           });
+          cnsMs = performance.now() - cnsStartedAt;
           nextState = cnsResult.state;
           if (pauseEvents.length > 0) {
             const pause = applyPauseControllerEvents(nextState.pause ?? createInitialPauseState(), pauseEvents);
@@ -467,7 +500,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             runtimeEventDiagnosticLines.push(...(nextState.hitDiagnosticLines ?? []).slice(previousDiagnosticCount));
           }
           if (soundEvents.length > 0) {
-            runtimeEventDiagnosticLines.push(...processSoundRuntimeEvents(soundEvents, character.sounds, null, audioRuntimeRef.current));
+            runtimeEventDiagnosticLines.push(...processSoundRuntimeEvents(soundEvents, character.sounds, null, audioRuntimeRef.current, aiLogEnabled));
           }
           nextReadableHistoryState = cnsResult.state;
           nextCnsTraces = cnsResult.traces;
@@ -494,7 +527,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           if (pausedThisFrame) {
             nextState = { ...nextState, hitEvents: [] };
           } else {
-            nextState = resolveFallbackHits(nextState, character.air, runtimeSettingsRef.current.hitDiagnostics);
+            nextState = resolveFallbackHits(nextState, character.air, aiLogEnabled && runtimeSettingsRef.current.hitDiagnostics);
             nextState = removeExplodsOnOwnerHit(nextState);
             const hitEffects = applyHitEffectRuntime(nextState, {
               ownerAir: () => character.air,
@@ -503,8 +536,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
               commonSounds: null,
             });
             nextState = hitEffects.state;
-            runtimeEventDiagnosticLines.push(...processSoundRuntimeEvents(hitEffects.soundEvents, character.sounds, null, audioRuntimeRef.current));
-            nextState = applyFallbackHitRecovery(nextState, runtimeSettingsRef.current.hitDiagnostics);
+            runtimeEventDiagnosticLines.push(...processSoundRuntimeEvents(hitEffects.soundEvents, character.sounds, null, audioRuntimeRef.current, aiLogEnabled));
+            nextState = applyFallbackHitRecovery(nextState, aiLogEnabled && runtimeSettingsRef.current.hitDiagnostics);
           }
           if (runtimeEventDiagnosticLines.length > 0) {
             nextState = { ...nextState, hitDiagnosticLines: [...(nextState.hitDiagnosticLines ?? []), ...runtimeEventDiagnosticLines] };
@@ -523,7 +556,11 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
 
         restartPressedRef.current = inputSnapshot.system.restartRound;
 
-        const explodRenderDiagnosticLines = rendererRef.current?.render(nextState, nextFeedback, nextRoundState, nextScore) ?? [];
+        const simulationFinishedAt = performance.now();
+        const explodRenderDiagnosticLines = rendererRef.current?.render(nextState, nextFeedback, nextRoundState, nextScore, {
+          collisionBoxesVisible: runtimeSettingsRef.current.collisionBoxesVisible,
+          diagnosticsEnabled: aiLogEnabled,
+        }) ?? [];
         if (explodRenderDiagnosticLines.length > 0) {
           nextState = { ...nextState, hitDiagnosticLines: [...(nextState.hitDiagnosticLines ?? []), ...explodRenderDiagnosticLines] };
         }
@@ -533,28 +570,47 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
         roundStateRef.current = nextRoundState;
         roundScoreRef.current = nextScore;
         cnsTraceRef.current = nextCnsTraces;
-        updateStageDebugOverlay({
-          state: nextState,
-          pressedKeys,
-          frameNo: frameNoRef.current,
-          stateTransitionHistoryRef,
-          inputHistoryRef,
-          damageHistoryRef,
-          lastKeySignatureRef: lastStageKeySignatureRef,
-          lastStateNosRef,
-          setStageDebugLines,
-        });
+        const diagnosticStartedAt = performance.now();
+        if (
+          runtimeSettingsRef.current.stateHistoryVisible
+          && timestamp - lastStateHistoryRenderTimeRef.current >= STATE_HISTORY_RENDER_THROTTLE_MS
+        ) {
+          lastStateHistoryRenderTimeRef.current = timestamp;
+          updateStageDebugOverlay({
+            state: nextState,
+            pressedKeys,
+            frameNo: frameNoRef.current,
+            stateTransitionHistoryRef,
+            inputHistoryRef,
+            damageHistoryRef,
+            lastKeySignatureRef: lastStageKeySignatureRef,
+            lastStateNosRef,
+            setStageDebugLines,
+          });
+        }
 
-        const nextRoundDebugLine = formatRoundState(nextRoundState);
-        const nextScoreDebugLine = formatRoundScore(nextScore);
-        const nextCnsDebugLines = formatCnsRuntimeDebugOverlay(nextCnsTraces);
-        const nextPhysicsDebugLines = formatPhysicsDebugOverlay(nextState);
-        setRoundDebugLine(nextRoundDebugLine);
-        setScoreDebugLine(nextScoreDebugLine);
-        setCnsDebugLines(nextCnsDebugLines);
-        setPhysicsDebugLines(nextPhysicsDebugLines);
+        const humanStateChanged = nextCnsTraces.some((trace) => trace.stateNo !== trace.afterStateNo);
+        const captureHumanLogThisFrame = humanLogEnabled && (
+          humanStateChanged
+          || timestamp - lastHumanLogCaptureTimeRef.current >= HUMAN_LOG_CAPTURE_INTERVAL_MS
+        );
+        if (captureHumanLogThisFrame) lastHumanLogCaptureTimeRef.current = timestamp;
+        const formatDetailedDiagnostics = aiLogEnabled || captureHumanLogThisFrame;
+        const nextRoundDebugLine = formatDetailedDiagnostics ? formatRoundState(nextRoundState) : '';
+        const nextScoreDebugLine = formatDetailedDiagnostics ? formatRoundScore(nextScore) : '';
+        const nextCnsDebugLines = formatDetailedDiagnostics ? formatCnsRuntimeDebugOverlay(nextCnsTraces) : [];
+        const nextPhysicsDebugLines = formatDetailedDiagnostics ? formatPhysicsDebugOverlay(nextState) : [];
+        if (captureHumanLogThisFrame) {
+          const debugUiStartedAt = performance.now();
+          setRoundDebugLine(nextRoundDebugLine);
+          setScoreDebugLine(nextScoreDebugLine);
+          setCnsDebugLines(nextCnsDebugLines);
+          setPhysicsDebugLines(nextPhysicsDebugLines);
+          debugUiUpdateMs += performance.now() - debugUiStartedAt;
+        }
 
-        appendRuntimeHistoryIfNeeded({
+        const logSerializationStartedAt = performance.now();
+        if (aiLogEnabled) appendRuntimeHistoryIfNeeded({
           frameNo: frameNoRef.current,
           inputLines: nextInputDebugLines,
           commandLines: nextCommandDebugLines,
@@ -569,7 +625,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           lastSignatureRef: lastRuntimeSignatureRef,
           setHistoryLines: scheduleRuntimeHistoryRender,
         });
-        appendReadableRuntimeHistoryIfNeeded({
+        const generatedHumanCharacters = captureHumanLogThisFrame ? appendReadableRuntimeHistoryIfNeeded({
           cns: character.cns,
           commands: p1Commands,
           getAnimEndTime: (animNo) => getMugenAnimEndTime(character.air, animNo),
@@ -583,14 +639,45 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           nextEntryIdRef: nextRuntimeLogEntryIdRef,
           lastSignatureRef: lastReadableRuntimeSignatureRef,
           setIndexEntries: setRuntimeLogIndexEntries,
-        });
-        appendStateTransitionLogIfNeeded({
+        }) : 0;
+        if (humanLogEnabled) appendStateTransitionLogIfNeeded({
           frameNo: frameNoRef.current,
           state: nextState,
           historyRef: stateTransitionLogRef,
           lastStateNosRef: stateTransitionLogLastStateNosRef,
           setHistoryLines: setStateTransitionLogLines,
         });
+        logSerializationMs = performance.now() - logSerializationStartedAt;
+
+        const rendererTimings = rendererRef.current?.getLastTimings() ?? { normalMs: 0, debugMs: 0 };
+        const generatedAiEntries = lastRuntimeSignatureRef.current !== aiSignatureBefore ? 1 : 0;
+        const generatedHumanEntries = Math.max(0, readableEntryStoreRef.current.size - humanBufferEntriesBefore);
+        const nextAiHeaderIndex = runtimeHistoryRef.current.findIndex((line, index) => index > 0 && line.startsWith('===== AI_RUNTIME'));
+        const newlyGeneratedAiCharacters = generatedAiEntries === 0
+          ? 0
+          : runtimeHistoryRef.current.slice(0, nextAiHeaderIndex < 0 ? runtimeHistoryRef.current.length : nextAiHeaderIndex)
+            .reduce((total, line) => total + line.length, 0);
+        performanceMetricsRef.current.record({
+          frameTimeMs: measuredFrameTimeMs,
+          simulationMs: simulationFinishedAt - performanceFrameStartedAt,
+          cnsMs,
+          diagnosticMs: performance.now() - diagnosticStartedAt,
+          logSerializationMs,
+          debugUiUpdateMs,
+          canvasNormalMs: rendererTimings.normalMs,
+          canvasDebugMs: rendererTimings.debugMs,
+          generatedLogEntries: generatedAiEntries + generatedHumanEntries,
+          generatedLogCharacters: newlyGeneratedAiCharacters + generatedHumanCharacters,
+          aiBufferLines: runtimeHistoryRef.current.length,
+          humanBufferEntries: readableEntryStoreRef.current.size,
+          stateHistoryLines: stateTransitionHistoryRef.current.length + inputHistoryRef.current.length + damageHistoryRef.current.length,
+        });
+        if (timestamp - lastPerformancePublishTimeRef.current >= 1000) {
+          lastPerformancePublishTimeRef.current = timestamp;
+          const performanceSnapshot = performanceMetricsRef.current.snapshot(runtimeSettingsRef.current);
+          window.__WEBMUGEN_PERFORMANCE__ = performanceSnapshot;
+          canvas.dataset.performanceSnapshot = JSON.stringify(performanceSnapshot);
+        }
 
           frameId = requestAnimationFrame(tick);
         };
@@ -703,6 +790,30 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
 
   const setRuntimeSettings = (nextSettings: RuntimeSettings) => {
     const normalized = normalizeRuntimeSettings(nextSettings);
+    performanceMetricsRef.current.clear();
+    lastPerformancePublishTimeRef.current = 0;
+    if (!normalized.aiLogEnabled) {
+      runtimeHistoryRef.current = [];
+      audioLifecycleHistoryRef.current = [];
+      lastRuntimeSignatureRef.current = '';
+      invalidateRuntimeHistoryViews();
+    }
+    if (!normalized.humanLogEnabled) {
+      clearReadableRuntimeLogStores({ indexStore: readableIndexStoreRef.current, entryStore: readableEntryStoreRef.current });
+      stateTransitionLogRef.current = [];
+      lastReadableRuntimeSignatureRef.current = '';
+      setRuntimeLogIndexEntries([]);
+      setSelectedReadableEntry(null);
+      setShowHumanDetail(false);
+      lastHumanLogCaptureTimeRef.current = 0;
+    }
+    if (!normalized.stateHistoryVisible) {
+      stateTransitionHistoryRef.current = [];
+      inputHistoryRef.current = [];
+      damageHistoryRef.current = [];
+      lastStateHistoryRenderTimeRef.current = 0;
+      setStageDebugLines([]);
+    }
     runtimeSettingsRef.current = normalized;
     setRuntimeSettingsState(normalized);
     saveRuntimeSettings(normalized);
@@ -794,11 +905,11 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
                   onContinueWithoutAudio={continueWithoutAudio}
                 />
               )}
-              <div className="stage-debug-overlay" aria-label="stage debug overlay">
+              {runtimeSettings.stateHistoryVisible && <div className="stage-debug-overlay" aria-label="stage debug overlay">
                 {stageDebugLines.map((line, index) => (
                   <div key={`${line}-${index}`}>{line}</div>
                 ))}
-              </div>
+              </div>}
             </div>
           </section>
 
@@ -816,7 +927,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           />
 
           <section className="debug-panel">
-            {activeDebugTab === 'runtime-human' && (
+            {activeDebugTab === 'runtime-human' && runtimeSettings.humanLogEnabled && (
               <HumanRuntimePanel
                 indexEntries={runtimeLogIndexEntries}
                 selectedEntry={selectedReadableEntry}
@@ -829,13 +940,15 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
                 onOpenCnsSource={openCnsSource}
               />
             )}
-            {activeDebugTab === 'runtime-ai' && (
+            {activeDebugTab === 'runtime-human' && !runtimeSettings.humanLogEnabled && <p>Human log is OFF in Settings.</p>}
+            {activeDebugTab === 'runtime-ai' && runtimeSettings.aiLogEnabled && (
               <AiRuntimePanel
                 visibleRuntimeHistory={visibleAiHistory}
                 historyWindow={aiHistoryWindow}
                 onShowLatest={showLatestRuntimeHistory}
               />
             )}
+            {activeDebugTab === 'runtime-ai' && !runtimeSettings.aiLogEnabled && <p>AI log is OFF in Settings.</p>}
             {activeDebugTab === 'manual' && <ManualPanel />}
             {activeDebugTab === 'settings' && (
               <SettingsPanel
@@ -1162,7 +1275,7 @@ function InputConfigPanel({
   );
 }
 
-function RuntimeSettingsPanel({
+export function RuntimeSettingsPanel({
   settings,
   onChange,
 }: {
@@ -1203,9 +1316,10 @@ function RuntimeSettingsPanel({
           <input
             type="checkbox"
             checked={settings.hitDiagnostics}
+            disabled={!settings.aiLogEnabled}
             onChange={(event) => onChange({ ...settings, hitDiagnostics: event.currentTarget.checked })}
           />
-          Hit diagnostics
+          AI hit lifecycle details
         </label>
         <label>
           Frame ms
@@ -1221,6 +1335,49 @@ function RuntimeSettingsPanel({
         <button type="button" onClick={() => onChange(DEFAULT_RUNTIME_SETTINGS)}>
           MUGEN default
         </button>
+      </div>
+      <h3>Debug / Logging</h3>
+      <div className="runtime-settings-grid">
+        <label>
+          <input
+            aria-label="Human log enabled"
+            type="checkbox"
+            checked={settings.humanLogEnabled}
+            onChange={(event) => onChange({ ...settings, humanLogEnabled: event.currentTarget.checked })}
+          />
+          Human log
+          <small>Records detailed diagnostics for reading on screen. May increase load.</small>
+        </label>
+        <label>
+          <input
+            aria-label="AI log enabled"
+            type="checkbox"
+            checked={settings.aiLogEnabled}
+            onChange={(event) => onChange({ ...settings, aiLogEnabled: event.currentTarget.checked })}
+          />
+          AI log
+          <small>Records detailed AI_RUNTIME frame dumps. May increase load.</small>
+        </label>
+        <label>
+          <input
+            aria-label="Collision boxes visible"
+            type="checkbox"
+            checked={settings.collisionBoxesVisible}
+            onChange={(event) => onChange({ ...settings, collisionBoxesVisible: event.currentTarget.checked })}
+          />
+          Collision boxes
+          <small>Draws Clsn1, Clsn2, Push, and projectile debug rectangles.</small>
+        </label>
+        <label>
+          <input
+            aria-label="State history visible"
+            type="checkbox"
+            checked={settings.stateHistoryVisible}
+            onChange={(event) => onChange({ ...settings, stateHistoryVisible: event.currentTarget.checked })}
+          />
+          State history
+          <small>Shows the lightweight state/input/damage history at the lower left.</small>
+        </label>
       </div>
     </section>
   );
@@ -3067,32 +3224,34 @@ function appendReadableRuntimeHistoryIfNeeded({
   nextEntryIdRef: MutableRefObject<number>;
   lastSignatureRef: MutableRefObject<string>;
   setIndexEntries: (entries: RuntimeLogIndexEntry[]) => void;
-}) {
+}): number {
   const keySummary = formatMugenPressedKeys(pressedKeys, inputConfig.players[0]);
   const snapshots = createReadableRuntimeStateSnapshots(state, traces);
-  const signature = snapshots.map((snapshot) => {
+  const preparedSnapshots = snapshots.map((snapshot) => {
     const [p1] = snapshot.players;
-    return [
+    const triggerSummary = formatP1SatisfiedStateDefTriggerSummary(cns, snapshot, commands, getAnimEndTime);
+    const damageSummary = formatHitEventSummary(snapshot);
+    return { snapshot, triggerSummary, damageSummary, signature: [
       p1.stateNo,
       p1.animNo,
-      stripReadableRuntimeValueSummaries(formatP1SatisfiedStateDefTriggerSummary(cns, snapshot, commands, getAnimEndTime)),
-      formatHitEventSummary(snapshot),
+      stripReadableRuntimeValueSummaries(triggerSummary),
+      damageSummary,
       keySummary,
-    ].join('|');
-  }).join('||');
-  if (signature === lastSignatureRef.current) return;
+    ].join('|') };
+  });
+  const signature = preparedSnapshots.map((prepared) => prepared.signature).join('||');
+  if (signature === lastSignatureRef.current) return 0;
 
   lastSignatureRef.current = signature;
   const timestamp = new Date().toLocaleTimeString('ja-JP', { hour12: false });
   let visibleEntries: RuntimeLogIndexEntry[] | null = null;
+  let generatedCharacters = 0;
   const appendedKeys = new Set<string>();
-  for (const snapshot of snapshots) {
+  for (const { snapshot, triggerSummary, damageSummary } of preparedSnapshots) {
     const [p1] = snapshot.players;
     const key = createReadableRuntimeEntryKey(frameNo, p1.stateNo);
     if (appendedKeys.has(key)) continue;
     appendedKeys.add(key);
-    const triggerSummary = formatP1SatisfiedStateDefTriggerSummary(cns, snapshot, commands, getAnimEndTime);
-    const damageSummary = formatHitEventSummary(snapshot);
     const id = nextEntryIdRef.current;
     nextEntryIdRef.current += 1;
     const lines = freezeHistoryLines([
@@ -3105,6 +3264,7 @@ function appendReadableRuntimeHistoryIfNeeded({
       `Damage=${damageSummary}`,
       '',
     ]);
+    generatedCharacters += lines.reduce((total, line) => total + line.length, 0);
     visibleEntries = appendReadableRuntimeEntry({
       indexStore: indexStoreRef.current,
       entryStore: entryStoreRef.current,
@@ -3113,6 +3273,7 @@ function appendReadableRuntimeHistoryIfNeeded({
     });
   }
   if (visibleEntries) setIndexEntries(visibleEntries);
+  return generatedCharacters;
 }
 
 function createReadableRuntimeStateSnapshots(state: GameState, traces: readonly CnsRuntimeTrace[]): GameState[] {

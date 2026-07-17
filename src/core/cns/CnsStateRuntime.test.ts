@@ -4,6 +4,31 @@ import { createInitialGameState } from '../engine/GameState';
 import { stepCnsPhysicsMotion } from './CnsPhysicsStep';
 import { stepCnsStateRuntime } from './CnsStateRuntime';
 
+describe('Issue #75 runtime diagnostic gating', () => {
+  it('does not return trace objects or raw diagnostic strings when both log sinks are disabled', () => {
+    const cns = parseCnsText(`
+[StateDef 0]
+type = S
+movetype = I
+physics = S
+ctrl = 1
+
+[State 0, noop]
+type = Null
+trigger1 = 1
+`);
+
+    const result = stepCnsStateRuntime(createInitialGameState(), cns, {
+      traceDiagnostics: false,
+      hitDiagnostics: false,
+    });
+
+    expect(result.traces).toEqual([]);
+    expect(result.state.hitDiagnosticLines ?? []).toEqual([]);
+    expect(result.state.players.every((player) => (player.hitDiagnosticLines ?? []).length === 0)).toBe(true);
+  });
+});
+
 describe('CnsStateRuntime Size constants', () => {
   it('carries push dimensions and scale into PlayerState without pre-scaling them', () => {
     const cns = parseCnsText(`

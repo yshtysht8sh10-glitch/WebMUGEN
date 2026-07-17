@@ -9,6 +9,10 @@ export type RuntimeSettings = {
   frameIntervalMs: number;
   hitDiagnostics: boolean;
   infinitePower: InfinitePowerMode;
+  humanLogEnabled: boolean;
+  aiLogEnabled: boolean;
+  collisionBoxesVisible: boolean;
+  stateHistoryVisible: boolean;
 };
 
 export const DEFAULT_RUNTIME_SETTINGS: RuntimeSettings = {
@@ -16,6 +20,10 @@ export const DEFAULT_RUNTIME_SETTINGS: RuntimeSettings = {
   frameIntervalMs: DEFAULT_FRAME_INTERVAL_MS,
   hitDiagnostics: true,
   infinitePower: 'off',
+  humanLogEnabled: false,
+  aiLogEnabled: false,
+  collisionBoxesVisible: false,
+  stateHistoryVisible: false,
 };
 
 export function loadRuntimeSettings(storage: Pick<Storage, 'getItem'> | undefined = readLocalStorage()): RuntimeSettings {
@@ -47,7 +55,15 @@ export function normalizeRuntimeSettings(value: unknown): RuntimeSettings {
     frameIntervalMs: clampNumber(source.frameIntervalMs, 1, 1000, DEFAULT_RUNTIME_SETTINGS.frameIntervalMs),
     hitDiagnostics: source.hitDiagnostics ?? DEFAULT_RUNTIME_SETTINGS.hitDiagnostics,
     infinitePower: normalizeInfinitePowerMode(source.infinitePower),
+    humanLogEnabled: normalizeBoolean(source.humanLogEnabled),
+    aiLogEnabled: normalizeBoolean(source.aiLogEnabled),
+    collisionBoxesVisible: normalizeBoolean(source.collisionBoxesVisible),
+    stateHistoryVisible: normalizeBoolean(source.stateHistoryVisible),
   };
+}
+
+function normalizeBoolean(value: unknown): boolean {
+  return typeof value === 'boolean' ? value : false;
 }
 
 function normalizeInfinitePowerMode(value: unknown): InfinitePowerMode {

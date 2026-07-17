@@ -3,12 +3,28 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { MutableRefObject } from 'react';
 import type { CnsRuntimeTrace } from '../core/cns/CnsStateRuntime';
-import { AudioStartOverlay, WebMugenApp, appendRuntimeHistoryIfNeeded, createSourceOutline, drawAirPreview, findAirActionForLine, formatSatisfiedStateDefTriggers, parseControllerValueText, stripReadableRuntimeValueSummaries } from './WebMugenApp';
+import { AudioStartOverlay, RuntimeSettingsPanel, WebMugenApp, appendRuntimeHistoryIfNeeded, createSourceOutline, drawAirPreview, findAirActionForLine, formatSatisfiedStateDefTriggers, parseControllerValueText, stripReadableRuntimeValueSummaries } from './WebMugenApp';
+import { DEFAULT_RUNTIME_SETTINGS } from './RuntimeSettings';
 import type { ImageDataSpritePack } from '../core/sprite/ImageDataSpriteTypes';
 import { parseCnsText } from '../parser/cns/CnsParser';
 import { createInitialGameState } from '../core/engine/GameState';
 
 describe('WebMugenApp runtime history', () => {
+  it('starts all Issue #75 debug sinks disabled while exposing four independent Settings toggles', () => {
+    const html = renderToStaticMarkup(createElement(WebMugenApp, { initialPage: 'play' }));
+
+    expect(html).not.toContain('aria-label="stage debug overlay"');
+    expect(html).toContain('Human log is OFF in Settings.');
+    const settingsHtml = renderToStaticMarkup(createElement(RuntimeSettingsPanel, {
+      settings: DEFAULT_RUNTIME_SETTINGS,
+      onChange: () => undefined,
+    }));
+    expect(settingsHtml).toContain('aria-label="Human log enabled"');
+    expect(settingsHtml).toContain('aria-label="AI log enabled"');
+    expect(settingsHtml).toContain('aria-label="Collision boxes visible"');
+    expect(settingsHtml).toContain('aria-label="State history visible"');
+  });
+
   it('keeps the game panel mounted while leaving hidden static content unmounted', () => {
     const html = renderToStaticMarkup(createElement(WebMugenApp));
 

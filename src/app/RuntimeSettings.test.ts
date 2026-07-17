@@ -35,3 +35,48 @@ describe('Issue #64 runtime settings persistence', () => {
     expect(() => saveRuntimeSettings({ ...DEFAULT_RUNTIME_SETTINGS, infinitePower: 'both' }, broken)).not.toThrow();
   });
 });
+
+describe('Issue #75 debug and logging settings', () => {
+  it('defaults all four settings to OFF for new, legacy, and invalid data', () => {
+    expect(DEFAULT_RUNTIME_SETTINGS).toMatchObject({
+      humanLogEnabled: false,
+      aiLogEnabled: false,
+      collisionBoxesVisible: false,
+      stateHistoryVisible: false,
+    });
+    expect(normalizeRuntimeSettings({ roundTime: 20 })).toMatchObject({
+      humanLogEnabled: false,
+      aiLogEnabled: false,
+      collisionBoxesVisible: false,
+      stateHistoryVisible: false,
+    });
+    expect(normalizeRuntimeSettings({
+      humanLogEnabled: 1,
+      aiLogEnabled: 'true',
+      collisionBoxesVisible: null,
+      stateHistoryVisible: {},
+    })).toMatchObject({
+      humanLogEnabled: false,
+      aiLogEnabled: false,
+      collisionBoxesVisible: false,
+      stateHistoryVisible: false,
+    });
+  });
+
+  it('persists the four settings independently', () => {
+    let stored: string | null = null;
+    const storage = {
+      getItem: () => stored,
+      setItem: (_key: string, value: string) => { stored = value; },
+    };
+    const expected = {
+      ...DEFAULT_RUNTIME_SETTINGS,
+      humanLogEnabled: true,
+      aiLogEnabled: false,
+      collisionBoxesVisible: true,
+      stateHistoryVisible: false,
+    };
+    saveRuntimeSettings(expected, storage);
+    expect(loadRuntimeSettings(storage)).toEqual(expected);
+  });
+});

@@ -55,6 +55,7 @@ export type CnsRuntimeInput = {
   getAnimationElementNo?: (animNo: number, animTime: number) => number | null;
   getAnimationTriggerInfo?: (animNo: number, animTime: number) => AnimationTriggerInfo | null;
   hitDiagnostics?: boolean;
+  traceDiagnostics?: boolean;
   getCnsDocumentForPlayer?: (playerId: number) => CnsDocument | null | undefined;
   onSoundPlay?: (event: SoundPlayEvent) => void;
   onSoundStop?: (event: SoundStopEvent) => void;
@@ -207,7 +208,7 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
   for (const request of pendingSpawns) {
     helpers = spawnHelper(helpers, request, resolveCnsByOwner(request.stateOwnerId, cns, input));
   }
-  const helperDiagnostics = [
+  const helperDiagnostics = input.hitDiagnostics === false ? [] : [
     ...pendingSpawns.map((request, index) => {
       const entity = helpers.entries[helpers.entries.length - pendingSpawns.length + index];
       return `raw.helper event=spawn entityId=${entity?.entityId ?? '-'} helperId=${request.helperId} root=${request.rootEntityId} parent=${request.parentEntityId} owner=${request.ownerCharacterId} state=${request.stateNo} anim=${entity?.player.animNo ?? '-'} frame=${state.frame} firstStep=next_frame`;
@@ -216,7 +217,7 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
   ];
   return {
     state: { ...state, players, helpers, hitDiagnosticLines: [...(state.hitDiagnosticLines ?? []), ...helperDiagnostics] },
-    traces: [p1.trace, p2.trace, ...helperTraces],
+    traces: input.traceDiagnostics === false ? [] : [p1.trace, p2.trace, ...helperTraces],
   };
 }
 
@@ -238,6 +239,7 @@ function stepPlayer(
   runtimeFrame = 0,
 ): { player: PlayerState; trace: CnsRuntimeTrace; targetOperations: TargetOperation[] } {
   const originalStateNo = player.stateNo;
+  const traceDiagnosticsEnabled = input.traceDiagnostics !== false;
   const juggleMax = player.juggleMax ?? readAirJuggle(cns);
   const resetJuggle = player.stateType !== 'A' && player.stateType !== 'L' && player.moveType === 'I' && player.ctrl;
   let next: PlayerState = {
@@ -267,27 +269,27 @@ function stepPlayer(
     afterAnimNo: player.animNo,
     stateTime: player.stateTime,
     afterStateTime: player.stateTime,
-    mugenAnimTime: mugenAnimTime(player, input),
+    mugenAnimTime: traceDiagnosticsEnabled ? mugenAnimTime(player, input) : 0,
     stateFound: Boolean(findState(cns, player.stateNo)),
     executedControllers: [],
     debugLines: [],
   };
   const targetOperations: TargetOperation[] = [];
 
-  const debugEnabled = shouldDebugRuntime(commands);
+  const debugEnabled = traceDiagnosticsEnabled && shouldDebugRuntime(commands);
   if (player.hitPause > 0) {
-    trace.debugLines.push(`hitpause skip remaining=${player.hitPause}`);
-    return { ...finishTrace(appendFallPauseDiagnostic(next, runtimeFrame, 'hitpause', player.hitPause, input.hitDiagnostics !== false), trace), targetOperations };
+    if (traceDiagnosticsEnabled) trace.debugLines.push(`hitpause skip remaining=${player.hitPause}`);
+    return { ...finishTrace(appendFallPauseDiagnostic(next, runtimeFrame, 'hitpause', player.hitPause, input.hitDiagnostics !== false), trace, traceDiagnosticsEnabled), targetOperations };
   }
   if (input.pauseState && (input.pauseState.resumeGuard || !canEntityMoveDuringPause(input.pauseState, player.id))) {
-    trace.debugLines.push(`global_pause skip reason=${input.pauseState.resumeGuard ? 'resume_guard' : input.pauseState.kind ?? 'pause'} remaining=${Math.max(input.pauseState.pauseTime, input.pauseState.superPauseTime)} owner=p${input.pauseState.ownerEntityId ?? '-'}`);
+    if (traceDiagnosticsEnabled) trace.debugLines.push(`global_pause skip reason=${input.pauseState.resumeGuard ? 'resume_guard' : input.pauseState.kind ?? 'pause'} remaining=${Math.max(input.pauseState.pauseTime, input.pauseState.superPauseTime)} owner=p${input.pauseState.ownerEntityId ?? '-'}`);
     return { ...finishTrace(appendFallPauseDiagnostic(
       next,
       runtimeFrame,
       input.pauseState.kind ?? 'pause',
       Math.max(input.pauseState.pauseTime, input.pauseState.superPauseTime),
       input.hitDiagnostics !== false,
-    ), trace), targetOperations };
+    ), trace, traceDiagnosticsEnabled), targetOperations };
   }
 
   next = tickHitAttributeSlots(next);
@@ -311,10 +313,10 @@ function stepPlayer(
     if (debugEnabled) appendDebug(trace, `enter S${negativeStateNo} state=${next.stateNo} controllers=${negativeState.controllers.length}`);
     if (debugEnabled) appendDebug(trace, formatStateDefOverview(negativeState));
     const negativeStateEntry = next;
-    const result = executeStateControllers(next, opponent, negativeState, cns, input, commands, debugEnabled, negativeStateEntry, runtimeFrame);
+    const result = executeStateControllers(next, opponent, negativeState, cns, input, commands, debugEnabled, traceDiagnosticsEnabled, negativeStateEntry, runtimeFrame);
     next = result.player;
-    trace.executedControllers.push(...result.executedControllers);
-    trace.debugLines.push(...result.debugLines);
+    if (traceDiagnosticsEnabled) trace.executedControllers.push(...result.executedControllers);
+    if (traceDiagnosticsEnabled) trace.debugLines.push(...result.debugLines);
     targetOperations.push(...result.targetOperations);
     if (debugEnabled) appendDebug(trace, `leave S${negativeStateNo} state=${next.stateNo}`);
     if (next.stateNo !== originalStateNo) {
@@ -334,7 +336,7 @@ function stepPlayer(
         `  state=${next.stateNo} owner=${next.stateOwnerId ?? next.id} result=missing reason=state_not_found`,
       ],
     };
-    return { ...finishTrace(next, trace), targetOperations };
+    return { ...finishTrace(next, trace, traceDiagnosticsEnabled), targetOperations };
   }
   if (debugEnabled) appendDebug(trace, `enter current S${stateDef.stateNo} state=${next.stateNo}`);
   if (debugEnabled) appendDebug(trace, formatStateDefOverview(stateDef));
@@ -344,10 +346,10 @@ function stepPlayer(
   }
   next = appendGetHitFrameDiagnostic(next, opponent, stateDef, input, commands, runtimeFrame, input.hitDiagnostics !== false);
   if (debugEnabled) appendDebug(trace, `after header S${stateDef.stateNo} state=${next.stateNo} type=${next.stateType} ctrl=${next.ctrl ? 1 : 0}`);
-  const result = executeStateControllers(next, opponent, stateDef, cns, input, commands, debugEnabled, undefined, runtimeFrame);
+  const result = executeStateControllers(next, opponent, stateDef, cns, input, commands, debugEnabled, traceDiagnosticsEnabled, undefined, runtimeFrame);
   next = result.player;
-  trace.executedControllers.push(...result.executedControllers);
-  trace.debugLines.push(...result.debugLines);
+  if (traceDiagnosticsEnabled) trace.executedControllers.push(...result.executedControllers);
+  if (traceDiagnosticsEnabled) trace.debugLines.push(...result.debugLines);
   targetOperations.push(...result.targetOperations);
   if (next.stateNo !== stateDef.stateNo && next.stateTime === 0) {
     const enteredState = findState(cns, next.stateNo);
@@ -355,29 +357,29 @@ function stepPlayer(
       if (debugEnabled) appendDebug(trace, `enter target S${enteredState.stateNo} state=${next.stateNo}`);
       if (debugEnabled) appendDebug(trace, formatStateDefOverview(enteredState));
       const enteredStateNo = next.stateNo;
-      const enteredResult = executeStateControllers(next, opponent, enteredState, cns, input, commands, debugEnabled, undefined, runtimeFrame);
+      const enteredResult = executeStateControllers(next, opponent, enteredState, cns, input, commands, debugEnabled, traceDiagnosticsEnabled, undefined, runtimeFrame);
       next = enteredResult.player;
       if (next.stateNo !== enteredStateNo && next.stateTime === 0) {
         // This second destination has not run its own controllers yet. Keep its
         // first Time = 0 pass available after the following physics increment.
         next = { ...next, stateTime: -1 };
       }
-      trace.executedControllers.push(...enteredResult.executedControllers);
-      trace.debugLines.push(...enteredResult.debugLines);
+      if (traceDiagnosticsEnabled) trace.executedControllers.push(...enteredResult.executedControllers);
+      if (traceDiagnosticsEnabled) trace.debugLines.push(...enteredResult.debugLines);
       targetOperations.push(...enteredResult.targetOperations);
       if (debugEnabled) appendDebug(trace, `leave target S${enteredState.stateNo} state=${next.stateNo}`);
     }
   }
   if (debugEnabled) appendDebug(trace, `leave current S${stateDef.stateNo} state=${next.stateNo}`);
 
-  return { ...finishTrace(next, trace), targetOperations };
+  return { ...finishTrace(next, trace, traceDiagnosticsEnabled), targetOperations };
 }
 
-function finishTrace(player: PlayerState, trace: CnsRuntimeTrace): { player: PlayerState; trace: CnsRuntimeTrace } {
+function finishTrace(player: PlayerState, trace: CnsRuntimeTrace, diagnosticsEnabled = true): { player: PlayerState; trace: CnsRuntimeTrace } {
   trace.afterStateNo = player.stateNo;
   trace.afterAnimNo = player.animNo;
   trace.afterStateTime = player.stateTime;
-  trace.debugLines.push(`finish state=${player.stateNo}`);
+  if (diagnosticsEnabled) trace.debugLines.push(`finish state=${player.stateNo}`);
   if (shouldDebugExecuted(trace)) trace.executedControllers.push(`dbg finish state=${player.stateNo}`);
   return { player, trace };
 }
@@ -390,6 +392,7 @@ function executeStateControllers(
   input: CnsRuntimeInput,
   commands?: ReadonlySet<string>,
   debugEnabled = false,
+  recordDiagnostics = true,
   negativeStateEntry?: PlayerState,
   runtimeFrame = 0,
 ): ControllerExecutionResult {
@@ -445,7 +448,7 @@ function executeStateControllers(
       pushDebug(debugLines, executedControllers, `pipe after S${stateDef.stateNo} ${controller.type} executed=${result.executed ? 1 : 0} before=${beforeStateNo} after=${next.stateNo}`);
     }
     if (result.executed) {
-      executedControllers.push(result.name);
+      if (recordDiagnostics) executedControllers.push(result.name);
       if (debugEnabled && beforeStateNo !== next.stateNo) {
         pushDebug(debugLines, executedControllers, `${result.name} ${beforeStateNo}->${next.stateNo}`);
       }
@@ -492,7 +495,9 @@ function applyTargetOperations(
       if (operation.kind === 'powerAdd') {
         const value = operation.value ?? 0;
         const next = addPlayerPower(player, value);
-        return appendPowerDiagnostic(next, `raw.power entity=p${player.id} source=controller type=TargetPowerAdd before=${player.power} value=${value} after=${next.power} max=${next.powerMax}`);
+        return input.hitDiagnostics === false
+          ? next
+          : appendPowerDiagnostic(next, `raw.power entity=p${player.id} source=controller type=TargetPowerAdd before=${player.power} value=${value} after=${next.power} max=${next.powerMax}`);
       }
       if (operation.kind === 'facing') {
         const ownerFacing = operation.ownerFacing ?? owner?.facing ?? 1;
@@ -561,7 +566,7 @@ function enterState(
   const powerAdded = addPlayerPower(player, stateDef.powerAdd ?? 0);
   const preserveHitDef = stateDef.hitDefPersist === true;
   const preservedMoveContact = preserveMoveContact(player, stateDef.moveHitPersist === true, stateDef.hitCountPersist === true);
-  const hitDiagnosticLines = player.activeHitDef?.diagnosticId ? [
+  const hitDiagnosticLines = input?.hitDiagnostics !== false && player.activeHitDef?.diagnosticId ? [
     ...(player.hitDiagnosticLines ?? []),
     `raw.hitdef_lifecycle activeHitDefId=${player.activeHitDef.diagnosticId}`,
     `  event=${preserveHitDef ? 'preserve' : 'discard'} reason=state_change hitdefpersist=${preserveHitDef ? 1 : 0} movehitpersist=${stateDef.moveHitPersist ? 1 : 0} hitcountpersist=${stateDef.hitCountPersist ? 1 : 0} hitCount=${player.moveContact?.hitCount ?? 0}`,
@@ -589,7 +594,7 @@ function enterState(
     pauseControllerLatch: undefined,
     hitDiagnosticLines,
   } as PlayerState;
-  return stateDef.powerAdd === undefined
+  return stateDef.powerAdd === undefined || input?.hitDiagnostics === false
     ? entered
     : appendPowerDiagnostic(entered, `raw.power entity=p${player.id} source=statedef state=${stateNo} before=${player.power} delta=${stateDef.powerAdd} after=${entered.power} max=${entered.powerMax}`);
 }
@@ -909,8 +914,8 @@ function executeController(
   if (type === 'movetypeset') return moveTypeSet(player, controller);
   if (type === 'lifeadd') return addLife(player, controller);
   if (type === 'lifeset') return setLife(player, controller);
-  if (type === 'poweradd') return addPower(player, controller);
-  if (type === 'powerset') return setPower(player, controller);
+  if (type === 'poweradd') return addPower(player, controller, input);
+  if (type === 'powerset') return setPower(player, controller, input);
   if (type === 'hitadd') return hitAdd(player, controller);
   if (type === 'attackmulset') return withExtendedPlayer(player, { attackMultiplier: num(controller, 'value') ?? 1 }, 'AttackMulSet');
   if (type === 'defencemulset') return withExtendedPlayer(player, { defenseMultiplier: num(controller, 'value') ?? 1 }, 'DefenceMulSet');
@@ -931,7 +936,7 @@ function executeController(
   if (type === 'hitfallvel') return hitFallVel(player);
   if (type === 'hitfallset') return hitFallSet(player, controller, input, commands, opponent);
   if (type === 'hitvelset') return hitVelSet(player, controller);
-  if (type === 'hitfalldamage') return hitFallDamage(player, controller);
+  if (type === 'hitfalldamage') return hitFallDamage(player, controller, input);
   if (type === 'fallenvshake') return fallEnvShake(player, input);
   if (type === 'pause') return pauseController(player, opponent, controller, input, commands, false);
   if (type === 'superpause') return pauseController(player, opponent, controller, input, commands, true);
@@ -1263,11 +1268,11 @@ function setLife(player: PlayerState, controller: CnsStateController): Controlle
   return value === null ? withPlayer(player, false, 'LifeSet') : withPlayer({ ...player, life: Math.max(0, value) }, true, 'LifeSet');
 }
 
-function addPower(player: PlayerState, controller: CnsStateController): ControllerResult {
+function addPower(player: PlayerState, controller: CnsStateController, input: CnsRuntimeInput): ControllerResult {
   const value = num(controller, 'value');
   if (value === null) return withPlayer(player, false, 'PowerAdd');
   const next = addPlayerPower(player, value);
-  return withPlayer(appendPowerDiagnostic(next, `raw.power entity=p${player.id} source=controller type=PowerAdd before=${player.power} value=${value} after=${next.power} max=${next.powerMax}`), true, 'PowerAdd');
+  return withPlayer(input.hitDiagnostics === false ? next : appendPowerDiagnostic(next, `raw.power entity=p${player.id} source=controller type=PowerAdd before=${player.power} value=${value} after=${next.power} max=${next.powerMax}`), true, 'PowerAdd');
 }
 
 function hitFallSet(
@@ -1288,11 +1293,11 @@ function hitFallSet(
   }, true, 'HitFallSet');
 }
 
-function setPower(player: PlayerState, controller: CnsStateController): ControllerResult {
+function setPower(player: PlayerState, controller: CnsStateController, input: CnsRuntimeInput): ControllerResult {
   const value = num(controller, 'value');
   if (value === null) return withPlayer(player, false, 'PowerSet');
   const next = setPlayerPower(player, value);
-  return withPlayer(appendPowerDiagnostic(next, `raw.power entity=p${player.id} source=controller type=PowerSet before=${player.power} value=${value} after=${next.power} max=${next.powerMax}`), true, 'PowerSet');
+  return withPlayer(input.hitDiagnostics === false ? next : appendPowerDiagnostic(next, `raw.power entity=p${player.id} source=controller type=PowerSet before=${player.power} value=${value} after=${next.power} max=${next.powerMax}`), true, 'PowerSet');
 }
 
 function appendPowerDiagnostic(player: PlayerState, line: string): PlayerState {
@@ -1305,7 +1310,7 @@ function hitAdd(player: PlayerState, controller: CnsStateController): Controller
   return value === null ? withPlayer(player, false, 'HitAdd') : withPlayer({ ...player, hitCount: Math.max(0, (extended.hitCount ?? 0) + value) } as PlayerState, true, 'HitAdd');
 }
 
-function hitFallDamage(player: PlayerState, controller: CnsStateController): ControllerResult {
+function hitFallDamage(player: PlayerState, controller: CnsStateController, input: CnsRuntimeInput): ControllerResult {
   const explicitValue = controller.params.value === undefined ? null : num(controller, 'value');
   const value = explicitValue ?? player.getHitVars?.['fall.damage'];
   if (value === undefined || value === null) return withPlayer(player, false, 'HitFallDamage');
@@ -1393,7 +1398,7 @@ function fallEnvShake(player: PlayerState, input: CnsRuntimeInput): ControllerRe
   if (event.time > 0) input.onEnvironmentShake?.(event);
   return withPlayer({
     ...player,
-    hitDiagnosticLines: [
+    hitDiagnosticLines: input.hitDiagnostics === false ? player.hitDiagnosticLines : [
       ...(player.hitDiagnosticLines ?? []),
       `raw.fall_envshake target=p${player.id}`,
       `  time=${event.time} frequency=${event.frequency} amplitude=${event.amplitude} phase=${event.phase} result=${event.time > 0 ? 'started' : 'skipped'}`,
@@ -1430,7 +1435,7 @@ function appendGetHitFrameDiagnostic(
   });
   return {
     ...player,
-    hitDiagnosticLines: [
+    hitDiagnosticLines: input.hitDiagnostics === false ? player.hitDiagnosticLines : [
       ...(player.hitDiagnosticLines ?? []),
       `raw.gethitvar_frame target=p${player.id}`,
       `  frame=${runtimeFrame} entity=p${player.id} state=${player.stateNo} prevState=${(player as ExtendedPlayerState).prevStateNo ?? '-'} stateTime=${player.stateTime} anim=${player.animNo} animTime=${player.animTime} animElem=${animElem} ctrl=${player.ctrl ? 1 : 0} stateType=${player.stateType} moveType=${player.moveType} physics=${player.physics} life=${player.life} ko=${player.life <= 0 ? 1 : 0}`,

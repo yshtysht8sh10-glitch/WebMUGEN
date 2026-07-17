@@ -32,6 +32,11 @@ export class CanvasRenderer {
   private readonly roundStateRenderer = new RoundStateRenderer();
   private lastPowerHudSignature = '';
   private reportedInitialPower = false;
+  private lastTimings = { normalMs: 0, debugMs: 0 };
+
+  getLastTimings(): Readonly<{ normalMs: number; debugMs: number }> {
+    return this.lastTimings;
+  }
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -51,7 +56,11 @@ export class CanvasRenderer {
     hitFeedback?: HitFeedbackState,
     roundState?: RoundState,
     roundScore?: RoundScore,
+    options: { collisionBoxesVisible?: boolean; diagnosticsEnabled?: boolean } = {},
   ): string[] {
+    const normalStartedAt = performance.now();
+    const collisionBoxesVisible = options.collisionBoxesVisible ?? true;
+    const diagnosticsEnabled = options.diagnosticsEnabled ?? true;
     const ctx = this.context;
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     const shake = getScreenShakeOffset(hitFeedback);
@@ -59,10 +68,10 @@ export class CanvasRenderer {
     ctx.translate(shake.x, shake.y);
     this.drawStage(ctx);
     this.drawLifeBars(ctx, state);
-    const powerDiagnostics = this.drawPowerBars(ctx, state);
+    const powerDiagnostics = this.drawPowerBars(ctx, state, diagnosticsEnabled);
     if (roundState) this.roundStateRenderer.render(ctx, roundState, roundScore);
-    this.drawProjectiles(ctx, state.projectiles);
-    const explodResolution = resolveExplodRenderFrames(state, this.defaultAssets(), this.ownerAssets, this.fightFxAssets);
+    this.drawProjectiles(ctx, state.projectiles, diagnosticsEnabled);
+    const explodResolution = resolveExplodRenderFrames(state, this.defaultAssets(), this.ownerAssets, this.fightFxAssets, 0, 0, diagnosticsEnabled);
     const renderDiagnostics = [...explodResolution.diagnosticLines];
     const regularDrawables = [
       ...getPlayersInSpritePriorityOrder(state).map((player) => ({
@@ -87,17 +96,31 @@ export class CanvasRenderer {
         })),
     ].sort((a, b) => a.priority - b.priority || Number(a.kind === 'explod') - Number(b.kind === 'explod') || a.stableId - b.stableId);
     for (const drawable of regularDrawables) {
-      if (drawable.kind === 'player') renderDiagnostics.push(this.drawPlayer(ctx, drawable.player, drawable.player.id === 1 ? '#66ccff' : '#ff99aa'));
-      else renderDiagnostics.push(this.drawExplod(ctx, drawable.frame));
+      if (drawable.kind === 'player') {
+        const diagnostic = this.drawPlayer(ctx, drawable.player, drawable.player.id === 1 ? '#66ccff' : '#ff99aa', diagnosticsEnabled);
+        if (diagnostic) renderDiagnostics.push(diagnostic);
+      } else {
+        const diagnostic = this.drawExplod(ctx, drawable.frame, diagnosticsEnabled);
+        if (diagnostic) renderDiagnostics.push(diagnostic);
+      }
     }
     if (hitFeedback) this.hitFeedbackRenderer.render(ctx, hitFeedback);
     for (const frame of getExplodsInDrawOrder(explodResolution.frames).filter((candidate) => candidate.entry.onTop)) {
-      renderDiagnostics.push(this.drawExplod(ctx, frame));
+      const diagnostic = this.drawExplod(ctx, frame, diagnosticsEnabled);
+      if (diagnostic) renderDiagnostics.push(diagnostic);
     }
-    this.drawDebugBoxes(ctx, state.players[0]);
-    this.drawDebugBoxes(ctx, state.players[1]);
-    state.helpers.entries.forEach((helper) => this.drawDebugBoxes(ctx, helper.player));
-    this.drawProjectileDebugBoxes(ctx, state.projectiles);
+    const normalFinishedAt = performance.now();
+    const debugStartedAt = normalFinishedAt;
+    if (collisionBoxesVisible) {
+      this.drawDebugBoxes(ctx, state.players[0]);
+      this.drawDebugBoxes(ctx, state.players[1]);
+      state.helpers.entries.forEach((helper) => this.drawDebugBoxes(ctx, helper.player));
+      this.drawProjectileDebugBoxes(ctx, state.projectiles);
+    }
+    this.lastTimings = {
+      normalMs: normalFinishedAt - normalStartedAt,
+      debugMs: collisionBoxesVisible ? performance.now() - debugStartedAt : 0,
+    };
     ctx.restore();
     return [...powerDiagnostics, ...renderDiagnostics];
   }
@@ -128,7 +151,7 @@ export class CanvasRenderer {
     ctx.strokeRect(360, 18, 260, 16);
   }
 
-  private drawProjectiles(ctx: CanvasRenderingContext2D, projectiles: ProjectileState[]): void {
+  private drawProjectiles(ctx: CanvasRenderingContext2D, projectiles: ProjectileState[], diagnosticsEnabled: boolean): void {
     for (const projectile of projectiles) {
       const currentElement = this.airDocument
         ? getCurrentAnimationElement(this.airDocument, projectile.animNo, projectile.animTime)
@@ -145,6 +168,12 @@ export class CanvasRenderer {
           currentElement.element.offsetX,
           currentElement.element.offsetY,
           currentElement.element.flip,
+          undefined,
+          1,
+          1,
+          1,
+          false,
+          diagnosticsEnabled,
         );
 
         if (drawn.drawn) continue;
@@ -165,40 +194,40 @@ export class CanvasRenderer {
     }
   }
 
-  private drawPlayer(ctx: CanvasRenderingContext2D, player: PlayerState, color: string): string {
+  private drawPlayer(ctx: CanvasRenderingContext2D, player: PlayerState, color: string, diagnosticsEnabled: boolean): string {
     const hasOwnerAssetMap = Object.keys(this.ownerAssets).length > 0;
     const assets = this.ownerAssets[player.id] ?? (hasOwnerAssetMap ? undefined : this.defaultAssets());
     const stateOwner = player.stateOwnerId ?? player.id;
-    const prefix = `raw.render entity=p${player.id} state=${player.stateNo} anim=${player.animNo} stateOwner=${stateOwner} animOwner=${player.id}`;
-    if (!assets) return `${prefix} result=skip reason=animation_owner_missing playerVisible=0 rendererDrawRequested=0`;
+    const prefix = diagnosticsEnabled ? `raw.render entity=p${player.id} state=${player.stateNo} anim=${player.animNo} stateOwner=${stateOwner} animOwner=${player.id}` : '';
+    if (!assets) return diagnosticsEnabled ? `${prefix} result=skip reason=animation_owner_missing playerVisible=0 rendererDrawRequested=0` : '';
 
     const assertSpecial = ((player as PlayerState & { runtime?: { assertSpecial?: string[] } }).runtime?.assertSpecial ?? [])
       .map((flag) => flag.trim().toLowerCase());
     if (assertSpecial.includes('invisible')) {
-      return `${prefix} result=skip reason=entity_invisible playerVisible=0 assertSpecialInvisible=1 rendererDrawRequested=0`;
+      return diagnosticsEnabled ? `${prefix} result=skip reason=entity_invisible playerVisible=0 assertSpecialInvisible=1 rendererDrawRequested=0` : '';
     }
 
     if (!assets.airDocument && (assets.imageDataSpritePack || assets.spritePack)) {
-      return `${prefix} result=skip reason=animation_owner_missing animExists=0 playerVisible=0 rendererDrawRequested=0`;
+      return diagnosticsEnabled ? `${prefix} result=skip reason=animation_owner_missing animExists=0 playerVisible=0 rendererDrawRequested=0` : '';
     }
 
     const action = assets.airDocument?.actions.find((candidate) => candidate.actionNo === player.animNo);
     if (assets.airDocument && !action) {
-      return `${prefix} result=skip reason=air_action_missing animExists=0 playerVisible=0 rendererDrawRequested=0`;
+      return diagnosticsEnabled ? `${prefix} result=skip reason=air_action_missing animExists=0 playerVisible=0 rendererDrawRequested=0` : '';
     }
     const currentElement = assets.airDocument
       ? getCurrentAnimationElement(assets.airDocument, player.animNo, player.animTime)
       : null;
 
     if (action && !currentElement) {
-      return `${prefix} result=skip reason=air_element_missing animExists=1 playerVisible=0 rendererDrawRequested=0`;
+      return diagnosticsEnabled ? `${prefix} result=skip reason=air_element_missing animExists=1 playerVisible=0 rendererDrawRequested=0` : '';
     }
 
     if (currentElement) {
       const { groupNo, imageNo } = currentElement.element;
-      const elementFields = `animExists=1 airElementIndex=${currentElement.elementIndex + 1} airElementSpriteGroup=${groupNo} airElementSpriteIndex=${imageNo}`;
+      const elementFields = diagnosticsEnabled ? `animExists=1 airElementIndex=${currentElement.elementIndex + 1} airElementSpriteGroup=${groupNo} airElementSpriteIndex=${imageNo}` : '';
       if (groupNo < 0 || imageNo < 0) {
-        return `${prefix} ${elementFields} result=skip reason=intentional_invisible_element spriteExists=0 playerVisible=0 rendererDrawRequested=0`;
+        return diagnosticsEnabled ? `${prefix} ${elementFields} result=skip reason=intentional_invisible_element spriteExists=0 playerVisible=0 rendererDrawRequested=0` : '';
       }
       const drawn = this.drawSpriteByElement(
         ctx,
@@ -211,19 +240,24 @@ export class CanvasRenderer {
         currentElement.element.offsetY,
         currentElement.element.flip,
         assets,
+        1,
+        1,
+        1,
+        false,
+        diagnosticsEnabled,
       );
 
-      if (drawn.drawn) return `${prefix} ${elementFields} spriteExists=1 result=drawn playerVisible=1 rendererDrawRequested=1 ${drawn.diagnostic}`;
+      if (drawn.drawn) return diagnosticsEnabled ? `${prefix} ${elementFields} spriteExists=1 result=drawn playerVisible=1 rendererDrawRequested=1 ${drawn.diagnostic}` : '';
       if (assets.imageDataSpritePack || assets.spritePack) {
-        return `${prefix} ${elementFields} spriteExists=0 result=skip reason=sprite_missing playerVisible=0 rendererDrawRequested=0`;
+        return diagnosticsEnabled ? `${prefix} ${elementFields} spriteExists=0 result=skip reason=sprite_missing playerVisible=0 rendererDrawRequested=0` : '';
       }
     }
 
     this.drawFallbackPlayer(ctx, player, color, currentElement);
-    return `${prefix} result=fallback reason=no_character_sprite_assets playerVisible=1 rendererDrawRequested=1 rendererDrawSource=debug_fallback`;
+    return diagnosticsEnabled ? `${prefix} result=fallback reason=no_character_sprite_assets playerVisible=1 rendererDrawRequested=1 rendererDrawSource=debug_fallback` : '';
   }
 
-  private drawPowerBars(ctx: CanvasRenderingContext2D, state: GameState): string[] {
+  private drawPowerBars(ctx: CanvasRenderingContext2D, state: GameState, diagnosticsEnabled: boolean): string[] {
     const [p1, p2] = state.players;
     const p1Ratio = getPlayerPowerRatio(p1);
     const p2Ratio = getPlayerPowerRatio(p2);
@@ -248,7 +282,7 @@ export class CanvasRenderer {
     const p2PowerMax = p2.powerMax ?? 3000;
     const infiniteMode = p1.infinitePower && p2.infinitePower ? 'both' : p1.infinitePower ? 'p1' : p2.infinitePower ? 'p2' : 'off';
     const signature = `${p1Power}/${p1PowerMax}|${p2Power}/${p2PowerMax}|${infiniteMode}`;
-    if (signature === this.lastPowerHudSignature) return [];
+    if (!diagnosticsEnabled || signature === this.lastPowerHudSignature) return [];
     this.lastPowerHudSignature = signature;
     const diagnostics = [`raw.power_hud p1=${p1Power}/${p1PowerMax} width=${260 * p1Ratio} p2=${p2Power}/${p2PowerMax} width=${260 * p2Ratio} infinite=${infiniteMode}`];
     if (!this.reportedInitialPower) {
@@ -261,7 +295,7 @@ export class CanvasRenderer {
     return diagnostics;
   }
 
-  private drawExplod(ctx: CanvasRenderingContext2D, frame: ExplodRenderFrame): string {
+  private drawExplod(ctx: CanvasRenderingContext2D, frame: ExplodRenderFrame, diagnosticsEnabled: boolean): string {
     const { entry, currentElement } = frame;
     const blend = resolveExplodBlend(entry.render.transparency, entry.render.alpha);
     ctx.save();
@@ -282,8 +316,10 @@ export class CanvasRenderer {
       entry.render.scaleX,
       entry.render.scaleY,
       entry.render.ownPalette,
+      diagnosticsEnabled,
     );
     ctx.restore();
+    if (!diagnosticsEnabled) return '';
     return `raw.explod_draw internalId=${entry.runtimeId} mugenId=${entry.mugenId} anim=${entry.animationSource === 'fightfx' ? 'F' : ''}${entry.animNo} elem=${currentElement.elementIndex + 1} screen=(${frame.screenX},${frame.screenY}) facing=${entry.facing} vfacing=${entry.verticalFacing} scale=(${entry.render.scaleX},${entry.render.scaleY}) trans=${entry.render.transparency ?? 'none'} alpha=(${entry.render.alpha?.source ?? 256},${entry.render.alpha?.destination ?? 0}) composite=${blend.compositeOperation} ownpal=${entry.render.ownPalette ? 1 : 0} shadow=(${entry.render.shadow.red},${entry.render.shadow.green},${entry.render.shadow.blue}) sprpriority=${entry.spritePriority} ontop=${entry.onTop ? 1 : 0} result=${drawResult.drawn ? 'drawn' : 'hidden'}${drawResult.drawn ? ` ${drawResult.diagnostic}` : ' reason=sprite_not_found'}${blend.limitation ? ` limitation=${blend.limitation}` : ''}${entry.render.ownPalette ? ' limitation_ownpal=dynamic_palette_effects_unverified' : ''}${entry.render.shadow.red || entry.render.shadow.green || entry.render.shadow.blue ? ' limitation_shadow=no_effect_shadow_pass' : ''}`;
   }
 
@@ -302,13 +338,14 @@ export class CanvasRenderer {
     scaleX = 1,
     scaleY = 1,
     ownPalette = false,
+    diagnosticsEnabled = true,
   ): { drawn: boolean; diagnostic: string } {
     const flipX = flip.toUpperCase().includes('H');
     const key = spriteKey(groupNo, imageNo);
 
     const imageDataSprite = assets.imageDataSpritePack?.sprites.get(key);
     if (imageDataSprite) {
-      const resolved = this.imageDataSpriteRenderer.resolveCanvas(assets.imageDataSpritePack, groupNo, imageNo, ownPalette);
+      const resolved = this.imageDataSpriteRenderer.resolveCanvas(assets.imageDataSpritePack, groupNo, imageNo, ownPalette, diagnosticsEnabled);
       if (!resolved) return { drawn: false, diagnostic: '' };
 
       ctx.save();

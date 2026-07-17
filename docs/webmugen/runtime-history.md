@@ -4,6 +4,8 @@ Updated: 2026-07-09
 
 Runtime History is the persistent frame-by-frame diagnostic log shown in the Debug UI.
 
+Issue #75 makes Human and AI retention opt-in. Both default to OFF and are independently short-circuited before snapshot/string construction. The lower-left state history is a separate fixed-size lightweight stream and does not require Human log capture. See `performance-debug-settings.md`.
+
 ## Purpose
 
 Live debug values are useful, but they change every frame. Runtime History preserves important snapshots so a transition can be inspected after it has already happened.
@@ -115,6 +117,8 @@ When a StateNo transition link points at an old frame, the UI first switches the
 The retained history lives outside React state. React state tracks only the current window mode and a small version counter, so appending a log does not copy thousands of retained lines through React. Latest-window selection also stops scanning once enough recent entries are known for large logs.
 
 Runtime-history rendering is throttled while the game is running. Appends are still stored immediately, but the React-visible version counters are invalidated on a short timer instead of every frame. Jumping to a StateNo transition or returning to the latest window invalidates immediately so navigation remains responsive.
+
+The Human and AI stores are each capped at 5,000 entries. Their normal UI invalidation cadence is 250 ms. Disabling either sink clears its retained store; disabling the lower-left history clears its three five-item streams.
 
 Rendered output is capped by both entry count and line count. This matters for large characters where a single human-readable entry can contain many State status rows. When the latest window exceeds the rendered-line cap, the UI keeps the newest lines and adds a truncation marker; full retained logs remain available from the copy action.
 
