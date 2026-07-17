@@ -1,4 +1,5 @@
 import type { CnsDocument, CnsStateDefinition } from '../../mugen/common/cnsTypes';
+import { findCnsState } from '../../mugen/common/CnsStateIndex';
 import type { PlayerInput, PlayerState, ProjectileState } from './types';
 import { executeControllers } from './ControllerExecutor';
 
@@ -84,7 +85,7 @@ export function findStateDefinition(
   document: CnsDocument,
   stateNo: number,
 ): CnsStateDefinition | undefined {
-  return document.states.find((state) => state.stateNo === stateNo);
+  return findCnsState(document, stateNo);
 }
 
 function executeStateIfPresent(

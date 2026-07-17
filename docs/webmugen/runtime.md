@@ -130,6 +130,14 @@ and Redirect child compilation are not repeated per frame. The old string evalua
 a test oracle. A local 33,665-evaluation itoko sample measured 288.87 ms through the legacy path and
 5.25 ms through the warmed compiled path (98.2% reduction in Trigger-evaluator time for that sample).
 
+Issue #58 Phase 5 prepares a first-State-wins `Map<number, StateDef>` for each parsed or merged CNS
+document. State Runtime, Helper initialization, CNS physics, and the legacy StateMachine adapter use
+`Map.get(stateNo)` instead of scanning `states`. Repeated lookups reuse the same Map; replacing a
+document's State array invalidates and rebuilds the index once. The first duplicate StateNo remains
+selected, matching the former `Array.find` rule. A local itoko sample of 80,000 mixed hit/miss lookups
+measured 82.15 ms linear and 5.16 ms indexed (93.7% lookup-time reduction); State lookup was already
+a small part of total frame CPU.
+
 ## Compatibility cautions
 
 Do not hard-code state numbers unless the behavior is truly an engine-level common rule and cannot be expressed as MUGEN data.

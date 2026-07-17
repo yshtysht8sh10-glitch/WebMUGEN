@@ -7,6 +7,7 @@ import type {
   CnsValue,
 } from '../../mugen/common/cnsTypes';
 import { prepareCnsControllerTriggerGroups } from '../../mugen/common/CnsTriggerGroups';
+import { prepareCnsDocumentStateIndex } from '../../mugen/common/CnsStateIndex';
 
 type CurrentSection =
   | { kind: 'statedef'; state: CnsStateDefinition }
@@ -115,10 +116,12 @@ export function parseCnsText(text: string, options: CnsParseOptions = {}): CnsDo
     for (const controller of state.controllers) prepareCnsControllerTriggerGroups(controller);
   }
 
-  return {
+  const document = {
     states,
     metadataSections,
   };
+  prepareCnsDocumentStateIndex(document);
+  return document;
 }
 
 function applyStateDefValue(state: CnsStateDefinition, key: string, value: CnsValue): void {

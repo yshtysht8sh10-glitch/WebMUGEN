@@ -1,5 +1,6 @@
 import type { CnsDocument, CnsStateController, CnsStateDefinition } from '../../mugen/common/cnsTypes';
 import { prepareCnsDocumentRuntimeTriggers } from '../cns/CnsRuntimeTrigger';
+import { findCnsState, prepareCnsDocumentStateIndex } from '../../mugen/common/CnsStateIndex';
 import { parseAirText } from '../../parser/air/AirParser';
 import { parseCmdText } from '../../parser/cmd/CmdParser';
 import type { CmdDocument } from '../../parser/cmd/CmdTypes';
@@ -253,10 +254,12 @@ export function resolveAssetPath(basePath: string, relativePath: string): string
 }
 
 export function mergeCnsDocuments(base: CnsDocument, extra: CnsDocument): CnsDocument {
-  return {
+  const document = {
     states: [...base.states, ...extra.states],
     metadataSections: [...base.metadataSections, ...extra.metadataSections],
   };
+  prepareCnsDocumentStateIndex(document);
+  return document;
 }
 
 function mergeManyCnsDocuments(documents: readonly CnsDocument[]): CnsDocument {
@@ -264,7 +267,7 @@ function mergeManyCnsDocuments(documents: readonly CnsDocument[]): CnsDocument {
 }
 
 function annotateCnsDocument(document: CnsDocument, source: CnsStateDefinition['source'], sourceLabel: string): CnsDocument {
-  return {
+  const annotated = {
     states: document.states.map((state) => ({
       ...state,
       source: state.source ?? source,
@@ -272,11 +275,13 @@ function annotateCnsDocument(document: CnsDocument, source: CnsStateDefinition['
     })),
     metadataSections: document.metadataSections,
   };
+  prepareCnsDocumentStateIndex(annotated);
+  return annotated;
 }
 
 export function mergeMissingCnsStates(base: CnsDocument, common: CnsDocument): CnsDocument {
   const existingStateNos = new Set(base.states.map((state) => state.stateNo));
-  const commonCommandState = common.states.find((state) => state.stateNo === -1);
+  const commonCommandState = findCnsState(common, -1);
 
   const states = base.states.map((state) => {
     if (state.stateNo !== -1 || !commonCommandState) return state;
@@ -301,10 +306,12 @@ export function mergeMissingCnsStates(base: CnsDocument, common: CnsDocument): C
 
   const missingCommonStates = common.states.filter((state) => !existingStateNos.has(state.stateNo));
 
-  return {
+  const document = {
     states: [...states, ...missingCommonStates],
     metadataSections: [...base.metadataSections, ...common.metadataSections],
   };
+  prepareCnsDocumentStateIndex(document);
+  return document;
 }
 
 function isBaselineMovementController(controller: CnsStateController): boolean {

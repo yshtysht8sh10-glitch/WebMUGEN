@@ -1,5 +1,6 @@
 import type { CnsDocument, CnsStateController, CnsStateDefinition, CnsTrigger, CnsValue } from '../../mugen/common/cnsTypes';
 import { prepareCnsControllerTriggerGroups } from '../../mugen/common/CnsTriggerGroups';
+import { findCnsState } from '../../mugen/common/CnsStateIndex';
 import type { ActiveHitDef, GameState, PlayerState } from '../engine/types';
 import { readCnsConst } from './CnsConstants';
 import { calculateMugenAnimTime } from '../animation/AnimationDuration';
@@ -551,7 +552,7 @@ function withTriggerStateSnapshot(player: PlayerState, snapshot: PlayerState): P
 }
 
 function findState(cns: CnsDocument, stateNo: number): CnsStateDefinition | undefined {
-  return cns.states.find((state) => state.stateNo === stateNo);
+  return findCnsState(cns, stateNo);
 }
 
 function readAirJuggle(cns: CnsDocument): number {

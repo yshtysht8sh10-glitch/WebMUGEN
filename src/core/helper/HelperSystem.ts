@@ -1,4 +1,5 @@
 import type { CnsDocument } from '../../mugen/common/cnsTypes';
+import { findCnsState } from '../../mugen/common/CnsStateIndex';
 import type { HelperEntity, HelperRuntimeState, PlayerState } from '../engine/types';
 
 export type HelperSpawnRequest = {
@@ -23,7 +24,7 @@ export function createInitialHelperState(): HelperRuntimeState {
 }
 
 export function spawnHelper(state: HelperRuntimeState, request: HelperSpawnRequest, cns?: CnsDocument | null): HelperRuntimeState {
-  const stateDef = cns?.states.find((candidate) => candidate.stateNo === request.stateNo);
+  const stateDef = findCnsState(cns, request.stateNo);
   const player: PlayerState = {
     ...request.parent,
     id: request.rootEntityId,

@@ -1,6 +1,7 @@
 import type { GameState, PlayerState } from '../engine/types';
 import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 import type { CnsDocument, CnsStateDefinition } from '../../mugen/common/cnsTypes';
+import { findCnsState } from '../../mugen/common/CnsStateIndex';
 import { readCnsConst } from './CnsConstants';
 
 const GROUND_FRICTION = 0.82;
@@ -58,7 +59,7 @@ function applyCommonDownRecovery(player: PlayerState, cns: CnsDocument | null | 
   };
   if (player.life <= 0 || lieDownElapsed < lieDownTime) return timed;
 
-  const getupState = cns?.states.find((stateDef) => stateDef.stateNo === 5120);
+  const getupState = findCnsState(cns, 5120);
   if (!getupState) return timed;
   return {
     ...timed,
@@ -149,7 +150,7 @@ function applyCnsAirLandingState(player: PlayerState, opponent: PlayerState, cns
     return player;
   }
 
-  const landingState = cns.states.find((state) => state.stateNo === COMMON_JUMP_LAND_STATE);
+  const landingState = findCnsState(cns, COMMON_JUMP_LAND_STATE);
   if (!landingState) {
     return player;
   }

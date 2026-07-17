@@ -40,6 +40,11 @@ Rules:
 - Do not patch `common1.cns` for WebMUGEN convenience.
 - Runtime incompatibilities should be fixed in parser/runtime/trigger/controller/physics layers.
 
+Issue #58 Phase 5 builds a StateNo index whenever parsing or CNS/common/CMD merging produces a new
+document. Duplicate StateNo entries retain array precedence: only the first entry is inserted, so
+character/base States continue to win where the previous runtime `Array.find` selected them first.
+The index is an execution lookup aid; it does not reorder or remove `states` used by static tooling.
+
 Character `[Data]`, `[Size]`, `[Velocity]`, and `[Movement]` sections are retained as CNS metadata. `Const(...)` resolves those character sections before using the existing compatibility defaults. Directional jump and run-jump pairs therefore remain available to common State 40, and `movement.yaccel` reaches air physics without copying character values into TypeScript.
 
 ## CMD loading policy

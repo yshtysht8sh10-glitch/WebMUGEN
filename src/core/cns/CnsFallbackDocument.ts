@@ -5,6 +5,7 @@ import type {
 } from '../../mugen/common/cnsTypes';
 import { parseCnsText } from '../../parser/cns/CnsParser';
 import { prepareCnsControllerTriggerGroups } from '../../mugen/common/CnsTriggerGroups';
+import { prepareCnsDocumentStateIndex } from '../../mugen/common/CnsStateIndex';
 import { appendCnsFallbackAttackStates } from './CnsFallbackAttackStates';
 
 const FALLBACK_RETURN_CONTROLLER: CnsStateController = {
@@ -39,7 +40,7 @@ export function attachFallbackAttackStates(cnsDocument?: CnsDocument | null): Cn
     state.stateNo === 200 ? injectFallbackReturnController(state) : state,
   );
 
-  return {
+  const document = {
     ...cnsDocument,
     states: mergedStates,
     metadataSections: [
@@ -47,6 +48,8 @@ export function attachFallbackAttackStates(cnsDocument?: CnsDocument | null): Cn
       ...fallbackDocument.metadataSections,
     ],
   };
+  prepareCnsDocumentStateIndex(document);
+  return document;
 }
 
 function injectFallbackReturnController(state: CnsStateDefinition): CnsStateDefinition {
