@@ -109,6 +109,12 @@ one very long line containing every trigger and controller and state value
 
 Temporary debug logs are allowed during investigation, but long-term overlay output should remain readable.
 
+Debug-only CNS formatters must also be gated before invocation. Issue #58 Phase 2 prevents
+`debugControllerCheck` from re-evaluating crouch-route Triggers when trace diagnostics are disabled;
+the normal controller decision is evaluated once and no diagnostic string or diagnostic Trigger
+result is produced. Enabling the relevant trace keeps the existing detailed output and its diagnostic
+re-evaluation behavior. Trigger compilation and grouping caches are separate later phases.
+
 Keep logs when they help future compatibility work. Remove or narrow logs that only explain a solved one-off bug.
 
 For large characters, cap rendered history by both entry count and line count. Prefer retaining ChangeState and ChangeAnim candidates before less route-critical controller details.

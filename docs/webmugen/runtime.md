@@ -111,6 +111,12 @@ pipe before state=0
 pipe after state=20
 ```
 
+Issue #58 Phase 2 gates the crouch-route `debugControllerCheck` formatter before it is called.
+When trace debugging is disabled, the production `shouldRun` result is consumed directly and the
+formatter does not rebuild or re-evaluate Trigger diagnostics. When debugging is enabled, the
+existing detailed `eval`, group, and `STATE10` lines remain unchanged. This phase does not alter
+Trigger grouping, expression evaluation, parsing, or evaluation order.
+
 ## Compatibility cautions
 
 Do not hard-code state numbers unless the behavior is truly an engine-level common rule and cannot be expressed as MUGEN data.

@@ -422,7 +422,9 @@ function executeStateControllers(
     const run = shouldRun(controller, triggerPlayer, input, commands, opponent);
     next = appendRedirectTriggerDiagnostics(next, triggerPlayer, opponent, stateDef, controller, input, commands, runtimeFrame, run);
     next = appendTargetCompositeTriggerDiagnostic(next, triggerPlayer, opponent, stateDef, controller, input, commands, runtimeFrame, run);
-    const debugLine = debugControllerCheck(stateDef, controller, triggerPlayer, input, commands, run);
+    const debugLine = debugEnabled
+      ? debugControllerCheck(stateDef, controller, triggerPlayer, input, commands, run)
+      : null;
     if (debugEnabled && debugLine) {
       pushDebug(debugLines, executedControllers, debugLine);
       for (const line of formatState10Process(stateDef, controller, next, input, commands, run)) {
