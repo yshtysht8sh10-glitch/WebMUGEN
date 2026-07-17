@@ -3,3 +3,11 @@ dist/
 .env
 .DS_Store
 Thumbs.db
+public/chars/*
+!public/chars/common.cmd
+!public/chars/common1.cns
+!public/chars/T-H-M-A.zip
+!public/chars/T-H-M-A/
+!public/chars/T-H-M-A/**
+!public/chars/kfm/
+!public/chars/kfm/**

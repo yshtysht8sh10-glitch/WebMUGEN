@@ -3,13 +3,18 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { MutableRefObject } from 'react';
 import type { CnsRuntimeTrace } from '../core/cns/CnsStateRuntime';
-import { AudioStartOverlay, RuntimeSettingsPanel, WebMugenApp, appendRuntimeHistoryIfNeeded, createSourceOutline, drawAirPreview, findAirActionForLine, formatSatisfiedStateDefTriggers, parseControllerValueText, stripReadableRuntimeValueSummaries } from './WebMugenApp';
+import { AudioStartOverlay, CHARACTER_PATH_OPTIONS, RuntimeSettingsPanel, WebMugenApp, appendRuntimeHistoryIfNeeded, createSourceOutline, drawAirPreview, findAirActionForLine, formatSatisfiedStateDefTriggers, parseControllerValueText, stripReadableRuntimeValueSummaries } from './WebMugenApp';
 import { DEFAULT_RUNTIME_SETTINGS } from './RuntimeSettings';
 import type { ImageDataSpritePack } from '../core/sprite/ImageDataSpriteTypes';
 import { parseCnsText } from '../parser/cns/CnsParser';
 import { createInitialGameState } from '../core/engine/GameState';
 
 describe('WebMugenApp runtime history', () => {
+  it('offers discovered public characters in the character picker', () => {
+    expect(CHARACTER_PATH_OPTIONS).toContain('/chars/T-H-M-A.zip');
+    expect(CHARACTER_PATH_OPTIONS).toContain('/chars/kfm/kfm.def');
+  });
+
   it('starts all Issue #75 debug sinks disabled while exposing four independent Settings toggles', () => {
     const html = renderToStaticMarkup(createElement(WebMugenApp, { initialPage: 'play' }));
 

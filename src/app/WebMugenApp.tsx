@@ -109,6 +109,7 @@ import {
   type RuntimeLogIndexEntry,
 } from './RuntimeLogIndex';
 import { RuntimePerformanceMetrics } from './RuntimePerformanceMetrics';
+import { CHARACTER_PATH_OPTIONS as DISCOVERED_CHARACTER_PATH_OPTIONS } from 'virtual:webmugen-character-manifest';
 
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/T-H-M-A.zip';
 const ENABLE_RUNTIME_FALLBACKS = false;
@@ -116,7 +117,10 @@ const READABLE_STATE_STATUS_ALWAYS_SHOW_TYPES = new Set(['changestate', 'changea
 const READABLE_STATE_STATUS_EXTRA_CONTROLLER_LIMIT = 10;
 const INPUT_CONFIG_STORAGE_KEY = 'webmugen.inputConfig.v1';
 const CHARACTER_PATH_STORAGE_KEY = 'webmugen.characterPath.v1';
-const CHARACTER_PATH_OPTIONS = ['/chars/T-H-M-A.zip', '/chars/kfm/kfm.def'] as const;
+export const CHARACTER_PATH_OPTIONS = uniqueCharacterPathOptions([
+  DEFAULT_CHARACTER_DEF_PATH,
+  ...DISCOVERED_CHARACTER_PATH_OPTIONS,
+]);
 const RUNTIME_HISTORY_RENDER_THROTTLE_MS = 250;
 const STATE_HISTORY_RENDER_THROTTLE_MS = 200;
 const HUMAN_LOG_CAPTURE_INTERVAL_MS = 100;
@@ -1588,6 +1592,10 @@ function loadCharacterPath(): string {
 function saveCharacterPath(path: string): void {
   if (typeof localStorage === 'undefined') return;
   localStorage.setItem(CHARACTER_PATH_STORAGE_KEY, path);
+}
+
+function uniqueCharacterPathOptions(paths: readonly string[]): readonly string[] {
+  return Array.from(new Set(paths));
 }
 
 function normalizeInputConfig(value: unknown): InputConfig {
