@@ -1,4 +1,5 @@
 import type { CnsDocument, CnsStateController, CnsStateDefinition, CnsTrigger, CnsValue } from '../../mugen/common/cnsTypes';
+import { prepareCnsControllerTriggerGroups } from '../../mugen/common/CnsTriggerGroups';
 import type { ActiveHitDef, GameState, PlayerState } from '../engine/types';
 import { readCnsConst } from './CnsConstants';
 import { calculateMugenAnimTime } from '../animation/AnimationDuration';
@@ -636,7 +637,7 @@ function applyStateHeader(player: PlayerState, stateDef: CnsStateDefinition, res
 
 function shouldRun(controller: CnsStateController, player: PlayerState, input: CnsRuntimeInput, commands?: ReadonlySet<string>, opponent?: PlayerState): boolean {
   if (controller.triggers.length === 0) return true;
-  return evaluateTriggerRecords(controller.triggers, createTriggerContext(player, input, commands, opponent));
+  return evaluateTriggerRecords(controller, createTriggerContext(player, input, commands, opponent));
 }
 
 function createTriggerContext(
@@ -679,27 +680,12 @@ function createTriggerContext(
   };
 }
 
-function evaluateTriggerRecords(triggers: readonly CnsTrigger[], context: CnsRuntimeTriggerContext): boolean {
-  const triggerAll: CnsTrigger[] = [];
-  const groups = new Map<number, CnsTrigger[]>();
-
-  for (const trigger of triggers) {
-    if (/^triggerall$/i.test(trigger.name)) {
-      triggerAll.push(trigger);
-      continue;
-    }
-
-    const match = trigger.name.match(/^trigger(\d+)$/i);
-    const groupNo = match ? Number(match[1]) : 1;
-    const existing = groups.get(groupNo) ?? [];
-    existing.push(trigger);
-    groups.set(groupNo, existing);
-  }
-
-  if (!triggerAll.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context))) return false;
-  if (groups.size === 0) return triggerAll.length > 0;
-  return Array.from(groups.values()).some((group) =>
-    group.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context)),
+function evaluateTriggerRecords(controller: CnsStateController, context: CnsRuntimeTriggerContext): boolean {
+  const triggerGroups = prepareCnsControllerTriggerGroups(controller);
+  if (!triggerGroups.triggerAll.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context))) return false;
+  if (triggerGroups.groups.length === 0) return triggerGroups.triggerAll.length > 0;
+  return triggerGroups.groups.some((group) =>
+    group.triggers.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context)),
   );
 }
 
@@ -803,37 +789,24 @@ function formatState10Process(
   if (stateDef.stateNo !== -1 || controller.type.toLowerCase() !== 'changestate' || num(controller, 'value') !== 10) return [];
 
   const context = { player, commands, animTime: mugenAnimTime(player, input) };
-  const triggerAll = controller.triggers.filter((trigger) => /^triggerall$/i.test(trigger.name));
-  const groups = collectTriggerGroups(controller.triggers);
-  const sortedGroups = Array.from(groups.entries()).sort(([left], [right]) => left - right);
+  const triggerGroups = prepareCnsControllerTriggerGroups(controller);
+  const triggerAll = triggerGroups.triggerAll;
+  const sortedGroups = triggerGroups.sortedGroups;
   const allResult = triggerAll.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context));
   const anyGroupResult = sortedGroups.length === 0
     ? triggerAll.length > 0
-    : sortedGroups.some(([, triggers]) => triggers.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context)));
-  const recordsResult = evaluateTriggerRecords(controller.triggers, context);
+    : sortedGroups.some((group) => group.triggers.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context)));
+  const recordsResult = evaluateTriggerRecords(controller, context);
   const stringResult = evaluateCnsRuntimeTriggerGroup(controller.triggers.map(formatTrigger), context);
 
   return [
     `STATE10 01 input cmds=${formatCommands(commands)}`,
     `STATE10 02 candidate S-1 ChangeState value=10 current=${player.stateNo} type=${player.stateType} ctrl=${player.ctrl ? 1 : 0}`,
     `STATE10 03 triggerall ${formatTriggerList(triggerAll, context)} result=${allResult ? 'T' : 'F'}`,
-    ...sortedGroups.map(([groupNo, triggers]) => `STATE10 04 group${groupNo} ${formatTriggerList(triggers, context)} result=${triggers.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context)) ? 'T' : 'F'}`),
+    ...sortedGroups.map((group) => `STATE10 04 group${group.number} ${formatTriggerList(group.triggers, context)} result=${group.triggers.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context)) ? 'T' : 'F'}`),
     `STATE10 05 final all=${allResult ? 'T' : 'F'} anyGroup=${anyGroupResult ? 'T' : 'F'} records=${recordsResult ? 'T' : 'F'} string=${stringResult ? 'T' : 'F'} shouldRun=${run ? 'T' : 'F'}`,
     `STATE10 06 next ${run ? 'execute ChangeState' : 'skip ChangeState'} before=${player.stateNo}`,
   ];
-}
-
-function collectTriggerGroups(triggers: readonly CnsTrigger[]): Map<number, CnsTrigger[]> {
-  const groups = new Map<number, CnsTrigger[]>();
-  for (const trigger of triggers) {
-    if (/^triggerall$/i.test(trigger.name)) continue;
-    const match = trigger.name.match(/^trigger(\d+)$/i);
-    const groupNo = match ? Number(match[1]) : 1;
-    const existing = groups.get(groupNo) ?? [];
-    existing.push(trigger);
-    groups.set(groupNo, existing);
-  }
-  return groups;
 }
 
 function formatTriggerList(triggers: readonly CnsTrigger[], context: CnsRuntimeTriggerContext): string {
@@ -860,42 +833,29 @@ function formatTriggerGroupEvaluation(
   commands?: ReadonlySet<string>,
 ): string {
   const context = { player, commands, animTime: mugenAnimTime(player, input) };
-  const triggerAll: CnsTrigger[] = [];
-  const groups = new Map<number, CnsTrigger[]>();
-
-  for (const trigger of controller.triggers) {
-    if (/^triggerall$/i.test(trigger.name)) {
-      triggerAll.push(trigger);
-      continue;
-    }
-
-    const match = trigger.name.match(/^trigger(\d+)$/i);
-    const groupNo = match ? Number(match[1]) : 1;
-    const existing = groups.get(groupNo) ?? [];
-    existing.push(trigger);
-    groups.set(groupNo, existing);
-  }
+  const triggerGroups = prepareCnsControllerTriggerGroups(controller);
+  const triggerAll = triggerGroups.triggerAll;
 
   const allResult = triggerAll.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context));
-  const sortedGroups = Array.from(groups.entries()).sort(([left], [right]) => left - right);
-  const groupSummaries = sortedGroups.map(([groupNo, triggers]) => {
+  const sortedGroups = triggerGroups.sortedGroups;
+  const groupSummaries = sortedGroups.map(({ number: groupNo, triggers }) => {
     const items = triggers.map((trigger) => `${trigger.expression}:${evaluateCnsRuntimeTrigger(trigger.expression, context) ? 'T' : 'F'}`).join('&');
     const result = triggers.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context));
     return `g${groupNo}(${items})=${result ? 'T' : 'F'}`;
   });
-  const groupDetails = sortedGroups.map(([groupNo, triggers]) => {
+  const groupDetails = sortedGroups.map(({ number: groupNo, triggers }) => {
     const result = triggers.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context));
     const names = triggers.map((trigger) => trigger.name).join(',');
     const items = triggers.map((trigger) => `${trigger.name}:${trigger.expression}:${evaluateCnsRuntimeTrigger(trigger.expression, context) ? 'T' : 'F'}`).join('&');
     return `key=${groupNo} size=${triggers.length} result=${result ? 'T' : 'F'} names=[${names}] items=[${items}]`;
   });
-  const groupKeys = sortedGroups.map(([groupNo]) => groupNo).join(',') || 'none';
-  const anyGroupResult = sortedGroups.length === 0 ? triggerAll.length > 0 : sortedGroups.some(([, triggers]) => triggers.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context)));
-  const recordResult = evaluateTriggerRecords(controller.triggers, context);
+  const groupKeys = sortedGroups.map((group) => group.number).join(',') || 'none';
+  const anyGroupResult = sortedGroups.length === 0 ? triggerAll.length > 0 : sortedGroups.some((group) => group.triggers.every((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context)));
+  const recordResult = evaluateTriggerRecords(controller, context);
   const stringRuntimeResult = evaluateCnsRuntimeTriggerGroup(controller.triggers.map(formatTrigger), context);
   const allItems = triggerAll.map((trigger) => `${trigger.expression}:${evaluateCnsRuntimeTrigger(trigger.expression, context) ? 'T' : 'F'}`).join('&') || 'none';
 
-  return `all(${allItems})=${allResult ? 'T' : 'F'} | ${groupSummaries.join(' | ') || 'groups=none'} | groupCount=${groups.size} allCount=${triggerAll.length} keys=[${groupKeys}] details=[${groupDetails.join(' || ') || 'none'}] | anyGroup=${anyGroupResult ? 'T' : 'F'} | final=${allResult && anyGroupResult ? 'T' : 'F'} | records=${recordResult ? 'T' : 'F'} | string=${stringRuntimeResult ? 'T' : 'F'}`;
+  return `all(${allItems})=${allResult ? 'T' : 'F'} | ${groupSummaries.join(' | ') || 'groups=none'} | groupCount=${triggerGroups.groups.length} allCount=${triggerAll.length} keys=[${groupKeys}] details=[${groupDetails.join(' || ') || 'none'}] | anyGroup=${anyGroupResult ? 'T' : 'F'} | final=${allResult && anyGroupResult ? 'T' : 'F'} | records=${recordResult ? 'T' : 'F'} | string=${stringRuntimeResult ? 'T' : 'F'}`;
 }
 
 function formatTrigger(trigger: CnsTrigger): string {

@@ -4,6 +4,7 @@ import type {
   CnsStateDefinition,
 } from '../../mugen/common/cnsTypes';
 import { parseCnsText } from '../../parser/cns/CnsParser';
+import { prepareCnsControllerTriggerGroups } from '../../mugen/common/CnsTriggerGroups';
 import { appendCnsFallbackAttackStates } from './CnsFallbackAttackStates';
 
 const FALLBACK_RETURN_CONTROLLER: CnsStateController = {
@@ -18,6 +19,7 @@ const FALLBACK_RETURN_CONTROLLER: CnsStateController = {
     value: 0,
   },
 };
+prepareCnsControllerTriggerGroups(FALLBACK_RETURN_CONTROLLER);
 
 const FALLBACK_RETURN_CONTROLLER_NAME = 'FallbackReturnToStand';
 

@@ -117,6 +117,13 @@ formatter does not rebuild or re-evaluate Trigger diagnostics. When debugging is
 existing detailed `eval`, group, and `STATE10` lines remain unchanged. This phase does not alter
 Trigger grouping, expression evaluation, parsing, or evaluation order.
 
+Issue #58 Phase 3 prepares Controller Trigger groups at CNS parse completion. Normal runtime
+evaluation reads the cached `triggerall` and numbered groups, preserving the former source-order
+short-circuit behavior. For a Controller with one `triggerall` and two numbered groups, the former
+per-evaluation grouping allocations (`triggerall` array, two group arrays, `Map`, and values array)
+are replaced by zero grouping allocations after load. Expression evaluation is still string-based;
+compiled Trigger evaluation belongs to Phase 4.
+
 ## Compatibility cautions
 
 Do not hard-code state numbers unless the behavior is truly an engine-level common rule and cannot be expressed as MUGEN data.

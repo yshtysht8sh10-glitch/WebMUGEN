@@ -57,6 +57,12 @@ AND (
 
 Do not flatten all trigger1/trigger2 expressions into one AND list.
 
+Issue #58 Phase 3 builds this grouping once when each Controller is parsed. The cached structure
+keeps `triggerall`, numbered AND groups, first-seen group evaluation order, and a separately sorted
+diagnostic view. Runtime controller decisions reuse those arrays directly; they do not rebuild a
+`Map` or grouping arrays each frame. Trigger expression parsing and evaluation are unchanged in
+this phase.
+
 ## Expression support
 
 Expression features are tracked separately from trigger names.

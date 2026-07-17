@@ -5,9 +5,22 @@ export type CnsTrigger = {
   expression: string;
 };
 
+export type CnsTriggerGroup = {
+  number: number;
+  triggers: readonly CnsTrigger[];
+};
+
+export type CnsControllerTriggerGroups = {
+  sourceTriggers: readonly CnsTrigger[];
+  triggerAll: readonly CnsTrigger[];
+  groups: readonly CnsTriggerGroup[];
+  sortedGroups: readonly CnsTriggerGroup[];
+};
+
 export type CnsStateController = {
   type: string;
   triggers: CnsTrigger[];
+  triggerGroups?: CnsControllerTriggerGroups;
   params: Record<string, CnsValue>;
   sourceFile?: string;
   sourceLine?: number;
