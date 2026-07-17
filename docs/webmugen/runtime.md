@@ -19,7 +19,7 @@ Its responsibilities are:
 
 ## Runtime order
 
-For each player, the current order is:
+For each root player, the current order is:
 
 ```text
 State -3
@@ -32,6 +32,17 @@ current StateDef
 ```
 
 This mirrors MUGEN-style global and command state processing closely enough for current compatibility work.
+
+Helper processing is intentionally narrower:
+
+```text
+keyctrl = 0: current StateDef
+keyctrl = 1: State -1 -> current StateDef
+```
+
+State -3 and State -2 are root-only. State -1 is available to a Helper only when `keyctrl = 1`;
+the root command set is then supplied to that Helper. This eligibility is selected by entity kind
+and `keyctrl`, without character, Helper ID, or State-number exceptions.
 
 If a negative state changes `stateNo`, the runtime exits early for that player after recording the transition. This prevents old-state logic from running after State -1 has already changed state.
 

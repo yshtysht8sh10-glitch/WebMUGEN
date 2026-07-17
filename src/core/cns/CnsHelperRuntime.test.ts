@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parseCnsText } from '../../parser/cns/CnsParser';
 import { createInitialGameState } from '../engine/GameState';
 import { restartRound } from '../engine/RoundRestart';
+import { spawnHelper } from '../helper/HelperSystem';
 import { stepCnsPhysicsMotion } from './CnsPhysicsStep';
 import { stepCnsStateRuntime } from './CnsStateRuntime';
 import { evaluateCnsRuntimeTrigger } from './CnsRuntimeTrigger';
@@ -107,5 +108,87 @@ ctrl = 0
     expect(evaluateCnsRuntimeTrigger('NumHelper(100) = 2', { player, numHelper: (id) => id === 100 ? 2 : 0 })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('IsHelper = 1', { player, isHelper: true })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('IsHelper = 0', { player, isHelper: false })).toBe(true);
+  });
+
+  it('applies special States only within the WinMUGEN Helper keyctrl scope', () => {
+    const specialStateCns = parseCnsText(`
+[StateDef -3]
+[State -3, Root global]
+type = VarAdd
+trigger1 = 1
+v = 0
+value = 100
+
+[StateDef -2]
+[State -2, Root global]
+type = VarAdd
+trigger1 = 1
+v = 0
+value = 10
+
+[StateDef -1]
+[State -1, Helper command marker]
+type = VarAdd
+trigger1 = 1
+v = 0
+value = 1
+
+[State -1, Helper command route]
+type = ChangeState
+trigger1 = command = "go"
+value = 200
+
+[StateDef 100]
+type = S
+physics = N
+
+[State 100, Current only]
+type = VarSet
+trigger1 = 1
+v = 1
+value = 100
+
+[StateDef 200]
+type = S
+physics = N
+
+[State 200, Routed current]
+type = VarSet
+trigger1 = 1
+v = 1
+value = 200
+`);
+    const initial = createInitialGameState();
+    const frozenRoots = initial.players.map((player) => ({ ...player, hitPause: 1 })) as typeof initial.players;
+    const helperRequest = (rootEntityId: 1 | 2, keyCtrl: boolean) => ({
+      helperId: 100,
+      rootEntityId,
+      parentEntityId: rootEntityId,
+      ownerCharacterId: rootEntityId,
+      stateOwnerId: rootEntityId,
+      animationOwnerId: rootEntityId,
+      stateNo: 100,
+      x: frozenRoots[rootEntityId - 1].x,
+      y: frozenRoots[rootEntityId - 1].y,
+      facing: frozenRoots[rootEntityId - 1].facing,
+      keyCtrl,
+      ownPal: false,
+      spawnFrame: 0,
+      parent: frozenRoots[rootEntityId - 1],
+    });
+    let helpers = spawnHelper(initial.helpers, helperRequest(1, false), specialStateCns);
+    helpers = spawnHelper(helpers, helperRequest(2, true), specialStateCns);
+
+    const result = stepCnsStateRuntime({ ...initial, players: frozenRoots, helpers }, specialStateCns, {
+      p1Commands: new Set(['go']),
+      p2Commands: new Set(['go']),
+    });
+    const [withoutKeyCtrl, withKeyCtrl] = result.state.helpers.entries;
+
+    expect(withoutKeyCtrl.player).toMatchObject({ stateNo: 100, vars: { 1: 100 } });
+    expect((withoutKeyCtrl.player as { vars?: Record<number, number> }).vars?.[0]).toBeUndefined();
+    expect(withKeyCtrl.player).toMatchObject({ stateNo: 200, vars: { 0: 1, 1: 200 } });
+    expect(result.traces.find((trace) => trace.entityId === withoutKeyCtrl.entityId)?.executedControllers).toEqual(['VarSet']);
+    expect(result.traces.find((trace) => trace.entityId === withKeyCtrl.entityId)?.executedControllers).toEqual(['VarAdd', 'ChangeState', 'VarSet']);
   });
 });

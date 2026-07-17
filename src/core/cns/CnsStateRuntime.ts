@@ -161,6 +161,9 @@ const RECOGNIZED_NO_OP_CONTROLLERS = new Map<string, string>([
 
 let nextActiveHitDefDiagnosticId = 1;
 const EMPTY_CNS_DOCUMENT: CnsDocument = { states: [], metadataSections: [] };
+const ROOT_SPECIAL_STATE_NOS = [-3, -2, -1] as const;
+const HELPER_COMMAND_STATE_NOS = [-1] as const;
+const NO_SPECIAL_STATE_NOS: readonly number[] = [];
 
 export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, input: CnsRuntimeInput = {}): CnsRuntimeResult {
   if (!cns) return { state, traces: [missingTrace(1, state.players[0], input), missingTrace(2, state.players[1], input)] };
@@ -195,7 +198,16 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
         parentEntityId: helper.parentEntityId, ownerCharacterId: helper.ownerCharacterId,
       };
       const commands = helper.keyCtrl ? (helper.rootEntityId === 1 ? input.p1Commands : input.p2Commands) : undefined;
-      const stepped = stepPlayer(helper.player, opponent, helper.rootEntityId, helperCns, { ...helperInput(context), constants: helperCns }, commands, state.frame);
+      const stepped = stepPlayer(
+        helper.player,
+        opponent,
+        helper.rootEntityId,
+        helperCns,
+        { ...helperInput(context), constants: helperCns },
+        commands,
+        state.frame,
+        helper.keyCtrl ? HELPER_COMMAND_STATE_NOS : NO_SPECIAL_STATE_NOS,
+      );
       stepped.trace.entityId = helper.entityId;
       helperTraces.push(stepped.trace);
       const stateOwnerId = stepped.player.stateOwnerId === 1 || stepped.player.stateOwnerId === 2
@@ -237,6 +249,7 @@ function stepPlayer(
   input: CnsRuntimeInput,
   commands?: ReadonlySet<string>,
   runtimeFrame = 0,
+  specialStateNos: readonly number[] = ROOT_SPECIAL_STATE_NOS,
 ): { player: PlayerState; trace: CnsRuntimeTrace; targetOperations: TargetOperation[] } {
   const originalStateNo = player.stateNo;
   const traceDiagnosticsEnabled = input.traceDiagnostics !== false;
@@ -304,7 +317,7 @@ function stepPlayer(
     appendDebug(trace, `pipeline start state=${next.stateNo} type=${next.stateType} ctrl=${next.ctrl ? 1 : 0} time=${next.stateTime}`);
   }
 
-  for (const negativeStateNo of [-3, -2, -1]) {
+  for (const negativeStateNo of specialStateNos) {
     const negativeState = findState(cns, negativeStateNo);
     if (!negativeState) {
       if (debugEnabled) appendDebug(trace, `S${negativeStateNo} missing`);

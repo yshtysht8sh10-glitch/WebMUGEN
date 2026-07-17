@@ -45,7 +45,7 @@ Debug Overlay / Runtime History
 
 ## CNS State Runtime flow
 
-Inside `stepCnsStateRuntime`, each player is stepped through the CNS runtime.
+Inside `stepCnsStateRuntime`, each root player is stepped through the CNS runtime.
 
 ```text
 current PlayerState
@@ -67,6 +67,11 @@ The negative states execute before the current state. This is important for comm
 - `State -2`: global behavior after -3;
 - `State -1`: command/state routing;
 - current state: behavior for the player's current `stateNo`.
+
+Helpers use the WinMUGEN special-State scope instead of the root sequence. A Helper with
+`keyctrl = 0` executes only its current State. A Helper with `keyctrl = 1` executes the inherited
+State -1 command routes and then its current State. Helpers do not execute State -3 or State -2.
+See `../mugen-spec/winmugen/state-processing-order.md` and `helper.md`.
 
 If a negative state changes `stateNo`, the old current State is not executed. The newly entered State is selected instead. Positive-State `ChangeState` stops the remaining controllers in that State; entered-State controllers may run in the same frame under the existing bounded pipeline. If that entered State immediately changes State again, the final unprocessed destination keeps `StateTime = 0` through the following physics increment, so its `Time = 0` controllers run on the next CNS tick.
 
