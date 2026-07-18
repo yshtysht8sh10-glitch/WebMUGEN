@@ -131,6 +131,8 @@ function matchesCommandAtOffset(
       timeLimit,
       shouldRequireFreshDirection(step, steps[stepIndex + 1]),
       shouldRequireFreshButton(step),
+      steps[stepIndex + 1],
+      previousMatchedFrameIndex,
     );
 
     if (foundIndex < 0 || (requireFinalStepAtStart && stepIndex === steps.length - 1 && foundIndex !== 0)) {
@@ -194,13 +196,22 @@ function findStep(
   timeLimit: number,
   requireFreshDirection: boolean,
   requireFreshButton: boolean,
+  laterStep: CommandStep | undefined,
+  laterMatchedFrameIndex: number,
 ): number {
   const endIndex = Math.min(frames.length, timeLimit);
   for (let index = startIndex; index < endIndex; index += 1) {
     if (
       stepMatchesFrame(step, frames[index]) &&
       (!requireFreshDirection || isFreshDirectionStep(step, frames, index)) &&
-      (!requireFreshButton || isFreshButtonStep(step, frames, index))
+      (!requireFreshButton || isFreshButtonStep(step, frames, index)) &&
+      !reusesAmbiguousDiagonal(
+        step,
+        laterStep,
+        frames,
+        index,
+        laterMatchedFrameIndex,
+      )
     ) {
       return index;
     }
@@ -267,6 +278,26 @@ function isFreshButtonStep(step: CommandStep, frames: readonly InputFrame[], ind
 
   const olderFrame = frames[index + 1];
   return buttons.every((token) => !olderFrame?.buttons.has(token.value));
+}
+
+function reusesAmbiguousDiagonal(
+  step: CommandStep,
+  laterStep: CommandStep | undefined,
+  frames: readonly InputFrame[],
+  index: number,
+  laterMatchedFrameIndex: number,
+): boolean {
+  if (!laterStep || laterMatchedFrameIndex < 0 || index === laterMatchedFrameIndex) return false;
+
+  const direction = singleNonHoldDirection(step);
+  const laterDirection = singleNonHoldDirection(laterStep);
+  if (!direction || !laterDirection || direction === laterDirection) return false;
+
+  const actual = frames[index]?.direction;
+  const laterActual = frames[laterMatchedFrameIndex]?.direction;
+  if (!actual || actual !== laterActual) return false;
+
+  return actual !== direction && laterActual !== laterDirection;
 }
 
 function singleNonHoldDirection(step: CommandStep): DirectionToken | null {

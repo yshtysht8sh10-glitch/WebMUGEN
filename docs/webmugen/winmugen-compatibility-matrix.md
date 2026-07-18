@@ -492,7 +492,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | Hold direction `/F` | Complete | Basic support. |
 | Hold direction `/B` | Complete | Basic support. |
 | Hold direction `/U` | Complete | Basic support. |
-| Direction sequences | Partial 40% | Implemented: Facing-relative `~D, DB, B, F, x/y` is verified through the bundled T-H-M-A CMD and State -1 route. Missing: other sequence and charge forms still need WinMUGEN timing/syntax audit. Evidence: focused matcher, resolver, and real-character integration tests. |
+| Direction sequences | Partial 60% | Implemented: Facing-relative sequences are verified through T-H-M-A and focused tests. One unchanged diagonal hold cannot be reused as alternating `D, F, D, F` inputs, while normal `D, DF, F` leniency is preserved. Missing: other sequence and charge forms still need WinMUGEN timing/syntax audit. Evidence: P1/P2-facing matcher regression and live game-path normal/super conflict integration test. |
 | Button sequences | Partial 40% | Implemented: Basic support; simple button commands are kept briefly active so jump/crouch startup routes do not drop the input. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
 | Simultaneous buttons | Audit needed | Parser and command matcher behavior require syntax and timing verification. |
 | Release commands | Partial 40% | Implemented: `~` is retained and requires the matched direction/button to be absent in a newer input frame. Missing: numeric charge and other compound modifier forms. Evidence: positive/negative release tests and bundled T-H-M-A integration. |

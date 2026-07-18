@@ -192,6 +192,46 @@ describe('CommandMatcher', () => {
     );
   });
 
+  it.each([1, -1] as const)(
+    'does not reuse one held diagonal as alternating D and F inputs while facing %i',
+    (facing) => {
+      const buffer = new InputBuffer(30);
+      const forward = facing === 1
+        ? { left: false, right: true }
+        : { left: true, right: false };
+
+      for (let frame = 0; frame < 13; frame += 1) {
+        buffer.push(
+          { left: false, right: false, up: false, down: true, attack: false },
+          facing,
+        );
+      }
+      for (let frame = 0; frame < 4; frame += 1) {
+        buffer.push({ ...forward, up: false, down: true, attack: false }, facing);
+      }
+      for (let frame = 0; frame < 2; frame += 1) {
+        buffer.push({ ...forward, up: false, down: false, attack: false }, facing);
+      }
+      buffer.push(
+        { ...forward, up: false, down: false, attack: false, buttons: ['a'] },
+        facing,
+      );
+
+      expect(
+        matchesCommand(
+          { name: 'normal', command: '~D, DF, F, a', time: 25 },
+          buffer.getFrames(),
+        ),
+      ).toBe(true);
+      expect(
+        matchesCommand(
+          { name: 'super', command: '~D, F, D, F, a', time: 25 },
+          buffer.getFrames(),
+        ),
+      ).toBe(false);
+    },
+  );
+
   it('requires a released ~D before the later command steps', () => {
     const released = new InputBuffer(20);
     released.push({ left: false, right: false, up: false, down: true, attack: false });

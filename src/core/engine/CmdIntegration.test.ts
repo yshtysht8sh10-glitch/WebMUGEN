@@ -162,4 +162,85 @@ command = /$D
       ctrl: true,
     });
   });
+
+  it('does not activate a double-QCF route from one held diagonal sequence', () => {
+    const conflictCns = parseCnsText(`
+[StateDef -1]
+
+[State -1, Super]
+type = ChangeState
+trigger1 = command = "super"
+value = 3300
+ctrl = 1
+
+[State -1, Normal]
+type = ChangeState
+trigger1 = command = "normal"
+value = 1000
+ctrl = 1
+
+[StateDef 0]
+type = S
+movetype = I
+physics = S
+anim = 0
+ctrl = 1
+
+[StateDef 1000]
+type = S
+movetype = A
+physics = S
+anim = 1000
+ctrl = 0
+
+[StateDef 3300]
+type = S
+movetype = A
+physics = S
+anim = 3300
+ctrl = 0
+`);
+    const conflictCmd = parseCmdText(`
+[Command]
+name = "super"
+command = ~D, F, D, F, a
+time = 25
+
+[Command]
+name = "normal"
+command = ~D, DF, F, a
+time = 25
+`);
+    let state = createInitialGameState();
+
+    for (let frame = 0; frame < 13; frame += 1) {
+      state = stepGameByCns(state, conflictCns, {
+        p1: { left: false, right: false, down: true, up: false, attack: false },
+      }, undefined, conflictCmd);
+    }
+    for (let frame = 0; frame < 4; frame += 1) {
+      state = stepGameByCns(state, conflictCns, {
+        p1: { left: false, right: true, down: true, up: false, attack: false },
+      }, undefined, conflictCmd);
+    }
+    for (let frame = 0; frame < 2; frame += 1) {
+      state = stepGameByCns(state, conflictCns, {
+        p1: { left: false, right: true, down: false, up: false, attack: false },
+      }, undefined, conflictCmd);
+    }
+    state = stepGameByCns(state, conflictCns, {
+      p1: {
+        left: false,
+        right: true,
+        down: false,
+        up: false,
+        attack: false,
+        buttons: ['a'],
+      },
+    }, undefined, conflictCmd);
+
+    expect(state.commandNames?.[0].has('normal')).toBe(true);
+    expect(state.commandNames?.[0].has('super')).toBe(false);
+    expect(state.players[0].stateNo).toBe(1000);
+  });
 });

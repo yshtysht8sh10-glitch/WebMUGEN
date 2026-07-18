@@ -18,7 +18,7 @@ Follow `docs/webmugen/development-policy.md`: common movement routing belongs in
 | Hold direction `/F` | Complete | Used for walk-forward route. | Direction depends on facing/context assumptions. |
 | Hold direction `/B` | Complete | Used for walk-back route. | Direction depends on facing/context assumptions. |
 | Hold direction `/U` | Complete | Used for jump route. | Air-jump/common-state behavior incomplete. |
-| Direction sequences | Partial | Facing-relative `~D, DB, B, F, x/y` is verified through the bundled T-H-M-A CMD and State -1 route. | Other sequence forms and charge syntax need audit. |
+| Direction sequences | Partial | Facing-relative sequences are verified through T-H-M-A and focused tests. A held diagonal may satisfy a neighboring cardinal step for normal leniency, but one unchanged diagonal stretch cannot be reused as alternating `D, F, D, F` inputs. | Other sequence forms and charge syntax need audit. |
 | Button sequences | Partial | Basic support; simple button commands are kept briefly active. | Full sequence timing and cancel windows need audit. |
 | Simultaneous buttons | Partial | Basic syntax exists. | Full parsing/timing behavior needs audit. |
 | Release commands | Partial | The matcher retains `~` and requires the matched direction/button to be released in a newer input frame. | Numeric charge forms such as `~30$D` and other compound modifiers remain unsupported. |
@@ -27,6 +27,8 @@ Follow `docs/webmugen/development-policy.md`: common movement routing belongs in
 | `command.buffer.time` | Partial | Parser and matcher honor explicit post-match active window; double-tap direction buffering applies after release, not during a held second tap. | Exact WinMUGEN behavior still needs audit. |
 | `$` direction match | Partial | KFM hold commands work. | Full syntax and facing-relative behavior need tests. |
 | `/` hold prefix | Partial | Used in common commands. | Syntax coverage is incomplete. |
+
+Issue #79 was caused in the production matcher, not by State -1 route ordering. During a single `D -> DF -> F+a` motion, several held `DF` frames could each satisfy both cardinal `D` and `F`. That made T-H-M-A's `~D, F, D, F, a` super command active alongside its normal `~D, DF, F, a` command. The matcher now rejects adjacent, different cardinal steps when both are satisfied only by reusing the same unchanged diagonal direction. Exact `DF` steps, `$`/`/` hold commands, release commands, and lenient final-direction-plus-button input remain covered by focused tests.
 
 ## Common routing policy
 

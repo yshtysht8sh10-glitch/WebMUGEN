@@ -137,7 +137,7 @@ const cmdNotes={
   'Hold direction /F':'Basic support.',
   'Hold direction /B':'Basic support.',
   'Hold direction /U':'Basic support.',
-  'Direction sequences':'Facing-relative ~D, DB, B, F, x/y is verified through the bundled T-H-M-A CMD and State -1 route; other sequence and charge forms need audit.',
+  'Direction sequences':'Facing-relative sequences are verified through T-H-M-A and focused tests. One unchanged diagonal hold cannot be reused as alternating D, F, D, F inputs, while normal D, DF, F leniency is preserved. Other sequence and charge forms need audit.',
   'Button sequences':'Basic support; simple button commands are kept briefly active so jump/crouch startup routes do not drop the input.',
   'Simultaneous buttons':'Needs full syntax audit.',
   'Release commands':'The matcher retains ~ and requires the matched direction/button to be released in a newer frame. Numeric charge and other compound forms remain unsupported.',

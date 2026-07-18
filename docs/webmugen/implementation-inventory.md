@@ -10,7 +10,7 @@ This document is a high-level inventory of WebMUGEN implementation areas. It is 
 |---|---|
 | DEF | Basic character metadata/file loading path exists. |
 | CNS | StateDef, State Controllers, triggers, and many parameters are parsed. Some syntax remains incomplete. |
-| CMD | Commands, hold prefixes, simple sequences, and buffer time exist. WinMUGEN timing still needs audit. |
+| CMD | Commands, hold prefixes, simple sequences, and buffer time exist. The production matcher prevents one unchanged diagonal hold from manufacturing alternating cardinal steps, with T-H-M-A-style normal/super conflict coverage. WinMUGEN timing still needs audit. |
 | AIR | Actions, elements, timing, loop handling, and Clsn blocks exist. Edge cases remain. |
 | SFF/Sprites | SpritePack renderer prototype exists; full SFF compatibility may require further work. |
 | SND | SND v1 header/subfile parsing, group/index lookup, WAV byte retention, HTTP/ZIP CharacterLoader integration, and non-fatal load diagnostics exist. Browser decoding/playback begins with Issues #27/#28. |

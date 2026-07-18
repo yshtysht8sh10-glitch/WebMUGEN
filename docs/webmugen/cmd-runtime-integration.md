@@ -40,6 +40,8 @@ value = 300
 
 The integration test `src/core/engine/CmdIntegration.test.ts` covers this buffered transition.
 
+Direction matching keeps MUGEN-style diagonal leniency, so a cardinal `D` or `F` step may match a compatible diagonal. The matcher must not, however, turn multiple frames of one unchanged diagonal hold into alternating cardinal inputs. For example, one `D -> DF -> F+a` motion can match `~D, DF, F, a`, but the held `DF` frames cannot also manufacture `~D, F, D, F, a`. `CmdIntegration.test.ts` verifies that the normal route is active and the double-motion route remains inactive.
+
 ## Runtime State
 
 `GameState` can carry command runtime data after `stepGameByCns()` has run:
@@ -185,8 +187,10 @@ Contains the newer typed command runtime path and diagnostics. This path is usef
 - `src/core/engine/CmdIntegration.test.ts`
   - hold command triggers CNS ChangeState
   - buffered KFM-style `~D, DF, F, x` command triggers CNS ChangeState
+  - a single held-diagonal motion does not activate a double-motion super route
 - `src/input/CommandMatcher.test.ts`
   - `~`, `$`, `/`, simultaneous buttons, quarter-circle commands
+  - held-diagonal reuse is rejected for alternating cardinal steps in both facing directions
 - `src/input/CommandResolver.test.ts`
   - direct, hold, diagonal, and buffered command resolution
 - `src/input/InputBufferClone.test.ts`
