@@ -204,6 +204,75 @@ describe('T-H-M-A State 215 launch regression', () => {
   }, 30_000);
 });
 
+describe('T-H-M-A State 1016 multihit regression', () => {
+  it('creates a fresh HitDef generation at each configured AnimElem', async () => {
+    const assets = await loadCharacterFromDef('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.def', createFileSystemFetcher());
+    const state1016 = assets.cns.states.find((state) => state.stateNo === 1016);
+    const hitDef = state1016?.controllers.find((controller) => controller.type.trim().toLowerCase() === 'hitdef');
+    if (!state1016 || !hitDef) throw new Error('State 1016 HitDef not found');
+    const focusedCns: CnsDocument = {
+      metadataSections: assets.cns.metadataSections,
+      states: [{ ...state1016, controllers: [hitDef] }],
+    };
+    const firstElemTime = findActionElementStart(assets.air.actions, 1016, 1);
+    const secondElemTime = findActionElementStart(assets.air.actions, 1016, 2);
+    expect(firstElemTime).not.toBeNull();
+    expect(secondElemTime).not.toBeNull();
+    const initial = createInitialGameState();
+    const input = {
+      hitDiagnostics: true,
+      getAnimationTriggerInfo: (animNo: number, animTime: number) => getAnimationTriggerInfo(assets.air, animNo, animTime),
+    };
+    const first = stepCnsStateRuntime({
+      ...initial,
+      players: [{
+        ...initial.players[0], stateNo: 1016, stateType: 'A', moveType: 'A', physics: 'N', ctrl: false,
+        animNo: 1016, animTime: firstElemTime!,
+      }, initial.players[1]],
+    }, focusedCns, input).state;
+    const firstGeneration = first.players[0].activeHitDef?.diagnosticId;
+    expect(firstGeneration).toBeDefined();
+
+    const second = stepCnsStateRuntime({
+      ...first,
+      players: [{
+        ...first.players[0], animTime: secondElemTime!, hitDefUsed: true,
+        moveContact: { activeHitDefId: firstGeneration!, contact: true, hit: true, guarded: false, hitCount: 1 },
+      }, first.players[1]],
+    }, focusedCns, input).state;
+
+    expect(second.players[0].activeHitDef?.diagnosticId).not.toBe(firstGeneration);
+    expect(second.players[0].moveContact).toMatchObject({ contact: true, hit: true, guarded: false, elapsed: 1, hitCount: 1 });
+  });
+
+  it('routes State 1011 to 1012 after the first hit even when the next AnimElem activates HitDef first', async () => {
+    const assets = await loadCharacterFromDef('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.def', createFileSystemFetcher());
+    const secondElemTime = findActionElementStart(assets.air.actions, 1011, 2);
+    expect(secondElemTime).not.toBeNull();
+    const initial = createInitialGameState();
+    const state = {
+      ...initial,
+      players: [{
+        ...initial.players[0], stateNo: 1011, prevStateNo: 1010, stateType: 'S' as const, moveType: 'A' as const,
+        physics: 'N' as const, ctrl: false, animNo: 1011, animTime: secondElemTime!, hitPause: 0,
+        moveContact: { activeHitDefId: 77, contact: true, hit: true, guarded: false, elapsed: 1, hitCount: 1 },
+        targets: [{ playerId: 2, hitDefId: 1011, activeHitDefId: 77 }],
+      }, { ...initial.players[1], stateNo: 5000, moveType: 'H' as const, ctrl: false }],
+    } as GameState;
+
+    const result = stepCnsStateRuntime(state, assets.cns, {
+      getAnimationDuration: (animNo) => getMugenAnimEndTime(assets.air, animNo),
+      getAnimationTriggerInfo: (animNo, animTime) => getAnimationTriggerInfo(assets.air, animNo, animTime),
+      hitDiagnostics: true,
+    });
+
+    expect(result.state.players[0], result.state.players[0].hitDiagnosticLines?.join('\n')).toMatchObject({
+      stateNo: 1012, prevStateNo: 1011,
+    });
+    expect(result.state.players[0].hitDiagnosticLines?.join('\n')).toContain('targetRedirectRequestedId=1011');
+  });
+});
+
 function createFileSystemFetcher(): CharacterAssetFetcher {
   return {
     async text(requestPath) {
@@ -300,6 +369,12 @@ function findActionCollisionElement(actions: AirAction[], actionNo: number, kind
     animTime += Math.max(0, element.duration);
   }
   return null;
+}
+
+function findActionElementStart(actions: AirAction[], actionNo: number, elementNo: number): number | null {
+  const action = actions.find((candidate) => candidate.actionNo === actionNo);
+  if (!action || elementNo < 1 || elementNo > action.elements.length) return null;
+  return action.elements.slice(0, elementNo - 1).reduce((sum, element) => sum + Math.max(1, element.duration), 0);
 }
 
 function activateState215HitDef(cns: CnsDocument, attackerId: 1 | 2 = 1): GameState {

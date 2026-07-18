@@ -5,6 +5,20 @@ import { parseCnsText } from '../../parser/cns/CnsParser';
 import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 
 describe('CnsPhysicsStep', () => {
+  it('keeps MoveHit at 1 through hitpause and advances it on the next active tick', () => {
+    const state = createInitialGameState();
+    const hit = {
+      ...state.players[0],
+      hitPause: 1,
+      moveContact: { activeHitDefId: 7, contact: true, hit: true, guarded: false, elapsed: 1, hitCount: 1 },
+    };
+    const resumed = stepCnsPhysicsMotion({ ...state, players: [hit, state.players[1]] });
+    expect(resumed.players[0]).toMatchObject({ hitPause: 0, moveContact: { elapsed: 1 } });
+
+    const advanced = stepCnsPhysicsMotion(resumed);
+    expect(advanced.players[0].moveContact?.elapsed).toBe(2);
+  });
+
   it('moves airborne players upward when jump velocity is negative', () => {
     const state = createInitialGameState();
     const next = stepCnsPhysicsMotion({

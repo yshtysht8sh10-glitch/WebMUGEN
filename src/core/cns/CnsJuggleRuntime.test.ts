@@ -53,4 +53,45 @@ describe('CNS juggle runtime state', () => {
     }, cns).state;
     expect(recovered.players[1].juggleRemaining).toBe(12);
   });
+
+  it('preserves the paid target across a continued attack and resets it at an explicit new juggle StateDef', () => {
+    const chainCns = parseCnsText(`
+[Statedef 200]
+type = S
+movetype = A
+physics = N
+juggle = 6
+[State 200, Continue]
+type = ChangeState
+trigger1 = 1
+value = 201
+[Statedef 201]
+type = A
+movetype = A
+physics = N
+[State 201, New attack]
+type = ChangeState
+trigger1 = Time = 1
+value = 202
+[Statedef 202]
+type = A
+movetype = A
+physics = N
+juggle = 4
+`);
+    const state = createInitialGameState();
+    const continued = stepCnsStateRuntime({
+      ...state,
+      players: [{
+        ...state.players[0], stateNo: 200, moveType: 'A', juggle: 6, juggleConsumedTargetIds: [2],
+      }, state.players[1]],
+    }, chainCns).state;
+    expect(continued.players[0]).toMatchObject({ stateNo: 201, juggle: 6, juggleConsumedTargetIds: [2] });
+
+    const restarted = stepCnsStateRuntime({
+      ...continued,
+      players: [{ ...continued.players[0], stateTime: 1 }, continued.players[1]],
+    }, chainCns).state;
+    expect(restarted.players[0]).toMatchObject({ stateNo: 202, juggle: 4, juggleConsumedTargetIds: [] });
+  });
 });

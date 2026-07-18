@@ -229,18 +229,20 @@ function resolveAttack(
 
   const isAirJuggle = target.stateType === 'A';
   const juggleCost = Math.max(0, attacker.juggle ?? 0);
+  const juggleAlreadyConsumed = attacker.juggleConsumedTargetIds?.includes(target.id) ?? false;
+  const juggleCharge = juggleAlreadyConsumed ? 0 : juggleCost;
   const juggleMax = target.juggleMax ?? 15;
   const juggleBefore = target.juggleRemaining ?? juggleMax;
-  if (isAirJuggle && juggleCost > juggleBefore) {
+  if (isAirJuggle && juggleCharge > juggleBefore) {
     if (diagnosticsEnabled) diagnosticLines.push(
       `raw.hit_collision attacker=p${attacker.id} target=p${target.id}`,
       `${collisionHeader} overlap=${formatOverlap(overlap)} result=rejected reason=juggle_insufficient`,
       `raw.hit_juggle attacker=p${attacker.id} target=p${target.id}`,
-      `  activeHitDefId=${activeHitDefId ?? 'none'} state=${attacker.stateNo} cost=${juggleCost} before=${juggleBefore} after=${juggleBefore} max=${juggleMax} result=rejected reason=insufficient_points`,
+      `  activeHitDefId=${activeHitDefId ?? 'none'} state=${attacker.stateNo} cost=${juggleCharge} before=${juggleBefore} after=${juggleBefore} max=${juggleMax} configuredCost=${juggleCost} chainPaid=${juggleAlreadyConsumed ? 1 : 0} result=rejected reason=insufficient_points`,
     );
     return { attacker, target, hitEvent: null, diagnosticLines };
   }
-  if (isAirJuggle) target = { ...target, juggleMax, juggleRemaining: juggleBefore - juggleCost };
+  if (isAirJuggle) target = { ...target, juggleMax, juggleRemaining: juggleBefore - juggleCharge };
 
   const lifeBefore = target.life;
   const targetStateTypeAtHit = target.stateType;
@@ -276,7 +278,11 @@ function resolveAttack(
   const animType = active?.animType ?? 'Light';
   const animSource = active?.animTypeSource ?? 'winmugen_default';
   const animationExists = airDocumentHasAction(airDocument, selectedAnim);
-  const hitAttacker = markAttackerHit(attacker, activeHitDefId, target.id, active.hitId, active.pauseTime.attacker);
+  const hitAttacker = markJuggleChainContact(
+    markAttackerHit(attacker, activeHitDefId, target.id, active.hitId, active.pauseTime.attacker),
+    target.id,
+    isAirJuggle,
+  );
   const contactedAttacker = applyAttackerRequestedState(
     activeHitDefId === null ? hitAttacker : recordMoveContact(hitAttacker, activeHitDefId, 'hit'),
     active,
@@ -322,7 +328,7 @@ function resolveAttack(
     `  activeHitDefId=${idText} lifeBefore=${lifeBefore} appliedDamage=${damage} lifeAfter=${hitTarget.life} source=${source} kill=${active.kill === false ? 0 : 1} ko=${hitTarget.life === 0 ? 1 : 0}`,
     ...(isAirJuggle ? [
       `raw.hit_juggle attacker=p${attacker.id} target=p${target.id}`,
-      `  activeHitDefId=${idText} state=${attacker.stateNo} cost=${juggleCost} before=${juggleBefore} after=${hitTarget.juggleRemaining ?? juggleBefore} max=${juggleMax} result=accepted`,
+      `  activeHitDefId=${idText} state=${attacker.stateNo} cost=${juggleCharge} before=${juggleBefore} after=${hitTarget.juggleRemaining ?? juggleBefore} max=${juggleMax} configuredCost=${juggleCost} chainPaid=${juggleAlreadyConsumed ? 1 : 0} result=accepted`,
     ] : []),
     `raw.hitpause attacker=p${attacker.id} target=p${target.id}`,
     `  activeHitDefId=${idText} event=start attackerFrames=${active.pauseTime.attacker} defenderFrames=${active.pauseTime.defender} source=active_hitdef`,
@@ -624,6 +630,14 @@ function markAttackerHit(
       ...(player.hitTargets ?? []),
       { activeHitDefId, defenderId, hitDefId },
     ],
+  };
+}
+
+function markJuggleChainContact(player: PlayerState, defenderId: number, isAirJuggle: boolean): PlayerState {
+  if (!isAirJuggle || player.juggleConsumedTargetIds?.includes(defenderId)) return player;
+  return {
+    ...player,
+    juggleConsumedTargetIds: [...(player.juggleConsumedTargetIds ?? []), defenderId],
   };
 }
 

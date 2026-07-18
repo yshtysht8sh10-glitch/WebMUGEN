@@ -1054,7 +1054,7 @@ trigger1 = 1
     expect(result.state.players[0]).toMatchObject({
       hitDefUsed: true,
       hitTargets: [{ activeHitDefId: 7, defenderId: 2 }],
-      moveContact: { activeHitDefId: 7, contact: false, hit: false, guarded: false, hitCount: 2 },
+      moveContact: { activeHitDefId: 7, contact: false, hit: false, guarded: false, elapsed: 0, hitCount: 2 },
     });
     expect(result.traces[0].executedControllers).toContain('MoveHitReset');
   });
@@ -1177,7 +1177,7 @@ movetype = A
 physics = S
 [State 200, Structured HitDef]
 type = HitDef
-trigger1 = 1
+trigger1 = Time = 0
 attr = S, NA, SA
 damage = ifelse(var(0) = 1, 80, 40), var(1) + 5
 animtype = Medium
@@ -1249,7 +1249,7 @@ p2sprpriority = 3
     const afterHit = stepCnsStateRuntime({
       ...activated,
       players: [{
-        ...activated.players[0], hitDefUsed: true,
+        ...activated.players[0], stateTime: 1, hitDefUsed: true,
         vars: { 0: 0, 1: 100, 2: 100, 3: 100, 4: 100, 5: 100 },
       } as typeof activated.players[0], activated.players[1]],
     }, cns).state;

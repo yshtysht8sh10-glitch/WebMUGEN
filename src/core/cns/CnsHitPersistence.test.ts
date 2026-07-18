@@ -65,12 +65,12 @@ describe('StateDef HitDef persistence', () => {
 
   it('preserves contact result and hit count independently', () => {
     const resultOnly = enterWithPersistence(0, 1, 0);
-    expect(resultOnly.moveContact).toEqual({ activeHitDefId: 77, contact: true, hit: true, guarded: false, hitCount: 0 });
+    expect(resultOnly.moveContact).toEqual({ activeHitDefId: 77, contact: true, hit: true, guarded: false, elapsed: 1, hitCount: 0 });
 
     const countOnly = enterWithPersistence(0, 0, 1);
-    expect(countOnly.moveContact).toEqual({ activeHitDefId: 77, contact: false, hit: false, guarded: false, hitCount: 3 });
+    expect(countOnly.moveContact).toEqual({ activeHitDefId: 77, contact: false, hit: false, guarded: false, elapsed: 0, hitCount: 3 });
 
     const both = enterWithPersistence(0, 1, 1);
-    expect(both.moveContact).toEqual({ activeHitDefId: 77, contact: true, hit: true, guarded: false, hitCount: 3 });
+    expect(both.moveContact).toEqual({ activeHitDefId: 77, contact: true, hit: true, guarded: false, elapsed: 1, hitCount: 3 });
   });
 });

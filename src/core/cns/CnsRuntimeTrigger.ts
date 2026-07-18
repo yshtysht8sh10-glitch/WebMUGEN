@@ -657,9 +657,9 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'hitpausetime': return (context) => context.player.hitPause;
     case 'hitcount': return (context) => context.player.moveContact?.hitCount ?? 0;
     case 'hitfall': return (context) => readOptionalBool(context.player, 'hitFall', false) ? 1 : 0;
-    case 'movecontact': return (context) => context.player.moveContact?.contact ? 1 : 0;
-    case 'movehit': return (context) => context.player.moveContact?.hit ? 1 : 0;
-    case 'moveguarded': return (context) => context.player.moveContact?.guarded ? 1 : 0;
+    case 'movecontact': return (context) => context.player.moveContact?.contact ? context.player.moveContact.elapsed ?? 1 : 0;
+    case 'movehit': return (context) => context.player.moveContact?.hit ? context.player.moveContact.elapsed ?? 1 : 0;
+    case 'moveguarded': return (context) => context.player.moveContact?.guarded ? context.player.moveContact.elapsed ?? 1 : 0;
     case 'numenemy': return (context) => (context.opponent ? 1 : 1);
     case 'numproj': return () => 0;
     case 'numexplod': return () => 0;

@@ -81,6 +81,20 @@ describe('CnsRuntimeTrigger core expansion', () => {
     expect(evaluateCnsRuntimeTrigger('StateNo != [0, 99]', { player })).toBe(true);
   });
 
+  it('returns the elapsed MoveHit value instead of a permanent boolean 1', () => {
+    const contacted = {
+      ...player,
+      moveContact: { activeHitDefId: 7, contact: true, hit: true, guarded: false, elapsed: 1, hitCount: 1 },
+    };
+    expect(evaluateCnsRuntimeTrigger('MoveHit = 1', { player: contacted })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('MoveHit = 2', {
+      player: { ...contacted, moveContact: { ...contacted.moveContact, elapsed: 2 } },
+    })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('MoveHit = 1', {
+      player: { ...contacted, moveContact: { ...contacted.moveContact, elapsed: 2 } },
+    })).toBe(false);
+  });
+
   it('evaluates screen and edge distance triggers', () => {
     expect(evaluateCnsRuntimeTrigger('ScreenPos X = 130', { player })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('BackEdgeDist > 100', { player })).toBe(true);

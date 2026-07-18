@@ -113,25 +113,65 @@ physics = S
     expect(hit.players[1].hitFallVelocity).toEqual({ x: 0, y: -4.5 });
   });
 
-  it('consumes StateDef juggle only for an airborne target and rejects a new HitDef when points are insufficient', () => {
+  it('consumes StateDef juggle once per attack chain and target', () => {
     const first = resolveConfiguredHit({ targetStateType: 'A', juggle: 6, airJuggle: 10, pauseTime: [0, 0] });
     expect(first.players[1]).toMatchObject({ life: 963, juggleMax: 10, juggleRemaining: 4 });
-    expect(first.hitDiagnosticLines?.join('\n')).toContain('cost=6 before=10 after=4 max=10 result=accepted');
+    expect(first.hitDiagnosticLines?.join('\n')).toContain('cost=6 before=10 after=4 max=10 configuredCost=6 chainPaid=0 result=accepted');
 
     const duplicate = resolveFallbackHits(first, air);
     expect(duplicate.players[1].juggleRemaining).toBe(4);
 
     const active = first.players[0].activeHitDef!;
-    const rejected = resolveFallbackHits({
+    const continued = resolveFallbackHits({
       ...first,
       players: [
         { ...first.players[0], hitPause: 0, hitDefUsed: false, hitTargets: [], activeHitDef: { ...active, diagnosticId: (active.diagnosticId ?? 0) + 1 } },
         { ...first.players[1], hitPause: 0, animNo: 0 },
       ],
     }, air);
-    expect(rejected.hitEvents).toHaveLength(0);
-    expect(rejected.players[1]).toMatchObject({ life: 963, juggleRemaining: 4 });
-    expect(rejected.hitDiagnosticLines?.join('\n')).toContain('result=rejected reason=juggle_insufficient');
+    expect(continued.hitEvents).toHaveLength(1);
+    expect(continued.players[1]).toMatchObject({ life: 926, juggleRemaining: 4 });
+    expect(continued.hitDiagnosticLines?.join('\n')).toContain('cost=0 before=4 after=4 max=10 configuredCost=6 chainPaid=1 result=accepted');
+
+    const newAttack = resolveFallbackHits({
+      ...first,
+      players: [
+        {
+          ...first.players[0], hitPause: 0, hitDefUsed: false, hitTargets: [], juggleConsumedTargetIds: [],
+          activeHitDef: { ...active, diagnosticId: (active.diagnosticId ?? 0) + 2 },
+        },
+        { ...first.players[1], hitPause: 0, animNo: 0 },
+      ],
+    }, air);
+    expect(newAttack.hitEvents).toHaveLength(0);
+    expect(newAttack.players[1]).toMatchObject({ life: 963, juggleRemaining: 4 });
+    expect(newAttack.hitDiagnosticLines?.join('\n')).toContain('result=rejected reason=juggle_insufficient');
+  });
+
+  it('does not exhaust airjuggle across 29 HitDef generations in one multihit chain', () => {
+    let state = resolveConfiguredHit({
+      damage: 1, targetStateType: 'A', juggle: 15, airJuggle: 50, pauseTime: [0, 0],
+    });
+    expect(state.hitEvents).toHaveLength(1);
+    expect(state.players[1].juggleRemaining).toBe(35);
+
+    for (let generation = 1; generation < 29; generation += 1) {
+      const active = state.players[0].activeHitDef!;
+      state = resolveFallbackHits({
+        ...state,
+        players: [{
+          ...state.players[0], hitPause: 0, hitDefUsed: false,
+          activeHitDef: { ...active, diagnosticId: (active.diagnosticId ?? 0) + 1, rejectedLogged: false },
+        }, {
+          ...state.players[1], hitPause: 0, animNo: 0, stateType: 'A', moveType: 'H',
+        }],
+      }, air);
+      expect(state.hitEvents, `generation ${generation + 1}`).toHaveLength(1);
+    }
+
+    expect(state.players[1].life).toBe(971);
+    expect(state.players[1].juggleRemaining).toBe(35);
+    expect(state.players[0].moveContact?.hitCount).toBe(29);
   });
 
   it('does not consume or reject juggle points for an ordinary grounded hit', () => {
@@ -706,7 +746,7 @@ damage = 25
     expect(runtime.players[0].hitDefUsed).toBe(true);
   });
 
-  it('reuses the ActiveHitDef id and reports a duplicate controller only once', () => {
+  it('creates a new ActiveHitDef generation each time the controller executes', () => {
     const cns = parseCnsText(`
 [Statedef 200]
 type = S
@@ -724,9 +764,52 @@ damage = 37, 0
     const second = stepCnsStateRuntime(first, cns).state;
     const third = stepCnsStateRuntime(second, cns).state;
 
-    expect(second.players[0].activeHitDef?.diagnosticId).toBe(first.players[0].activeHitDef?.diagnosticId);
-    expect(second.players[0].hitDiagnosticLines?.join('\n')).toContain('event=duplicate_ignore');
-    expect(third.players[0].hitDiagnosticLines).toEqual([]);
+    expect(second.players[0].activeHitDef?.diagnosticId).not.toBe(first.players[0].activeHitDef?.diagnosticId);
+    expect(third.players[0].activeHitDef?.diagnosticId).not.toBe(second.players[0].activeHitDef?.diagnosticId);
+    expect(second.players[0].hitDiagnosticLines?.join('\n')).toContain('event=reactivate');
+  });
+
+  it('reactivates a consumed multihit controller without erasing the previous MoveHit result', () => {
+    const cns = parseCnsText(`
+[Statedef 200]
+type = S
+movetype = A
+[State 200, Multihit]
+type = HitDef
+trigger1 = Time = 0
+trigger2 = Time = 2
+damage = 25, 0
+pausetime = 0, 0
+`);
+    const initial = createInitialGameState();
+    const activated = stepCnsStateRuntime({
+      ...initial,
+      players: [
+        { ...initial.players[0], x: 240, y: 285, stateNo: 200, animNo: 200, moveType: 'A' },
+        { ...initial.players[1], x: 290, y: 285, animNo: 0 },
+      ],
+    }, cns).state;
+    const firstHit = resolveFallbackHits(activated, air);
+    const firstGeneration = firstHit.players[0].activeHitDef?.diagnosticId;
+
+    expect(firstHit.hitEvents).toHaveLength(1);
+    expect(firstHit.players[0].moveContact).toMatchObject({ hit: true, hitCount: 1 });
+
+    const reactivated = stepCnsStateRuntime({
+      ...firstHit,
+      players: [
+        { ...firstHit.players[0], stateTime: 2, hitPause: 0 },
+        { ...firstHit.players[1], hitPause: 0, animNo: 0 },
+      ],
+    }, cns).state;
+
+    expect(reactivated.players[0].activeHitDef?.diagnosticId).not.toBe(firstGeneration);
+    expect(reactivated.players[0].moveContact).toMatchObject({ contact: true, hit: true, guarded: false, elapsed: 1, hitCount: 1 });
+
+    const secondHit = resolveFallbackHits(reactivated, air);
+    expect(secondHit.hitEvents).toHaveLength(1);
+    expect(secondHit.players[0].moveContact).toMatchObject({ hit: true, hitCount: 2 });
+    expect(secondHit.players[1].life).toBe(firstHit.players[1].life - 25);
   });
 
   it('does not generate diagnostic lines when hit diagnostics are disabled', () => {

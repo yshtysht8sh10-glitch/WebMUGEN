@@ -583,6 +583,9 @@ function enterState(
   const powerAdded = addPlayerPower(player, stateDef.powerAdd ?? 0);
   const preserveHitDef = stateDef.hitDefPersist === true;
   const preservedMoveContact = preserveMoveContact(player, stateDef.moveHitPersist === true, stateDef.hitCountPersist === true);
+  const enteredMoveType = toMoveType(stateDef.moveType ?? null) ?? player.moveType;
+  const startsJuggleChain = enteredMoveType === 'A' && stateDef.juggle !== undefined;
+  const continuesJuggleChain = enteredMoveType === 'A' && player.moveType === 'A' && stateDef.juggle === undefined;
   const hitDiagnosticLines = input?.hitDiagnostics !== false && player.activeHitDef?.diagnosticId ? [
     ...(player.hitDiagnosticLines ?? []),
     `raw.hitdef_lifecycle activeHitDefId=${player.activeHitDef.diagnosticId}`,
@@ -599,11 +602,12 @@ function enterState(
     vx: stateDef.velocitySet ? stateDef.velocitySet.x * player.facing : player.vx,
     vy: stateDef.velocitySet ? stateDef.velocitySet.y : player.vy,
     stateType: toStateType(stateDef.stateType ?? null) ?? player.stateType,
-    moveType: toMoveType(stateDef.moveType ?? null) ?? player.moveType,
+    moveType: enteredMoveType,
     physics: toPhysics(stateDef.physics ?? null) ?? player.physics,
     ctrl: stateDef.ctrl ?? inferDefaultCtrl(stateNo, player.ctrl),
     facing: stateDef.faceP2 ? faceToward(player, opponent) : player.facing,
     juggle: stateDef.juggle ?? powered.juggle,
+    juggleConsumedTargetIds: startsJuggleChain ? [] : continuesJuggleChain ? player.juggleConsumedTargetIds ?? [] : [],
     activeHitDef: preserveHitDef ? player.activeHitDef : null,
     hitDefUsed: preserveHitDef ? player.hitDefUsed : false,
     hitTargets: preserveHitDef ? player.hitTargets ?? [] : [],
@@ -985,7 +989,7 @@ function appendTargetCompositeTriggerDiagnostic(
     hitDiagnosticLines: [
       ...(outputPlayer.hitDiagnosticLines ?? []),
       `raw.target_composite_trigger frame=${runtimeFrame} entity=p${triggerPlayer.id} controller=${controller.type} state=${stateDef.stateNo}`,
-      `  StateNo=${triggerPlayer.stateNo} PrevStateNo=${triggerPlayer.prevStateNo ?? triggerPlayer.stateNo} MoveContact=${contact?.contact ? 1 : 0} MoveHit=${contact?.hit ? 1 : 0} MoveGuarded=${contact?.guarded ? 1 : 0}`,
+      `  StateNo=${triggerPlayer.stateNo} PrevStateNo=${triggerPlayer.prevStateNo ?? triggerPlayer.stateNo} MoveContact=${contact?.contact ? contact.elapsed ?? 1 : 0} MoveHit=${contact?.hit ? contact.elapsed ?? 1 : 0} MoveGuarded=${contact?.guarded ? contact.elapsed ?? 1 : 0}`,
       `  activeTargetIds=${(triggerPlayer.targets ?? []).map((entry) => `${entry.hitDefId}->p${entry.playerId}`).join(',') || 'none'} targetRedirectRequestedId=${requestedId ?? 'invalid'} targetRedirectResolvedEntityId=${redirected?.id ?? 'none'} targetRedirectFound=${redirected ? 1 : 0} targetStateNo=${redirected?.stateNo ?? 'SFalse'} targetMoveType=${redirected?.moveType ?? 'SFalse'}`,
       ...triggerResults,
       `  triggerGroup aggregateResult=${aggregateResult ? 1 : 0} ChangeState=${controller.type.toLowerCase() === 'changestate' && aggregateResult ? 'eligible' : 'not_executed'} targetState=${num(controller, 'value', triggerPlayer, input, commands, opponent) ?? '-'} ctrlBefore=${triggerPlayer.ctrl ? 1 : 0} requestedCtrl=${num(controller, 'ctrl', triggerPlayer, input, commands, opponent) ?? 'statedef'}`,
@@ -1682,9 +1686,6 @@ function activateHitDef(
 ): ControllerResult {
   const controllerKey = [player.id, player.stateNo, controller.sourceFile ?? '-', controller.sourceLine ?? '-'].join(':');
   const existing = player.activeHitDef;
-  if (player.hitDefUsed && existing?.controllerKey === controllerKey) {
-    return withPlayer(player, true, 'HitDef');
-  }
   const snapshot = evaluateHitDefSnapshot(controller, player, input, commands, opponent);
   const damage = snapshot.damage;
   const guardDamage = snapshot.guardDamage;
@@ -1702,17 +1703,10 @@ function activateHitDef(
     : undefined;
   const damageSource = controller.params.damage === undefined || snapshot.invalidParameters.includes('damage') ? 'existing_fallback' : 'cns';
   const sameController = existing?.controllerKey === controllerKey;
-  const snapshotSignature = JSON.stringify({ ...snapshot, animType: selectedAnimType, animTypeSource });
-  const sameValues = sameController && existing.snapshotSignature === snapshotSignature;
-  const diagnosticId = sameController && existing?.diagnosticId ? existing.diagnosticId : nextActiveHitDefDiagnosticId++;
-  const action = sameController ? 'update' : 'create';
+  const diagnosticId = nextActiveHitDefDiagnosticId++;
+  const action = sameController ? 'reactivate' : 'create';
   const diagnosticsEnabled = input.hitDiagnostics !== false;
-  const duplicateFirstSeen = diagnosticsEnabled && sameValues && !existing?.duplicateLogged;
-  const hitDiagnosticLines = !diagnosticsEnabled ? [] : duplicateFirstSeen ? [
-    ...(player.hitDiagnosticLines ?? []),
-    `raw.hitdef_lifecycle activeHitDefId=${diagnosticId}`,
-    `  event=duplicate_ignore reason=same_controller_same_values hitCount=${player.hitDefUsed ? 1 : 0}`,
-  ] : sameValues ? (player.hitDiagnosticLines ?? []) : [
+  const hitDiagnosticLines = !diagnosticsEnabled ? [] : [
     ...(player.hitDiagnosticLines ?? []),
     `raw.hitdef_activate attacker=p${player.id} state=${player.stateNo} time=${player.stateTime}`,
     `  controller=${controller.sourceFile ?? '-'}:${controller.sourceLine ?? '-'} activeHitDefId=${diagnosticId}`,
@@ -1744,7 +1738,6 @@ function activateHitDef(
       controllerKey,
       damageValues: [Math.max(0, damage), Math.max(0, guardDamage)],
       damageSource,
-      snapshotSignature,
       groundHitTime,
       airHitTime,
       groundHitTimeSource: groundHitTime === undefined ? 'hardcoded' : 'cns',
@@ -1753,9 +1746,8 @@ function activateHitDef(
       airHitTimeFallbackReason,
       animType: selectedAnimType,
       animTypeSource,
-      missLogged: sameController ? existing?.missLogged : false,
-      rejectedLogged: sameController ? existing?.rejectedLogged : false,
-      duplicateLogged: diagnosticsEnabled && sameValues ? true : false,
+      missLogged: false,
+      rejectedLogged: false,
     },
   }, true, 'HitDef');
 }
@@ -1950,6 +1942,7 @@ function preserveMoveContact(player: PlayerState, preserveResult: boolean, prese
     contact: preserveResult ? current.contact : false,
     hit: preserveResult ? current.hit : false,
     guarded: preserveResult ? current.guarded : false,
+    elapsed: preserveResult ? current.elapsed ?? (current.contact ? 1 : 0) : 0,
     hitCount: preserveCount ? current.hitCount : 0,
   };
 }

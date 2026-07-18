@@ -3,6 +3,7 @@ import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 import type { CnsDocument, CnsStateDefinition } from '../../mugen/common/cnsTypes';
 import { findCnsState } from '../../mugen/common/CnsStateIndex';
 import { readCnsConst } from './CnsConstants';
+import { advanceMoveContact } from '../hitdef/MoveContactState';
 
 const GROUND_FRICTION = 0.82;
 const COMMON_JUMP_LAND_STATE = 52;
@@ -83,19 +84,20 @@ export function stepPlayerCnsPhysics(player: PlayerState, cns?: CnsDocument | nu
     };
   }
 
+  const advanced = advanceMoveContact(player);
   const nextTime = {
     stateTime: player.stateTime + 1,
     animTime: player.animTime + 1,
   };
 
   if (player.positionFrozen) {
-    return { ...player, positionFrozen: false, ...nextTime };
+    return { ...advanced, positionFrozen: false, ...nextTime };
   }
 
   if (player.physics === 'S' || player.physics === 'C') {
     const nextVx = player.vx * GROUND_FRICTION;
     return {
-      ...player,
+      ...advanced,
       x: player.x + player.vx,
       y: DEFAULT_GROUND_Y,
       vx: Math.abs(nextVx) < 0.01 ? 0 : nextVx,
@@ -107,7 +109,7 @@ export function stepPlayerCnsPhysics(player: PlayerState, cns?: CnsDocument | nu
   if (player.physics === 'A') {
     const nextVy = player.vy + readCnsConst(cns, 'movement.yaccel');
     return {
-      ...player,
+      ...advanced,
       x: player.x + player.vx,
       y: player.y + nextVy,
       vy: nextVy,
@@ -118,7 +120,7 @@ export function stepPlayerCnsPhysics(player: PlayerState, cns?: CnsDocument | nu
   // Physics=N disables the built-in gravity/friction, but explicit velocity
   // controllers still move the player on both axes.
   return {
-    ...player,
+    ...advanced,
     x: player.x + player.vx,
     y: player.y + player.vy,
     ...nextTime,

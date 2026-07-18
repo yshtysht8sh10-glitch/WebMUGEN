@@ -129,7 +129,7 @@ Issue #54 identified the previous implementation error: bare `AnimElem` compared
 
 ## Move contact results
 
-MoveContact, MoveHit, MoveGuarded, and HitCount read an attacker-side result owned by the current ActiveHitDef generation. A normal hit sets contact/hit and increments the State-local count; a live guardflag-approved contact sets contact/guarded without MoveHit or hit-count increment. New HitDef activation clears result flags while retaining the State hit count. On State entry, `movehitpersist` controls result preservation and `hitcountpersist` controls count preservation independently. `MoveHitReset` clears flags without erasing target hit history or count.
+MoveContact, MoveHit, MoveGuarded, and HitCount read attacker-side move results. A normal hit sets MoveContact/MoveHit to 1 and increments the State-local count; a live guardflag-approved contact sets MoveContact/MoveGuarded to 1 without MoveHit or hit-count increment. The Move* value remains 1 throughout attacker hitpause, then increments on each unpaused game tick. Activating a later HitDef does not clear the preceding result; its next hit or guard replaces the result and resets the value to 1. On State entry, `movehitpersist` controls result preservation and `hitcountpersist` controls count preservation independently. `MoveHitReset` clears flags without erasing target hit history or count.
 
 ## Target lookup
 

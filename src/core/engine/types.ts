@@ -32,7 +32,6 @@ export type ActiveHitDef = {
   damageSource?: 'cns' | 'existing_fallback';
   missLogged?: boolean;
   rejectedLogged?: boolean;
-  duplicateLogged?: boolean;
   groundHitTime?: number;
   airHitTime?: number;
   groundHitTimeSource?: 'cns' | 'hardcoded';
@@ -42,7 +41,6 @@ export type ActiveHitDef = {
   animType?: 'Light' | 'Medium' | 'Hard' | 'Back' | 'Up' | 'DiagUp';
   groundAnimTypeRaw?: string;
   animTypeSource?: 'cns' | 'winmugen_default';
-  snapshotSignature?: string;
   attr?: { stateType: string; attackTypes: string[] };
   airAnimType?: string;
   fallAnimType?: string;
@@ -173,6 +171,7 @@ export type PlayerState = {
   juggle?: number;
   juggleMax?: number;
   juggleRemaining?: number;
+  juggleConsumedTargetIds?: number[];
   guardIntent?: boolean;
   guardCrouchIntent?: boolean;
   hitBy?: string;
@@ -189,6 +188,7 @@ export type PlayerState = {
     contact: boolean;
     hit: boolean;
     guarded: boolean;
+    elapsed?: number;
     hitCount: number;
   };
   targets?: Array<{

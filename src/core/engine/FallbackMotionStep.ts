@@ -1,5 +1,6 @@
 import type { GameState, PlayerState } from './types';
 import { clampPlayersToGround, DEFAULT_GROUND_Y } from './GroundClamp';
+import { advanceMoveContact } from '../hitdef/MoveContactState';
 
 const GRAVITY = 0.6;
 const FRICTION = 0.82;
@@ -27,9 +28,10 @@ function stepPlayerMotion(player: PlayerState): PlayerState {
   const nextX = player.x + player.vx;
   const nextY = player.y + nextVy;
   const nextVx = isAirborne ? player.vx : player.vx * FRICTION;
+  const advanced = advanceMoveContact(player);
 
   return {
-    ...player,
+    ...advanced,
     x: nextX,
     y: nextY,
     vx: Math.abs(nextVx) < 0.01 ? 0 : nextVx,
