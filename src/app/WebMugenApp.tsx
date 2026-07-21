@@ -82,6 +82,7 @@ import {
 } from '../core/pause/PauseSystem';
 import { stepCnsPhysicsMotion } from '../core/cns/CnsPhysicsStep';
 import { stepAfterImage } from '../core/afterimage/AfterImageSystem';
+import { applyBgPalFxEvents, stepBgPalFx, type BgPalFxEvent } from '../core/palfx/BgPalFxSystem';
 import { formatCnsRuntimeDebugOverlay } from './CnsRuntimeDebugOverlay';
 import { formatCnsCommandDebugOverlay } from './CnsCommandDebugOverlay';
 import { formatCnsCoverageDebugOverlay } from './CnsCoverageDebugOverlay';
@@ -420,6 +421,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
         let nextScore = roundScoreRef.current;
         let nextCnsTraces = cnsTraceRef.current;
         const environmentShakeEvents: EnvironmentShake[] = [];
+        const bgPalFxEvents: BgPalFxEvent[] = [];
 
         if (
           inputSnapshot.system.restartRound &&
@@ -473,6 +475,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             onExplodBindTime: (event) => explodRuntimeEvents.push(event),
             onPause: (event) => pauseEvents.push(event),
             onEnvironmentShake: (event) => environmentShakeEvents.push(event),
+            onBgPalFx: (event) => bgPalFxEvents.push(event),
             pauseState: pauseAtFrameStart,
             screenWidth: canvas.width,
             roundState: nextRoundState.phase === 'fight' ? 2 : 3,
@@ -483,6 +486,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           });
           cnsMs = performance.now() - cnsStartedAt;
           nextState = cnsResult.state;
+          if (bgPalFxEvents.length > 0) nextState = applyBgPalFxEvents(nextState, bgPalFxEvents);
           if (pauseEvents.length > 0) {
             const pause = applyPauseControllerEvents(nextState.pause ?? createInitialPauseState(), pauseEvents);
             nextState = {
@@ -550,6 +554,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
 
           nextState = {
             ...nextState,
+            bgPalFx: stepBgPalFx(nextState.bgPalFx),
             players: nextState.players.map((player) => (
               !pausedThisFrame || canEntityMoveDuringPause(pauseDuringFrame, player.id)
                 ? { ...player, afterImage: stepAfterImage(player.afterImage, player) }

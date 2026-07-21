@@ -24,6 +24,7 @@ import {
   type CharacterRenderAssets,
   type ExplodRenderFrame,
 } from './ExplodRender';
+import { resolveBgPalFxFilter } from '../../core/palfx/BgPalFxSystem';
 
 export class CanvasRenderer {
   private readonly context: CanvasRenderingContext2D;
@@ -66,13 +67,20 @@ export class CanvasRenderer {
     const shake = getScreenShakeOffset(hitFeedback);
     ctx.save();
     ctx.translate(shake.x, shake.y);
+    const bgPalFxFilter = resolveBgPalFxFilter(state.bgPalFx);
+    ctx.save();
+    ctx.filter = bgPalFxFilter;
     this.drawStage(ctx);
+    ctx.restore();
     this.drawLifeBars(ctx, state);
     const powerDiagnostics = this.drawPowerBars(ctx, state, diagnosticsEnabled);
     if (roundState) this.roundStateRenderer.render(ctx, roundState, roundScore);
     this.drawProjectiles(ctx, state.projectiles, diagnosticsEnabled);
     const explodResolution = resolveExplodRenderFrames(state, this.defaultAssets(), this.ownerAssets, this.fightFxAssets, 0, 0, diagnosticsEnabled);
-    const renderDiagnostics = [...explodResolution.diagnosticLines];
+    const renderDiagnostics = [
+      ...(diagnosticsEnabled && state.bgPalFx ? [`raw.bgpalfx_draw owner=${state.bgPalFx.ownerEntityId} remaining=${state.bgPalFx.remainingTime} color=${state.bgPalFx.color} invertall=${state.bgPalFx.invertAll ? 1 : 0} mul=(${state.bgPalFx.multiply.red},${state.bgPalFx.multiply.green},${state.bgPalFx.multiply.blue}) filter=${bgPalFxFilter} result=drawn limitation=canvas_filter_approximated`] : []),
+      ...explodResolution.diagnosticLines,
+    ];
     const regularDrawables = [
       ...getPlayersInSpritePriorityOrder(state).map((player) => ({
         kind: 'player' as const,
@@ -97,6 +105,7 @@ export class CanvasRenderer {
     ].sort((a, b) => a.priority - b.priority || Number(a.kind === 'explod') - Number(b.kind === 'explod') || a.stableId - b.stableId);
     for (const drawable of regularDrawables) {
       if (drawable.kind === 'player') {
+        renderDiagnostics.push(...this.drawAfterImages(ctx, drawable.player, diagnosticsEnabled));
         const diagnostic = this.drawPlayer(ctx, drawable.player, drawable.player.id === 1 ? '#66ccff' : '#ff99aa', diagnosticsEnabled);
         if (diagnostic) renderDiagnostics.push(diagnostic);
       } else {
@@ -141,6 +150,11 @@ export class CanvasRenderer {
   }
 
   private drawStage(ctx: CanvasRenderingContext2D): void {
+    const splitY = this.canvas.height * 0.65;
+    ctx.fillStyle = '#5c7898';
+    ctx.fillRect(0, 0, this.canvas.width, splitY);
+    ctx.fillStyle = '#3d612f';
+    ctx.fillRect(0, splitY, this.canvas.width, this.canvas.height - splitY);
     ctx.fillStyle = '#26351e';
     ctx.fillRect(0, 285, this.canvas.width, 80);
   }
@@ -313,7 +327,6 @@ export class CanvasRenderer {
     if (!diagnosticsEnabled) return [];
     return [`raw.afterimage_draw entity=p${player.id} captured=${afterImage.frames.length} displayed=${displayed.length} drawn=${drawn} time=${afterImage.remainingTime} timegap=${afterImage.timeGap} framegap=${afterImage.frameGap} trans=${blend.mode || 'none'} composite=${blend.compositeOperation} palette=canvas_filter_approximated${blend.limitation ? ` limitation=${blend.limitation}` : ''}`];
   }
-
 
   private drawPowerBars(ctx: CanvasRenderingContext2D, state: GameState, diagnosticsEnabled: boolean): string[] {
     const [p1, p2] = state.players;
@@ -539,7 +552,6 @@ function resolveAfterImageFilter(afterImage: NonNullable<PlayerState['afterImage
   const grayscale = Math.min(1, Math.max(0, 1 - afterImage.palette.color / 256));
   return `${afterImage.palette.invertAll ? 'invert(1) ' : ''}grayscale(${grayscale}) contrast(${contrast}) brightness(${brightness})`;
 }
-
 
 function resolveSpriteBlend(
   transparency: string | null,

@@ -27,6 +27,7 @@ import { addPlayerPower, setPlayerPower } from '../power/PowerGauge';
 import type { AnimationTriggerInfo } from '../animation/AnimationPlayer';
 import { countHelpers, createInitialHelperState, destroyHelper, spawnHelper, type HelperSpawnRequest } from '../helper/HelperSystem';
 import { createAfterImageState, setAfterImageTime } from '../afterimage/AfterImageSystem';
+import type { BgPalFxEvent } from '../palfx/BgPalFxSystem';
 
 type RuntimeEntityContext = {
   kind: 'root' | 'helper';
@@ -69,6 +70,7 @@ export type CnsRuntimeInput = {
   onExplodBindTime?: (event: ExplodBindTimeEvent) => void;
   onPause?: (event: PauseControllerEvent) => void;
   onEnvironmentShake?: (event: { time: number; frequency: number; amplitude: number; phase: number }) => void;
+  onBgPalFx?: (event: BgPalFxEvent) => void;
   pauseState?: PauseState;
   screenWidth?: number;
   gameTime?: number;
@@ -134,7 +136,6 @@ const RECOGNIZED_NO_OP_CONTROLLERS = new Map<string, string>([
   ['angledraw', 'AngleDraw'],
   ['appendtoclipboard', 'AppendToClipboard'],
   ['attackdist', 'AttackDist'],
-  ['bgpalfx', 'BGPalFX'],
   ['bindtoparent', 'BindToParent'],
   ['bindtoroot', 'BindToRoot'],
   ['bindtotarget', 'BindToTarget'],
@@ -919,6 +920,7 @@ function executeController(
   if (type === 'trans') return withExtendedPlayer(player, { transparent: str(controller, 'trans') ?? str(controller, 'value') ?? '' }, 'Trans');
   if (type === 'width') return withExtendedPlayer(player, { width: { edge: num(controller, 'edge') ?? undefined, player: num(controller, 'player') ?? undefined } }, 'Width');
   if (type === 'afterimage') return afterImage(player, opponent, controller, input, commands);
+  if (type === 'bgpalfx') return bgPalFx(player, opponent, controller, input, commands);
   if (type === 'afterimagetime') {
     const time = num(controller, 'time', player, input, commands, opponent) ?? num(controller, 'value', player, input, commands, opponent) ?? 0;
     return withPlayer({ ...player, afterImage: setAfterImageTime(player.afterImage, time) }, true, 'AfterImageTime');
@@ -1014,6 +1016,30 @@ function afterImage(
   }, true, 'AfterImage');
 }
 
+function bgPalFx(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const sinAdd = controller.params.sinadd === undefined
+    ? { red: 0, green: 0, blue: 0, period: 0 }
+    : {
+        ...triple(controller, 'sinadd', player, input, commands, opponent, 0, 0, 0),
+        period: readTupleNumber(controller, 'sinadd', 3, player, input, commands, opponent) ?? 0,
+      };
+  input.onBgPalFx?.({
+    duration: Math.trunc(num(controller, 'time', player, input, commands, opponent) ?? 1),
+    color: num(controller, 'color', player, input, commands, opponent) ?? 256,
+    invertAll: (num(controller, 'invertall', player, input, commands, opponent) ?? 0) !== 0,
+    add: triple(controller, 'add', player, input, commands, opponent, 0, 0, 0),
+    multiply: triple(controller, 'mul', player, input, commands, opponent, 256, 256, 256),
+    sinAdd,
+    ownerEntityId: input.entityContext?.entityId ?? player.id,
+  });
+  return withPlayer(player, true, 'BGPalFX');
+}
 
 function appendTargetCompositeTriggerDiagnostic(
   outputPlayer: PlayerState,
@@ -2208,6 +2234,21 @@ function triple(
     green: cnsValueToNumber(values[1], player, input, commands, opponent) ?? defaultGreen,
     blue: cnsValueToNumber(values[2], player, input, commands, opponent) ?? defaultBlue,
   };
+}
+
+function readTupleNumber(
+  controller: CnsStateController,
+  key: string,
+  index: number,
+  player: PlayerState,
+  input: CnsRuntimeInput,
+  commands: ReadonlySet<string> | undefined,
+  opponent: PlayerState,
+): number | null {
+  const value = controller.params[key.toLowerCase()];
+  if (value === undefined) return null;
+  const values = Array.isArray(value) ? value : String(value).split(',').map((part) => part.trim());
+  return cnsValueToNumber(values[index], player, input, commands, opponent);
 }
 
 function optionalPair(

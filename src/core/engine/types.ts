@@ -60,6 +60,23 @@ export type AfterImageState = {
   frames: AfterImageFrame[];
 };
 
+export type PalFxColor = {
+  red: number;
+  green: number;
+  blue: number;
+};
+
+export type BgPalFxState = {
+  duration: number;
+  remainingTime: number;
+  elapsedTime: number;
+  color: number;
+  invertAll: boolean;
+  add: PalFxColor;
+  multiply: PalFxColor;
+  sinAdd: PalFxColor & { period: number };
+  ownerEntityId: number;
+};
 
 export type ActiveHitDef = {
   diagnosticId?: number;
@@ -310,6 +327,7 @@ export type GameState = {
   explods: ExplodRuntimeState;
   helpers: HelperRuntimeState;
   pause?: PauseState;
+  bgPalFx?: BgPalFxState;
   hitDiagnosticLines?: string[];
   commandBuffers?: [InputBuffer, InputBuffer];
   commandNames?: [ReadonlySet<string>, ReadonlySet<string>];

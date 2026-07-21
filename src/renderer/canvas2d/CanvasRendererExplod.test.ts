@@ -47,6 +47,7 @@ describe('CanvasRenderer Explod integration', () => {
     expect(drawImage).not.toHaveBeenCalled();
     expect(diagnostics).toContainEqual(expect.stringContaining('result=hidden reason=sprite_not_found'));
   });
+
   it('uses the AIR element A field when the Explod controller has no trans override', () => {
     const observedBlend: Array<{ composite: GlobalCompositeOperation; alpha: number }> = [];
     let context: CanvasRenderingContext2D;
@@ -68,6 +69,7 @@ describe('CanvasRenderer Explod integration', () => {
     expect(diagnostics).toContainEqual(expect.stringContaining('transSource=air'));
     expect(diagnostics).toContainEqual(expect.stringContaining('limitation=air_a_source_alpha_approximated'));
   });
+
   it('darkens an active SuperPause before drawing onTop Explods', () => {
     const order: string[] = [];
     let fillStyle = '';
@@ -114,6 +116,7 @@ describe('CanvasRenderer Explod integration', () => {
     expect(fullScreenDarken).not.toHaveBeenCalled();
     expect([...pauseDiagnostics, ...disabledDiagnostics].some((line) => line.startsWith('raw.superpause_darken'))).toBe(false);
   });
+
   it('draws retained AfterImage frames behind the player with controller transparency', () => {
     const observed: Array<{ x: number; composite: GlobalCompositeOperation }> = [];
     let context: CanvasRenderingContext2D;
@@ -138,6 +141,29 @@ describe('CanvasRenderer Explod integration', () => {
     expect(observed).toContainEqual({ x: 220, composite: 'source-over' });
     expect(diagnostics).toContainEqual(expect.stringContaining('raw.afterimage_draw entity=p1 captured=1 displayed=1 drawn=1'));
     expect(diagnostics).toContainEqual(expect.stringContaining('trans=add1 composite=lighter'));
+  });
+
+  it('applies BGPalFX only while drawing the stage layer', () => {
+    const stageFilters: string[] = [];
+    let filter = 'none';
+    const context = {
+      ...fakeContext({ drawImage: vi.fn(), scale: vi.fn(), translate: vi.fn() }),
+      set filter(value: string) { filter = value; },
+      get filter() { return filter; },
+      fillRect: vi.fn((_x: number, y: number) => { if (y === 0) stageFilters.push(filter); }),
+    } as unknown as CanvasRenderingContext2D;
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+    const state = createInitialGameState();
+    state.bgPalFx = {
+      duration: 20, remainingTime: 19, elapsedTime: 1, color: 0, invertAll: true,
+      add: { red: 0, green: 0, blue: 0 }, multiply: { red: 0, green: 0, blue: 0 },
+      sinAdd: { red: 0, green: 0, blue: 0, period: 0 }, ownerEntityId: 1,
+    };
+
+    const diagnostics = new CanvasRenderer(canvas).render(state);
+
+    expect(stageFilters).toEqual(['grayscale(1) brightness(0) invert(1)']);
+    expect(diagnostics).toContainEqual(expect.stringContaining('raw.bgpalfx_draw owner=1 remaining=19'));
   });
 });
 

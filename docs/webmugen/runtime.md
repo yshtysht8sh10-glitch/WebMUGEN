@@ -186,10 +186,14 @@ Issue #51 separates character/asset loading from live runtime startup. A prepare
 
 `GameState.pause` is the match-level Pause/SuperPause clock. The activation CNS pass emits one owner-scoped event; subsequent paused passes skip negative and current State controllers, and a one-frame resume guard lets physics advance StateTime before controllers can see the activation time again. The controller owner may continue for its `movetime`; other players, round time, hit resolution, and physics remain frozen. This ordering prevents Explod and sound side effects from being regenerated at the activation boundary. Canvas rendering consumes the same state: an active SuperPause with `darken` enabled darkens regular layers while leaving hit feedback and `ontop` Explods above the darkening pass. Same-pass events emitted by another player before the coordinator applies the pause remain a documented Partial boundary.
 
-## Helper HitDef runtime
-
-Issue #81 includes existing Helpers as attack candidates after the root-player priority pass. Each active Helper HitDef uses that Helper's owner AIR, position, facing, Anim and Clsn1 against the opposing root's Clsn2. Accepted contact mutates the root defender through the normal damage/guard/reaction/effect path and writes HitPause, MoveContact/MoveHit, hit-target consumption and Target registration back to the unique Helper entity. `raw.helper_hit_collision` keeps the runtime Helper id visible even though character-owned hit effects use the root id. Helper-as-defender, Helper-vs-Helper and simultaneous priority interactions remain Partial.
-
 ## AfterImage runtime
 
 Issue #81 replaces the recognized no-op with durable player frame history. After physics and hit processing, movable entities capture their displayed position, facing, Anim number, and Anim time at `timegap`; the renderer selects every `framegap` entry, draws oldest first immediately behind the owner, and uses the controller's `trans` composition. `raw.afterimage_draw` exposes capture/display/draw counts, duration, gap values, composition, and the diagnosed Canvas palette approximation.
+
+## BGPalFX runtime
+
+Issue #81 replaces the `BGPalFX` safe no-op with a match-level timed state. Controller execution evaluates `time`, `color`, `invertall`, `add`, `mul`, and `sinadd`; later frames advance the retained clock without rerunning the controller. Canvas scopes the calculated filter to `drawStage`, so players, Helpers, Explods, feedback, and HUD remain unaffected. Exact RGB-channel palette math and `ignorehitpause` controller activation remain Partial.
+
+## Helper HitDef runtime
+
+Issue #81 includes existing Helpers as attack candidates after the root-player priority pass. Each active Helper HitDef uses that Helper's owner AIR, position, facing, Anim and Clsn1 against the opposing root's Clsn2. Accepted contact mutates the root defender through the normal damage/guard/reaction/effect path and writes HitPause, MoveContact/MoveHit, hit-target consumption and Target registration back to the unique Helper entity. `raw.helper_hit_collision` keeps the runtime Helper id visible even though character-owned hit effects use the root id. Helper-as-defender, Helper-vs-Helper and simultaneous priority interactions remain Partial.
