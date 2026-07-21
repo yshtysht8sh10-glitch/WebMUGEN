@@ -63,6 +63,39 @@ ctrl = 1
   });
 });
 
+describe('CnsStateRuntime edge body distance routes', () => {
+  it('enters the wall-impact State when a launched player reaches either fallback stage edge', () => {
+    const cns = parseCnsText(`
+[StateDef 250]
+type = A
+movetype = H
+physics = N
+
+[State 250, ChangeState]
+type = ChangeState
+triggerall = time >= 10
+trigger1 = BackEdgeBodyDist <= 20
+trigger2 = FrontEdgeBodyDist <= 20
+value = 281
+
+[StateDef 281]
+type = A
+movetype = H
+physics = N
+`);
+    const state = createInitialGameState();
+
+    for (const player of [
+      { ...state.players[0], stateNo: 250, stateTime: 10, x: 912, facing: 1 as const },
+      { ...state.players[0], stateNo: 250, stateTime: 10, x: 48, facing: -1 as const },
+    ]) {
+      const result = stepCnsStateRuntime({ ...state, players: [player, state.players[1]] }, cns, {});
+      expect(result.state.players[0].stateNo).toBe(281);
+      expect(result.traces[0].executedControllers).toContain('ChangeState');
+    }
+  });
+});
+
 describe('CnsStateRuntime AnimTime', () => {
   it('faces the opponent when entering a StateDef with facep2', () => {
     const cns = parseCnsText(`

@@ -190,6 +190,24 @@ describe('CnsRuntimeTrigger', () => {
     expect(evaluateCnsRuntimeTrigger('NumProj = 0', { player })).toBe(true);
   });
 
+  it('evaluates facing-relative body distance from the fallback stage edges', () => {
+    expect(evaluateCnsRuntimeTrigger('FrontEdgeBodyDist <= 20', {
+      player: { ...player, x: 912, facing: 1 },
+    })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('BackEdgeBodyDist <= 20', {
+      player: { ...player, x: 48, facing: 1 },
+    })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('FrontEdgeBodyDist <= 20', {
+      player: { ...player, x: 48, facing: -1 },
+    })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('BackEdgeBodyDist <= 20', {
+      player: { ...player, x: 912, facing: -1 },
+    })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('FrontEdgeBodyDist <= 20', {
+      player: { ...player, x: 500, facing: 1 },
+    })).toBe(false);
+  });
+
   it('evaluates constants and misc numeric triggers', () => {
     expect(evaluateCnsRuntimeTrigger('Const(data.life) = 1000', { player })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('Life > 0', { player })).toBe(true);

@@ -24,6 +24,8 @@ Do not mark safe defaults as Complete.
 |---|---|---|---|
 | `BodyDist X` | Partial | Evaluates opponent center distance like `P2BodyDist X`. | Precise body-edge width and push/collision integration are incomplete. |
 | `BodyDist Y` | Partial | Evaluates opponent/player Y coordinate difference like `P2BodyDist Y`. | Precise body-edge height and airborne body bounds need audit. |
+| `BackEdgeBodyDist` | Fallback 40% | The production compiled evaluator selects the edge behind the player from Facing and measures from the fixed X=48/912 fallback boundary; a focused State 250 to 281 route test covers wall impact. | Camera-relative edges and exact body-width adjustment remain incomplete. |
+| `FrontEdgeBodyDist` | Fallback 40% | The production compiled evaluator selects the edge in front of the player from Facing and measures from the fixed X=48/912 fallback boundary; a focused State 250 to 281 route test covers wall impact. | Camera-relative edges and exact body-width adjustment remain incomplete. |
 | `AnimExist` | Partial | Uses runtime animation lookup when provided. | AIR ownership, redirect behavior, and missing animation edge cases need audit. |
 | `SelfAnimExist` | Partial | Uses runtime self-animation lookup when provided. | Redirect-specific AIR ownership and helper/custom-state behavior need audit. |
 | `AnimElem` | Complete | Uses 1-based AIR element starts, comparison-time syntax, invalid-element false, and loop re-entry. | Focused trigger/AIR tests and bundled T-H-M-A State 101 PlaySnd regression cover the runtime path. |

@@ -5,6 +5,7 @@ import { hitDefAttrMatches } from '../hitdef/HitAttribute';
 import type { CnsDocument, CnsTrigger } from '../../mugen/common/cnsTypes';
 import { readCnsConst } from './CnsConstants';
 import { readPlayerPowerMax } from '../power/PowerGauge';
+import { FALLBACK_STAGE_LEFT, FALLBACK_STAGE_RIGHT } from '../engine/FallbackStageRules';
 
 export type CnsRuntimeTriggerContext = {
   player: PlayerState;
@@ -668,6 +669,12 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'ishelper': return (context) => context.isHelper ? 1 : 0;
     case 'backedgedist': return (context) => context.player.x;
     case 'frontedgedist': return (context) => (context.screenWidth ?? 960) - context.player.x;
+    case 'backedgebodydist': return (context) => context.player.facing === 1
+      ? context.player.x - FALLBACK_STAGE_LEFT
+      : FALLBACK_STAGE_RIGHT - context.player.x;
+    case 'frontedgebodydist': return (context) => context.player.facing === 1
+      ? FALLBACK_STAGE_RIGHT - context.player.x
+      : context.player.x - FALLBACK_STAGE_LEFT;
     case 'p2life': return (context) => context.opponent?.life ?? 1000;
     case 'p2stateno': return (context) => context.opponent?.stateNo ?? 0;
     case 'p2facing': return (context) => context.opponent?.facing ?? -context.player.facing;
