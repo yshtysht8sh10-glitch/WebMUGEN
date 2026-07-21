@@ -25,6 +25,42 @@ export type Rect = {
   height: number;
 };
 
+export type AfterImageColor = {
+  red: number;
+  green: number;
+  blue: number;
+};
+
+export type AfterImageFrame = {
+  x: number;
+  y: number;
+  facing: 1 | -1;
+  animNo: number;
+  animTime: number;
+  age: number;
+};
+
+export type AfterImageState = {
+  enabled: boolean;
+  remainingTime: number;
+  captureTick: number;
+  length: number;
+  timeGap: number;
+  frameGap: number;
+  transparency: string;
+  palette: {
+    color: number;
+    invertAll: boolean;
+    bright: AfterImageColor;
+    contrast: AfterImageColor;
+    postBright: AfterImageColor;
+    add: AfterImageColor;
+    multiply: AfterImageColor;
+  };
+  frames: AfterImageFrame[];
+};
+
+
 export type ActiveHitDef = {
   diagnosticId?: number;
   controllerKey?: string;
@@ -151,6 +187,7 @@ export type PlayerState = {
   animNo: number;
   animTime: number;
   hitPause: number;
+  afterImage?: AfterImageState;
   pauseControllerLatch?: { key: string; stateNo: number; stateTime: number };
   positionFrozen?: boolean;
   activeHitDef: ActiveHitDef | null;

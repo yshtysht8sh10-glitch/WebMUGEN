@@ -272,6 +272,49 @@ export class CanvasRenderer {
     return diagnosticsEnabled ? `${prefix} result=fallback reason=no_character_sprite_assets playerVisible=1 rendererDrawRequested=1 rendererDrawSource=debug_fallback` : '';
   }
 
+  private drawAfterImages(ctx: CanvasRenderingContext2D, player: PlayerState, diagnosticsEnabled: boolean): string[] {
+    const afterImage = player.afterImage;
+    if (!afterImage?.enabled || afterImage.frames.length === 0) return [];
+    const hasOwnerAssetMap = Object.keys(this.ownerAssets).length > 0;
+    const assets = this.ownerAssets[player.id] ?? (hasOwnerAssetMap ? undefined : this.defaultAssets());
+    if (!assets?.airDocument) return diagnosticsEnabled
+      ? [`raw.afterimage_draw entity=p${player.id} result=hidden reason=animation_owner_missing`]
+      : [];
+
+    const displayed = afterImage.frames.filter((_, index) => index % afterImage.frameGap === 0).reverse();
+    const blend = resolveSpriteBlend(afterImage.transparency, null);
+    let drawn = 0;
+    for (const [displayIndex, frame] of displayed.entries()) {
+      const currentElement = getCurrentAnimationElement(assets.airDocument, frame.animNo, frame.animTime);
+      if (!currentElement || currentElement.element.groupNo < 0 || currentElement.element.imageNo < 0) continue;
+      ctx.save();
+      applySpriteBlend(ctx, blend);
+      ctx.filter = resolveAfterImageFilter(afterImage, displayed.length - displayIndex - 1);
+      const result = this.drawSpriteByElement(
+        ctx,
+        currentElement.element.groupNo,
+        currentElement.element.imageNo,
+        frame.x,
+        frame.y,
+        frame.facing,
+        currentElement.element.offsetX,
+        currentElement.element.offsetY,
+        currentElement.element.flip,
+        assets,
+        1,
+        1,
+        1,
+        false,
+        diagnosticsEnabled,
+      );
+      ctx.restore();
+      if (result.drawn) drawn += 1;
+    }
+    if (!diagnosticsEnabled) return [];
+    return [`raw.afterimage_draw entity=p${player.id} captured=${afterImage.frames.length} displayed=${displayed.length} drawn=${drawn} time=${afterImage.remainingTime} timegap=${afterImage.timeGap} framegap=${afterImage.frameGap} trans=${blend.mode || 'none'} composite=${blend.compositeOperation} palette=canvas_filter_approximated${blend.limitation ? ` limitation=${blend.limitation}` : ''}`];
+  }
+
+
   private drawPowerBars(ctx: CanvasRenderingContext2D, state: GameState, diagnosticsEnabled: boolean): string[] {
     const [p1, p2] = state.players;
     const p1Ratio = getPlayerPowerRatio(p1);
@@ -486,6 +529,17 @@ type ResolvedSpriteBlend = {
   destinationAlpha: number;
   limitation: string | null;
 };
+
+function resolveAfterImageFilter(afterImage: NonNullable<PlayerState['afterImage']>, historyIndex: number): string {
+  const average = (color: { red: number; green: number; blue: number }): number => (color.red + color.green + color.blue) / 3;
+  const repeatedMultiplier = Math.pow(Math.max(0, average(afterImage.palette.multiply)), historyIndex);
+  const repeatedAdd = historyIndex * average(afterImage.palette.add) / 255;
+  const brightness = Math.max(0, repeatedMultiplier + repeatedAdd + (average(afterImage.palette.bright) + average(afterImage.palette.postBright)) / 255);
+  const contrast = Math.max(0, average(afterImage.palette.contrast) / 256);
+  const grayscale = Math.min(1, Math.max(0, 1 - afterImage.palette.color / 256));
+  return `${afterImage.palette.invertAll ? 'invert(1) ' : ''}grayscale(${grayscale}) contrast(${contrast}) brightness(${brightness})`;
+}
+
 
 function resolveSpriteBlend(
   transparency: string | null,

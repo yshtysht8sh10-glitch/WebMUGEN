@@ -26,6 +26,7 @@ import {
 import { addPlayerPower, setPlayerPower } from '../power/PowerGauge';
 import type { AnimationTriggerInfo } from '../animation/AnimationPlayer';
 import { countHelpers, createInitialHelperState, destroyHelper, spawnHelper, type HelperSpawnRequest } from '../helper/HelperSystem';
+import { createAfterImageState, setAfterImageTime } from '../afterimage/AfterImageSystem';
 
 type RuntimeEntityContext = {
   kind: 'root' | 'helper';
@@ -115,7 +116,6 @@ type ExtendedPlayerState = PlayerState & {
   drawOffset?: { x: number; y: number };
   transparent?: string;
   width?: { edge?: number; player?: number };
-  afterImageTime?: number;
   angle?: number;
   pauseTime?: number;
   superPauseTime?: number;
@@ -130,7 +130,6 @@ type ExtendedPlayerState = PlayerState & {
 const DEBUG_STATES = [-3, -2, -1, 0, 10, 11, 12] as const;
 
 const RECOGNIZED_NO_OP_CONTROLLERS = new Map<string, string>([
-  ['afterimage', 'AfterImage'],
   ['allpalfx', 'AllPalFX'],
   ['angledraw', 'AngleDraw'],
   ['appendtoclipboard', 'AppendToClipboard'],
@@ -919,7 +918,11 @@ function executeController(
   if (type === 'offset') return withExtendedPlayer(player, { drawOffset: { x: num(controller, 'x') ?? 0, y: num(controller, 'y') ?? 0 } }, 'Offset');
   if (type === 'trans') return withExtendedPlayer(player, { transparent: str(controller, 'trans') ?? str(controller, 'value') ?? '' }, 'Trans');
   if (type === 'width') return withExtendedPlayer(player, { width: { edge: num(controller, 'edge') ?? undefined, player: num(controller, 'player') ?? undefined } }, 'Width');
-  if (type === 'afterimagetime') return withExtendedPlayer(player, { afterImageTime: num(controller, 'time') ?? num(controller, 'value') ?? 0 }, 'AfterImageTime');
+  if (type === 'afterimage') return afterImage(player, opponent, controller, input, commands);
+  if (type === 'afterimagetime') {
+    const time = num(controller, 'time', player, input, commands, opponent) ?? num(controller, 'value', player, input, commands, opponent) ?? 0;
+    return withPlayer({ ...player, afterImage: setAfterImageTime(player.afterImage, time) }, true, 'AfterImageTime');
+  }
   if (type === 'angleadd') return withExtendedPlayer(player, { angle: readAngle(player) + (num(controller, 'value') ?? 0) }, 'AngleAdd');
   if (type === 'anglemul') return withExtendedPlayer(player, { angle: readAngle(player) * (num(controller, 'value') ?? 1) }, 'AngleMul');
   if (type === 'angleset') return withExtendedPlayer(player, { angle: num(controller, 'value') ?? 0 }, 'AngleSet');
@@ -982,6 +985,35 @@ function assertSpecial(player: PlayerState, controller: CnsStateController): Con
     noAutoTurn: player.noAutoTurn === true || flags.includes('noautoturn'),
   }, 'AssertSpecial');
 }
+
+function afterImage(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const time = Math.trunc(num(controller, 'time', player, input, commands, opponent) ?? 1);
+  return withPlayer({
+    ...player,
+    afterImage: createAfterImageState(time, {
+      length: Math.trunc(num(controller, 'length', player, input, commands, opponent) ?? 20),
+      timeGap: Math.trunc(num(controller, 'timegap', player, input, commands, opponent) ?? 1),
+      frameGap: Math.trunc(num(controller, 'framegap', player, input, commands, opponent) ?? 4),
+      transparency: str(controller, 'trans') ?? 'none',
+      palette: {
+        color: num(controller, 'palcolor', player, input, commands, opponent) ?? 256,
+        invertAll: (num(controller, 'palinvertall', player, input, commands, opponent) ?? 0) !== 0,
+        bright: triple(controller, 'palbright', player, input, commands, opponent, 30, 30, 30),
+        contrast: triple(controller, 'palcontrast', player, input, commands, opponent, 120, 120, 220),
+        postBright: triple(controller, 'palpostbright', player, input, commands, opponent, 0, 0, 0),
+        add: triple(controller, 'paladd', player, input, commands, opponent, 10, 10, 25),
+        multiply: triple(controller, 'palmul', player, input, commands, opponent, 0.65, 0.65, 0.75),
+      },
+    }),
+  }, true, 'AfterImage');
+}
+
 
 function appendTargetCompositeTriggerDiagnostic(
   outputPlayer: PlayerState,

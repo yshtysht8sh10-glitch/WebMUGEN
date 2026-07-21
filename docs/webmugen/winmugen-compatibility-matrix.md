@@ -145,8 +145,8 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 
 | Controller | Status | Notes |
 |---|---|---|
-| AfterImage | Safe no-op | Recognized by the runtime without changing game state. Recognized safe no-op. Rendering effect not implemented. |
-| AfterImageTime | Partial 50% | Implemented: Stores duration field only. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| AfterImage | Partial 70% | Implemented: Controller trigger creates bounded player frame history; `time`, `length`, `timegap`, `framegap`, `trans`, and palette parameters are parsed, history is advanced in the app loop, and selected frames render behind the owner. Missing: exact indexed-palette arithmetic, subtractive blending, and broader Helper/pause verification. Evidence: focused controller/system/Canvas tests and T-H-M-A State 3310 production-data coverage. |
+| AfterImageTime | Partial 70% | Implemented: Changes an active AfterImage duration and clears it at zero; inactive use is a safe no-op. Missing: WinMUGEN's documented non-unit-timegap position-reset bug is not emulated. Evidence: focused AfterImageSystem tests. |
 | AllPalFX | Safe no-op | Recognized by the runtime without changing game state. Recognized safe no-op. Palette effect not implemented. |
 | AngleAdd | Partial 40% | Implemented: Tracks numeric angle only. Rendering transform incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
 | AngleDraw | Safe no-op | Recognized by the runtime without changing game state. Recognized safe no-op. Rendering transform incomplete. |

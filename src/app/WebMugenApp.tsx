@@ -81,6 +81,7 @@ import {
   type PauseControllerEvent,
 } from '../core/pause/PauseSystem';
 import { stepCnsPhysicsMotion } from '../core/cns/CnsPhysicsStep';
+import { stepAfterImage } from '../core/afterimage/AfterImageSystem';
 import { formatCnsRuntimeDebugOverlay } from './CnsRuntimeDebugOverlay';
 import { formatCnsCommandDebugOverlay } from './CnsCommandDebugOverlay';
 import { formatCnsCoverageDebugOverlay } from './CnsCoverageDebugOverlay';
@@ -546,6 +547,23 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           if (runtimeEventDiagnosticLines.length > 0) {
             nextState = { ...nextState, hitDiagnosticLines: [...(nextState.hitDiagnosticLines ?? []), ...runtimeEventDiagnosticLines] };
           }
+
+          nextState = {
+            ...nextState,
+            players: nextState.players.map((player) => (
+              !pausedThisFrame || canEntityMoveDuringPause(pauseDuringFrame, player.id)
+                ? { ...player, afterImage: stepAfterImage(player.afterImage, player) }
+                : player
+            )) as GameState['players'],
+            helpers: {
+              ...nextState.helpers,
+              entries: nextState.helpers.entries.map((helper) => (
+                !pausedThisFrame || canEntityMoveDuringPause(pauseDuringFrame, helper.entityId)
+                  ? { ...helper, player: { ...helper.player, afterImage: stepAfterImage(helper.player.afterImage, helper.player) } }
+                  : helper
+              )),
+            },
+          };
 
           if (!pausedThisFrame) nextRoundState = stepRoundState(nextRoundState, nextState);
           nextScore = updateRoundScore(nextScore, nextRoundState);

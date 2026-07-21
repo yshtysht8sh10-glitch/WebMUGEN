@@ -4,6 +4,7 @@ import type { ExplodRuntimeEntry } from '../../core/explod/ExplodSystem';
 import type { AirDocument } from '../../parser/air/AirTypes';
 import type { SpritePack } from '../../core/sprite/SpriteTypes';
 import { CanvasRenderer } from './CanvasRenderer';
+import { createAfterImageState } from '../../core/afterimage/AfterImageSystem';
 
 describe('CanvasRenderer Explod integration', () => {
   it('draws the owner AIR/SFF frame with Explod facing and vfacing exactly once', () => {
@@ -112,6 +113,31 @@ describe('CanvasRenderer Explod integration', () => {
 
     expect(fullScreenDarken).not.toHaveBeenCalled();
     expect([...pauseDiagnostics, ...disabledDiagnostics].some((line) => line.startsWith('raw.superpause_darken'))).toBe(false);
+  });
+  it('draws retained AfterImage frames behind the player with controller transparency', () => {
+    const observed: Array<{ x: number; composite: GlobalCompositeOperation }> = [];
+    let context: CanvasRenderingContext2D;
+    const translate = vi.fn((x: number) => observed.push({ x, composite: context.globalCompositeOperation }));
+    context = fakeContext({ drawImage: vi.fn(), scale: vi.fn(), translate });
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+    const state = createInitialGameState();
+    state.players[0] = {
+      ...state.players[0],
+      animNo: 100,
+      afterImage: {
+        ...createAfterImageState(42, { frameGap: 6, transparency: 'add1' }),
+        frames: [{ x: 180, y: 285, facing: 1, animNo: 100, animTime: 0, age: 6 }],
+      },
+    };
+    const image = {} as HTMLImageElement;
+    const assets = { airDocument: air(100, 10, 0), spritePack: { sprites: new Map([['10,0', { groupNo: 10, imageNo: 0, src: '', xAxis: 4, yAxis: 5, image }]]) } as SpritePack };
+
+    const diagnostics = new CanvasRenderer(canvas, undefined, null, null, { 1: assets }).render(state);
+
+    expect(observed).toContainEqual({ x: 180, composite: 'lighter' });
+    expect(observed).toContainEqual({ x: 220, composite: 'source-over' });
+    expect(diagnostics).toContainEqual(expect.stringContaining('raw.afterimage_draw entity=p1 captured=1 displayed=1 drawn=1'));
+    expect(diagnostics).toContainEqual(expect.stringContaining('trans=add1 composite=lighter'));
   });
 });
 

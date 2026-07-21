@@ -189,3 +189,7 @@ Issue #51 separates character/asset loading from live runtime startup. A prepare
 ## Helper HitDef runtime
 
 Issue #81 includes existing Helpers as attack candidates after the root-player priority pass. Each active Helper HitDef uses that Helper's owner AIR, position, facing, Anim and Clsn1 against the opposing root's Clsn2. Accepted contact mutates the root defender through the normal damage/guard/reaction/effect path and writes HitPause, MoveContact/MoveHit, hit-target consumption and Target registration back to the unique Helper entity. `raw.helper_hit_collision` keeps the runtime Helper id visible even though character-owned hit effects use the root id. Helper-as-defender, Helper-vs-Helper and simultaneous priority interactions remain Partial.
+
+## AfterImage runtime
+
+Issue #81 replaces the recognized no-op with durable player frame history. After physics and hit processing, movable entities capture their displayed position, facing, Anim number, and Anim time at `timegap`; the renderer selects every `framegap` entry, draws oldest first immediately behind the owner, and uses the controller's `trans` composition. `raw.afterimage_draw` exposes capture/display/draw counts, duration, gap values, composition, and the diagnosed Canvas palette approximation.

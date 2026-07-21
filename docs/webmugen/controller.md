@@ -133,6 +133,8 @@ Issue #54 fixes the upstream trigger path used by repeating sounds. `AnimElem = 
 
 Issue #51 makes the first gesture atomic from unlock request through the following sound bridge: one pending `resume()` is shared, and PlaySnd or HitDef sound emitted before it resolves waits for that attempt. There is no unbounded pre-gesture queue, failed resume remains retryable, and Runtime tab changes do not recreate or subscribe the adapter.
 
+Issue #81 connects `AfterImage` to player frame-history capture and Canvas rendering. `time`, `length`, `timegap`, `framegap`, and `trans` follow the documented history semantics; `AfterImageTime` changes an active effect and zero clears it. The palette fields are retained and approximated with Canvas filters, while `add`/`add1` use additive composition. Exact indexed-palette arithmetic, subtractive blending, and pause behavior outside the root-player path remain Partial. `raw.afterimage_draw` reports captured/displayed/drawn counts and the active gaps.
+
 `Pause` and `SuperPause` now emit match-level events instead of storing dead player fields. The owner may execute and move for `movetime`; other CNS and physics stop, including negative States. Explods use their own matching allowance. PlaySnd on the activation pass fires once, then controller suppression plus the resume guard prevents replay. Existing browser voices continue through the pause. A SuperPause with `darken = 1` draws a half-opacity black screen pass after regular layers and before hit feedback/`ontop` Explods; normal Pause and `darken = 0` do not. Same activation-pass cross-player ordering, Helper ownership, default SuperPause anim/sound/pos, and other presentation details remain Partial.
 
 If the controller only stores a field or is skipped safely, mark Partial.
@@ -141,7 +143,7 @@ If the controller only stores a field or is skipped safely, mark Partial.
 
 `Null` can be Complete because explicit no-op is the intended behavior.
 
-`AfterImage` as safe no-op is Partial because the visual effect is missing.
+`AfterImage` remains Partial because frame history and visible composition are connected, but Canvas filters do not exactly reproduce WinMUGEN's indexed-palette arithmetic.
 
 `HitDef` is Partial. When the controller activates, the live CNS runtime evaluates and freezes a typed `ActiveHitDef` snapshot containing attr, damage, ground/air/fall animation types, hit/guard flags, priority, hit/guard pause, ground/air/guard types, hit times, velocities, major fall fields, id/chain fields, `hitonce`, kill/power/numhits, five cornerpush variants, snap, and P1/P2 sprite priorities. Numeric CNS expressions and parameter pairs are evaluated with the activation-frame player/opponent context. Every successful controller execution creates a new ActiveHitDef generation, including repeated AnimElem activations from the same controller. Generation activation preserves the prior MoveContact/MoveHit/MoveGuarded result; the next accepted hit or guard replaces it, while State-local HitCount is retained. Stored fields whose combat behavior is not connected are reported as `stored_not_applied`; failed evaluations retain their parameter names in diagnostics.
 
