@@ -13,9 +13,11 @@ The Phase1 frame order is:
 5. begin their normal owner-CNS State pass on the next frame;
 6. include surviving Helpers in owner-scoped AIR/SFF rendering.
 
+Issue #81 adds Helper-as-attacker collision after the root-player clash pass. A Helper with an active HitDef resolves its owner AIR `Clsn1` against the opposing root player's `Clsn2`; accepted contact updates the Helper's HitPause, MoveContact/MoveHit, consumed-target history, and Target registry while applying damage, reaction State/velocity, guard handling, and HitDef effects to the root target. Hit events retain the root character id for owner AIR/SFF/SND effect lookup, while `raw.helper_hit_collision` identifies the unique Helper runtime id. T-H-M-A State 3320 and Action 3320 provide production regression coverage.
+
 `NumHelper` reads the committed frame-start collection for the current root, with optional MUGEN ID filtering. `IsHelper` distinguishes a Helper evaluation context from a root player. `DestroySelf` only removes the executing Helper; it does not destroy a root player. `raw.helper` reports spawn/destroy identity, ownership, State, Anim, frame, and first-step timing. Round restart creates an empty collection and resets the runtime allocator.
 
-Phase1 is intentionally Partial. Root/parent/helper redirect expressions, ParentVar/Bind, complete keyctrl input rules, independent palette mutation, physics push/collision, HitDef/Target ownership, pause/superpause allowances, child behavior after parent removal, and broader real-character verification remain future work.
+Helper support remains Partial. Root/parent/helper redirect expressions, ParentVar/Bind, complete keyctrl input rules, independent palette mutation, push/body collision, Helper-as-defender and Helper-vs-Helper combat, exact Helper/root Power ownership, pause/superpause allowances, and child behavior after parent removal remain future work.
 
 ## Special State processing scope
 

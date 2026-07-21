@@ -64,9 +64,33 @@ export function resolveFallbackHits(state: GameState, airDocument?: AirDocument 
   p1 = mergeCombatRoles(p1Result.attacker, p2Result.target, Boolean(p2Result.hitEvent));
   p2 = mergeCombatRoles(p2Result.attacker, p1Result.target, Boolean(p1Result.hitEvent));
 
+  const helpers = state.helpers.entries.map((helper) => {
+    const target = helper.rootEntityId === 1 ? p2 : p1;
+    const attacker = pruneTargets(helper.player, [target]);
+    const result = resolveAttack(
+      attacker,
+      target,
+      getPlayerAttackBoxes(attacker, airDocument),
+      getPlayerBodyBoxes(target, airDocument),
+      airDocument,
+      diagnosticsEnabled,
+    );
+    hitDiagnosticLines.push(...result.diagnosticLines);
+    if (result.hitEvent) {
+      hitEvents.push(result.hitEvent);
+      hitDiagnosticLines.push(`raw.helper_hit_collision entity=${helper.entityId} helperId=${helper.helperId} root=p${helper.rootEntityId} target=p${target.id} result=accepted`);
+      if (helper.rootEntityId === 1) p2 = result.target;
+      else p1 = result.target;
+    } else if (diagnosticsEnabled && attacker.activeHitDef) {
+      hitDiagnosticLines.push(`raw.helper_hit_collision entity=${helper.entityId} helperId=${helper.helperId} root=p${helper.rootEntityId} target=p${target.id} result=no_contact`);
+    }
+    return { ...helper, player: result.attacker };
+  });
+
   return {
     ...state,
     players: [p1, p2],
+    helpers: { ...state.helpers, entries: helpers },
     hitEvents,
     hitDiagnosticLines,
   };

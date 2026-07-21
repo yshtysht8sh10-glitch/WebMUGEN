@@ -30,6 +30,66 @@ Clsn1: 1
 `);
 
 describe('FallbackHitResolver', () => {
+  it('resolves active P1 and P2 Helper HitDefs against their opposing root players', () => {
+    const cns = parseCnsText(`
+[StateDef 3320]
+type=A
+movetype=A
+physics=N
+anim=200
+[State 3320, HitDef]
+type=HitDef
+trigger1=1
+attr=A,HA
+damage=37,2
+pausetime=3,4
+ground.velocity=-2,0
+`);
+    const initial = createInitialGameState();
+    const helperPlayer = {
+      ...initial.players[0], id: 1 as const, x: 350, stateNo: 3320, animNo: 200,
+      stateType: 'A' as const, moveType: 'A' as const, physics: 'N' as const, ctrl: false,
+    };
+    const p2HelperPlayer = {
+      ...initial.players[1], id: 2 as const, x: 290, facing: -1 as const, stateNo: 3320, animNo: 200,
+      stateType: 'A' as const, moveType: 'A' as const, physics: 'N' as const, ctrl: false,
+    };
+    const withHelper = {
+      ...initial,
+      players: [{ ...initial.players[0], stateNo: -999 }, initial.players[1]] as typeof initial.players,
+      helpers: {
+        entries: [
+          {
+            entityId: 3, helperId: 3320, rootEntityId: 1 as const, parentEntityId: 1,
+            ownerCharacterId: 1 as const, stateOwnerId: 1 as const, animationOwnerId: 1 as const,
+            keyCtrl: false, ownPal: false, spawnFrame: -1, player: helperPlayer,
+          },
+          {
+            entityId: 4, helperId: 3320, rootEntityId: 2 as const, parentEntityId: 2,
+            ownerCharacterId: 2 as const, stateOwnerId: 2 as const, animationOwnerId: 2 as const,
+            keyCtrl: false, ownPal: false, spawnFrame: -1, player: p2HelperPlayer,
+          },
+        ],
+        nextEntityId: 5,
+      },
+    };
+    const activated = stepCnsStateRuntime(withHelper, cns).state;
+    expect(activated.helpers.entries.map((entry) => entry.player.activeHitDef?.damage)).toEqual([37, 37]);
+
+    const result = resolveFallbackHits(activated, air, true);
+
+    expect(result.players[0]).toMatchObject({ life: 963, stateNo: 5000, hitPause: 4 });
+    expect(result.players[1]).toMatchObject({ life: 963, stateNo: 5000, hitPause: 4 });
+    expect(result.helpers.entries[0].player).toMatchObject({ hitPause: 3, hitDefUsed: true });
+    expect(result.helpers.entries[1].player).toMatchObject({ hitPause: 3, hitDefUsed: true });
+    expect(result.helpers.entries[0].player.moveContact).toMatchObject({ contact: true, hit: true, hitCount: 1 });
+    expect(result.helpers.entries[0].player.targets).toContainEqual(expect.objectContaining({ playerId: 2 }));
+    expect(result.hitEvents).toContainEqual(expect.objectContaining({ attackerId: 1, defenderId: 2, damage: 37 }));
+    expect(result.hitEvents).toContainEqual(expect.objectContaining({ attackerId: 2, defenderId: 1, damage: 37 }));
+    expect(result.hitDiagnosticLines).toContain('raw.helper_hit_collision entity=3 helperId=3320 root=p1 target=p2 result=accepted');
+    expect(result.hitDiagnosticLines).toContain('raw.helper_hit_collision entity=4 helperId=3320 root=p2 target=p1 result=accepted');
+  });
+
   it('selects ground.velocity.y for grounded targets and air.velocity.y only for airborne targets', () => {
     const configured = {
       groundVelocity: [-5.5, 0] as [number, number],
