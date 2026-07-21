@@ -224,6 +224,8 @@ MoveContact/MoveHit/MoveGuarded use an elapsed value: contact records value 1, a
 
 `raw.target_controller` records the owner, controller, optional HitDef id filter, selected player ids, and whether the operation was queued, dropped, or safely skipped because no target matched.
 
+`raw.cross` records airborne state, both players' current `AssertSpecial noautoturn` values, Facing before/after, and whether stage auto-turn changed either player. This distinguishes an AIR/rendering flip from a stage-facing change and verifies that a same-tick State transition retains the asserted flag.
+
 ## Real-character trace audit
 
 The optional three-character regression harness asserts a continuous event chain for ground, air, guard, KO, edge, both Facing directions, and both player roles. Its current evidence and reproduction command are recorded in `hitdef-real-character-regression.md`.

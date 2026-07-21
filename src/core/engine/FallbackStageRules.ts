@@ -40,7 +40,7 @@ export function applyFallbackStageRules(state: GameState): GameState {
       formatPushBoxDiagnostic('p1', pushResult.before[0]),
       formatPushBoxDiagnostic('p2', pushResult.before[1]),
       `raw.push result=${pushResult.result} overlapX=${formatNumber(pushResult.overlapX)} overlapY=${formatNumber(pushResult.overlapY)} playerPush=${nextP1.playerPush === false || nextP2.playerPush === false ? 0 : 1}`,
-      `raw.cross airborne=${Number(isAirborne(nextP1) || isAirborne(nextP2))} facingBefore=${beforeFacing.join(',')} facingAfter=${nextP1.facing},${nextP2.facing} autoTurn=${Number(beforeFacing[0] !== nextP1.facing || beforeFacing[1] !== nextP2.facing)}`,
+      `raw.cross airborne=${Number(isAirborne(nextP1) || isAirborne(nextP2))} noAutoTurn=${Number(nextP1.noAutoTurn === true)},${Number(nextP2.noAutoTurn === true)} facingBefore=${beforeFacing.join(',')} facingAfter=${nextP1.facing},${nextP2.facing} autoTurn=${Number(beforeFacing[0] !== nextP1.facing || beforeFacing[1] !== nextP2.facing)}`,
     ],
   };
 }
@@ -54,7 +54,7 @@ function applyFacing(p1: PlayerState, p2: PlayerState): [PlayerState, PlayerStat
 }
 
 function faceGroundedPlayer(player: PlayerState, opponent: PlayerState): PlayerState {
-  if (isAirborne(player)) return player;
+  if (isAirborne(player) || player.noAutoTurn === true) return player;
   return { ...player, facing: player.x < opponent.x ? 1 : -1 };
 }
 

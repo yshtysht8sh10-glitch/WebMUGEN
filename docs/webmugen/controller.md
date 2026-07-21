@@ -55,6 +55,8 @@ These mutate state identity or state flags.
 
 `ChangeState` preserves the current State owner. `SelfState` resolves the player's `selfStateOwnerId`, enters that owner's CNS document, and clears borrowed ownership. In an ordinary StateDef, a successfully executed ChangeState or SelfState terminates that StateDef's remaining controller list; the entered State may then execute on the same frame. Negative common command states retain their existing entry-snapshot scan semantics. Helper/animation ownership remains Partial.
 
+`AssertSpecial noautoturn` is a per-game-tick flag. `flag`, `flag2`, and `flag3` are checked case-insensitively; once asserted, the flag survives a later ChangeState in the same CNS pass and prevents the grounded stage rule from changing Facing. It is cleared at the beginning of the next CNS tick unless asserted again. Other AssertSpecial flags and WinMUGEN-version-specific hitpause persistence remain Partial.
+
 ### Motion and position
 
 Examples:

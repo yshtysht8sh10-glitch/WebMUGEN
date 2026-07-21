@@ -166,7 +166,7 @@ Canvas collision debug uses the same AIR world-coordinate boxes as the hit resol
 
 When `Collision boxes` is OFF, Canvas never enters the player/helper/projectile debug rectangle path. The lower-left history has its own setting and remains a separate 5 Hz lightweight stream.
 
-Issue #57 adds a blue Push Box using the same `[Size]`-derived rectangle as the stage solver. `raw.push` exposes owner, ground/air mode, character/default source, resolved edges, front/back/height, overlap, `PlayerPush`, and apply/skip result. `raw.cross` exposes airborne state plus Facing before/after so an unintended air auto-turn is visible in the copied runtime history.
+Issue #57 adds a blue Push Box using the same `[Size]`-derived rectangle as the stage solver. `raw.push` exposes owner, ground/air mode, character/default source, resolved edges, front/back/height, overlap, `PlayerPush`, and apply/skip result. `raw.cross` exposes airborne state, both players' per-tick `noAutoTurn` flags, and Facing before/after so an unintended auto-turn is visible in the copied runtime history.
 
 Runtime Settings `Power Infinite` is separate from CNS compatibility. The Canvas power gauge displays `∞` for each selected root player, while `raw.power_hud infinite=off|p1|p2|both` exposes the current selection. An actual refill or mode transition produces `raw.power_infinite timing=frame_start` with the real before/after and `powerMax`; normal controller and HitDef power diagnostics continue to show later mutations in that frame.
 

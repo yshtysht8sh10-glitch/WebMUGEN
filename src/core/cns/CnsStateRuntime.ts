@@ -134,7 +134,6 @@ const RECOGNIZED_NO_OP_CONTROLLERS = new Map<string, string>([
   ['allpalfx', 'AllPalFX'],
   ['angledraw', 'AngleDraw'],
   ['appendtoclipboard', 'AppendToClipboard'],
-  ['assertspecial', 'AssertSpecial'],
   ['attackdist', 'AttackDist'],
   ['bgpalfx', 'BGPalFX'],
   ['bindtoparent', 'BindToParent'],
@@ -269,6 +268,7 @@ function stepPlayer(
       yScale: readCnsConst(cns, 'size.yscale'),
     },
     playerPush: true,
+    noAutoTurn: false,
     hitDiagnosticLines: [],
     juggleMax,
     juggleRemaining: resetJuggle ? juggleMax : player.juggleRemaining ?? juggleMax,
@@ -882,6 +882,7 @@ function executeController(
 ): ControllerResult {
   const type = controller.type.toLowerCase();
   if (type === 'null') return withPlayer(player, true, 'Null');
+  if (type === 'assertspecial') return assertSpecial(player, controller);
   if (type === 'changeanim') return changeAnim(player, opponent, controller, input, commands);
   if (type === 'velset') return velSet(player, opponent, controller, input, commands);
   if (type === 'veladd') return velAdd(player, opponent, controller, input, commands);
@@ -957,6 +958,15 @@ function executeController(
   if (noOpName) return withPlayer(player, true, noOpName);
 
   return withPlayer(player, false, controller.type);
+}
+
+function assertSpecial(player: PlayerState, controller: CnsStateController): ControllerResult {
+  const flags = ['flag', 'flag2', 'flag3']
+    .map((key) => str(controller, key)?.trim().toLowerCase())
+    .filter((flag): flag is string => Boolean(flag));
+  return withExtendedPlayer(player, {
+    noAutoTurn: player.noAutoTurn === true || flags.includes('noautoturn'),
+  }, 'AssertSpecial');
 }
 
 function appendTargetCompositeTriggerDiagnostic(

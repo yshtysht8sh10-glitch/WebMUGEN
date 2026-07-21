@@ -198,6 +198,7 @@ export type PlayerState = {
   }>;
   targetBind?: { ownerId: number; remaining: number; offsetX: number; offsetY: number };
   playerPush?: boolean;
+  noAutoTurn?: boolean;
   hitDiagnosticLines?: string[];
   hitStun?: {
     activeHitDefId: number | null;
