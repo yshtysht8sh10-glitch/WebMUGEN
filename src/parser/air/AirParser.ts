@@ -127,6 +127,7 @@ function parseAirElement(line: string): Omit<AirElement, 'clsn1' | 'clsn2'> | nu
   const offsetY = Number(parts[3]);
   const duration = Number(parts[4]);
   const flip = parts[5] ?? '';
+  const blend = parts[6] ?? '';
 
   if ([groupNo, imageNo, offsetX, offsetY, duration].some((value) => Number.isNaN(value))) {
     return null;
@@ -139,6 +140,7 @@ function parseAirElement(line: string): Omit<AirElement, 'clsn1' | 'clsn2'> | nu
     offsetY,
     duration,
     flip,
+    blend,
   };
 }
 

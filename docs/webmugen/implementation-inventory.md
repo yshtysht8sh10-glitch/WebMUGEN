@@ -11,7 +11,7 @@ This document is a high-level inventory of WebMUGEN implementation areas. It is 
 | DEF | Basic character metadata/file loading path exists. |
 | CNS | StateDef, State Controllers, triggers, and many parameters are parsed. Some syntax remains incomplete. |
 | CMD | Commands, hold prefixes, simple sequences, and buffer time exist. The production matcher prevents one unchanged diagonal hold from manufacturing alternating cardinal steps, with T-H-M-A-style normal/super conflict coverage. WinMUGEN timing still needs audit. |
-| AIR | Actions, elements, timing, loop handling, and Clsn blocks exist. Edge cases remain. |
+| AIR | Actions, elements, timing, loop handling, Clsn blocks, and optional seventh-field blend values exist. Destination-alpha and subtractive Canvas rendering remain approximate. |
 | SFF/Sprites | SpritePack renderer prototype exists; full SFF compatibility may require further work. |
 | SND | SND v1 header/subfile parsing, group/index lookup, WAV byte retention, HTTP/ZIP CharacterLoader integration, and non-fatal load diagnostics exist. Browser decoding/playback begins with Issues #27/#28. |
 
@@ -26,7 +26,7 @@ This document is a high-level inventory of WebMUGEN implementation areas. It is 
 | Physics | Basic position/velocity stepping exists; full WinMUGEN physics is Partial. |
 | Animation | AIR-based animation selection and timing exist; exact edge cases need audit. |
 | Hit/Collision | Partial live paths cover normal/guard/fall kill separation, explicit power/numhits, edge cornerpush, snap, sprite priority, effects, chains, targets, and common get-hit routing. Three-character P1/P2 real-data regression evidence is recorded in `hitdef-real-character-regression.md`; projectile/team/camera-relative behavior remains a major area. |
-| Projectile/Helper/Explod | Explod create/render/lifecycle, explicit-ID mutations, motion/render extensions, owner-hit removal, round cleanup, Pause/SuperPause gating, SFF v1 shared/sprite palette chain resolution, linked sprite palette ownership, ACT-only reversed index lookup, AIR Preview parity, and owner/ownpal-isolated Canvas caching are production-connected. SFF v2, dynamic palette effects, destination/subtractive blend, shadows, and non-player owners remain incomplete; see `explod-integration-design.md`. Helper/Projectile also remain incomplete. |
+| Projectile/Helper/Explod | Explod create/render/lifecycle, explicit-ID mutations, motion/render extensions, owner-hit removal, round cleanup, Pause/SuperPause gating, SFF v1 shared/sprite palette chain resolution, linked sprite palette ownership, ACT-only reversed index lookup, AIR seventh-field additive blend, AIR Preview parity, and owner/ownpal-isolated Canvas caching are production-connected. SFF v2, dynamic palette effects, destination/subtractive blend, shadows, and non-player owners remain incomplete; see `explod-integration-design.md`. Helper/Projectile also remain incomplete. |
 | Real Explod/Sound regression | KFM, T-H-M-A, and Yes030_e-rada production loading, P1/P2/Facing Explod/SND resolution, T-H-M-A ZIP, lifecycle, round reset, tab retention, and Audio cleanup are recorded in `explod-sound-real-character-regression.md`. |
 
 ## App/debug layer

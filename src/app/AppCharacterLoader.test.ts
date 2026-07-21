@@ -105,6 +105,13 @@ describe('AppCharacterLoader', () => {
       expect(result.character?.sounds?.samples.some((sample) => sample.format === 'wave')).toBe(true);
       expect(result.character?.cns.states.flatMap((state) => state.controllers).some((controller) => controller.type.toLowerCase() === 'explod')).toBe(true);
       expect(result.character?.cns.states.flatMap((state) => state.controllers).some((controller) => controller.type.toLowerCase() === 'playsnd')).toBe(true);
+      expect(result.character?.air.actions.find((action) => action.actionNo === 3301)?.elements[0]).toMatchObject({
+        groupNo: 999,
+        imageNo: 6,
+        duration: -1,
+        flip: '',
+        blend: 'A',
+      });
       expect(result.character?.loadDiagnostics).toEqual([]);
     } finally {
       globalThis.fetch = originalFetch;

@@ -158,6 +158,9 @@ export class CanvasRenderer {
         : null;
 
       if (currentElement) {
+        const blend = resolveSpriteBlend(currentElement.element.blend ?? null, null);
+        ctx.save();
+        applySpriteBlend(ctx, blend);
         const drawn = this.drawSpriteByElement(
           ctx,
           currentElement.element.groupNo,
@@ -175,6 +178,7 @@ export class CanvasRenderer {
           false,
           diagnosticsEnabled,
         );
+        ctx.restore();
 
         if (drawn.drawn) continue;
       }
@@ -229,6 +233,9 @@ export class CanvasRenderer {
       if (groupNo < 0 || imageNo < 0) {
         return diagnosticsEnabled ? `${prefix} ${elementFields} result=skip reason=intentional_invisible_element spriteExists=0 playerVisible=0 rendererDrawRequested=0` : '';
       }
+      const blend = resolveSpriteBlend(currentElement.element.blend ?? null, null);
+      ctx.save();
+      applySpriteBlend(ctx, blend);
       const drawn = this.drawSpriteByElement(
         ctx,
         groupNo,
@@ -246,8 +253,9 @@ export class CanvasRenderer {
         false,
         diagnosticsEnabled,
       );
+      ctx.restore();
 
-      if (drawn.drawn) return diagnosticsEnabled ? `${prefix} ${elementFields} spriteExists=1 result=drawn playerVisible=1 rendererDrawRequested=1 ${drawn.diagnostic}` : '';
+      if (drawn.drawn) return diagnosticsEnabled ? `${prefix} ${elementFields} airBlend=${blend.mode || 'none'} composite=${blend.compositeOperation} spriteExists=1 result=drawn playerVisible=1 rendererDrawRequested=1 ${drawn.diagnostic}${blend.limitation ? ` limitation=${blend.limitation}` : ''}` : '';
       if (assets.imageDataSpritePack || assets.spritePack) {
         return diagnosticsEnabled ? `${prefix} ${elementFields} spriteExists=0 result=skip reason=sprite_missing playerVisible=0 rendererDrawRequested=0` : '';
       }
@@ -297,10 +305,11 @@ export class CanvasRenderer {
 
   private drawExplod(ctx: CanvasRenderingContext2D, frame: ExplodRenderFrame, diagnosticsEnabled: boolean): string {
     const { entry, currentElement } = frame;
-    const blend = resolveExplodBlend(entry.render.transparency, entry.render.alpha);
+    const controllerTransparency = entry.render.transparency?.trim().toLowerCase() === 'default' ? null : entry.render.transparency;
+    const effectiveTransparency = controllerTransparency ?? currentElement.element.blend ?? null;
+    const blend = resolveSpriteBlend(effectiveTransparency, controllerTransparency ? entry.render.alpha : null);
     ctx.save();
-    ctx.globalCompositeOperation = blend.compositeOperation;
-    ctx.globalAlpha = blend.globalAlpha;
+    applySpriteBlend(ctx, blend);
     const drawResult = this.drawSpriteByElement(
       ctx,
       currentElement.element.groupNo,
@@ -320,7 +329,7 @@ export class CanvasRenderer {
     );
     ctx.restore();
     if (!diagnosticsEnabled) return '';
-    return `raw.explod_draw internalId=${entry.runtimeId} mugenId=${entry.mugenId} anim=${entry.animationSource === 'fightfx' ? 'F' : ''}${entry.animNo} elem=${currentElement.elementIndex + 1} screen=(${frame.screenX},${frame.screenY}) facing=${entry.facing} vfacing=${entry.verticalFacing} scale=(${entry.render.scaleX},${entry.render.scaleY}) trans=${entry.render.transparency ?? 'none'} alpha=(${entry.render.alpha?.source ?? 256},${entry.render.alpha?.destination ?? 0}) composite=${blend.compositeOperation} ownpal=${entry.render.ownPalette ? 1 : 0} shadow=(${entry.render.shadow.red},${entry.render.shadow.green},${entry.render.shadow.blue}) sprpriority=${entry.spritePriority} ontop=${entry.onTop ? 1 : 0} result=${drawResult.drawn ? 'drawn' : 'hidden'}${drawResult.drawn ? ` ${drawResult.diagnostic}` : ' reason=sprite_not_found'}${blend.limitation ? ` limitation=${blend.limitation}` : ''}${entry.render.ownPalette ? ' limitation_ownpal=dynamic_palette_effects_unverified' : ''}${entry.render.shadow.red || entry.render.shadow.green || entry.render.shadow.blue ? ' limitation_shadow=no_effect_shadow_pass' : ''}`;
+    return `raw.explod_draw internalId=${entry.runtimeId} mugenId=${entry.mugenId} anim=${entry.animationSource === 'fightfx' ? 'F' : ''}${entry.animNo} elem=${currentElement.elementIndex + 1} screen=(${frame.screenX},${frame.screenY}) facing=${entry.facing} vfacing=${entry.verticalFacing} scale=(${entry.render.scaleX},${entry.render.scaleY}) trans=${blend.mode || 'none'} alpha=(${blend.sourceAlpha},${blend.destinationAlpha}) composite=${blend.compositeOperation} ownpal=${entry.render.ownPalette ? 1 : 0} shadow=(${entry.render.shadow.red},${entry.render.shadow.green},${entry.render.shadow.blue}) sprpriority=${entry.spritePriority} ontop=${entry.onTop ? 1 : 0} result=${drawResult.drawn ? 'drawn' : 'hidden'}${drawResult.drawn ? ` ${drawResult.diagnostic}` : ' reason=sprite_not_found'} transSource=${controllerTransparency ? 'controller' : currentElement.element.blend ? 'air' : 'default'}${blend.limitation ? ` limitation=${blend.limitation}` : ''}${entry.render.ownPalette ? ' limitation_ownpal=dynamic_palette_effects_unverified' : ''}${entry.render.shadow.red || entry.render.shadow.green || entry.render.shadow.blue ? ' limitation_shadow=no_effect_shadow_pass' : ''}`;
   }
 
   private drawSpriteByElement(
@@ -462,21 +471,44 @@ export class CanvasRenderer {
   }
 }
 
-function resolveExplodBlend(
+type ResolvedSpriteBlend = {
+  mode: string;
+  compositeOperation: GlobalCompositeOperation;
+  globalAlpha: number;
+  sourceAlpha: number;
+  destinationAlpha: number;
+  limitation: string | null;
+};
+
+function resolveSpriteBlend(
   transparency: string | null,
   alpha: { source: number; destination: number } | null,
-): { compositeOperation: GlobalCompositeOperation; globalAlpha: number; limitation: string | null } {
+): ResolvedSpriteBlend {
   const mode = transparency?.trim().toLowerCase() ?? '';
-  const globalAlpha = alpha ? Math.min(1, Math.max(0, alpha.source / 256)) : 1;
-  if (mode === 'add' || mode === 'add1' || mode === 'addalpha') {
+  const airAlpha = mode.match(/^as(\d+)d(\d+)$/);
+  const sourceAlpha = alpha?.source ?? (airAlpha ? Number(airAlpha[1]) : 256);
+  const destinationAlpha = alpha?.destination ?? (airAlpha ? Number(airAlpha[2]) : mode === 'a' ? 256 : mode === 'a1' ? 128 : 0);
+  const globalAlpha = Math.min(1, Math.max(0, sourceAlpha / 256));
+  if (mode === 'a' || mode === 'a1' || airAlpha || mode === 'add' || mode === 'add1' || mode === 'addalpha') {
+    const approximatedAirAdd = mode === 'a';
     return {
+      mode: transparency?.trim() ?? '',
       compositeOperation: 'lighter',
-      globalAlpha: mode === 'addalpha' ? globalAlpha : 1,
-      limitation: mode === 'addalpha' && alpha && alpha.destination !== 0 ? 'destination_alpha_approximated' : null,
+      globalAlpha: approximatedAirAdd ? 0.5 : mode === 'add' || mode === 'add1' ? 1 : globalAlpha,
+      sourceAlpha,
+      destinationAlpha,
+      limitation: approximatedAirAdd
+        ? 'air_a_source_alpha_approximated'
+        : destinationAlpha !== 0 && destinationAlpha !== 256 ? 'destination_alpha_approximated' : null,
     };
   }
-  if (mode === 'sub') return { compositeOperation: 'source-over', globalAlpha, limitation: 'subtractive_blend_unsupported' };
-  return { compositeOperation: 'source-over', globalAlpha, limitation: null };
+  if (mode === 's' || mode === 'sub') return { mode: transparency?.trim() ?? '', compositeOperation: 'source-over', globalAlpha, sourceAlpha, destinationAlpha, limitation: 'subtractive_blend_unsupported' };
+  return { mode: transparency?.trim() ?? '', compositeOperation: 'source-over', globalAlpha, sourceAlpha, destinationAlpha, limitation: null };
+}
+
+function applySpriteBlend(ctx: CanvasRenderingContext2D, blend: ResolvedSpriteBlend): void {
+  ctx.globalCompositeOperation = blend.compositeOperation;
+  ctx.globalAlpha = blend.globalAlpha;
 }
 
 export function getPlayersInSpritePriorityOrder(state: GameState): PlayerState[] {

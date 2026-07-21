@@ -7,6 +7,13 @@ import { createInitialGameState } from '../engine/GameState';
 import { stepCnsStateRuntime } from '../cns/CnsStateRuntime';
 
 describe('real character Explod production integration', () => {
+  it('retains T-H-M-A Action 3301 additive AIR blending', async () => {
+    const bytes = await readFile('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.air');
+    const air = parseAirText(new TextDecoder('shift_jis').decode(bytes));
+    const action = air.actions.find((candidate) => candidate.actionNo === 3301);
+
+    expect(action?.elements[0]).toMatchObject({ groupNo: 999, imageNo: 6, duration: -1, flip: '', blend: 'A' });
+  });
   it('creates KFM State 191 wood through CNS into GameState with evaluated coordinates', async () => {
     const cns = parseCnsText(await readFile('public/chars/kfm/kfm.cns', 'utf8'));
     const air = parseAirText(await readFile('public/chars/kfm/kfm.air', 'utf8'));

@@ -64,4 +64,15 @@ Clsn1: 1
     expect(doc.actions[0].elements[2].clsn1).toHaveLength(0);
     expect(doc.actions[0].elements[2].clsn2).toHaveLength(1);
   });
+
+  it('parses the seventh AIR element field as transparency blending', () => {
+    const doc = parseAirText(`
+[Begin Action 3301]
+999, 6, 0, 0, -1, , A
+999, 7, 0, 0, 1, H, AS128D128
+`);
+
+    expect(doc.actions[0].elements[0]).toMatchObject({ flip: '', blend: 'A' });
+    expect(doc.actions[0].elements[1]).toMatchObject({ flip: 'H', blend: 'AS128D128' });
+  });
 });
