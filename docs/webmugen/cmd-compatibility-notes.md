@@ -1,6 +1,6 @@
 # CMD Compatibility Notes
 
-Updated: 2026-07-14
+Updated: 2026-07-21
 
 This document summarizes CMD implementation notes. The compatibility matrix remains the source of truth:
 
@@ -47,6 +47,9 @@ Do not move these rules into hidden TypeScript logic unless they are truly engin
 The walk-forward and walk-back routes intentionally skip dash/run states `100`
 through `107`. This keeps a held direction from converting a character dash
 substate such as `101` into State `20` through the common `Statedef -1` route.
+Their temporary `VelSet` and `ChangeAnim` glue also excludes `holdup`. Therefore,
+a diagonal jump entered from State `20` or `21` cannot reapply the previous walk
+animation after the jump route has entered State `40`.
 
 ## Debugging CMD routes
 

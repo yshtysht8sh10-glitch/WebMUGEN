@@ -30,6 +30,35 @@ describe('character-specific common jump profile', () => {
     }
   });
 
+  it.each([
+    ['forward', 20, 'holdfwd'],
+    ['back', 21, 'holdback'],
+  ] as const)('does not let %s walk glue overwrite jump startup', (_name, stateNo, directionCommand) => {
+    const state = createInitialGameState();
+    const jumped = stepCnsStateRuntime({
+      ...state,
+      players: [{
+        ...state.players[0],
+        stateNo,
+        stateTime: 1,
+        animNo: stateNo,
+        animTime: 1,
+        ctrl: true,
+      }, state.players[1]],
+    }, profile, {
+      p1Commands: new Set(['holdup', directionCommand]),
+      p2Commands: new Set(),
+      getAnimationDuration: () => 60,
+    }).state.players[0];
+
+    expect(jumped).toMatchObject({
+      stateNo: 40,
+      prevStateNo: stateNo,
+      animNo: 40,
+      stateTime: 0,
+    });
+  });
+
   it('exposes loaded velocity and movement values through Const expressions', () => {
     const player = createInitialGameState().players[0];
     expect(readNumberExpression('Const(velocity.jump.neu.y)', { player, constants: profile })).toBe(-8.4);

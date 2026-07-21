@@ -95,6 +95,7 @@ value = 20
 type = VelSet
 triggerall = command = "holdfwd"
 triggerall = command != "holddown"
+triggerall = command != "holdup"
 trigger1 = stateno = 20
 x = 2.4
 
@@ -102,6 +103,7 @@ x = 2.4
 type = ChangeAnim
 triggerall = command = "holdfwd"
 triggerall = command != "holddown"
+triggerall = command != "holdup"
 trigger1 = stateno = 20
 trigger1 = anim != 20
 value = 20
@@ -127,6 +129,7 @@ value = 21
 type = VelSet
 triggerall = command = "holdback"
 triggerall = command != "holddown"
+triggerall = command != "holdup"
 trigger1 = stateno = 21
 x = -2.2
 
@@ -134,6 +137,7 @@ x = -2.2
 type = ChangeAnim
 triggerall = command = "holdback"
 triggerall = command != "holddown"
+triggerall = command != "holdup"
 trigger1 = stateno = 21
 trigger1 = anim != 21
 value = 21
