@@ -142,6 +142,7 @@ export type PlayerState = {
   comboHitCount?: number;
   stateNo: number;
   prevStateNo?: number;
+  stateHeaderAppliedStateNo?: number;
   stateTime: number;
   stateType: 'S' | 'C' | 'A' | 'L';
   moveType: 'I' | 'A' | 'H';

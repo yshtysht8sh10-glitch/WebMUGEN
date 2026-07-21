@@ -169,6 +169,7 @@ function enterLandingState(player: PlayerState, opponent: PlayerState, stateDef:
     ...player,
     prevStateNo: player.stateNo,
     stateNo: stateDef.stateNo,
+    stateHeaderAppliedStateNo: stateDef.stateNo,
     stateTime: 0,
     stateType,
     moveType: toMoveType(stateDef.moveType) ?? player.moveType,

@@ -40,6 +40,8 @@ StateDef headers and controllers can select animation:
 - `ChangeAnim` changes the current animation;
 - `ChangeAnim2` is not full behavior while target/common animation ownership is incomplete.
 
+StateDef `anim` is not reapplied on later ticks in the same State. A `ChangeAnim` selected after entry therefore remains active until another controller or State transition changes it. Bundled T-H-M-A State 102 is covered for its State 101 entry path: Anim 107 remains selected after the following physics/runtime tick instead of reverting to the StateDef's Anim 102.
+
 ## Trigger interaction
 
 Animation-related triggers are matrix-tracked individually.

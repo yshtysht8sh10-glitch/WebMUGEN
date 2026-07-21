@@ -311,7 +311,7 @@ function stepPlayer(
 
   const stateDefBeforeNegative = findState(cns, next.stateNo);
   if (stateDefBeforeNegative) {
-    next = applyStateHeader(next, stateDefBeforeNegative, false);
+    next = applyStateHeader(next, stateDefBeforeNegative);
     next = forceHitStunControl(next, `statedef:${stateDefBeforeNegative.stateNo}`, input.hitDiagnostics !== false);
   }
   if (debugEnabled) {
@@ -356,7 +356,7 @@ function stepPlayer(
   if (debugEnabled) appendDebug(trace, `enter current S${stateDef.stateNo} state=${next.stateNo}`);
   if (debugEnabled) appendDebug(trace, formatStateDefOverview(stateDef));
   if (stateDef !== stateDefBeforeNegative) {
-    next = applyStateHeader(next, stateDef, false);
+    next = applyStateHeader(next, stateDef);
     next = forceHitStunControl(next, `statedef:${stateDef.stateNo}`, input.hitDiagnostics !== false);
   }
   next = appendGetHitFrameDiagnostic(next, opponent, stateDef, input, commands, runtimeFrame, input.hitDiagnostics !== false);
@@ -596,6 +596,7 @@ function enterState(
     ...powerAdded,
     prevStateNo: player.stateNo,
     stateNo,
+    stateHeaderAppliedStateNo: stateNo,
     stateTime: 0,
     animNo,
     animTime: animChanged ? 0 : player.animTime,
@@ -634,10 +635,23 @@ function inferDefaultCtrl(stateNo: number, currentCtrl: boolean): boolean {
   return currentCtrl;
 }
 
-function applyStateHeader(player: PlayerState, stateDef: CnsStateDefinition, resetAnimOnChange: boolean): PlayerState {
-  const animNo = stateDef.initialAnim ?? player.animNo;
-  const applyEntryVelocity = player.stateTime === 0 && stateDef.velocitySet !== undefined;
-  return { ...player, stateType: toStateType(stateDef.stateType ?? null) ?? player.stateType, moveType: toMoveType(stateDef.moveType ?? null) ?? player.moveType, physics: toPhysics(stateDef.physics ?? null) ?? player.physics, ctrl: stateDef.ctrl ?? player.ctrl, juggle: stateDef.juggle ?? player.juggle, animNo, animTime: resetAnimOnChange && player.animNo !== animNo ? 0 : player.animTime, vx: applyEntryVelocity ? stateDef.velocitySet!.x * player.facing : player.vx, vy: applyEntryVelocity ? stateDef.velocitySet!.y : player.vy };
+function applyStateHeader(player: PlayerState, stateDef: CnsStateDefinition): PlayerState {
+  const applyEntryFields = player.stateHeaderAppliedStateNo !== stateDef.stateNo;
+  const animNo = applyEntryFields ? stateDef.initialAnim ?? player.animNo : player.animNo;
+  const applyEntryVelocity = applyEntryFields && stateDef.velocitySet !== undefined;
+  return {
+    ...player,
+    stateHeaderAppliedStateNo: stateDef.stateNo,
+    stateType: toStateType(stateDef.stateType ?? null) ?? player.stateType,
+    moveType: toMoveType(stateDef.moveType ?? null) ?? player.moveType,
+    physics: toPhysics(stateDef.physics ?? null) ?? player.physics,
+    ctrl: stateDef.ctrl ?? player.ctrl,
+    juggle: stateDef.juggle ?? player.juggle,
+    animNo,
+    animTime: player.animTime,
+    vx: applyEntryVelocity ? stateDef.velocitySet!.x * player.facing : player.vx,
+    vy: applyEntryVelocity ? stateDef.velocitySet!.y : player.vy,
+  };
 }
 
 function shouldRun(controller: CnsStateController, player: PlayerState, input: CnsRuntimeInput, commands?: ReadonlySet<string>, opponent?: PlayerState): boolean {
