@@ -1,7 +1,7 @@
 import type { CnsDocument, CnsStateController, CnsStateDefinition, CnsTrigger, CnsValue } from '../../mugen/common/cnsTypes';
 import { prepareCnsControllerTriggerGroups } from '../../mugen/common/CnsTriggerGroups';
 import { findCnsState } from '../../mugen/common/CnsStateIndex';
-import type { ActiveHitDef, GameState, PlayerState } from '../engine/types';
+import type { ActiveHitDef, GameState, PlayerState, ProjectileState } from '../engine/types';
 import { readCnsConst } from './CnsConstants';
 import { calculateMugenAnimTime } from '../animation/AnimationDuration';
 import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
@@ -71,6 +71,7 @@ export type CnsRuntimeInput = {
   onPause?: (event: PauseControllerEvent) => void;
   onEnvironmentShake?: (event: { time: number; frequency: number; amplitude: number; phase: number }) => void;
   onBgPalFx?: (event: BgPalFxEvent) => void;
+  onProjectileCreate?: (projectile: ProjectileState) => void;
   pauseState?: PauseState;
   screenWidth?: number;
   gameTime?: number;
@@ -931,6 +932,7 @@ function executeController(
   if (type === 'hitby') return hitAttributeController(player, controller, 'allow', 'HitBy');
   if (type === 'nothitby') return hitAttributeController(player, controller, 'deny', 'NotHitBy');
   if (type === 'hitdef') return activateHitDef(player, controller, input, commands, opponent);
+  if (type === 'projectile') return createProjectile(player, opponent, controller, input, commands);
   if (type === 'movehitreset') return withPlayer(resetMoveContact(player), true, 'MoveHitReset');
   if (type.startsWith('target')) return executeTargetController(player, opponent, controller, input, commands);
   if (type === 'hitfallvel') return hitFallVel(player);
@@ -2234,6 +2236,41 @@ function triple(
     green: cnsValueToNumber(values[1], player, input, commands, opponent) ?? defaultGreen,
     blue: cnsValueToNumber(values[2], player, input, commands, opponent) ?? defaultBlue,
   };
+}
+
+function createProjectile(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const velocity = pair(controller, 'velocity', player, input, commands, opponent, 0, 0, 'vel');
+  const acceleration = pair(controller, 'accel', player, input, commands, opponent, 0, 0);
+  const offset = pair(controller, 'offset', player, input, commands, opponent, 0, 0);
+  const scale = pair(controller, 'projscale', player, input, commands, opponent, 1, 1);
+  const snapshot = evaluateHitDefSnapshot(controller, player, input, commands, opponent);
+  const projectile: ProjectileState = {
+    id: Math.trunc(num(controller, 'projid', player, input, commands, opponent) ?? 0),
+    ownerId: player.id,
+    x: player.x + offset.x * player.facing,
+    y: player.y + offset.y,
+    vx: velocity.x * player.facing,
+    vy: velocity.y,
+    ax: acceleration.x * player.facing,
+    ay: acceleration.y,
+    facing: player.facing,
+    animNo: Math.trunc(num(controller, 'projanim', player, input, commands, opponent) ?? 0),
+    animTime: 0,
+    lifeTime: 0,
+    removeTime: Math.trunc(num(controller, 'projremovetime', player, input, commands, opponent) ?? 90),
+    hitDef: snapshot,
+    hitBox: { x: -12, y: -12, width: 24, height: 24 },
+    scaleX: scale.x,
+    scaleY: scale.y,
+  };
+  input.onProjectileCreate?.(projectile);
+  return withPlayer(player, true, 'Projectile');
 }
 
 function readTupleNumber(

@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { CanvasRenderer } from '../renderer/canvas2d/CanvasRenderer';
 import { createInitialGameState } from '../core/engine/GameState';
-import type { GameState } from '../core/engine/types';
+import type { GameState, ProjectileState, Rect } from '../core/engine/types';
 import { applyInfinitePowerAtFrameStart } from '../core/power/InfinitePower';
 import { createSampleCharacterAssets, loadAppCharacter } from './AppCharacterLoader';
 import type { CharacterSourceFile } from '../core/character/CharacterTypes';
@@ -30,6 +30,7 @@ import { applyFallbackControls } from '../core/engine/FallbackControls';
 import { stepFallbackMotion } from '../core/engine/FallbackMotionStep';
 import { applyFallbackStageRules } from '../core/engine/FallbackStageRules';
 import { resolveFallbackHits } from '../core/engine/FallbackHitResolver';
+import { resolveProjectileHits, stepProjectiles } from '../core/projectile/ProjectileSystem';
 import { applyHitEffectRuntime } from '../core/hitdef/HitEffectRuntime';
 import { applyFallbackHitRecovery } from '../core/engine/FallbackHitRecovery';
 import {
@@ -464,6 +465,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           const soundEvents: SoundRuntimeEvent[] = [];
           const explodRuntimeEvents: ExplodControllerEvent[] = [];
           const pauseEvents: PauseControllerEvent[] = [];
+          const projectileEvents: ProjectileState[] = [];
           const runtimeEventDiagnosticLines: string[] = [];
           const cnsStartedAt = performance.now();
           const cnsResult = stepCnsStateRuntime(nextState, character.cns, {
@@ -487,6 +489,10 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             onPause: (event) => pauseEvents.push(event),
             onEnvironmentShake: (event) => environmentShakeEvents.push(event),
             onBgPalFx: (event) => bgPalFxEvents.push(event),
+            onProjectileCreate: (projectile) => projectileEvents.push({
+              ...projectile,
+              hitBox: getProjectileHitBox(character.air, projectile.animNo) ?? projectile.hitBox,
+            }),
             pauseState: pauseAtFrameStart,
             screenWidth: canvas.width,
             roundState: nextRoundState.phase === 'fight' ? 2 : 3,
@@ -497,6 +503,9 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           });
           cnsMs = performance.now() - cnsStartedAt;
           nextState = cnsResult.state;
+          if (projectileEvents.length > 0) {
+            nextState = { ...nextState, projectiles: [...nextState.projectiles, ...projectileEvents] };
+          }
           if (bgPalFxEvents.length > 0) nextState = applyBgPalFxEvents(nextState, bgPalFxEvents);
           if (pauseEvents.length > 0) {
             const pause = applyPauseControllerEvents(nextState.pause ?? createInitialPauseState(), pauseEvents);
@@ -554,6 +563,16 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
               aiLogEnabled && runtimeSettingsRef.current.hitDiagnostics,
               beforePhysicsState,
             );
+            const projectileResult = resolveProjectileHits(
+              nextState.players,
+              stepProjectiles(nextState.projectiles).projectiles,
+            );
+            nextState = {
+              ...nextState,
+              players: projectileResult.players,
+              projectiles: projectileResult.projectiles,
+              hitEvents: [...nextState.hitEvents, ...projectileResult.hitEvents],
+            };
             nextState = removeExplodsOnOwnerHit(nextState);
             const hitEffects = applyHitEffectRuntime(nextState, {
               ownerAir: () => character.air,
@@ -3674,4 +3693,17 @@ function freezeHistoryLines(lines: Iterable<unknown>): string[] {
 
 function normalizeResolvedCommands(commands: Iterable<string>): ReadonlySet<string> {
   return new Set(Array.from(commands, (command) => command.toLowerCase()));
+}
+
+function getProjectileHitBox(air: AirDocument, animNo: number): Rect | null {
+  const action = air.actions.find((candidate) => candidate.actionNo === animNo);
+  const boxes = action?.elements[0]?.clsn1.length
+    ? action.elements[0].clsn1
+    : action?.defaultClsn1 ?? [];
+  if (boxes.length === 0) return null;
+  const left = Math.min(...boxes.map((box) => box.left));
+  const top = Math.min(...boxes.map((box) => box.top));
+  const right = Math.max(...boxes.map((box) => box.right));
+  const bottom = Math.max(...boxes.map((box) => box.bottom));
+  return { x: left, y: top, width: right - left, height: bottom - top };
 }

@@ -54,7 +54,7 @@ function applyFacing(p1: PlayerState, p2: PlayerState): [PlayerState, PlayerStat
 }
 
 function faceGroundedPlayer(player: PlayerState, opponent: PlayerState): PlayerState {
-  if (isAirborne(player) || player.noAutoTurn === true) return player;
+  if (isAirborne(player) || player.moveType !== 'I' || player.noAutoTurn === true) return player;
   return { ...player, facing: player.x < opponent.x ? 1 : -1 };
 }
 

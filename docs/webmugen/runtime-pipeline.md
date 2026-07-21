@@ -50,6 +50,12 @@ on element N in the same collision frame, including one-tick attack elements suc
 T-H-M-A State 215. If physics changes State or Anim entirely, collision uses that new animation
 instead of restoring the old snapshot.
 
+Projectile Controllers now emit into the same production frame. New and existing projectiles advance
+with Facing-relative velocity and acceleration after player physics, then resolve their basic contact
+after direct HitDef collision. Rendering uses the owner AIR action. This path remains Partial because
+animated Clsn changes, full HitDef/guard parity, projectile interactions, and pause semantics are not
+yet connected.
+
 ## CNS State Runtime flow
 
 Inside `stepCnsStateRuntime`, each root player is stepped through the CNS runtime.

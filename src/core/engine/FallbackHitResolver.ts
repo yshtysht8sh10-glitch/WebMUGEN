@@ -593,7 +593,8 @@ function evaluateHitEligibility(hitDef: NonNullable<PlayerState['activeHitDef']>
   if (target.life <= 0) return { accepted: false, reason: 'target_ko', targetClass };
   const hitFlag = (hitDef.hitFlag ?? 'MAF').replace(/\s+/g, '').toUpperCase();
   if (!/^[HLAFDMP+-]+$/.test(hitFlag)) return { accepted: false, reason: 'unsupported_hitflag', targetClass };
-  if (/[+-]/.test(hitFlag)) return { accepted: false, reason: 'unsupported_hitflag_modifier', targetClass };
+  if (hitFlag.includes('+') && target.moveType !== 'H') return { accepted: false, reason: 'hitflag_requires_hit_state', targetClass };
+  if (hitFlag.includes('-') && target.moveType === 'H') return { accepted: false, reason: 'hitflag_excludes_hit_state', targetClass };
   const requiredFlag = targetClass === 'stand' ? ['H', 'M']
     : targetClass === 'crouch' ? ['L', 'M']
       : targetClass === 'air' ? ['A']

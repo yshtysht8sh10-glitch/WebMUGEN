@@ -194,8 +194,8 @@ export class CanvasRenderer {
           currentElement.element.flip,
           undefined,
           1,
-          1,
-          1,
+          projectile.scaleX ?? 1,
+          projectile.scaleY ?? 1,
           false,
           diagnosticsEnabled,
         );

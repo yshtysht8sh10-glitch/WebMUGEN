@@ -21,14 +21,16 @@ export function stepProjectiles(projectiles: ProjectileState[]): ProjectileStepR
         ...projectile,
         x: projectile.x + projectile.vx,
         y: projectile.y + projectile.vy,
+        vx: projectile.vx + (projectile.ax ?? 0),
+        vy: projectile.vy + (projectile.ay ?? 0),
         animTime: projectile.animTime + 1,
         lifeTime: projectile.lifeTime + 1,
       }))
       .filter(
         (projectile) =>
-          projectile.lifeTime < projectile.removeTime &&
+          (projectile.removeTime < 0 || projectile.lifeTime < projectile.removeTime) &&
           projectile.x > -80 &&
-          projectile.x < 720 &&
+          projectile.x < 1040 &&
           projectile.y > -80 &&
           projectile.y < 420,
       ),
@@ -75,11 +77,16 @@ export function resolveProjectileHits(
 }
 
 export function getProjectileWorldBox(projectile: ProjectileState): Rect {
+  const scaleX = Math.abs(projectile.scaleX ?? 1);
+  const scaleY = Math.abs(projectile.scaleY ?? 1);
+  const facingOffsetX = projectile.facing === 1
+    ? projectile.hitBox.x
+    : -(projectile.hitBox.x + projectile.hitBox.width);
   return {
-    x: projectile.x + projectile.hitBox.x,
-    y: projectile.y + projectile.hitBox.y,
-    width: projectile.hitBox.width,
-    height: projectile.hitBox.height,
+    x: projectile.x + facingOffsetX * scaleX,
+    y: projectile.y + projectile.hitBox.y * scaleY,
+    width: projectile.hitBox.width * scaleX,
+    height: projectile.hitBox.height * scaleY,
   };
 }
 

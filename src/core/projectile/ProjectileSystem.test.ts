@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialGameState } from '../engine/GameState';
-import { resolveProjectileHits, stepProjectiles } from './ProjectileSystem';
+import { getProjectileWorldBox, resolveProjectileHits, stepProjectiles } from './ProjectileSystem';
 import type { ProjectileState } from '../engine/types';
 
 function createProjectile(): ProjectileState {
@@ -34,12 +34,22 @@ function createProjectile(): ProjectileState {
 
 describe('ProjectileSystem', () => {
   it('steps projectile position', () => {
-    const projectile = createProjectile();
+    const projectile = { ...createProjectile(), ax: 0.5, ay: 0.25 };
     const result = stepProjectiles([projectile]);
 
     expect(result.projectiles[0].x).toBe(425);
+    expect(result.projectiles[0].vx).toBe(5.5);
+    expect(result.projectiles[0].vy).toBe(0.25);
     expect(result.projectiles[0].animTime).toBe(1);
     expect(result.projectiles[0].lifeTime).toBe(1);
+  });
+
+  it('mirrors and scales the projectile collision box with Facing', () => {
+    const box = getProjectileWorldBox({
+      ...createProjectile(), facing: -1, scaleX: 0.5, scaleY: 2,
+      hitBox: { x: -5, y: -10, width: 50, height: 20 },
+    });
+    expect(box).toEqual({ x: 397.5, y: 210, width: 25, height: 40 });
   });
 
   it('removes projectile on hit', () => {

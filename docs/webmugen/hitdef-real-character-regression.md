@@ -78,6 +78,14 @@ eligibility filter now tolerates the legacy `P` suffix and continues to apply th
 production-data coverage verifies the first Clsn/HitDef frame of both crouching Y and jumping Y
 against a standing target without modifying the character assets.
 
+## 2026-07-22 State 700 throw modifier regression
+
+Bundled T-H-M-A State 700 uses `hitflag = M-`, `p1stateno = 701`, and `p2stateno = 711`.
+The production-loader/AIR regression forces only the original HitDef trigger, finds a real Clsn
+contact, verifies that `-` accepts the neutral target, and confirms entry into both custom throw
+States. Focused synthetic coverage also verifies that `-` rejects an already-hit target and `+`
+requires one.
+
 Focused engine tests from Issues #3-#22 remain the behavioral evidence for multihit/chain persistence, Target mutation, custom-State ownership, guard/down/recovery, juggle, KO, power, cornerpush, snap, effects, and diagnostics. This harness proves those layers accept multiple real WinMUGEN data layouts and are not tied to KFM State numbers.
 
 ## Known constraints
@@ -85,6 +93,6 @@ Focused engine tests from Issues #3-#22 remain the behavioral evidence for multi
 - The harness forces an existing HitDef controller's trigger true to isolate HitDef/AIR/runtime compatibility. It does not claim every original CMD or AI route is playable end-to-end.
 - `mugen.cfg`-derived default power gain is unavailable; explicit power pairs are tested.
 - T-H-M-A State 200 additionally verifies expression-valued attacker-scoped hit/guard sparks (`16100`/`16000`) and sounds (`200,0`/`645,1`) through production Explod and Browser Audio event bridges.
-- Camera-relative cornerpush, team/Helper/projectile parity, full throw/custom animation ownership, bundled common fightfx/SND assets, palette effects, and legacy aliases remain Partial or Unsupported per Matrix.
+- Camera-relative cornerpush, team/Helper/full-projectile parity, full throw/custom animation ownership, bundled common fightfx/SND assets, palette effects, and legacy aliases remain Partial or Unsupported per Matrix.
 - Real Target/custom-State/multihit structures are inventoried here and their generic runtime behavior is covered by focused tests; exhaustive character-specific cinematics and AI routes are outside this Issue.
 - The normal build remains blocked before compilation by known TS5107 configuration. The full Vitest suite is the regression gate.

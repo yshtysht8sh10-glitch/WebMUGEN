@@ -255,6 +255,41 @@ describe('T-H-M-A State 215 launch regression', () => {
   }, 30_000);
 });
 
+describe('T-H-M-A State 700 throw regression', () => {
+  it('accepts hitflag M- against a neutral target and enters both custom throw states', async () => {
+    const assets = await loadCharacterFromDef('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.def', createFileSystemFetcher());
+    const state700 = assets.cns.states.find((state) => state.stateNo === 700);
+    const hitDef = state700?.controllers.find((controller) => controller.type.toLowerCase() === 'hitdef');
+    if (!state700 || !hitDef) throw new Error('T-H-M-A State 700 HitDef not found');
+    const forcedCns: CnsDocument = {
+      ...assets.cns,
+      states: [
+        { ...state700, controllers: [{ ...hitDef, triggers: [{ name: 'trigger1', expression: '1' }] }] },
+        ...assets.cns.states.filter((state) => state.stateNo !== 700),
+      ],
+    };
+    const initial = createInitialGameState();
+    const activated = stepCnsStateRuntime({
+      ...initial,
+      players: [
+        { ...initial.players[0], stateNo: 700, stateType: 'S', moveType: 'A', physics: 'S', ctrl: false, animNo: 700 },
+        initial.players[1],
+      ],
+    }, forcedCns, { hitDiagnostics: true }).state;
+    expect(activated.players[0].activeHitDef?.hitFlag).toBe('M-');
+
+    const attack = findActionCollisionElement(assets.air.actions, 700, 'attack');
+    const body = findCollisionElement(assets.air.actions, 'body');
+    expect(attack).not.toBeNull();
+    expect(body).not.toBeNull();
+    const contacted = findContact(activated, assets.air, 1, attack!, body!, 'ground', 1);
+
+    expect(contacted, contacted?.hitDiagnosticLines?.join('\n')).not.toBeNull();
+    expect(contacted!.players[0].stateNo).toBe(701);
+    expect(contacted!.players[1].stateNo).toBe(711);
+  });
+});
+
 describe('T-H-M-A crouching and jumping Y collision regression', () => {
   it.each([
     { stateNo: 410, stateType: 'C' as const, physics: 'C' as const, y: 285 },

@@ -299,6 +299,8 @@ export type ProjectileState = {
   y: number;
   vx: number;
   vy: number;
+  ax?: number;
+  ay?: number;
   facing: 1 | -1;
   animNo: number;
   animTime: number;
@@ -306,6 +308,8 @@ export type ProjectileState = {
   removeTime: number;
   hitDef: ActiveHitDef;
   hitBox: Rect;
+  scaleX?: number;
+  scaleY?: number;
 };
 
 export type HitEvent = {

@@ -360,10 +360,20 @@ physics = S
     expect(rejected.hitDiagnosticLines?.join('\n')).toContain('reason=hitflag_state_mismatch');
   });
 
-  it('rejects unsupported hitflag modifiers instead of treating them as always-hit', () => {
-    const result = resolveConfiguredHit({ hitFlag: 'M-', pauseTime: [0, 0] });
-    expect(result.hitEvents).toHaveLength(0);
-    expect(result.hitDiagnosticLines?.join('\n')).toContain('reason=unsupported_hitflag_modifier');
+  it('applies hitflag +/- modifiers to the target hit-state status', () => {
+    const normalTarget = resolveConfiguredHit({ hitFlag: 'M-', pauseTime: [0, 0] });
+    expect(normalTarget.hitEvents).toHaveLength(1);
+
+    const excludedHitTarget = resolveConfiguredHit({ targetMoveType: 'H', hitFlag: 'M-', pauseTime: [0, 0] });
+    expect(excludedHitTarget.hitEvents).toHaveLength(0);
+    expect(excludedHitTarget.hitDiagnosticLines?.join('\n')).toContain('reason=hitflag_excludes_hit_state');
+
+    const requiredHitTarget = resolveConfiguredHit({ targetMoveType: 'H', hitFlag: 'M+', pauseTime: [0, 0] });
+    expect(requiredHitTarget.hitEvents).toHaveLength(1);
+
+    const excludedNormalTarget = resolveConfiguredHit({ hitFlag: 'M+', pauseTime: [0, 0] });
+    expect(excludedNormalTarget.hitEvents).toHaveLength(0);
+    expect(excludedNormalTarget.hitDiagnosticLines?.join('\n')).toContain('reason=hitflag_requires_hit_state');
   });
 
   it('uses normalized attr for HitBy/NotHitBy filtering and rejects invalid attr', () => {

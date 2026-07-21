@@ -44,6 +44,20 @@ describe('FallbackStageRules', () => {
     expect(next.players[1].x - next.players[0].x).toBeGreaterThanOrEqual(32);
   });
 
+  it('does not auto-turn an attacking wall-carry state when TargetBind places P2 behind P1', () => {
+    const state = createInitialGameState();
+    const next = applyFallbackStageRules({
+      ...state,
+      players: [
+        { ...state.players[0], x: 400, facing: 1, moveType: 'A', ctrl: false },
+        { ...state.players[1], x: 380, facing: 1, moveType: 'H', ctrl: false },
+      ],
+    });
+
+    expect(next.players[0].facing).toBe(1);
+    expect(next.players[1].facing).toBe(1);
+  });
+
   it.each([
     { label: 'P1 approaches P2', p1X: 319, p2X: 320 },
     { label: 'P2 approaches P1', p1X: 300, p2X: 301 },
