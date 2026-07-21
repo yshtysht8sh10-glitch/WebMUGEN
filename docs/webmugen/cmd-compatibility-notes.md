@@ -22,7 +22,7 @@ Follow `docs/webmugen/development-policy.md`: common movement routing belongs in
 | Button sequences | Partial | Basic support; simple button commands are kept briefly active. | Full sequence timing and cancel windows need audit. |
 | Simultaneous buttons | Partial | Basic syntax exists. | Full parsing/timing behavior needs audit. |
 | Release commands | Partial | The matcher retains `~` and requires the matched direction/button to be released in a newer input frame. | Numeric charge forms such as `~30$D` and other compound modifiers remain unsupported. |
-| Buffer time | Partial | InputBuffer exists and default buffering covers simple buttons/double-tap directions. Double-tap directions do not retrigger while the second direction is held. | Exact WinMUGEN timing still needs audit. |
+| Buffer time | Partial | InputBuffer exists and default buffering covers simple buttons/double-tap directions. Button-bearing commands resolved during attacker hit pause are delivered once on the first CNS-active frame; direction-only holds are not latched. Double-tap directions do not retrigger while the second direction is held. | Exact WinMUGEN timing, long hit-pause windows, and simultaneous commands still need audit. |
 | `command.time` | Partial | A 25-frame window accepts sequences spanning 24 or 25 frames and rejects 26 frames. | Broader WinMUGEN timing and pause behavior still need audit. |
 | `command.buffer.time` | Partial | Parser and matcher honor explicit post-match active window; double-tap direction buffering applies after release, not during a held second tap. | Exact WinMUGEN behavior still needs audit. |
 | `$` direction match | Partial | KFM hold commands work. | Full syntax and facing-relative behavior need tests. |
@@ -82,3 +82,9 @@ history, matching, the active command set, Japanese `Command` trigger comparison
 `ChangeState`. The matcher records the frame used by each command step; a `~` step succeeds only
 when a newer frame no longer contains that direction or button. Facing conversion remains confined
 to `InputBuffer`, so B/F is not converted a second time during matching.
+
+The live runtime also retains a resolved command containing a non-hold button while its player is in
+attacker hit pause. CNS execution remains frozen during the pause, then the retained command is added
+to the first active frame and cleared. Direction-only commands such as `holddown` continue to reflect
+the current key state instead of becoming sticky. A bundled T-H-M-A regression verifies the original
+State 200 `MoveContact` route from `x` into the close `a` State 232 cancel after eight hit-pause ticks.

@@ -88,6 +88,7 @@ import { formatCnsCommandDebugOverlay } from './CnsCommandDebugOverlay';
 import { formatCnsCoverageDebugOverlay } from './CnsCoverageDebugOverlay';
 import { formatPhysicsDebugOverlay } from './PhysicsDebugOverlay';
 import { InputBuffer } from '../input/InputBuffer';
+import { HitPauseCommandBuffer } from '../input/HitPauseCommandBuffer';
 import { resolveCommands } from '../input/CommandResolver';
 import { evaluateCnsRuntimeTrigger, readNumberExpression, type CnsRuntimeTriggerContext } from '../core/cns/CnsRuntimeTrigger';
 import type { CnsDocument, CnsStateController, CnsStateDefinition, CnsTrigger } from '../mugen/common/cnsTypes';
@@ -164,6 +165,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
   const cnsCoverageRef = useRef<CnsCoverageDiagnostics | null>(null);
   const p1CommandBufferRef = useRef(new InputBuffer(60));
   const p2CommandBufferRef = useRef(new InputBuffer(60));
+  const p1HitPauseCommandBufferRef = useRef<HitPauseCommandBuffer | null>(null);
+  const p2HitPauseCommandBufferRef = useRef<HitPauseCommandBuffer | null>(null);
   const restartPressedRef = useRef(false);
   const inputRef = useRef<BrowserInput | null>(null);
   const inputConfigRef = useRef<InputConfig>(loadInputConfig());
@@ -320,6 +323,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
       setShowCharacterFiles(false);
       p1CommandBufferRef.current.clear();
       p2CommandBufferRef.current.clear();
+      p1HitPauseCommandBufferRef.current?.clear();
+      p2HitPauseCommandBufferRef.current?.clear();
       setSelectedCnsSource(null);
       setLoadedAir(null);
       setLoadedSprites(null);
@@ -367,6 +372,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
         inputRef.current = new BrowserInput(window);
         p1CommandBufferRef.current = new InputBuffer(60);
         p2CommandBufferRef.current = new InputBuffer(60);
+        p1HitPauseCommandBufferRef.current = new HitPauseCommandBuffer(character.cmd);
+        p2HitPauseCommandBufferRef.current = new HitPauseCommandBuffer(character.cmd);
 
         const tick = (timestamp: number) => {
         const frameIntervalMs = runtimeSettingsRef.current.frameIntervalMs;
@@ -393,8 +400,10 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
         const currentPlayers = gameStateRef.current.players;
         p1CommandBufferRef.current.push(p1Input, currentPlayers[0].facing);
         p2CommandBufferRef.current.push(p2Input, currentPlayers[1].facing);
-        const p1Commands = normalizeResolvedCommands(resolveCommands(character.cmd, p1Input, p1CommandBufferRef.current, currentPlayers[0].facing).activeCommandNames);
-        const p2Commands = normalizeResolvedCommands(resolveCommands(character.cmd, p2Input, p2CommandBufferRef.current, currentPlayers[1].facing).activeCommandNames);
+        const resolvedP1Commands = normalizeResolvedCommands(resolveCommands(character.cmd, p1Input, p1CommandBufferRef.current, currentPlayers[0].facing).activeCommandNames);
+        const resolvedP2Commands = normalizeResolvedCommands(resolveCommands(character.cmd, p2Input, p2CommandBufferRef.current, currentPlayers[1].facing).activeCommandNames);
+        const p1Commands = p1HitPauseCommandBufferRef.current?.resolve(resolvedP1Commands, currentPlayers[0].hitPause > 0) ?? resolvedP1Commands;
+        const p2Commands = p2HitPauseCommandBufferRef.current?.resolve(resolvedP2Commands, currentPlayers[1].hitPause > 0) ?? resolvedP2Commands;
 
         const humanLogEnabled = runtimeSettingsRef.current.humanLogEnabled;
         const aiLogEnabled = runtimeSettingsRef.current.aiLogEnabled;
@@ -443,6 +452,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           nextCnsTraces = [];
           p1CommandBufferRef.current.clear();
           p2CommandBufferRef.current.clear();
+          p1HitPauseCommandBufferRef.current?.clear();
+          p2HitPauseCommandBufferRef.current?.clear();
           audioRuntimeRef.current?.stopAll();
         } else if (nextRoundState.phase !== 'intro') {
           const pauseAtFrameStart = nextState.pause ?? createInitialPauseState();
@@ -516,6 +527,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
 
           const pauseDuringFrame = nextState.pause ?? createInitialPauseState();
           const pausedThisFrame = isGamePaused(pauseDuringFrame);
+          const beforePhysicsState = nextState;
           const beforePhysicsPlayers = nextState.players;
           if (ENABLE_RUNTIME_FALLBACKS) {
             nextState = stepFallbackMotion(nextState);
@@ -536,7 +548,12 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           if (pausedThisFrame) {
             nextState = { ...nextState, hitEvents: [] };
           } else {
-            nextState = resolveFallbackHits(nextState, character.air, aiLogEnabled && runtimeSettingsRef.current.hitDiagnostics);
+            nextState = resolveFallbackHits(
+              nextState,
+              character.air,
+              aiLogEnabled && runtimeSettingsRef.current.hitDiagnostics,
+              beforePhysicsState,
+            );
             nextState = removeExplodsOnOwnerHit(nextState);
             const hitEffects = applyHitEffectRuntime(nextState, {
               ownerAir: () => character.air,
@@ -773,6 +790,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
     saveInputConfig(nextConfig);
     p1CommandBufferRef.current.clear();
     p2CommandBufferRef.current.clear();
+    p1HitPauseCommandBufferRef.current?.clear();
+    p2HitPauseCommandBufferRef.current?.clear();
   };
 
   const openCnsSource = (selection: CnsSourceSelection) => {

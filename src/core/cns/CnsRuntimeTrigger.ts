@@ -5,7 +5,7 @@ import { hitDefAttrMatches } from '../hitdef/HitAttribute';
 import type { CnsDocument, CnsTrigger } from '../../mugen/common/cnsTypes';
 import { readCnsConst } from './CnsConstants';
 import { readPlayerPowerMax } from '../power/PowerGauge';
-import { FALLBACK_STAGE_LEFT, FALLBACK_STAGE_RIGHT } from '../engine/FallbackStageRules';
+import { buildPushBox, FALLBACK_STAGE_LEFT, FALLBACK_STAGE_RIGHT } from '../engine/FallbackStageRules';
 
 export type CnsRuntimeTriggerContext = {
   player: PlayerState;
@@ -679,11 +679,11 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'p2stateno': return (context) => context.opponent?.stateNo ?? 0;
     case 'p2facing': return (context) => context.opponent?.facing ?? -context.player.facing;
     case 'p2bodydistx':
-    case 'p2bodydist x':
+    case 'p2bodydist x': return (context) => readP2BodyDistX(context.player, context.opponent);
     case 'p2distx':
     case 'p2dist x': return (context) => (context.opponent ? Math.abs(context.opponent.x - context.player.x) : 999);
     case 'bodydistx':
-    case 'bodydist x': return (context) => (context.opponent ? Math.abs(context.opponent.x - context.player.x) : 999);
+    case 'bodydist x': return (context) => readP2BodyDistX(context.player, context.opponent);
     case 'p2bodydisty':
     case 'p2bodydist y':
     case 'p2disty':
@@ -694,6 +694,15 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'p2movetype': return (context) => moveTypeToNumber(context.opponent?.moveType ?? 'I');
     default: return getFunctionNumberSource(name) ?? getRedirectNumberSource(name);
   }
+}
+
+function readP2BodyDistX(player: PlayerState, opponent: PlayerState | undefined): number {
+  if (!opponent) return 999;
+  const playerBox = buildPushBox(player);
+  const opponentBox = buildPushBox(opponent);
+  const playerFront = player.facing === 1 ? playerBox.right : playerBox.left;
+  const opponentFront = opponent.facing === 1 ? opponentBox.right : opponentBox.left;
+  return player.facing * (opponentFront - playerFront);
 }
 
 function getFunctionNumberSource(name: string): NumberSource | null {

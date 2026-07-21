@@ -27,7 +27,12 @@ type PriorityDecision = {
 
 type HitEligibility = { accepted: boolean; reason: string; targetClass: string };
 
-export function resolveFallbackHits(state: GameState, airDocument?: AirDocument | null, diagnosticsEnabled = true): GameState {
+export function resolveFallbackHits(
+  state: GameState,
+  airDocument?: AirDocument | null,
+  diagnosticsEnabled = true,
+  animationSnapshot?: GameState,
+): GameState {
   if (!airDocument) {
     return state;
   }
@@ -42,10 +47,12 @@ export function resolveFallbackHits(state: GameState, airDocument?: AirDocument 
     ...(p2.hitDiagnosticLines ?? []),
   ] : [];
 
-  const p1Attack = getPlayerAttackBoxes(p1, airDocument);
-  const p1Body = getPlayerBodyBoxes(p1, airDocument);
-  const p2Attack = getPlayerAttackBoxes(p2, airDocument);
-  const p2Body = getPlayerBodyBoxes(p2, airDocument);
+  const collisionP1 = withSnapshotAnimation(p1, animationSnapshot?.players[0]);
+  const collisionP2 = withSnapshotAnimation(p2, animationSnapshot?.players[1]);
+  const p1Attack = getPlayerAttackBoxes(collisionP1, airDocument);
+  const p1Body = getPlayerBodyBoxes(collisionP1, airDocument);
+  const p2Attack = getPlayerAttackBoxes(collisionP2, airDocument);
+  const p2Body = getPlayerBodyBoxes(collisionP2, airDocument);
 
   const p1PriorityCandidate = isPriorityCandidate(p1, p2, p1Attack, p2Body);
   const p2PriorityCandidate = isPriorityCandidate(p2, p1, p2Attack, p1Body);
@@ -67,11 +74,15 @@ export function resolveFallbackHits(state: GameState, airDocument?: AirDocument 
   const helpers = state.helpers.entries.map((helper) => {
     const target = helper.rootEntityId === 1 ? p2 : p1;
     const attacker = pruneTargets(helper.player, [target]);
+    const snapshotHelper = animationSnapshot?.helpers.entries.find((entry) => entry.entityId === helper.entityId)?.player;
+    const collisionAttacker = withSnapshotAnimation(attacker, snapshotHelper);
+    const snapshotTarget = helper.rootEntityId === 1 ? animationSnapshot?.players[1] : animationSnapshot?.players[0];
+    const collisionTarget = withSnapshotAnimation(target, snapshotTarget);
     const result = resolveAttack(
       attacker,
       target,
-      getPlayerAttackBoxes(attacker, airDocument),
-      getPlayerBodyBoxes(target, airDocument),
+      getPlayerAttackBoxes(collisionAttacker, airDocument),
+      getPlayerBodyBoxes(collisionTarget, airDocument),
       airDocument,
       diagnosticsEnabled,
     );
@@ -387,6 +398,11 @@ function resolveAttack(
   };
 }
 
+function withSnapshotAnimation(player: PlayerState, snapshot?: PlayerState): PlayerState {
+  if (!snapshot || player.stateNo !== snapshot.stateNo || player.animNo !== snapshot.animNo) return player;
+  return { ...player, animTime: snapshot.animTime };
+}
+
 function isPriorityCandidate(
   attacker: PlayerState,
   target: PlayerState,
@@ -576,7 +592,7 @@ function evaluateHitEligibility(hitDef: NonNullable<PlayerState['activeHitDef']>
   const targetClass = classifyHitTarget(target);
   if (target.life <= 0) return { accepted: false, reason: 'target_ko', targetClass };
   const hitFlag = (hitDef.hitFlag ?? 'MAF').replace(/\s+/g, '').toUpperCase();
-  if (!/^[HLAFDM+-]+$/.test(hitFlag)) return { accepted: false, reason: 'unsupported_hitflag', targetClass };
+  if (!/^[HLAFDMP+-]+$/.test(hitFlag)) return { accepted: false, reason: 'unsupported_hitflag', targetClass };
   if (/[+-]/.test(hitFlag)) return { accepted: false, reason: 'unsupported_hitflag_modifier', targetClass };
   const requiredFlag = targetClass === 'stand' ? ['H', 'M']
     : targetClass === 'crouch' ? ['L', 'M']

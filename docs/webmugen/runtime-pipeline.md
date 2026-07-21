@@ -43,6 +43,13 @@ CanvasRenderer
 Debug Overlay / Runtime History
 ```
 
+Hit resolution uses the animation snapshot observed by the CNS pass that created or retained the
+ActiveHitDef. Physics still updates position before collision, but its `AnimTime` increment must not
+advance Clsn lookup to the next AIR element. This keeps an `AnimElem = N` HitDef and the Clsn1 boxes
+on element N in the same collision frame, including one-tick attack elements such as bundled
+T-H-M-A State 215. If physics changes State or Anim entirely, collision uses that new animation
+instead of restoring the old snapshot.
+
 ## CNS State Runtime flow
 
 Inside `stepCnsStateRuntime`, each root player is stepped through the CNS runtime.
@@ -75,7 +82,7 @@ See `../mugen-spec/winmugen/state-processing-order.md` and `helper.md`.
 
 If a negative state changes `stateNo`, the old current State is not executed. The newly entered State is selected instead. Positive-State `ChangeState` stops the remaining controllers in that State; entered-State controllers may run in the same frame under the existing bounded pipeline. If that entered State immediately changes State again, the final unprocessed destination keeps `StateTime = 0` through the following physics increment, so its `Time = 0` controllers run on the next CNS tick.
 
-When a player's HitDef hit-pause counter is positive, CNS StateDef headers and controllers are skipped for that player. The following physics step decrements only the counter; position, velocity, StateTime, and AnimTime remain frozen. Input buffers are updated before CNS execution and therefore continue collecting input during hit pause. Hit pause is per player and separate from SuperPause.
+When a player's HitDef hit-pause counter is positive, CNS StateDef headers and controllers are skipped for that player. The following physics step decrements only the counter; position, velocity, StateTime, and AnimTime remain frozen. Input buffers are updated before CNS execution and therefore continue collecting input during hit pause. Resolved commands containing a non-hold button are retained and exposed once on the first CNS-active frame after the pause, while direction-only hold commands continue to follow the live key state. Hit pause is per player and separate from SuperPause.
 
 Match-level Pause/SuperPause is checked before State -3/-2/-1 and the current StateDef. Non-moving players therefore emit no repeated Explod or sound events while paused. The controller owner runs only while its `movetime` remains; physics, round time, hit resolution, and Explod lifecycle use the same frame's pause snapshot. Explods consume `pausemovetime` or `supermovetime` independently. When the clock reaches zero, one guarded CNS pass advances StateTime through physics without replaying time-zero controllers. Already-started Browser Audio continues; the runtime does not suspend AudioContext.
 

@@ -104,9 +104,28 @@ describe('CnsRuntimeTrigger core expansion', () => {
   it('evaluates P2 and EnemyNear redirects', () => {
     expect(evaluateCnsRuntimeTrigger('P2Life = 850', { player, opponent })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('P2StateNo = 0', { player, opponent })).toBe(true);
-    expect(evaluateCnsRuntimeTrigger('P2BodyDist X = 40', { player, opponent })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('P2BodyDist X = 8', { player, opponent })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('P2Dist X = 40', { player, opponent })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('EnemyNear, StateNo = 0', { player, opponent })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('EnemyNear, Pos X = 170', { player, opponent })).toBe(true);
+  });
+
+  it('measures P2BodyDist X between scaled ground or air fronts', () => {
+    const widths = {
+      groundFront: 20, groundBack: 10, airFront: 7, airBack: 5,
+      xScale: 2, yScale: 1, height: 60,
+    };
+    const p1 = { ...player, x: 100, facing: 1 as const, collisionWidth: widths };
+    const p2 = { ...opponent, x: 180, facing: -1 as const, collisionWidth: widths };
+
+    expect(evaluateCnsRuntimeTrigger('P2BodyDist X = 0', {
+      player: p1,
+      opponent: { ...p2, x: 180 },
+    })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('P2BodyDist X = 52', {
+      player: { ...p1, stateType: 'A' },
+      opponent: { ...p2, stateType: 'A' },
+    })).toBe(true);
   });
 
   it('evaluates guard, hit and helper-safe fallback triggers', () => {

@@ -153,7 +153,7 @@ If the controller only stores a field or is skipped safely, mark Partial.
 
 `FallEnvShake` reads the `fall.envshake.time/freq/ampl/phase` values snapshotted from the HitDef that caused the fall and starts the shared Canvas screen-shake feedback when the configured time is positive. Common States 5100 and 5110 therefore retain their data-defined landing effect; zero time is an explicit no-effect execution rather than a fabricated default shake.
 
-Before damage or guard resolution, `hitflag` classifies the target as standing, crouching, air, falling/get-hit, or down and checks H/L/M/A/F/D respectively. The same normalized `attr` snapshot drives `HitDefAttr` and defender `HitBy`/`NotHitBy` filters. Malformed attr, unknown hitflag characters, and currently unsupported `+`/`-` modifiers reject with explicit diagnostics rather than becoming unconditional hits.
+Before damage or guard resolution, `hitflag` classifies the target as standing, crouching, air, falling/get-hit, or down and checks H/L/M/A/F/D respectively. The legacy `P` suffix found in WinMUGEN character data is accepted without changing those target classes; bundled T-H-M-A States 410 and 610 exercise `MAFP`. The same normalized `attr` snapshot drives `HitDefAttr` and defender `HitBy`/`NotHitBy` filters. Other unknown hitflag characters and currently unsupported `+`/`-` modifiers reject with explicit diagnostics rather than becoming unconditional hits.
 
 When both players have eligible Clsn contact in the same frame, priority is resolved from the original frame snapshot rather than P1-first mutation order. Higher numeric priority wins; equal `Hit` trades; equal `Miss` or `Dodge` produces no contact. Mixed priority-type edge cases remain Partial and are diagnosed.
 

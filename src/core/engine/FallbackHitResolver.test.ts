@@ -350,6 +350,16 @@ physics = S
     if (!accepted) expect(result.hitDiagnosticLines?.join('\n')).toContain('reason=hitflag_state_mismatch');
   });
 
+  it('tolerates the legacy P suffix while applying the other hitflag target classes', () => {
+    const accepted = resolveConfiguredHit({ hitFlag: 'MAFP', pauseTime: [0, 0] });
+    expect(accepted.hitEvents).toHaveLength(1);
+    expect(accepted.hitDiagnosticLines?.join('\n')).toContain('hitflag=MAFP targetClass=stand');
+
+    const rejected = resolveConfiguredHit({ targetStateType: 'L', targetMoveType: 'H', hitFlag: 'MAFP', pauseTime: [0, 0] });
+    expect(rejected.hitEvents).toHaveLength(0);
+    expect(rejected.hitDiagnosticLines?.join('\n')).toContain('reason=hitflag_state_mismatch');
+  });
+
   it('rejects unsupported hitflag modifiers instead of treating them as always-hit', () => {
     const result = resolveConfiguredHit({ hitFlag: 'M-', pauseTime: [0, 0] });
     expect(result.hitEvents).toHaveLength(0);

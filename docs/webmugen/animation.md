@@ -32,6 +32,13 @@ Each element references a sprite group/image and has display time.
 
 Current-element Clsn1 and Clsn2 boxes are converted through a shared world-coordinate API. The conversion applies the element X/Y offset, mirrors the combined local X coordinates for left-facing players, adds the player world origin, preserves multiple boxes, and returns no rectangles when the selected element has no applicable default or element Clsn block. Each result records attack/body kind, default/element source, animation number, element index, and box index for collision diagnostics and renderer debug labels.
 
+The live app resolves player and Helper Clsn boxes from the pre-physics animation snapshot while
+retaining post-physics world positions. CNS `AnimElem` triggers and collision therefore observe the
+same AIR element even though physics increments `AnimTime` before hit resolution. A physics-driven
+State or Anim change invalidates the snapshot. Bundled T-H-M-A State 215 covers the one-tick case:
+its `AnimElem = 4` HitDef now overlaps Action 215 element 4 Clsn1 instead of activating after those
+boxes have disappeared.
+
 ## Runtime interaction
 
 StateDef headers and controllers can select animation:

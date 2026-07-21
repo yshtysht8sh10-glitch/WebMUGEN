@@ -53,6 +53,31 @@ Issue #63 expands the self-contained T-H-M-A State 215 regression from two nonle
 
 This audit also supplies real animation timing callbacks used by the app, rather than treating AnimTime/SelfAnimExist as synthetic defaults. `public/chars/common1.cns` remains unchanged.
 
+## 2026-07-21 State 215 collision-frame regression
+
+The production frame sequence now keeps the CNS animation snapshot for Clsn lookup after physics
+updates position and increments `AnimTime`. A focused bundled T-H-M-A test runs the original
+`AnimElem = 4` HitDef without forcing its trigger: Action 215 element 4 first rejects collision while
+the HitDef is inactive, then the following CNS pass activates HitDef ID 215 and resolves contact
+against that same element's two Clsn1 boxes. This closes the former one-frame split where element 4
+reported `active_hitdef_missing` and element 5 reported `clsn1_missing`.
+
+## 2026-07-22 State 200 hit-confirm regression
+
+The bundled T-H-M-A production route now verifies that an `a` command entered during State 200's
+eight-tick attacker hit pause survives until CNS execution resumes. On that first active tick,
+State -1 observes both the retained command and the live `MoveContact` result and enters the close
+State 232 cancel. The regression uses the production AIR timing callbacks and the original CMD/CNS
+data; no character asset was modified.
+
+## 2026-07-22 crouching/jumping Y hitflag regression
+
+Bundled T-H-M-A States 410 and 610 use `hitflag = MAFP` for their four original HitDefs. The live
+eligibility filter now tolerates the legacy `P` suffix and continues to apply the documented
+`M/A/F` target classes, instead of rejecting the complete HitDef as `unsupported_hitflag`. Focused
+production-data coverage verifies the first Clsn/HitDef frame of both crouching Y and jumping Y
+against a standing target without modifying the character assets.
+
 Focused engine tests from Issues #3-#22 remain the behavioral evidence for multihit/chain persistence, Target mutation, custom-State ownership, guard/down/recovery, juggle, KO, power, cornerpush, snap, effects, and diagnostics. This harness proves those layers accept multiple real WinMUGEN data layouts and are not tied to KFM State numbers.
 
 ## Known constraints

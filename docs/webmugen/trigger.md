@@ -95,6 +95,17 @@ When adding expression support, update Expression rows in the matrix, not unrela
 
 The result remains a fallback approximation: it uses fixed stage limits and the player center rather than a camera-relative screen edge and exact body-width adjustment.
 
+## Player body distance
+
+`P2BodyDist X` and the compatibility alias `BodyDist X` measure from P1's front to P2's front in
+P1's Facing direction. Each front is derived from the player's current ground/air `Size` width and
+`xscale`; unlike `P2Dist X`, this is not an axis-to-axis distance. Two grounded T-H-M-A players at
+their normal 32-pixel push separation therefore report body distance 0, allowing the original CMD
+near/far branches to select States 200/203 for `x` and States 232/230 for `a`.
+
+The current two-player runtime uses each player's active Facing and root character Size data. Team
+target selection, different local coordinate spaces, and Helper redirect ownership remain Partial.
+
 ## Character constants
 
 `Const(...)` first resolves the current character CNS metadata. `[Velocity]` pairs expose their requested X/Y component, including `jump.neu`, `jump.fwd`, `jump.back`, `runjump.fwd`, and `runjump.back`; a directional entry that defines only X inherits the same character's `jump.neu` Y, as used by bundled real character data. `[Movement] yaccel` feeds both expressions and `Physics=A`. Existing defaults remain only for missing values already covered by the former compatibility table. Other WinMUGEN constant families and coordinate scaling remain Partial.

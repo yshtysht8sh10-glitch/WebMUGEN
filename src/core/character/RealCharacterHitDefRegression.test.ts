@@ -13,6 +13,7 @@ import { resolveFallbackHits } from '../engine/FallbackHitResolver';
 import { createInitialRoundState, stepRoundState } from '../engine/RoundState';
 import type { GameState } from '../engine/types';
 import { loadCharacterFromDef, type CharacterAssetFetcher } from './CharacterLoader';
+import { HitPauseCommandBuffer } from '../../input/HitPauseCommandBuffer';
 
 declare const process: { env: Record<string, string | undefined>; platform: string };
 
@@ -131,6 +132,56 @@ realCharacterDescribe('WinMUGEN real-character HitDef regression', () => {
 });
 
 describe('T-H-M-A State 215 launch regression', () => {
+  it('uses the AnimElem trigger frame for collision after physics advances AnimTime', async () => {
+    const assets = await loadCharacterFromDef('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.def', createFileSystemFetcher());
+    const initial = createInitialGameState();
+    const state: GameState = {
+      ...initial,
+      players: [
+        {
+          ...initial.players[0],
+          x: 333.2,
+          stateNo: 215,
+          stateHeaderAppliedStateNo: 215,
+          stateTime: 5,
+          stateType: 'S',
+          moveType: 'A',
+          physics: 'S',
+          ctrl: false,
+          animNo: 215,
+          animTime: 5,
+          fvars: { 1: 1 },
+        },
+        { ...initial.players[1], x: 420, animNo: 0, animTime: 0 },
+      ],
+    };
+    const runtimeInput = {
+      hitDiagnostics: true,
+      getAnimationDuration: (animNo: number) => getMugenAnimEndTime(assets.air, animNo),
+      getAnimationElementNo: (animNo: number, animTime: number) => {
+        const element = getCurrentAnimationElement(assets.air, animNo, animTime);
+        return element ? element.elementIndex + 1 : null;
+      },
+      getAnimationTriggerInfo: (animNo: number, animTime: number) => getAnimationTriggerInfo(assets.air, animNo, animTime),
+    };
+
+    const beforeAttackElement = stepCnsStateRuntime(state, assets.cns, runtimeInput).state;
+    const attackElement = stepCnsPhysicsMotion(beforeAttackElement, assets.cns);
+    const earlyCollision = resolveFallbackHits(attackElement, assets.air, true, beforeAttackElement);
+    expect(earlyCollision.hitEvents).toHaveLength(0);
+    expect(attackElement.players[0].animTime).toBe(6);
+
+    const activated = stepCnsStateRuntime(earlyCollision, assets.cns, runtimeInput).state;
+    expect(activated.players[0].activeHitDef?.hitId).toBe(215);
+    const afterPhysics = stepCnsPhysicsMotion(activated, assets.cns);
+    const contacted = resolveFallbackHits(afterPhysics, assets.air, true, activated);
+
+    expect(afterPhysics.players[0].animTime).toBe(7);
+    expect(contacted.hitEvents).toHaveLength(1);
+    expect(contacted.players[1].life).toBe(940);
+    expect(contacted.hitDiagnosticLines?.join('\n')).toContain('attackerElem=3');
+  });
+
   it.each([
     { mode: 'ground' as const, attackerId: 1 as const, facing: 1 as const, ko: false },
     { mode: 'air' as const, attackerId: 2 as const, facing: -1 as const, ko: false },
@@ -202,6 +253,123 @@ describe('T-H-M-A State 215 launch regression', () => {
       expect(state.players[targetIndex]).toMatchObject({ stateNo: 0, stateType: 'S', moveType: 'I' });
     }
   }, 30_000);
+});
+
+describe('T-H-M-A crouching and jumping Y collision regression', () => {
+  it.each([
+    { stateNo: 410, stateType: 'C' as const, physics: 'C' as const, y: 285 },
+    { stateNo: 610, stateType: 'A' as const, physics: 'A' as const, y: 255 },
+  ])('resolves State $stateNo AnimElem 5 against a standing target', async ({ stateNo, stateType, physics, y }) => {
+    const assets = await loadCharacterFromDef('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.def', createFileSystemFetcher());
+    const stateDef = assets.cns.states.find((candidate) => candidate.stateNo === stateNo);
+    expect(stateDef).toBeDefined();
+    const focusedCns: CnsDocument = { metadataSections: assets.cns.metadataSections, states: [stateDef!] };
+    const attackTime = findActionElementStart(assets.air.actions, stateNo, 5);
+    expect(attackTime).not.toBeNull();
+    const initial = createInitialGameState();
+    const state: GameState = {
+      ...initial,
+      players: [{
+        ...initial.players[0],
+        x: 350,
+        y,
+        stateNo,
+        stateHeaderAppliedStateNo: stateNo,
+        stateTime: attackTime!,
+        stateType,
+        moveType: 'A',
+        physics,
+        ctrl: false,
+        animNo: stateNo,
+        animTime: attackTime!,
+        fvars: { 1: 1, 2: 0 },
+      }, {
+        ...initial.players[1],
+        x: 390,
+        animNo: 0,
+        animTime: 0,
+      }],
+    };
+    const runtimeInput = {
+      hitDiagnostics: true,
+      getAnimationDuration: (animNo: number) => getMugenAnimEndTime(assets.air, animNo),
+      getAnimationElementNo: (animNo: number, animTime: number) => {
+        const element = getCurrentAnimationElement(assets.air, animNo, animTime);
+        return element ? element.elementIndex + 1 : null;
+      },
+      getAnimationTriggerInfo: (animNo: number, animTime: number) => getAnimationTriggerInfo(assets.air, animNo, animTime),
+    };
+
+    const activated = stepCnsStateRuntime(state, focusedCns, runtimeInput).state;
+    const afterPhysics = stepCnsPhysicsMotion(activated, focusedCns);
+    const contacted = resolveFallbackHits(afterPhysics, assets.air, true, activated);
+
+    expect(activated.players[0].activeHitDef, activated.players[0].hitDiagnosticLines?.join('\n')).not.toBeNull();
+    expect(contacted.hitEvents, contacted.hitDiagnosticLines?.join('\n')).toHaveLength(1);
+    expect(contacted.hitDiagnosticLines?.join('\n')).toContain('hitflag=MAFP');
+  });
+});
+
+describe('T-H-M-A hit-confirm command buffering', () => {
+  it('carries an a command from State 200 hitpause into the close State 232 cancel route', async () => {
+    const assets = await loadCharacterFromDef('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.def', createFileSystemFetcher());
+    const initial = createInitialGameState();
+    let state: GameState = {
+      ...initial,
+      players: [
+        {
+          ...initial.players[0],
+          x: 333.2,
+          stateNo: 200,
+          stateHeaderAppliedStateNo: 200,
+          stateTime: 8,
+          stateType: 'S',
+          moveType: 'A',
+          physics: 'S',
+          ctrl: false,
+          animNo: 200,
+          animTime: 8,
+          hitPause: 8,
+          moveContact: { activeHitDefId: 1, contact: true, hit: true, guarded: false, elapsed: 1, hitCount: 1 },
+        },
+        { ...initial.players[1], x: 330 },
+      ],
+    };
+    const commandBuffer = new HitPauseCommandBuffer(assets.cmd);
+    const animationInput = {
+      getAnimationDuration: (animNo: number) => getMugenAnimEndTime(assets.air, animNo),
+      getAnimationElementNo: (animNo: number, animTime: number) => {
+        const element = getCurrentAnimationElement(assets.air, animNo, animTime);
+        return element ? element.elementIndex + 1 : null;
+      },
+      getAnimationTriggerInfo: (animNo: number, animTime: number) => getAnimationTriggerInfo(assets.air, animNo, animTime),
+    };
+    commandBuffer.resolve(new Set(['a']), true);
+
+    while (state.players[0].hitPause > 0) {
+      const commands = commandBuffer.resolve(new Set(), true);
+      state = stepCnsPhysicsMotion(stepCnsStateRuntime(state, assets.cns, {
+        ...animationInput,
+        p1Commands: commands,
+      }).state, assets.cns);
+    }
+
+    const resumedCommands = commandBuffer.resolve(new Set(), false);
+    const cancelResult = stepCnsStateRuntime(state, assets.cns, {
+      ...animationInput,
+      p1Commands: resumedCommands,
+      traceDiagnostics: true,
+      hitDiagnostics: true,
+    });
+    const cancelled = cancelResult.state;
+
+    expect(resumedCommands).toContain('a');
+    expect(cancelled.players[0], [
+      ...cancelResult.traces[0].debugLines,
+      ...(cancelled.players[0].hitDiagnosticLines ?? []),
+    ].join('\n')).toMatchObject({ stateNo: 232, animNo: 232, ctrl: false });
+    expect(cancelled.players[0].moveContact).toBeUndefined();
+  });
 });
 
 describe('T-H-M-A State 1016 multihit regression', () => {

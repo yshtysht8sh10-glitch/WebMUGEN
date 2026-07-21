@@ -22,7 +22,7 @@ Do not mark safe defaults as Complete.
 
 | Trigger | Matrix status | Current note | Remaining risk |
 |---|---|---|---|
-| `BodyDist X` | Partial | Evaluates opponent center distance like `P2BodyDist X`. | Precise body-edge width and push/collision integration are incomplete. |
+| `BodyDist X` | Partial | Compatibility alias of `P2BodyDist X`; measures Facing-relative front-to-front distance using each player's ground/air Size width and XScale. Real T-H-M-A x/a near/far CMD routes are covered. | Team selection, mixed coordinate spaces, and Helper redirects need audit. |
 | `BodyDist Y` | Partial | Evaluates opponent/player Y coordinate difference like `P2BodyDist Y`. | Precise body-edge height and airborne body bounds need audit. |
 | `BackEdgeBodyDist` | Fallback 40% | The production compiled evaluator selects the edge behind the player from Facing and measures from the fixed X=48/912 fallback boundary; a focused State 250 to 281 route test covers wall impact. | Camera-relative edges and exact body-width adjustment remain incomplete. |
 | `FrontEdgeBodyDist` | Fallback 40% | The production compiled evaluator selects the edge in front of the player from Facing and measures from the fixed X=48/912 fallback boundary; a focused State 250 to 281 route test covers wall impact. | Camera-relative edges and exact body-width adjustment remain incomplete. |

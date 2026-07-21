@@ -79,6 +79,36 @@ function runRealCommand(button: 'x' | 'y') {
   return { name, resolved, result, filteredControllers };
 }
 
+function runProximityCommand(button: 'x' | 'a', axisDistance: number) {
+  const destinations = button === 'x' ? [200, 203] : [230, 232];
+  const stateMinusOne = commandStates.states.find((state) => state.stateNo === -1);
+  const filteredControllers = stateMinusOne?.controllers.filter((controller) =>
+    controller.type.toLowerCase() === 'changestate' && destinations.includes(Number(controller.params.value))) ?? [];
+  const cns = {
+    states: [
+      { ...stateMinusOne!, controllers: filteredControllers },
+      {
+        stateNo: 0, stateType: 'S', moveType: 'I', physics: 'S', ctrl: true, initialAnim: 0, controllers: [],
+      },
+      ...destinations.map((stateNo) => ({
+        stateNo, stateType: 'S', moveType: 'A', physics: 'S', ctrl: false, initialAnim: stateNo, controllers: [],
+      })),
+    ],
+    metadataSections: commandStates.metadataSections,
+  };
+  const initial = createInitialGameState();
+  return stepCnsStateRuntime({
+    ...initial,
+    players: [
+      { ...initial.players[0], x: 300, facing: 1, vars: { 33: 0 } },
+      { ...initial.players[1], x: 300 + axisDistance, facing: -1 },
+    ],
+  }, cns, {
+    p1Commands: new Set([button]),
+    p2Commands: new Set(),
+  });
+}
+
 describe('real T-H-M-A release command integration', () => {
   it.each([
     ['x', 3405],
@@ -89,5 +119,18 @@ describe('real T-H-M-A release command integration', () => {
     expect(hasCommand(result.resolved, result.name)).toBe(true);
     expect(result.result.state.players[0].stateNo).toBe(stateNo);
     expect(result.result.traces[0].executedControllers).toContain('ChangeState');
+  });
+});
+
+describe('real T-H-M-A proximity attack routing', () => {
+  it.each([
+    ['x', 32, 200],
+    ['x', 80, 203],
+    ['a', 32, 232],
+    ['a', 80, 230],
+  ] as const)('routes %s at axis distance %i to State %i', (button, axisDistance, stateNo) => {
+    const result = runProximityCommand(button, axisDistance);
+    expect(result.state.players[0].stateNo).toBe(stateNo);
+    expect(result.traces[0].executedControllers).toContain('ChangeState');
   });
 });
