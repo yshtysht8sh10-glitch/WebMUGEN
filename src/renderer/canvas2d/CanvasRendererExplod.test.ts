@@ -67,6 +67,52 @@ describe('CanvasRenderer Explod integration', () => {
     expect(diagnostics).toContainEqual(expect.stringContaining('transSource=air'));
     expect(diagnostics).toContainEqual(expect.stringContaining('limitation=air_a_source_alpha_approximated'));
   });
+  it('darkens an active SuperPause before drawing onTop Explods', () => {
+    const order: string[] = [];
+    let fillStyle = '';
+    const drawImage = vi.fn(() => order.push('ontop'));
+    const context = {
+      ...fakeContext({ drawImage, scale: vi.fn(), translate: vi.fn() }),
+      set fillStyle(value: string) { fillStyle = value; },
+      get fillStyle() { return fillStyle; },
+      fillRect: vi.fn((x: number, y: number, width: number, height: number) => {
+        if (fillStyle === 'rgba(0, 0, 0, 0.5)' && x === 0 && y === 0 && width === 640 && height === 360) order.push('darken');
+      }),
+    } as unknown as CanvasRenderingContext2D;
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+    const state = createInitialGameState();
+    state.pause = { pauseTime: 0, superPauseTime: 40, darken: true, moveTime: 0, ownerEntityId: 1, kind: 'superpause', resumeGuard: false };
+    state.explods.entries = [{ ...entry(), onTop: true }];
+    const image = {} as HTMLImageElement;
+    const assets = { airDocument: air(200, 20, 3), spritePack: { sprites: new Map([['20,3', { groupNo: 20, imageNo: 3, src: '', xAxis: 4, yAxis: 5, image }]]) } as SpritePack };
+
+    const diagnostics = new CanvasRenderer(canvas, undefined, null, null, { 2: assets }).render(state);
+
+    expect(order).toEqual(['darken', 'ontop']);
+    expect(diagnostics).toContain('raw.superpause_darken remaining=40 opacity=0.5 layer=before_ontop result=drawn');
+  });
+
+  it('does not darken normal Pause or darken=0 SuperPause', () => {
+    const fullScreenDarken = vi.fn();
+    let fillStyle = '';
+    const context = {
+      ...fakeContext({ drawImage: vi.fn(), scale: vi.fn(), translate: vi.fn() }),
+      set fillStyle(value: string) { fillStyle = value; },
+      get fillStyle() { return fillStyle; },
+      fillRect: vi.fn((x: number, y: number, width: number, height: number) => {
+        if (fillStyle === 'rgba(0, 0, 0, 0.5)' && x === 0 && y === 0 && width === 640 && height === 360) fullScreenDarken();
+      }),
+    } as unknown as CanvasRenderingContext2D;
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+    const initial = createInitialGameState();
+    const renderer = new CanvasRenderer(canvas);
+
+    const pauseDiagnostics = renderer.render({ ...initial, pause: { pauseTime: 10, superPauseTime: 0, darken: false, moveTime: 0, ownerEntityId: 1, kind: 'pause', resumeGuard: false } });
+    const disabledDiagnostics = renderer.render({ ...initial, pause: { pauseTime: 0, superPauseTime: 10, darken: false, moveTime: 0, ownerEntityId: 1, kind: 'superpause', resumeGuard: false } });
+
+    expect(fullScreenDarken).not.toHaveBeenCalled();
+    expect([...pauseDiagnostics, ...disabledDiagnostics].some((line) => line.startsWith('raw.superpause_darken'))).toBe(false);
+  });
 });
 
 function fakeContext(spies: { drawImage: ReturnType<typeof vi.fn>; scale: ReturnType<typeof vi.fn>; translate: ReturnType<typeof vi.fn> }): CanvasRenderingContext2D {

@@ -104,6 +104,13 @@ export class CanvasRenderer {
         if (diagnostic) renderDiagnostics.push(diagnostic);
       }
     }
+    if ((state.pause?.superPauseTime ?? 0) > 0 && state.pause?.darken) {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+      if (diagnosticsEnabled) {
+        renderDiagnostics.push(`raw.superpause_darken remaining=${state.pause.superPauseTime} opacity=0.5 layer=before_ontop result=drawn`);
+      }
+    }
     if (hitFeedback) this.hitFeedbackRenderer.render(ctx, hitFeedback);
     for (const frame of getExplodsInDrawOrder(explodResolution.frames).filter((candidate) => candidate.entry.onTop)) {
       const diagnostic = this.drawExplod(ctx, frame, diagnosticsEnabled);

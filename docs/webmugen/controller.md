@@ -133,7 +133,7 @@ Issue #54 fixes the upstream trigger path used by repeating sounds. `AnimElem = 
 
 Issue #51 makes the first gesture atomic from unlock request through the following sound bridge: one pending `resume()` is shared, and PlaySnd or HitDef sound emitted before it resolves waits for that attempt. There is no unbounded pre-gesture queue, failed resume remains retryable, and Runtime tab changes do not recreate or subscribe the adapter.
 
-`Pause` and `SuperPause` now emit match-level events instead of storing dead player fields. The owner may execute and move for `movetime`; other CNS and physics stop, including negative States. Explods use their own matching allowance. PlaySnd on the activation pass fires once, then controller suppression plus the resume guard prevents replay. Existing browser voices continue through the pause. Same activation-pass cross-player ordering, Helper ownership, and full SuperPause presentation remain Partial.
+`Pause` and `SuperPause` now emit match-level events instead of storing dead player fields. The owner may execute and move for `movetime`; other CNS and physics stop, including negative States. Explods use their own matching allowance. PlaySnd on the activation pass fires once, then controller suppression plus the resume guard prevents replay. Existing browser voices continue through the pause. A SuperPause with `darken = 1` draws a half-opacity black screen pass after regular layers and before hit feedback/`ontop` Explods; normal Pause and `darken = 0` do not. Same activation-pass cross-player ordering, Helper ownership, default SuperPause anim/sound/pos, and other presentation details remain Partial.
 
 If the controller only stores a field or is skipped safely, mark Partial.
 
