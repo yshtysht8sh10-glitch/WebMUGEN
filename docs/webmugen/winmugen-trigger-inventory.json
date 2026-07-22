@@ -10,8 +10,8 @@
   "counts": {
     "Not implemented": 0,
     "Parser only": 24,
-    "Safe fallback": 12,
-    "Partial": 89,
+    "Safe fallback": 9,
+    "Partial": 92,
     "Complete": 7,
     "Not applicable": 26
   },
@@ -3371,15 +3371,15 @@
       "redirectable": true,
       "version": "WinMUGEN 2002.04.14",
       "officialReference": "https://bluesura.github.io/MUGEN/document/Official/2002.04.14/trigger.html",
-      "officialSummary": "Returns the WinMUGEN NumExplod value described by Elecbyte's Trigger Reference.",
+      "officialSummary": "Counts active Explods owned by the current runtime entity, optionally filtered by MUGEN id.",
       "syntaxSupported": true,
       "parserBehavior": "CnsParser retains the complete expression string; trigger names are not enumerated in the production parser AST.",
       "evaluatorImplemented": true,
       "implementationLocation": "src/core/cns/CnsRuntimeTrigger.ts",
-      "runtimeDataSource": "fixed compatibility value",
+      "runtimeDataSource": "CnsRuntimeTriggerContext / PlayerState and connected subsystem state",
       "argumentSupport": "See syntax and knownLimitations; irregular/optional argument coverage is conservative.",
       "redirectSupport": "enemy/enemynear/target subset only; root/parent are fallbacks and helper/partner/playerid are missing",
-      "fallbackBehavior": "Returns a fixed compatibility value.",
+      "fallbackBehavior": "No general self fallback is intended for missing redirects.",
       "updateTiming": "not fully verified against WinMUGEN tick ordering",
       "pauseBehavior": "not comprehensively verified for hitpause, Pause and SuperPause",
       "rootBehavior": "root-player path exists",
@@ -3419,9 +3419,9 @@
           "exampleLine": 277
         }
       ],
-      "matrixStatus": "Safe fallback",
-      "canonicalMatrixStatus": "Safe no-op",
-      "knownLimitations": "Safe fallback; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
+      "matrixStatus": "Partial",
+      "canonicalMatrixStatus": "Partial 40%",
+      "knownLimitations": "Partial; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
     },
     {
       "name": "NumHelper",
@@ -5027,21 +5027,21 @@
       "redirectable": true,
       "version": "WinMUGEN 2002.04.14",
       "officialReference": "https://bluesura.github.io/MUGEN/document/Official/2002.04.14/trigger.html",
-      "officialSummary": "Returns the WinMUGEN ProjHitTime value described by Elecbyte's Trigger Reference.",
+      "officialSummary": "Returns elapsed unpaused ticks since the requested projectile id last hit, or -1 when it has not hit.",
       "syntaxSupported": true,
       "parserBehavior": "CnsParser retains the complete expression string; trigger names are not enumerated in the production parser AST.",
       "evaluatorImplemented": true,
       "implementationLocation": "src/core/cns/CnsRuntimeTrigger.ts",
-      "runtimeDataSource": "fixed compatibility value",
+      "runtimeDataSource": "CnsRuntimeTriggerContext / PlayerState and connected subsystem state",
       "argumentSupport": "See syntax and knownLimitations; irregular/optional argument coverage is conservative.",
       "redirectSupport": "enemy/enemynear/target subset only; root/parent are fallbacks and helper/partner/playerid are missing",
-      "fallbackBehavior": "Returns a fixed compatibility value.",
+      "fallbackBehavior": "No general self fallback is intended for missing redirects.",
       "updateTiming": "not fully verified against WinMUGEN tick ordering",
       "pauseBehavior": "not comprehensively verified for hitpause, Pause and SuperPause",
       "rootBehavior": "root-player path exists",
       "helperBehavior": "not comprehensively verified",
       "targetBehavior": "redirect child behavior only where the redirect resolver supports it",
-      "projectileBehavior": "projectile Trigger integration is absent or fixed fallback",
+      "projectileBehavior": "root-owner Projectile hit history is connected and advances on unpaused owner ticks",
       "testCoverage": "focused tests exist for the implemented subset; inventory audit records exact Matrix coverage",
       "realCharacterUsage": [
         {
@@ -5050,9 +5050,9 @@
           "exampleLine": 508
         }
       ],
-      "matrixStatus": "Safe fallback",
-      "canonicalMatrixStatus": "Safe no-op",
-      "knownLimitations": "Safe fallback; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
+      "matrixStatus": "Partial",
+      "canonicalMatrixStatus": "Partial 40%",
+      "knownLimitations": "Partial; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
     },
     {
       "name": "Random",
@@ -5067,15 +5067,15 @@
       "redirectable": true,
       "version": "WinMUGEN 2002.04.14",
       "officialReference": "https://bluesura.github.io/MUGEN/document/Official/2002.04.14/trigger.html",
-      "officialSummary": "Returns an integer from 0 through 999 in WinMUGEN; WebMUGEN currently returns fixed 500.",
+      "officialSummary": "Returns an integer from 0 through 999; WebMUGEN supplies a deterministic per-frame value so runtime traces and replays remain stable.",
       "syntaxSupported": true,
       "parserBehavior": "CnsParser retains the complete expression string; trigger names are not enumerated in the production parser AST.",
       "evaluatorImplemented": true,
       "implementationLocation": "src/core/cns/CnsRuntimeTrigger.ts",
-      "runtimeDataSource": "fixed compatibility value",
+      "runtimeDataSource": "CnsRuntimeTriggerContext / PlayerState and connected subsystem state",
       "argumentSupport": "See syntax and knownLimitations; irregular/optional argument coverage is conservative.",
       "redirectSupport": "enemy/enemynear/target subset only; root/parent are fallbacks and helper/partner/playerid are missing",
-      "fallbackBehavior": "Returns a fixed compatibility value.",
+      "fallbackBehavior": "No general self fallback is intended for missing redirects.",
       "updateTiming": "not fully verified against WinMUGEN tick ordering",
       "pauseBehavior": "not comprehensively verified for hitpause, Pause and SuperPause",
       "rootBehavior": "root-player path exists",
@@ -5105,9 +5105,9 @@
           "exampleLine": 4185
         }
       ],
-      "matrixStatus": "Safe fallback",
-      "canonicalMatrixStatus": "Safe no-op",
-      "knownLimitations": "Safe fallback; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
+      "matrixStatus": "Partial",
+      "canonicalMatrixStatus": "Partial 40%",
+      "knownLimitations": "Partial; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
     },
     {
       "name": "RightEdge",

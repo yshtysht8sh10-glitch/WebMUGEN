@@ -4,6 +4,7 @@ import type { CnsDocument, CnsStateDefinition } from '../../mugen/common/cnsType
 import { findCnsState } from '../../mugen/common/CnsStateIndex';
 import { readCnsConst } from './CnsConstants';
 import { advanceMoveContact } from '../hitdef/MoveContactState';
+import { stepBgPalFx } from '../palfx/BgPalFxSystem';
 
 const GROUND_FRICTION = 0.82;
 const COMMON_JUMP_LAND_STATE = 52;
@@ -77,27 +78,30 @@ function applyCommonDownRecovery(player: PlayerState, cns: CnsDocument | null | 
 }
 
 export function stepPlayerCnsPhysics(player: PlayerState, cns?: CnsDocument | null): PlayerState {
+  const palFx = stepBgPalFx(player.palFx);
   if (player.hitPause > 0) {
     return {
       ...player,
+      palFx,
       hitPause: Math.max(0, player.hitPause - 1),
     };
   }
 
-  const advanced = advanceMoveContact(player);
+  const advanced = advanceProjectileContacts(advanceMoveContact(player));
   const nextTime = {
     stateTime: player.stateTime + 1,
     animTime: player.animTime + 1,
   };
 
   if (player.positionFrozen) {
-    return { ...advanced, positionFrozen: false, ...nextTime };
+    return { ...advanced, palFx, positionFrozen: false, ...nextTime };
   }
 
   if (player.physics === 'S' || player.physics === 'C') {
     const nextVx = player.vx * GROUND_FRICTION;
     return {
       ...advanced,
+      palFx,
       x: player.x + player.vx,
       y: DEFAULT_GROUND_Y,
       vx: Math.abs(nextVx) < 0.01 ? 0 : nextVx,
@@ -110,6 +114,7 @@ export function stepPlayerCnsPhysics(player: PlayerState, cns?: CnsDocument | nu
     const nextVy = player.vy + readCnsConst(cns, 'movement.yaccel');
     return {
       ...advanced,
+      palFx,
       x: player.x + player.vx,
       y: player.y + nextVy,
       vy: nextVy,
@@ -121,9 +126,22 @@ export function stepPlayerCnsPhysics(player: PlayerState, cns?: CnsDocument | nu
   // controllers still move the player on both axes.
   return {
     ...advanced,
+    palFx,
     x: player.x + player.vx,
     y: player.y + player.vy,
     ...nextTime,
+  };
+}
+
+function advanceProjectileContacts(player: PlayerState): PlayerState {
+  if (!player.projectileContacts) return player;
+  return {
+    ...player,
+    projectileContacts: Object.fromEntries(Object.entries(player.projectileContacts).map(([id, contact]) => [id, {
+      contactTime: contact.contactTime < 0 ? -1 : contact.contactTime + 1,
+      hitTime: contact.hitTime < 0 ? -1 : contact.hitTime + 1,
+      guardedTime: contact.guardedTime < 0 ? -1 : contact.guardedTime + 1,
+    }])),
   };
 }
 

@@ -1109,7 +1109,7 @@ x = 99
     }, cns);
     expect(result.state.players[0]).toMatchObject({ vx: -4, hitPause: 2 });
     expect(result.traces[0].executedControllers).not.toContain('VelSet');
-    expect(result.traces[0].debugLines).toContain('hitpause skip remaining=2');
+    expect(result.traces[0].debugLines).toContainEqual(expect.stringContaining('hitpause selective remaining=2'));
   });
 
   it('forces StateDef and internal ChangeState ctrl off during hit stun', () => {

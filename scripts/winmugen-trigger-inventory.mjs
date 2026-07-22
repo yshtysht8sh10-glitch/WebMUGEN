@@ -72,8 +72,8 @@ const COMPLETE = new Set([
   'AnimElem', 'AnimElemTime', 'Command', 'Ctrl', 'StateNo', 'StateType', 'Time',
 ]);
 const SAFE_FALLBACK = new Set([
-  'AILevel', 'LifeMax', 'NumEnemy', 'NumExplod', 'NumPartner', 'NumProj', 'NumProjID',
-  'ProjCancelTime', 'ProjContactTime', 'ProjGuardedTime', 'ProjHitTime', 'Random', 'RoundsExisted',
+  'AILevel', 'LifeMax', 'NumEnemy', 'NumPartner', 'NumProj', 'NumProjID',
+  'ProjCancelTime', 'ProjContactTime', 'ProjGuardedTime', 'RoundsExisted',
 ]);
 const PARTIAL = new Set([
   'Abs', 'ACos', 'Alive', 'Anim', 'AnimElemNo', 'AnimExist', 'AnimTime', 'ASin', 'ATan', 'AuthorName',
@@ -81,12 +81,12 @@ const PARTIAL = new Set([
   'Cos', 'DrawGame', 'E', 'Exp', 'Facing', 'Floor', 'FrontEdgeBodyDist', 'FrontEdgeDist', 'FVar',
   'GameTime', 'GetHitVar', 'HitCount', 'HitDefAttr', 'HitFall', 'HitOver', 'HitPauseTime', 'HitShakeOver',
   'HitVel X', 'HitVel Y', 'IfElse', 'InGuardDist', 'IsHelper', 'Life', 'Ln', 'Log', 'Lose', 'MatchOver',
-  'MoveContact', 'MoveGuarded', 'MoveHit', 'MoveType', 'Name', 'NumHelper', 'NumTarget', 'P2BodyDist X',
+  'MoveContact', 'MoveGuarded', 'MoveHit', 'MoveType', 'Name', 'NumExplod', 'NumHelper', 'NumTarget', 'P2BodyDist X',
   'P2BodyDist Y', 'P2Dist X', 'P2Dist Y', 'P2Life', 'P2MoveType', 'P2Name', 'P2StateNo', 'P2StateType',
-  'Pi', 'Pos X', 'Pos Y', 'Power', 'PowerMax', 'PrevStateNo', 'RoundNo', 'RoundState', 'ScreenPos X',
+  'Pi', 'Pos X', 'Pos Y', 'Power', 'PowerMax', 'PrevStateNo', 'ProjHitTime', 'RoundNo', 'RoundState', 'ScreenPos X',
   'ScreenPos Y', 'SelfAnimExist', 'Sin', 'StateTime', 'SysVar', 'Tan', 'TargetID', 'TargetStateNo', 'NumCommand',
   'P2AuthorName', 'P2Ctrl', 'P2Facing', 'Physics',
-  'TeamSide', 'TicksPerSecond', 'TimeMod', 'Var', 'Vel X', 'Vel Y', 'Win',
+  'Random', 'TeamSide', 'TicksPerSecond', 'TimeMod', 'Var', 'Vel X', 'Vel Y', 'Win',
 ]);
 
 const FUNCTION_ARGUMENTS = new Map([
@@ -115,7 +115,9 @@ const NOTES = {
   MoveContact: 'Elapsed unpaused ticks since the current attack contacted by hit or guard.',
   MoveHit: 'Elapsed unpaused ticks since the current attack hit.',
   MoveGuarded: 'Elapsed unpaused ticks since the current attack was guarded.',
-  Random: 'Returns an integer from 0 through 999 in WinMUGEN; WebMUGEN currently returns fixed 500.',
+  NumExplod: 'Counts active Explods owned by the current runtime entity, optionally filtered by MUGEN id.',
+  ProjHitTime: 'Returns elapsed unpaused ticks since the requested projectile id last hit, or -1 when it has not hit.',
+  Random: 'Returns an integer from 0 through 999; WebMUGEN supplies a deterministic per-frame value so runtime traces and replays remain stable.',
   Time: 'Returns ticks elapsed in the current State.',
   StateNo: 'Returns the currently executing State number.',
   StateType: 'Returns the current S/C/A state type.',
@@ -179,7 +181,9 @@ function createBaseRecord(name, version = 'WinMUGEN 2002.04.14', reference = OFF
     rootBehavior: evaluatorImplemented ? 'root-player path exists' : 'not implemented',
     helperBehavior: name === 'IsHelper' || name === 'NumHelper' ? 'focused Helper coverage exists' : 'not comprehensively verified',
     targetBehavior: name.startsWith('Target') || name === 'NumTarget' ? 'two-root-player Target registry subset' : 'redirect child behavior only where the redirect resolver supports it',
-    projectileBehavior: name.startsWith('Proj') || name === 'NumProj' || name === 'NumProjID' ? 'projectile Trigger integration is absent or fixed fallback' : 'not applicable to direct value source; projectile-owner parity unverified',
+    projectileBehavior: name === 'ProjHitTime'
+      ? 'root-owner Projectile hit history is connected and advances on unpaused owner ticks'
+      : name.startsWith('Proj') || name === 'NumProj' || name === 'NumProjID' ? 'projectile Trigger integration is absent or fixed fallback' : 'not applicable to direct value source; projectile-owner parity unverified',
     testCoverage: evaluatorImplemented ? 'focused tests exist for the implemented subset; inventory audit records exact Matrix coverage' : 'inventory/Matrix coverage only',
     realCharacterUsage: [],
     matrixStatus: audit,

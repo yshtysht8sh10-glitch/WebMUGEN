@@ -213,6 +213,10 @@ describe('CnsRuntimeTrigger', () => {
     expect(evaluateCnsRuntimeTrigger('Life > 0', { player })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('Power = 0', { player })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('Random < 1000', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('Random = [0,499]', { player, random: 499 })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('Random = [0,499]', { player, random: 500 })).toBe(false);
+    expect(evaluateCnsRuntimeTrigger('ProjHitTime(1005) = 1', { player, projHitTime: (id) => id === 1005 ? 1 : -1 })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('NumExplod(16600) = 0', { player, numExplod: (id) => id === 16600 ? 0 : 2 })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('HitPauseTime = 0', { player })).toBe(true);
   });
 

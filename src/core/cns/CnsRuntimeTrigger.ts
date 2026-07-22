@@ -24,12 +24,17 @@ export type CnsRuntimeTriggerContext = {
   aiLevel?: number;
   teamSide?: number;
   gameTime?: number;
+  random?: number;
   screenWidth?: number;
   screenHeight?: number;
   animationExists?: (animNo: number) => boolean;
   constants?: CnsDocument;
   isHelper?: boolean;
   numHelper?: (helperId?: number) => number;
+  numExplod?: (explodId?: number) => number;
+  projContactTime?: (projectileId: number) => number;
+  projHitTime?: (projectileId: number) => number;
+  projGuardedTime?: (projectileId: number) => number;
   getRedirectAnimationContext?: (player: PlayerState) => Pick<
     CnsRuntimeTriggerContext,
     'animTime' | 'animElemNo' | 'animElemTime' | 'animElemStarted' | 'animElemCount' | 'animElemTimes'
@@ -578,6 +583,17 @@ function getNumberSource(rawName: string): NumberSource | null {
     };
   }
 
+  const numExplodMatch = name.match(/^numexplod(?:\((.+)\))?$/);
+  if (numExplodMatch) {
+    const explodIdSource = numExplodMatch[1] === undefined ? null : compileNumberExpression(numExplodMatch[1]);
+    return (context) => {
+      const explodId = numExplodMatch[1] === undefined
+        ? undefined
+        : explodIdSource?.(context) ?? undefined;
+      return context.numExplod?.(explodId) ?? 0;
+    };
+  }
+
   const targetMatch = name.match(/^(numtarget|targetid|targetstateno)(?:\((.+)\))?$/);
   if (targetMatch) {
     const requestedIdSource = targetMatch[2] === undefined ? null : compileNumberExpression(targetMatch[2]);
@@ -637,7 +653,7 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'powermax': return (context) => readPlayerPowerMax(context.player);
     case 'life': return (context) => context.player.life;
     case 'lifemax': return () => 1000;
-    case 'random': return () => 500;
+    case 'random': return (context) => Math.max(0, Math.min(999, Math.trunc(context.random ?? 500)));
     case 'facing': return (context) => context.player.facing;
     case 'posx':
     case 'pos x': return (context) => context.player.x;
@@ -663,7 +679,7 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'moveguarded': return (context) => context.player.moveContact?.guarded ? context.player.moveContact.elapsed ?? 1 : 0;
     case 'numenemy': return (context) => (context.opponent ? 1 : 1);
     case 'numproj': return () => 0;
-    case 'numexplod': return () => 0;
+    case 'numexplod': return (context) => context.numExplod?.() ?? 0;
     case 'numpartner': return () => 0;
     case 'numcommand': return (context) => context.commands?.size ?? 0;
     case 'ishelper': return (context) => context.isHelper ? 1 : 0;
@@ -713,11 +729,11 @@ function getFunctionNumberSource(name: string): NumberSource | null {
   }
 
   const projContactTimeMatch = name.match(/^projcontacttime\((\d+)\)$/);
-  if (projContactTimeMatch) return () => -1;
+  if (projContactTimeMatch) return (context) => context.projContactTime?.(Number(projContactTimeMatch[1])) ?? -1;
   const projHitTimeMatch = name.match(/^projhittime\((\d+)\)$/);
-  if (projHitTimeMatch) return () => -1;
+  if (projHitTimeMatch) return (context) => context.projHitTime?.(Number(projHitTimeMatch[1])) ?? -1;
   const projGuardedTimeMatch = name.match(/^projguardedtime\((\d+)\)$/);
-  if (projGuardedTimeMatch) return () => -1;
+  if (projGuardedTimeMatch) return (context) => context.projGuardedTime?.(Number(projGuardedTimeMatch[1])) ?? -1;
   const projCancelTimeMatch = name.match(/^projcanceltime\((\d+)\)$/);
   if (projCancelTimeMatch) return () => -1;
 

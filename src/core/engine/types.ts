@@ -149,9 +149,11 @@ export type ActiveHitDef = {
   spark?: { animNo: number; scope: 'common' | 'attacker' };
   guardSpark?: { animNo: number; scope: 'common' | 'attacker' };
   sparkOffset?: { x: number; y: number };
+  guardSparkOffset?: { x: number; y: number };
   hitSound?: { group: number; index: number; scope: 'common' | 'attacker' };
   guardSound?: { group: number; index: number; scope: 'common' | 'attacker' };
   envShake?: { time: number; frequency: number; amplitude: number; phase: number };
+  palFx?: Omit<BgPalFxState, 'remainingTime' | 'elapsedTime' | 'ownerEntityId'>;
   hitOnce?: boolean;
   pauseTime: {
     attacker: number;
@@ -205,6 +207,7 @@ export type PlayerState = {
   animTime: number;
   hitPause: number;
   afterImage?: AfterImageState;
+  palFx?: BgPalFxState;
   pauseControllerLatch?: { key: string; stateNo: number; stateTime: number };
   positionFrozen?: boolean;
   activeHitDef: ActiveHitDef | null;
@@ -246,6 +249,11 @@ export type PlayerState = {
     elapsed?: number;
     hitCount: number;
   };
+  projectileContacts?: Record<number, {
+    contactTime: number;
+    hitTime: number;
+    guardedTime: number;
+  }>;
   targets?: Array<{
     playerId: number;
     hitDefId: number;
@@ -304,6 +312,10 @@ export type ProjectileState = {
   facing: 1 | -1;
   animNo: number;
   animTime: number;
+  hitAnimNo?: number;
+  hitAnimDuration?: number;
+  phase?: 'active' | 'hit';
+  removeOnHit?: boolean;
   lifeTime: number;
   removeTime: number;
   hitDef: ActiveHitDef;

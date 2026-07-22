@@ -75,6 +75,8 @@ export type CnsRuntimeInput = {
   pauseState?: PauseState;
   screenWidth?: number;
   gameTime?: number;
+  /** Stable 0..999 Random value for this runtime frame; injectable for replays and tests. */
+  random?: number;
   roundState?: number;
   roundNo?: number;
   matchOver?: boolean;
@@ -83,6 +85,7 @@ export type CnsRuntimeInput = {
   constants?: CnsDocument;
   entityContext?: RuntimeEntityContext;
   numHelper?: (helperId?: number) => number;
+  numExplod?: (explodId?: number) => number;
   onHelperSpawn?: (request: HelperSpawnRequest) => void;
   onHelperDestroy?: (entityId: number) => void;
 };
@@ -178,6 +181,9 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
     gameTime: state.frame,
     entityContext: context,
     numHelper: (helperId) => countHelpers(initialHelpers, context.rootEntityId, helperId),
+    numExplod: (explodId) => state.explods.entries.filter((entry) => (
+      entry.owner.entityId === context.entityId && (explodId === undefined || entry.mugenId === Math.trunc(explodId))
+    )).length,
     onHelperSpawn: (request) => pendingSpawns.push(request),
     onHelperDestroy: (entityId) => pendingDestroys.add(entityId),
   });
@@ -294,7 +300,30 @@ function stepPlayer(
 
   const debugEnabled = traceDiagnosticsEnabled && shouldDebugRuntime(commands);
   if (player.hitPause > 0) {
-    if (traceDiagnosticsEnabled) trace.debugLines.push(`hitpause skip remaining=${player.hitPause}`);
+    const pausedStates = [
+      ...specialStateNos.map((stateNo) => findState(cns, stateNo)).filter((state): state is CnsStateDefinition => Boolean(state)),
+      findState(cns, next.stateNo),
+    ].filter((state, index, states): state is CnsStateDefinition => Boolean(state) && states.indexOf(state) === index);
+    for (const pausedState of pausedStates) {
+      const result = executeStateControllers(
+        next,
+        opponent,
+        pausedState,
+        cns,
+        input,
+        commands,
+        debugEnabled,
+        traceDiagnosticsEnabled,
+        undefined,
+        runtimeFrame,
+        (controller) => (num(controller, 'ignorehitpause', next, input, commands, opponent) ?? 0) !== 0,
+      );
+      next = result.player;
+      if (traceDiagnosticsEnabled) trace.executedControllers.push(...result.executedControllers);
+      if (traceDiagnosticsEnabled) trace.debugLines.push(...result.debugLines);
+      targetOperations.push(...result.targetOperations);
+    }
+    if (traceDiagnosticsEnabled) trace.debugLines.push(`hitpause selective remaining=${player.hitPause} states=${pausedStates.map((state) => state.stateNo).join(',')} controllers=${trace.executedControllers.length}`);
     return { ...finishTrace(appendFallPauseDiagnostic(next, runtimeFrame, 'hitpause', player.hitPause, input.hitDiagnostics !== false), trace, traceDiagnosticsEnabled), targetOperations };
   }
   if (input.pauseState && (input.pauseState.resumeGuard || !canEntityMoveDuringPause(input.pauseState, player.id))) {
@@ -411,6 +440,7 @@ function executeStateControllers(
   recordDiagnostics = true,
   negativeStateEntry?: PlayerState,
   runtimeFrame = 0,
+  controllerFilter?: (controller: CnsStateController) => boolean,
 ): ControllerExecutionResult {
   let next = player;
   const executedControllers: string[] = [];
@@ -418,6 +448,7 @@ function executeStateControllers(
   const targetOperations: TargetOperation[] = [];
 
   for (const controller of stateDef.controllers) {
+    if (controllerFilter && !controllerFilter(controller)) continue;
     const type = controller.type.toLowerCase();
     const triggerPlayer = negativeStateEntry && type !== 'changestate' && next.stateNo !== negativeStateEntry.stateNo
       ? withTriggerStateSnapshot(next, negativeStateEntry)
@@ -680,12 +711,17 @@ function createTriggerContext(
     animationExists: input.getAnimationDuration ? (animNo) => input.getAnimationDuration?.(animNo) !== null : undefined,
     constants: input.constants,
     gameTime: input.gameTime,
+    random: input.random ?? stableRandomValue(input.gameTime ?? player.stateTime, player),
     roundState: input.roundState,
     roundNo: input.roundNo,
     matchOver: input.matchOver,
     roundWinner: input.roundWinner,
     isHelper: input.entityContext?.kind === 'helper',
     numHelper: input.numHelper,
+    numExplod: input.numExplod,
+    projContactTime: (projectileId) => player.projectileContacts?.[Math.trunc(projectileId)]?.contactTime ?? -1,
+    projHitTime: (projectileId) => player.projectileContacts?.[Math.trunc(projectileId)]?.hitTime ?? -1,
+    projGuardedTime: (projectileId) => player.projectileContacts?.[Math.trunc(projectileId)]?.guardedTime ?? -1,
     getRedirectAnimationContext: (candidate) => {
       const info = input.getAnimationTriggerInfo?.(candidate.animNo, candidate.animTime) ?? null;
       return {
@@ -979,6 +1015,17 @@ function executeController(
   if (noOpName) return withPlayer(player, true, noOpName);
 
   return withPlayer(player, false, controller.type);
+}
+
+function stableRandomValue(frame: number, player: PlayerState): number {
+  // Keep Trigger diagnostics and controller execution identical within a frame.
+  // The integer hash still provides the WinMUGEN Random range without depending
+  // on ambient Math.random(), which would make replays and focused tests diverge.
+  let value = Math.imul(Math.trunc(frame) + 1, 0x45d9f3b);
+  value ^= Math.imul(player.id, 0x27d4eb2d);
+  value ^= Math.imul(player.stateNo, 0x165667b1);
+  value ^= value >>> 16;
+  return (value >>> 0) % 1000;
 }
 
 function assertSpecial(player: PlayerState, controller: CnsStateController): ControllerResult {
@@ -1892,6 +1939,8 @@ function evaluateHitDefSnapshot(
   const fallVelocity = pairValue('fall.velocity');
   const downVelocity = pairValue('down.velocity');
   const sparkOffset = pairValue('sparkxy');
+  const guardSparkOffset = pairValue('guard.sparkxy');
+  const palFxAdd = pairValue('palfx.add');
   const noChainRaw = controller.params.nochainid;
   const noChainParts = Array.isArray(noChainRaw) ? noChainRaw : noChainRaw === undefined ? [] : [noChainRaw];
   const noChainIds = noChainParts.map((value) => cnsValueToNumber(value, player, input, commands, opponent));
@@ -1931,6 +1980,9 @@ function evaluateHitDefSnapshot(
     spark: parseEffectAnimation(controller.params.sparkno, player, input, commands, opponent),
     guardSpark: parseEffectAnimation(controller.params['guard.sparkno'] ?? controller.params.guardsparkno, player, input, commands, opponent),
     sparkOffset: { x: sparkOffset[0] ?? 0, y: sparkOffset[1] ?? 0 },
+    guardSparkOffset: guardSparkOffset[0] === undefined && guardSparkOffset[1] === undefined
+      ? undefined
+      : { x: guardSparkOffset[0] ?? 0, y: guardSparkOffset[1] ?? 0 },
     hitSound: parseEffectSound(controller.params.hitsound, player, input, commands, opponent),
     guardSound: parseEffectSound(controller.params.guardsound, player, input, commands, opponent),
     envShake: {
@@ -1939,6 +1991,29 @@ function evaluateHitDefSnapshot(
       amplitude: numValue('envshake.ampl') ?? -4,
       phase: numValue('envshake.phase') ?? 90,
     },
+    palFx: controller.params['palfx.time'] === undefined
+      ? undefined
+      : {
+          duration: Math.trunc(numValue('palfx.time') ?? 0),
+          color: numValue('palfx.color') ?? 256,
+          invertAll: boolValue('palfx.invertall') ?? false,
+          add: {
+            red: palFxAdd[0] ?? 0,
+            green: palFxAdd[1] ?? 0,
+            blue: readTupleNumber(controller, 'palfx.add', 2, player, input, commands, opponent) ?? 0,
+          },
+          multiply: {
+            red: readTupleNumber(controller, 'palfx.mul', 0, player, input, commands, opponent) ?? 256,
+            green: readTupleNumber(controller, 'palfx.mul', 1, player, input, commands, opponent) ?? 256,
+            blue: readTupleNumber(controller, 'palfx.mul', 2, player, input, commands, opponent) ?? 256,
+          },
+          sinAdd: {
+            red: readTupleNumber(controller, 'palfx.sinadd', 0, player, input, commands, opponent) ?? 0,
+            green: readTupleNumber(controller, 'palfx.sinadd', 1, player, input, commands, opponent) ?? 0,
+            blue: readTupleNumber(controller, 'palfx.sinadd', 2, player, input, commands, opponent) ?? 0,
+            period: readTupleNumber(controller, 'palfx.sinadd', 3, player, input, commands, opponent) ?? 0,
+          },
+        },
     hitOnce: boolValue('hitonce') ?? normalizedAttr?.attackTypes.some((value) => value.endsWith('T')) ?? false,
     pauseTime: { attacker: Math.max(0, pause[0] ?? 4), defender: Math.max(0, pause[1] ?? 8) },
     groundVelocity: { x: groundVelocity[0] ?? -3.5, y: groundVelocity[1] ?? 0 },
@@ -2127,6 +2202,15 @@ function addVarController(
   commands: ReadonlySet<string> | undefined,
   opponent: PlayerState,
 ): ControllerResult {
+  const direct = findDirectVarAssignment(controller, player, input, commands, opponent);
+  if (direct) {
+    return withPlayer(setIndexedVar(
+      player,
+      direct.kind,
+      direct.index,
+      getIndexedVar(player, direct.kind, direct.index) + direct.value,
+    ), true, 'VarAdd');
+  }
   const index = num(controller, 'v', player, input, commands, opponent);
   const value = num(controller, 'value', player, input, commands, opponent);
   return index === null || value === null ? withPlayer(player, false, 'VarAdd') : withPlayer(setVar(player, index, getVar(player, index) + value), true, 'VarAdd');
@@ -2238,6 +2322,12 @@ function triple(
   };
 }
 
+function getIndexedVar(player: PlayerState, kind: 'var' | 'sysvar' | 'fvar', index: number): number {
+  if (kind === 'sysvar') return (player as ExtendedPlayerState).sysVars?.[index] ?? 0;
+  if (kind === 'fvar') return (player as ExtendedPlayerState).fvars?.[index] ?? 0;
+  return getVar(player, index);
+}
+
 function createProjectile(
   player: PlayerState,
   opponent: PlayerState,
@@ -2250,6 +2340,7 @@ function createProjectile(
   const offset = pair(controller, 'offset', player, input, commands, opponent, 0, 0);
   const scale = pair(controller, 'projscale', player, input, commands, opponent, 1, 1);
   const snapshot = evaluateHitDefSnapshot(controller, player, input, commands, opponent);
+  const hitAnimNo = optionalNum(controller, 'projhitanim', player, input, commands, opponent);
   const projectile: ProjectileState = {
     id: Math.trunc(num(controller, 'projid', player, input, commands, opponent) ?? 0),
     ownerId: player.id,
@@ -2262,6 +2353,10 @@ function createProjectile(
     facing: player.facing,
     animNo: Math.trunc(num(controller, 'projanim', player, input, commands, opponent) ?? 0),
     animTime: 0,
+    hitAnimNo: hitAnimNo === null ? undefined : Math.trunc(hitAnimNo),
+    hitAnimDuration: hitAnimNo === null ? undefined : input.getAnimationDuration?.(Math.trunc(hitAnimNo)) ?? undefined,
+    phase: 'active',
+    removeOnHit: (num(controller, 'projremove', player, input, commands, opponent) ?? 1) !== 0,
     lifeTime: 0,
     removeTime: Math.trunc(num(controller, 'projremovetime', player, input, commands, opponent) ?? 90),
     hitDef: snapshot,

@@ -51,10 +51,19 @@ T-H-M-A State 215. If physics changes State or Anim entirely, collision uses tha
 instead of restoring the old snapshot.
 
 Projectile Controllers now emit into the same production frame. New and existing projectiles advance
-with Facing-relative velocity and acceleration after player physics, then resolve their basic contact
-after direct HitDef collision. Rendering uses the owner AIR action. This path remains Partial because
-animated Clsn changes, full HitDef/guard parity, projectile interactions, and pause semantics are not
+with Facing-relative velocity and acceleration after player physics, then resolve their contact
+after direct HitDef collision. Launched contacts preserve the HitDef velocity/hit-time/fall snapshot
+and `GetHitVar(yaccel)` so the character's common get-hit States own gravity and recovery instead of
+leaving the initial launch velocity unbounded. The resulting HitEvent carries the selected hit/guard
+spark and sound into the shared HitEffectRuntime. Contact writes attacker `MoveHit`/`MoveGuarded`,
+applies explicit hit/guard power transfer, and normal hit starts the snapshotted defender `palfx.*`
+envelope. A removing hit switches the projectile to
+its non-attacking `projhitanim` phase and keeps rendering that owner AIR action until its finite duration
+ends. Rendering uses the owner AIR action. This path remains Partial because
+animated Clsn changes, remaining HitDef parity, projectile interactions, exact PalFX arithmetic, and pause semantics are not
 yet connected.
+
+Projectile contact records owner-local contact/hit/guard times after collision. The following CNS pass therefore observes `ProjHitTime(id) = 1`. If the attacker is in HitPause, normal Controllers remain frozen but `ignorehitpause != 0` Controllers in special/current States are evaluated. `NumExplod(id)` is resolved from the committed Explod collection at frame start, so State -2 impact effects can be created once and rejected on later paused frames.
 
 ## CNS State Runtime flow
 

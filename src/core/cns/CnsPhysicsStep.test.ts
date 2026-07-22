@@ -5,6 +5,32 @@ import { parseCnsText } from '../../parser/cns/CnsParser';
 import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 
 describe('CnsPhysicsStep', () => {
+  it('advances defender PalFX duration during HitPause without advancing State time', () => {
+    const state = createInitialGameState();
+    const affected = {
+      ...state.players[0], hitPause: 1,
+      palFx: {
+        duration: 50, remainingTime: 50, elapsedTime: 0, color: 0, invertAll: true,
+        add: { red: 0, green: -70, blue: -170 }, multiply: { red: 256, green: 256, blue: 256 },
+        sinAdd: { red: 60, green: 60, blue: 50, period: 10 }, ownerEntityId: 2,
+      },
+    };
+    const next = stepCnsPhysicsMotion({ ...state, players: [affected, state.players[1]] });
+    expect(next.players[0]).toMatchObject({ hitPause: 0, stateTime: 0, palFx: { remainingTime: 49, elapsedTime: 1 } });
+  });
+
+  it('freezes Projectile contact times during attacker HitPause and advances them afterward', () => {
+    const state = createInitialGameState();
+    const contacted = {
+      ...state.players[0], hitPause: 1,
+      projectileContacts: { 1005: { contactTime: 1, hitTime: 1, guardedTime: -1 } },
+    };
+    const paused = stepCnsPhysicsMotion({ ...state, players: [contacted, state.players[1]] });
+    expect(paused.players[0].projectileContacts?.[1005].hitTime).toBe(1);
+    const advanced = stepCnsPhysicsMotion(paused);
+    expect(advanced.players[0].projectileContacts?.[1005].hitTime).toBe(2);
+  });
+
   it('keeps MoveHit at 1 through hitpause and advances it on the next active tick', () => {
     const state = createInitialGameState();
     const hit = {

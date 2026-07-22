@@ -165,6 +165,25 @@ describe('CanvasRenderer Explod integration', () => {
     expect(stageFilters).toEqual(['grayscale(1) brightness(0) invert(1)']);
     expect(diagnostics).toContainEqual(expect.stringContaining('raw.bgpalfx_draw owner=1 remaining=19'));
   });
+
+  it('reports a defender-scoped PalFX draw without applying it to the stage', () => {
+    let filter = 'none';
+    const context = {
+      ...fakeContext({ drawImage: vi.fn(), scale: vi.fn(), translate: vi.fn() }),
+      set filter(value: string) { filter = value; },
+      get filter() { return filter; },
+    } as unknown as CanvasRenderingContext2D;
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+    const state = createInitialGameState();
+    state.players[1].palFx = {
+      duration: 50, remainingTime: 49, elapsedTime: 1, color: 0, invertAll: true,
+      add: { red: 0, green: -70, blue: -170 }, multiply: { red: 256, green: 256, blue: 256 },
+      sinAdd: { red: 60, green: 60, blue: 50, period: 10 }, ownerEntityId: 1,
+    };
+
+    const diagnostics = new CanvasRenderer(canvas).render(state);
+    expect(diagnostics).toContainEqual(expect.stringContaining('raw.palfx_draw entity=p2 remaining=49'));
+  });
 });
 
 function fakeContext(spies: { drawImage: ReturnType<typeof vi.fn>; scale: ReturnType<typeof vi.fn>; translate: ReturnType<typeof vi.fn> }): CanvasRenderingContext2D {

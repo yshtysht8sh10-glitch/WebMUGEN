@@ -330,7 +330,7 @@ function resolveAttack(
   const hitGetHitVars = createGetHitVarSnapshot(active, damage, selectedHitTime, hitTimeKind, selectedVelocity);
   const hitWillKo = active.kill !== false && damage >= lifeBefore;
   if (hitWillKo) hitGetHitVars.fall = 1;
-  const hitTarget = rememberHitDefId(applyTargetRequestedState(applyFallbackHit(applyHitDefSnap(target, attacker, active), damage, active.kill !== false, active.numHits ?? 1, reactionState, selectedAnim, appliedVelocity, fallVelocity, active.pauseTime.defender, {
+  let hitTarget = rememberHitDefId(applyTargetRequestedState(applyFallbackHit(applyHitDefSnap(target, attacker, active), damage, active.kill !== false, active.numHits ?? 1, reactionState, selectedAnim, appliedVelocity, fallVelocity, active.pauseTime.defender, {
     activeHitDefId,
     selectedHitTime,
     kind: activeHitTime === undefined ? 'fallback' : hitTimeKind,
@@ -345,6 +345,17 @@ function resolveAttack(
     fallYVelocityAtHit: active.fall?.yVelocity ?? 0,
     ...(activeHitTime === undefined ? { fallbackReason: hitTimeFallbackReason } : {}),
   }, hitGetHitVars), active, attacker.id), attacker.id, active.hitId);
+  if (active.palFx && active.palFx.duration !== 0) {
+    hitTarget = {
+      ...hitTarget,
+      palFx: {
+        ...active.palFx,
+        remainingTime: active.palFx.duration,
+        elapsedTime: 0,
+        ownerEntityId: attacker.id,
+      },
+    };
+  }
   const idText = activeHitDefId === null ? 'none' : String(activeHitDefId);
   const auxiliary = applyHitDefAuxiliary(contactedAttacker, hitTarget, attacker, target, active, false);
   const targetedAttacker = activeHitDefId === null
@@ -432,10 +443,22 @@ function createContactHitEvent(
   airDocument: AirDocument,
 ): HitEvent {
   const contact = calculateContactPoint(overlap, attackBoxes, bodyBoxes, attacker, target);
+  return createHitEffectEvent(attacker, target, hitDef, guarded, damage, contact, airDocument);
+}
+
+export function createHitEffectEvent(
+  attacker: PlayerState,
+  target: PlayerState,
+  hitDef: NonNullable<PlayerState['activeHitDef']>,
+  guarded: boolean,
+  damage: number,
+  contact: { x: number; y: number },
+  airDocument?: AirDocument | null,
+): HitEvent {
   const sparkRef = guarded ? hitDef.guardSpark : hitDef.spark;
-  const offset = hitDef.sparkOffset ?? { x: 0, y: 0 };
+  const offset = guarded ? hitDef.guardSparkOffset ?? hitDef.sparkOffset ?? { x: 0, y: 0 } : hitDef.sparkOffset ?? { x: 0, y: 0 };
   const sparkAvailable = sparkRef?.scope === 'attacker'
-    ? airDocument.actions.some((action) => action.actionNo === sparkRef.animNo)
+    ? airDocument?.actions.some((action) => action.actionNo === sparkRef.animNo)
     : undefined;
   const soundRef = guarded ? hitDef.guardSound : hitDef.hitSound;
   const sparkPosition = calculateHitSparkPosition(attacker, target, offset);
@@ -895,7 +918,7 @@ function selectGuardKind(player: PlayerState, guardFlag: string | undefined): 's
   return flags.includes('H') || flags.includes('M') ? 'stand' : null;
 }
 
-function createGetHitVarSnapshot(
+export function createGetHitVarSnapshot(
   hitDef: NonNullable<PlayerState['activeHitDef']>,
   damage: number,
   hitTime: number,

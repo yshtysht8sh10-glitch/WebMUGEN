@@ -153,6 +153,12 @@ Issue #54 identified the previous implementation error: bare `AnimElem` compared
 
 MoveContact, MoveHit, MoveGuarded, and HitCount read attacker-side move results. A normal hit sets MoveContact/MoveHit to 1 and increments the State-local count; a live guardflag-approved contact sets MoveContact/MoveGuarded to 1 without MoveHit or hit-count increment. The Move* value remains 1 throughout attacker hitpause, then increments on each unpaused game tick. Activating a later HitDef does not clear the preceding result; its next hit or guard replaces the result and resets the value to 1. On State entry, `movehitpersist` controls result preservation and `hitcountpersist` controls count preservation independently. `MoveHitReset` clears flags without erasing target hit history or count.
 
+Projectile contact uses the same attacker-side MoveContact result shape. This lets bundled T-H-M-A State 1005 execute its `MoveGuarded` VarSet branches and its `MoveHit`-gated PowerAdd after projectile contact.
+
+`Random` evaluates to an integer in the WinMUGEN 0..999 range. WebMUGEN derives one stable value from the runtime frame/player/State context so repeated diagnostics and execution in the same frame agree; tests and replay callers may inject the frame value. The distribution is compatible for comparisons such as `Random = [0,499]`, but Elecbyte's exact PRNG seed and sequence are not reproduced.
+
+`ProjHitTime(id)` reads root-owner Projectile contact history. A successful hit stores time 1 for the next CNS evaluation, the value remains frozen during attacker HitPause, and subsequent unpaused ticks increment it. `NumExplod(id)` counts live Explods owned by the evaluating entity and supports an evaluated optional id. Together with selective `ignorehitpause` execution, these drive bundled T-H-M-A State -2's four fire Explods after Projectile 1005 hits.
+
 ## Target lookup
 
 Successful HitDef contact registers `{playerId, hitDefId, activeHitDefId}` on the attacker. NumTarget optionally filters by HitDef id; TargetID and TargetStateNo select the first matching entry. The storage permits multiple targets and is pruned for KO/destroyed players; round restart creates an empty list. Current TargetStateNo lookup is verified for the two-player runtime, while Helper/multi-player lookup remains Partial.

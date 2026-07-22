@@ -16,6 +16,7 @@ type = Projectile
 trigger1 = 1
 projID = 1000
 projanim = 15201
+projhitanim = 15210
 projscale = .5, .75
 velocity = .1, 0
 accel = .2, .05
@@ -29,12 +30,15 @@ air.velocity = -15, -6
     state.players[0] = { ...state.players[0], stateNo: 1000, facing: -1 };
     const emitted: ProjectileState[] = [];
 
-    const result = stepCnsStateRuntime(state, cns, { onProjectileCreate: (projectile) => emitted.push(projectile) });
+    const result = stepCnsStateRuntime(state, cns, {
+      getAnimationDuration: (animNo) => animNo === 15210 ? 27 : null,
+      onProjectileCreate: (projectile) => emitted.push(projectile),
+    });
 
     expect(result.traces[0].executedControllers).toContain('Projectile');
     expect(emitted).toHaveLength(1);
     expect(emitted[0]).toMatchObject({
-      id: 1000, ownerId: 1, animNo: 15201, facing: -1,
+      id: 1000, ownerId: 1, animNo: 15201, hitAnimNo: 15210, hitAnimDuration: 27, phase: 'active', removeOnHit: true, facing: -1,
       vx: -0.1, vy: 0, ax: -0.2, ay: 0.05,
       removeTime: 60, scaleX: 0.5, scaleY: 0.75,
       hitDef: {

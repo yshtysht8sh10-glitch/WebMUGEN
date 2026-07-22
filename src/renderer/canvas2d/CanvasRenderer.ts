@@ -106,8 +106,13 @@ export class CanvasRenderer {
     for (const drawable of regularDrawables) {
       if (drawable.kind === 'player') {
         renderDiagnostics.push(...this.drawAfterImages(ctx, drawable.player, diagnosticsEnabled));
+        const palFxFilter = resolveBgPalFxFilter(drawable.player.palFx);
+        ctx.save();
+        ctx.filter = palFxFilter;
         const diagnostic = this.drawPlayer(ctx, drawable.player, drawable.player.id === 1 ? '#66ccff' : '#ff99aa', diagnosticsEnabled);
+        ctx.restore();
         if (diagnostic) renderDiagnostics.push(diagnostic);
+        if (diagnosticsEnabled && drawable.player.palFx) renderDiagnostics.push(`raw.palfx_draw entity=p${drawable.player.id} remaining=${drawable.player.palFx.remainingTime} filter=${palFxFilter} result=drawn limitation=canvas_filter_approximated`);
       } else {
         const diagnostic = this.drawExplod(ctx, drawable.frame, diagnosticsEnabled);
         if (diagnostic) renderDiagnostics.push(diagnostic);
