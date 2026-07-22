@@ -1,6 +1,6 @@
 # Trigger Compatibility Notes
 
-Updated: 2026-07-14
+Updated: 2026-07-22
 
 This document summarizes Trigger implementation notes. The compatibility matrix remains the source of truth:
 
@@ -8,6 +8,13 @@ This document summarizes Trigger implementation notes. The compatibility matrix 
 - `docs/webmugen/winmugen-compatibility-matrix.md`
 
 Follow `docs/webmugen/development-policy.md`: implement triggers one item at a time and keep matrix status conservative.
+
+Issue #82 adds a second, Trigger-specific audit classification to every Trigger
+Matrix row: `Not implemented`, `Parser only`, `Safe fallback`, `Partial`,
+`Complete`, or `Not applicable`. This is intentionally more specific than the
+Matrix-wide seven-status progress taxonomy. The generated source inventory is
+`winmugen-trigger-inventory.json`; methodology and counts are in
+`trigger-audit-issue82.md`.
 
 ## Status rule
 

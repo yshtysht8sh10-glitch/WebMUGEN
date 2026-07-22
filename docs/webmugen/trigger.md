@@ -1,8 +1,13 @@
 # Trigger Evaluator
 
-Updated: 2026-07-14
+Updated: 2026-07-22
 
 This document describes CNS trigger evaluation in WebMUGEN. For status per trigger, see `trigger-compatibility-notes.md` and the compatibility matrix.
+
+Issue #82's complete versioned inventory, six-way audit classification,
+real-character occurrence data, evaluation pipeline, and reproducible audit
+commands are recorded in `trigger-audit-issue82.md` and
+`winmugen-trigger-inventory.json`.
 
 ## Responsibility
 

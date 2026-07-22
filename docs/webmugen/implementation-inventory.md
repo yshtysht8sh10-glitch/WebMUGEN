@@ -1,6 +1,6 @@
 # Implementation Inventory
 
-Updated: 2026-07-13
+Updated: 2026-07-22
 
 This document is a high-level inventory of WebMUGEN implementation areas. It is not the source of truth for exact compatibility status; use the compatibility matrix for that.
 
@@ -20,7 +20,7 @@ This document is a high-level inventory of WebMUGEN implementation areas. It is 
 | Area | Status summary |
 |---|---|
 | State runtime | Negative states and current StateDef execution exist. |
-| Trigger evaluator | Many simple triggers and expression features exist; subsystem-dependent triggers remain Partial/Unsupported. |
+| Trigger evaluator | Issue #82 inventories 158 versioned rows (122 expanded WinMUGEN rows plus 36 later/compatibility entries), separates parser retention from runtime values, records six-way classifications and bundled-character usage, and gates Matrix/evaluator registration. Subsystem-dependent triggers remain tracked as Parser only, Safe fallback, or Partial. |
 | Controller executor | Basic state/motion/var/life/power controllers exist; many effects are Partial safe shims. |
 | State entry | Centralized entry applies several StateDef header fields. |
 | Physics | Basic position/velocity stepping exists; full WinMUGEN physics is Partial. |

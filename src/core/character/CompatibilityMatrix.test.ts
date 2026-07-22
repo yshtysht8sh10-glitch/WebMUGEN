@@ -8,17 +8,17 @@ describe('WinMUGEN compatibility Matrix', () => {
       cwd: process.cwd(),
       encoding: 'utf8',
     });
-    expect(output).toContain('419 rows validated');
+    expect(output).toContain('446 rows validated');
 
     const markdown = readFileSync('docs/webmugen/winmugen-compatibility-matrix.md', 'utf8');
-    expect(markdown).toContain('- Complete: 132');
-    expect(markdown).toContain('- Partial: 167');
-    expect(markdown).toContain('- Fallback: 17');
-    expect(markdown).toContain('- Safe no-op: 36');
+    expect(markdown).toContain('- Complete: 101');
+    expect(markdown).toContain('- Partial: 204');
+    expect(markdown).toContain('- Fallback: 15');
+    expect(markdown).toContain('- Safe no-op: 35');
     expect(markdown).toContain('- Issue ready: 0');
-    expect(markdown).toContain('- Not started: 59');
-    expect(markdown).toContain('- Audit needed: 8');
-    expect(markdown).not.toMatch(/^\| .* \| (Partial|Unsupported|Untested) \|/m);
+    expect(markdown).toContain('- Not started: 33');
+    expect(markdown).toContain('- Audit needed: 58');
+    expect(markdown).not.toMatch(/^\| [^|]+ \| (Partial|Unsupported|Untested) \| [^|]+ \|$/m);
   });
 
   it('renders the Markdown mirror with matching detailed badges and filters', () => {

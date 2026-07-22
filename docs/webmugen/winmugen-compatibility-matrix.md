@@ -1,23 +1,24 @@
 # WebMUGEN WinMUGEN Compatibility Matrix
 
-Updated: 2026-07-13
+Updated: 2026-07-22
 
 This document is the working compatibility checklist for WebMUGEN. Every compatibility item is tracked on its own row. Do not combine multiple triggers, controllers, states, operators, redirects, or CMD features into a single matrix item.
 
 Status is intentionally conservative: **Complete** requires either focused tests or a confirmed app integration path. Runtime shims with no game effect are **Safe no-op**; approximate alternate paths are **Fallback**, never Partial or Complete.
 
 <!-- status-summary:start -->
-- Complete: 132
-- Partial: 167
-- Fallback: 17
-- Safe no-op: 36
+- Complete: 101
+- Partial: 204
+- Fallback: 15
+- Safe no-op: 35
 - Issue ready: 0
-- Not started: 59
-- Audit needed: 8
+- Not started: 33
+- Audit needed: 58
 <!-- status-summary:end -->
 
 Baseline references:
 
+- Elecbyte WinMUGEN 2002.04.14 Trigger Reference mirror: https://bluesura.github.io/MUGEN/document/Official/2002.04.14/trigger.html
 - Elecbyte MUGEN CNS trigger reference: https://www.elecbyte.com/mugendocs-11b1/trigger.html
 - Elecbyte MUGEN state controller reference: https://www.elecbyte.com/mugendocs-11b1/sctrls.html
 - Elecbyte MUGEN CNS format reference: https://www.elecbyte.com/mugendocs-11b1/cns.html
@@ -307,140 +308,166 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 
 ## Trigger Compatibility
 
-| Trigger | Status | Notes |
-|---|---|---|
-| Abs | Complete | `Abs(...)` supported for numeric expressions. |
-| ACos | Complete | Numeric math function supported in runtime trigger evaluator. |
-| AILevel | Complete | Basic trigger support with default 0. |
-| Alive | Complete | Basic support. |
-| Anim | Complete | Numeric comparison. |
-| AnimElem | Complete | Uses 1-based AIR element starts, including repeated starts after LoopStart/default loops; legacy comparison-time syntax and invalid-element false are focused-tested. |
-| AnimElemNo | Partial 55% | Implemented: Uses runtime animation element lookup when provided; AIR timing edge cases still need audit. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| AnimElemTime | Complete | Uses the AIR element-relative timeline shared with AnimElem, with positive, negative, and invalid-element focused coverage. |
-| AnimExist | Partial 55% | Implemented: Evaluates through runtime animation lookup when provided; AIR ownership edge cases still need audit. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| AnimTime | Complete | Uses MUGEN-style animation duration helper. |
-| ASin | Complete | Numeric math function supported in runtime trigger evaluator. |
-| ATan | Complete | Numeric math function supported in runtime trigger evaluator. |
-| AuthorName | Partial 40% | Implemented: String source exists; metadata currently defaults empty. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| BackEdge | Not started | Screen/camera edge value not implemented. |
-| BackEdgeBodyDist | Fallback 40% | Implemented: The production compiled Trigger evaluator selects the edge behind the player from Facing and measures from the fixed X=48/912 fallback boundary using the player center. Missing: camera-relative screen edges and exact body-width adjustment. Evidence: focused positive/negative evaluator tests and a State 250 to 281 wall-impact ChangeState runtime test. |
-| BackEdgeDist | Fallback 40% | Implemented: Uses internal screen/player coordinate approximation. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current approximate behavior, runtime inventory, and focused-test inventory. |
-| BodyDist X | Partial 60% | Implemented: Compatibility alias of P2BodyDist X; measures Facing-relative front-to-front distance using current ground/air Size width and XScale. Missing: team selection, mixed coordinate spaces, and Helper redirect ownership. Evidence: focused scaled-width evaluator tests and bundled T-H-M-A x/a proximity CMD routes. |
-| BodyDist Y | Partial 40% | Implemented: Evaluates opponent/player Y coordinate difference like P2BodyDist Y; precise body edge height is still incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| CanRecover | Partial 65% | Implemented: Reads fall.recover and fall.recovertime during the common air-fall path; focused tests verify that 5200/5210 require both CanRecover and `Command = "recovery"`. Broader recovery command/state behavior remains incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: focused State 215-style ground launch regression tests. |
-| Ceil | Complete | `Ceil(...)` supported for numeric expressions. |
-| Command | Complete | Basic command set matching. |
-| Cond | Complete | Numeric conditional function supported in runtime trigger evaluator. |
-| Const | Partial 65% | Implemented: Current-character `[Data]`, `[Size]`, `[Velocity]`, and `[Movement]` values resolve through the intended CNS path; jump/run-jump pairs and yaccel have production-loader coverage. Missing: remaining constant families and coordinate scaling. Evidence: focused expression/runtime tests and bundled T-H-M-A loading. |
-| Cos | Complete | Numeric math function supported in runtime trigger evaluator. |
-| Ctrl | Complete | Bare boolean and numeric `Ctrl = 1` / `Ctrl = 0` comparisons are covered, including a bundled real-character State -1 route. |
-| DrawGame | Partial 70% | Implemented: Reads the live RoundState draw result, including simultaneous KO and equal-Life time over. Missing: team modes and full match-series semantics. Evidence: focused simultaneous-KO and time-over RoundState tests. |
-| E | Complete | Numeric math constant supported in runtime trigger evaluator. |
-| Exp | Complete | Numeric math function supported in runtime trigger evaluator. |
-| Facing | Complete | Numeric comparison. |
-| Floor | Complete | `Floor(...)` supported for numeric expressions. |
-| FrontEdge | Not started | Screen/camera edge value not implemented. |
-| FrontEdgeBodyDist | Fallback 40% | Implemented: The production compiled Trigger evaluator selects the edge in front of the player from Facing and measures from the fixed X=48/912 fallback boundary using the player center. Missing: camera-relative screen edges and exact body-width adjustment. Evidence: focused positive/negative evaluator tests and a State 250 to 281 wall-impact ChangeState runtime test. |
-| FrontEdgeDist | Fallback 40% | Implemented: Uses internal screen/player coordinate approximation. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current approximate behavior, runtime inventory, and focused-test inventory. |
-| FVar | Partial 40% | Implemented: `fvar(n)` lookup supported with default 0. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| GameTime | Partial 55% | Implemented: App runtime synchronizes its monotonic tick into `GameState.frame`, so real-game triggers and Explod lifecycle no longer remain at frame 0. Pause/round exact WinMUGEN boundaries still need broader verification. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| GetHitVar | Partial 80% | Implemented: Contact snapshot supplies damage, hit/slide/control time, velocity, type/anim codes, fall damage/kill, combo hitcount, snap xoff/yoff, ids, guarded, and yaccel across get-hit State changes. yvel selects ground.velocity.y for S/C contact and air.velocity.y for A; fall.yvelocity remains separate, and numeric fall terms have boolean truthiness. Unsupported zoff/fall-time keys are diagnosed safe defaults. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| HitCount | Partial 75% | Implemented: Counts accepted hits across ActiveHitDef generations; `hitcountpersist` independently preserves or resets it on State entry. UniqHitCount and full multi-target semantics remain incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| HitDefAttr | Partial 40% | Implemented: Compares State and attack categories against the same normalized attr snapshot used by live HitBy/NotHitBy filtering. Redirect and malformed-attr edge cases remain incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| HitFall | Partial 55% | Implemented: Reads the contact-snapshotted HitDef fall flag through common air get-hit states. Guard/projectile parity remains incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| HitOver | Partial 75% | Implemented: Reads the independent selected hit-time clock used by common get-hit state routing. Missing: uncommon recovery and custom-state timing semantics. Evidence: common get-hit runtime integration tests. |
-| HitPauseTime | Complete | Reads player hitPause. |
-| HitShakeOver | Partial 75% | Implemented: Becomes true when the defender hit-pause counter expires. Missing: uncommon pause interaction and Helper semantics. Evidence: hit-pause and common get-hit runtime integration tests. |
-| HitVel X | Partial 40% | Implemented: Optional hit velocity field, default 0. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| HitVel Y | Partial 40% | Implemented: Optional hit velocity field, default 0. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| ID | Not started | Player/helper id trigger not implemented. |
-| IfElse | Complete | Numeric conditional function supported in runtime trigger evaluator. |
-| InGuardDist | Fallback 40% | Implemented: Simple distance approximation. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current approximate behavior, runtime inventory, and focused-test inventory. |
-| IsHelper | Partial 60% | Implemented: Returns 1 while evaluating a Helper entity and 0 for root players in the Phase1 runtime. Missing: redirect/custom-state and non-player entity audit. Evidence: focused root/helper trigger test. |
-| IsHomeTeam | Not started | Team metadata not implemented. |
-| Life | Complete | Numeric comparison. |
-| LifeMax | Partial 40% | Implemented: Default 1000. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| Ln | Complete | Numeric math function supported in runtime trigger evaluator. |
-| Log | Complete | Numeric math function supported in runtime trigger evaluator. |
-| Lose | Partial 70% | Implemented: Reads the live RoundState loser for P1/P2 after KO or time over. Missing: team/helper ownership and full match-series semantics. Evidence: focused P1/P2 KO RoundState and trigger-context tests. |
-| LoseKO | Not started | Round result not implemented. |
-| LoseTime | Not started | Round result not implemented. |
-| MatchNo | Not started | Match metadata not implemented. |
-| MatchOver | Partial 75% | Implemented: Becomes true for the live KO/time-over round phase and drives common State 5150's match-over animation. Missing: full match-series and team-mode rules. Evidence: focused State 5150 MatchOver animation and RoundState tests. |
-| MoveContact | Partial 80% | Implemented: Reads real hit or guarded contact state for the current ActiveHitDef generation; `movehitpersist` independently preserves or resets result flags on State entry. MoveReversed/team semantics remain incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| MoveGuarded | Partial 75% | Implemented: Guardflag-approved live contact sets guarded without setting MoveHit; persist headers remain incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| MoveHit | Partial 88% | Implemented: Returns 1 on accepted root or Helper hit, remains 1 through attacker hitpause, and increments on later unpaused ticks. Later HitDef activation preserves the result until a new contact or explicit/state reset, allowing bundled T-H-M-A State 1011 to route to 1012, State 1016 multihit generations, and Helper State 3320 MoveHit effects. Missing: Projectile parity, MoveReversed, and broader WinMUGEN lifetime cases. Evidence: focused MoveContact timing, live root/Helper HitDef, and bundled T-H-M-A coverage. |
-| MoveReversed | Not started | Reversal/contact state not implemented. |
-| MoveType | Complete | Basic support. |
-| Name | Partial 40% | Implemented: String source exists; metadata defaults empty. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| NumEnemy | Safe no-op | Recognized by the runtime without changing game state. Safe default 1. |
-| NumExplod | Safe no-op | Recognized by the runtime without changing game state. Production Explod entries now exist, but this trigger still returns safe default 0; owner plus optional MUGEN id lookup remains unconnected. |
-| NumHelper | Partial 65% | Implemented: Counts current committed Helpers for the evaluating entity's root and optionally filters duplicate-capable MUGEN Helper IDs. Spawn requests become visible at the frame commit point. Missing: redirect/team/custom-state edge audit. Evidence: focused count, duplicate ID, P1/P2, and nested Helper tests. |
-| NumPartner | Safe no-op | Recognized by the runtime without changing game state. Safe default 0. |
-| NumProj | Safe no-op | Recognized by the runtime without changing game state. Safe default 0. |
-| NumProjID | Safe no-op | Recognized by the runtime without changing game state. Safe default 0. |
-| NumTarget | Partial 60% | Implemented: Counts registered HitDef targets with optional HitDef id filtering; Helper/multi-player lookup remains incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| TargetID | Partial 55% | Implemented: Returns the first registered target player id, optionally filtered by HitDef id. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| TargetStateNo | Partial 55% | Implemented: Returns current StateNo for the selected two-player target; Helper/multi-player lookup remains incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| P1Name | Not started | Alias not implemented. `Name` exists. |
-| P2BodyDist X | Partial 60% | Implemented: Measures P2's front from P1's front in P1's Facing direction using each player's current ground/air Size width and XScale. Missing: team selection, mixed coordinate spaces, and Helper redirect ownership. Evidence: focused scaled-width evaluator tests and bundled T-H-M-A States 200/203/230/232 CMD routing. |
-| P2BodyDist Y | Partial 40% | Implemented: Uses opponent/player coordinate difference. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| P2Dist X | Partial 40% | Implemented: Uses opponent/player coordinate difference. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| P2Dist Y | Partial 40% | Implemented: Uses opponent/player coordinate difference. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| P2Life | Partial 40% | Implemented: Uses opponent life or default. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| P2MoveType | Partial 40% | Implemented: Opponent move type supported. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| P2Name | Partial 40% | Implemented: Opponent metadata source exists, default empty. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| P2StateNo | Partial 40% | Implemented: Opponent stateNo supported. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| P2StateType | Partial 40% | Implemented: Opponent state type supported. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| P3Name | Not started | Team metadata not implemented. |
-| P4Name | Not started | Team metadata not implemented. |
-| PalNo | Not started | Palette slot trigger not implemented. |
-| ParentDist X | Not started | Parent distance not implemented. |
-| ParentDist Y | Not started | Parent distance not implemented. |
-| Pi | Complete | Numeric math constant supported in runtime trigger evaluator. |
-| PlayerIDExist | Not started | Player/helper lookup by id not implemented. |
-| Pos X | Complete | Basic X comparison. |
-| Pos Y | Complete | Basic Y comparison. |
-| Power | Partial 80% | Implemented: Reads the evaluated P1/P2 player's durable value; threshold command routes, state preservation, consumption, independence, and round reset are focused-tested. Missing: Helper/root redirect ownership pending Issue #58. Evidence: Issue #52 focused runtime tests and `raw.power`. |
-| PowerMax | Partial 80% | Implemented: Reads each P1/P2 player's `[Data] power`-derived maximum (default 3000), including bundled 9000-limit characters. Missing: Helper/root redirect ownership pending Issue #58. Evidence: Issue #52 loader/runtime tests and HUD integration. |
-| PrevStateNo | Partial 80% | Implemented: Records the immediate source on State entry, re-entry, and multiple same-frame transitions; round reset has no stale value. Missing: Helper/custom-state ownership and broader real-character audit. Evidence: Issue #65 focused and bundled T-H-M-A integration tests. |
-| ProjCancelTime | Safe no-op | Recognized by the runtime without changing game state. Safe default -1. |
-| ProjContact | Not started | Boolean projectile contact not implemented. |
-| ProjContactTime | Safe no-op | Recognized by the runtime without changing game state. Safe default -1. |
-| ProjGuarded | Not started | Boolean projectile guarded not implemented. |
-| ProjGuardedTime | Safe no-op | Recognized by the runtime without changing game state. Safe default -1. |
-| ProjHit | Not started | Boolean projectile hit not implemented. |
-| ProjHitTime | Safe no-op | Recognized by the runtime without changing game state. Safe default -1. |
-| Random | Partial 40% | Implemented: Deterministic placeholder 500. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| RootDist X | Not started | Root distance not implemented. |
-| RootDist Y | Not started | Root distance not implemented. |
-| RoundNo | Partial 40% | Implemented: Context/default support. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| RoundsExisted | Safe no-op | Recognized by the runtime without changing game state. Safe default true. |
-| RoundState | Complete | Basic support with default 2 unless supplied. |
-| ScreenPos X | Fallback 40% | Implemented: Uses internal position approximation. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current approximate behavior, runtime inventory, and focused-test inventory. |
-| ScreenPos Y | Fallback 40% | Implemented: Uses internal position approximation. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current approximate behavior, runtime inventory, and focused-test inventory. |
-| SelfAnimExist | Partial 55% | Implemented: Evaluates through runtime self-animation lookup when provided; redirect-specific AIR ownership still needs audit. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| Sin | Complete | Numeric math function supported in runtime trigger evaluator. |
-| StateNo | Complete | Numeric comparison. |
-| StateTime | Partial 55% | Implemented: Real-character compatibility alias reads the same current State time as `Time`; WinMUGEN-version provenance remains under audit. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| StateType | Complete | Basic support. |
-| SysFVar | Not started | System float vars not implemented. |
-| SysVar | Complete | Basic numeric comparison. |
-| Tan | Complete | Numeric math function supported in runtime trigger evaluator. |
-| TeamMode | Not started | Team mode not implemented. |
-| TeamSide | Fallback 40% | Implemented: Context/player id fallback. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current approximate behavior, runtime inventory, and focused-test inventory. |
-| TicksPerSecond | Complete | Constant 60. |
-| Time | Complete | State time comparison. |
-| TimeMod | Partial 40% | Implemented: Evaluates State time modulo a positive divisor against the requested remainder; invalid divisors fail safely. `%` remains the preferred equivalent. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
-| UniqHitCount | Not started | Hit counter not implemented. |
-| Var | Complete | Basic numeric comparison. |
-| Vel X | Complete | Exposes world X velocity relative to the player's facing. |
-| Vel Y | Complete | Basic Y velocity comparison. |
-| Win | Partial 70% | Implemented: Reads the live RoundState winner for P1/P2 after KO or time over. Missing: team/helper ownership and full match-series semantics. Evidence: focused P1/P2 KO RoundState and trigger-context tests. |
-| WinKO | Not started | Round result not implemented. |
-| WinPerfect | Not started | Round result not implemented. |
-| WinTime | Not started | Round result not implemented. |
-
+| Trigger | Audit classification | Status | Notes |
+|---|---|---|---|
+| Abs | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| ACos | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| AILevel | Not applicable | Audit needed | MUGEN 1.0; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| Alive | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| Anim | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| AnimElem | Complete | Complete | Uses 1-based AIR element starts, including repeated starts after LoopStart/default loops; legacy comparison-time syntax and invalid-element false are focused-tested. |
+| AnimElemNo | Partial | Partial 55% | Implemented: Uses runtime animation element lookup when provided; AIR timing edge cases still need audit. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| AnimElemTime | Complete | Complete | Uses the AIR element-relative timeline shared with AnimElem, with positive, negative, and invalid-element focused coverage. |
+| AnimExist | Partial | Partial 55% | Implemented: Evaluates through runtime animation lookup when provided; AIR ownership edge cases still need audit. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| AnimTime | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| ASin | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| ATan | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| AuthorName | Partial | Partial 40% | Implemented: String source exists; metadata currently defaults empty. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| BackEdge | Not applicable | Audit needed | MUGEN 1.1; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| BackEdgeBodyDist | Partial | Fallback 40% | Implemented: The production compiled Trigger evaluator selects the edge behind the player from Facing and measures from the fixed X=48/912 fallback boundary using the player center. Missing: camera-relative screen edges and exact body-width adjustment. Evidence: focused positive/negative evaluator tests and a State 250 to 281 wall-impact ChangeState runtime test. |
+| BackEdgeDist | Partial | Fallback 40% | Implemented: Uses internal screen/player coordinate approximation. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current approximate behavior, runtime inventory, and focused-test inventory. |
+| BodyDist X | Partial | Partial 60% | Implemented: Compatibility alias of P2BodyDist X; measures Facing-relative front-to-front distance using current ground/air Size width and XScale. Missing: team selection, mixed coordinate spaces, and Helper redirect ownership. Evidence: focused scaled-width evaluator tests and bundled T-H-M-A x/a proximity CMD routes. |
+| BodyDist Y | Partial | Partial 40% | Implemented: Evaluates opponent/player Y coordinate difference like P2BodyDist Y; precise body edge height is still incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| BottomEdge | Not applicable | Audit needed | MUGEN 1.1; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| CameraPos X | Not applicable | Audit needed | MUGEN 1.1; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| CameraPos Y | Not applicable | Audit needed | MUGEN 1.1; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| CameraZoom | Not applicable | Audit needed | MUGEN 1.1; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| CanRecover | Partial | Partial 65% | Implemented: Reads fall.recover and fall.recovertime during the common air-fall path; focused tests verify that 5200/5210 require both CanRecover and Command = "recovery". Broader recovery command/state behavior remains incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: focused State 215-style ground launch regression tests. |
+| Ceil | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| Command | Complete | Complete | Basic command set matching. |
+| Cond | Not applicable | Audit needed | MUGEN 1.0; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| Const | Partial | Partial 65% | Implemented: Current-character [Data], [Size], [Velocity], and [Movement] values resolve through the intended CNS path; jump/run-jump pairs and yaccel have production-loader coverage. Missing: remaining constant families and coordinate scaling. Evidence: focused expression/runtime tests and bundled T-H-M-A loading. |
+| Const240p | Not applicable | Audit needed | MUGEN 1.0; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| Const480p | Not applicable | Audit needed | MUGEN 1.0; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| Const720p | Not applicable | Audit needed | MUGEN 1.0; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| Cos | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| Ctrl | Complete | Complete | Bare boolean and numeric Ctrl = 1 / Ctrl = 0 comparisons are covered, including a bundled real-character State -1 route. |
+| DrawGame | Partial | Partial 70% | Implemented: Reads the live RoundState draw result, including simultaneous KO and equal-Life time over. Missing: team modes and full match-series semantics. Evidence: focused simultaneous-KO and time-over RoundState tests. |
+| E | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| Exp | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| Facing | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| Floor | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| FrontEdge | Not applicable | Audit needed | MUGEN 1.1; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| FrontEdgeBodyDist | Partial | Fallback 40% | Implemented: The production compiled Trigger evaluator selects the edge in front of the player from Facing and measures from the fixed X=48/912 fallback boundary using the player center. Missing: camera-relative screen edges and exact body-width adjustment. Evidence: focused positive/negative evaluator tests and a State 250 to 281 wall-impact ChangeState runtime test. |
+| FrontEdgeDist | Partial | Fallback 40% | Implemented: Uses internal screen/player coordinate approximation. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current approximate behavior, runtime inventory, and focused-test inventory. |
+| FVar | Partial | Partial 40% | Implemented: fvar(n) lookup supported with default 0. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| GameHeight | Not applicable | Audit needed | MUGEN 1.1; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| GameTime | Partial | Partial 55% | Implemented: App runtime synchronizes its monotonic tick into GameState.frame, so real-game triggers and Explod lifecycle no longer remain at frame 0. Pause/round exact WinMUGEN boundaries still need broader verification. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| GameWidth | Not applicable | Audit needed | MUGEN 1.1; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| GetHitVar | Partial | Partial 80% | Implemented: Contact snapshot supplies damage, hit/slide/control time, velocity, type/anim codes, fall damage/kill, combo hitcount, snap xoff/yoff, ids, guarded, and yaccel across get-hit State changes. yvel selects ground.velocity.y for S/C contact and air.velocity.y for A; fall.yvelocity remains separate, and numeric fall terms have boolean truthiness. Unsupported zoff/fall-time keys are diagnosed safe defaults. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| HitCount | Partial | Partial 75% | Implemented: Counts accepted hits across ActiveHitDef generations; hitcountpersist independently preserves or resets it on State entry. UniqHitCount and full multi-target semantics remain incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| HitDefAttr | Partial | Partial 40% | Implemented: Compares State and attack categories against the same normalized attr snapshot used by live HitBy/NotHitBy filtering. Redirect and malformed-attr edge cases remain incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| HitFall | Partial | Partial 55% | Implemented: Reads the contact-snapshotted HitDef fall flag through common air get-hit states. Guard/projectile parity remains incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| HitOver | Partial | Partial 75% | Implemented: Reads the independent selected hit-time clock used by common get-hit state routing. Missing: uncommon recovery and custom-state timing semantics. Evidence: common get-hit runtime integration tests. |
+| HitPauseTime | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| HitShakeOver | Partial | Partial 75% | Implemented: Becomes true when the defender hit-pause counter expires. Missing: uncommon pause interaction and Helper semantics. Evidence: hit-pause and common get-hit runtime integration tests. |
+| HitVel X | Partial | Partial 40% | Implemented: Optional hit velocity field, default 0. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| HitVel Y | Partial | Partial 40% | Implemented: Optional hit velocity field, default 0. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| ID | Parser only | Audit needed | The CNS parser retains the expression string, but the runtime evaluator has no correct value source; unknown evaluation becomes false. |
+| IfElse | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| InGuardDist | Partial | Fallback 40% | Implemented: Simple distance approximation. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current approximate behavior, runtime inventory, and focused-test inventory. |
+| IsHelper | Partial | Partial 60% | Implemented: Returns 1 while evaluating a Helper entity and 0 for root players in the Phase1 runtime. Missing: redirect/custom-state and non-player entity audit. Evidence: focused root/helper trigger test. |
+| IsHomeTeam | Parser only | Audit needed | The CNS parser retains the expression string, but the runtime evaluator has no correct value source; unknown evaluation becomes false. |
+| LeftEdge | Not applicable | Audit needed | MUGEN 1.1; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| Life | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| LifeMax | Safe fallback | Safe no-op | Recognized by the CNS runtime without changing game state; returns a fixed compatibility value instead of WinMUGEN semantics. See the machine-readable Trigger inventory. |
+| Ln | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| Log | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| Lose | Partial | Partial 70% | Implemented: Reads the live RoundState loser for P1/P2 after KO or time over. Missing: team/helper ownership and full match-series semantics. Evidence: focused P1/P2 KO RoundState and trigger-context tests. |
+| LoseKO | Parser only | Audit needed | The CNS parser retains the expression string, but the runtime evaluator has no correct value source; unknown evaluation becomes false. |
+| LoseTime | Parser only | Audit needed | The CNS parser retains the expression string, but the runtime evaluator has no correct value source; unknown evaluation becomes false. |
+| MatchNo | Parser only | Audit needed | The CNS parser retains the expression string, but the runtime evaluator has no correct value source; unknown evaluation becomes false. |
+| MatchOver | Partial | Partial 75% | Implemented: Becomes true for the live KO/time-over round phase and drives common State 5150's match-over animation. Missing: full match-series and team-mode rules. Evidence: focused State 5150 MatchOver animation and RoundState tests. |
+| MoveContact | Partial | Partial 80% | Implemented: Reads real hit or guarded contact state for the current ActiveHitDef generation; movehitpersist independently preserves or resets result flags on State entry. MoveReversed/team semantics remain incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| MoveGuarded | Partial | Partial 75% | Implemented: Guardflag-approved live contact sets guarded without setting MoveHit; persist headers remain incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| MoveHit | Partial | Partial 88% | Implemented: Returns 1 on accepted root or Helper hit, remains 1 through attacker hitpause, and increments on later unpaused ticks. Later HitDef activation preserves the result until a new contact or explicit/state reset, allowing bundled T-H-M-A State 1011 to route to 1012, State 1016 multihit generations, and Helper State 3320 MoveHit effects. Missing: Projectile parity, MoveReversed, and broader WinMUGEN lifetime cases. Evidence: focused MoveContact timing, live root/Helper HitDef, and bundled T-H-M-A coverage. |
+| MoveReversed | Parser only | Audit needed | The CNS parser retains the expression string, but the runtime evaluator has no correct value source; unknown evaluation becomes false. |
+| MoveType | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| Name | Partial | Partial 40% | Implemented: String source exists; metadata defaults empty. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| NumCommand | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| NumEnemy | Safe fallback | Safe no-op | Recognized by the CNS runtime without changing game state; returns a fixed compatibility value instead of WinMUGEN semantics. See the machine-readable Trigger inventory. |
+| NumExplod | Safe fallback | Safe no-op | Recognized by the CNS runtime without changing game state; returns a fixed compatibility value instead of WinMUGEN semantics. See the machine-readable Trigger inventory. |
+| NumHelper | Partial | Partial 65% | Implemented: Counts current committed Helpers for the evaluating entity's root and optionally filters duplicate-capable MUGEN Helper IDs. Spawn requests become visible at the frame commit point. Missing: redirect/team/custom-state edge audit. Evidence: focused count, duplicate ID, P1/P2, and nested Helper tests. |
+| NumPartner | Safe fallback | Safe no-op | Recognized by the CNS runtime without changing game state; returns a fixed compatibility value instead of WinMUGEN semantics. See the machine-readable Trigger inventory. |
+| NumProj | Safe fallback | Safe no-op | Recognized by the CNS runtime without changing game state; returns a fixed compatibility value instead of WinMUGEN semantics. See the machine-readable Trigger inventory. |
+| NumProjID | Safe fallback | Safe no-op | Recognized by the CNS runtime without changing game state; returns a fixed compatibility value instead of WinMUGEN semantics. See the machine-readable Trigger inventory. |
+| NumTarget | Partial | Partial 60% | Implemented: Counts registered HitDef targets with optional HitDef id filtering; Helper/multi-player lookup remains incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| P1Name | Parser only | Audit needed | The CNS parser retains the expression string, but the runtime evaluator has no correct value source; unknown evaluation becomes false. |
+| P2AuthorName | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| P2BodyDist X | Partial | Partial 60% | Implemented: Measures P2's front from P1's front in P1's Facing direction using each player's current ground/air Size width and XScale. Missing: team selection, mixed coordinate spaces, and Helper redirect ownership. Evidence: focused scaled-width evaluator tests and bundled T-H-M-A States 200/203/230/232 CMD routing. |
+| P2BodyDist Y | Partial | Partial 40% | Implemented: Uses opponent/player coordinate difference. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| P2Ctrl | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| P2Dist X | Partial | Partial 40% | Implemented: Uses opponent/player coordinate difference. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| P2Dist Y | Partial | Partial 40% | Implemented: Uses opponent/player coordinate difference. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| P2Facing | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| P2Life | Partial | Partial 40% | Implemented: Uses opponent life or default. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| P2MoveType | Partial | Partial 40% | Implemented: Opponent move type supported. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| P2Name | Partial | Partial 40% | Implemented: Opponent metadata source exists, default empty. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| P2StateNo | Partial | Partial 40% | Implemented: Opponent stateNo supported. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| P2StateType | Partial | Partial 40% | Implemented: Opponent state type supported. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| P3Name | Parser only | Audit needed | The CNS parser retains the expression string, but the runtime evaluator has no correct value source; unknown evaluation becomes false. |
+| P4Name | Parser only | Audit needed | The CNS parser retains the expression string, but the runtime evaluator has no correct value source; unknown evaluation becomes false. |
+| PalNo | Parser only | Audit needed | The CNS parser retains the expression string, but the runtime evaluator has no correct value source; unknown evaluation becomes false. |
+| ParentDist X | Parser only | Audit needed | The CNS parser retains the expression string, but the runtime evaluator has no correct value source; unknown evaluation becomes false. |
+| ParentDist Y | Parser only | Audit needed | The CNS parser retains the expression string, but the runtime evaluator has no correct value source; unknown evaluation becomes false. |
+| Physics | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| Pi | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| PlayerIDExist | Parser only | Audit needed | The CNS parser retains the expression string, but the runtime evaluator has no correct value source; unknown evaluation becomes false. |
+| Pos X | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| Pos Y | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| Power | Partial | Partial 80% | Implemented: Reads the evaluated P1/P2 player's durable value; threshold command routes, state preservation, consumption, independence, and round reset are focused-tested. Missing: Helper/root redirect ownership pending Issue #58. Evidence: Issue #52 focused runtime tests and raw.power. |
+| PowerMax | Partial | Partial 80% | Implemented: Reads each P1/P2 player's [Data] power-derived maximum (default 3000), including bundled 9000-limit characters. Missing: Helper/root redirect ownership pending Issue #58. Evidence: Issue #52 loader/runtime tests and HUD integration. |
+| PrevStateNo | Partial | Partial 80% | Implemented: Records the immediate source on State entry, re-entry, and multiple same-frame transitions; round reset has no stale value. Missing: Helper/custom-state ownership and broader real-character audit. Evidence: Issue #65 focused and bundled T-H-M-A integration tests. |
+| ProjCancelTime | Safe fallback | Safe no-op | Recognized by the CNS runtime without changing game state; returns a fixed compatibility value instead of WinMUGEN semantics. See the machine-readable Trigger inventory. |
+| ProjContact | Parser only | Audit needed | The CNS parser retains the expression string, but the runtime evaluator has no correct value source; unknown evaluation becomes false. |
+| ProjContactTime | Safe fallback | Safe no-op | Recognized by the CNS runtime without changing game state; returns a fixed compatibility value instead of WinMUGEN semantics. See the machine-readable Trigger inventory. |
+| ProjGuarded | Parser only | Audit needed | The CNS parser retains the expression string, but the runtime evaluator has no correct value source; unknown evaluation becomes false. |
+| ProjGuardedTime | Safe fallback | Safe no-op | Recognized by the CNS runtime without changing game state; returns a fixed compatibility value instead of WinMUGEN semantics. See the machine-readable Trigger inventory. |
+| ProjHit | Parser only | Audit needed | The CNS parser retains the expression string, but the runtime evaluator has no correct value source; unknown evaluation becomes false. |
+| ProjHitTime | Safe fallback | Safe no-op | Recognized by the CNS runtime without changing game state; returns a fixed compatibility value instead of WinMUGEN semantics. See the machine-readable Trigger inventory. |
+| Random | Safe fallback | Safe no-op | Recognized by the CNS runtime without changing game state; returns a fixed compatibility value instead of WinMUGEN semantics. See the machine-readable Trigger inventory. |
+| RightEdge | Not applicable | Audit needed | MUGEN 1.1; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| RootDist X | Parser only | Audit needed | The CNS parser retains the expression string, but the runtime evaluator has no correct value source; unknown evaluation becomes false. |
+| RootDist Y | Parser only | Audit needed | The CNS parser retains the expression string, but the runtime evaluator has no correct value source; unknown evaluation becomes false. |
+| RoundNo | Partial | Partial 40% | Implemented: Context/default support. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| RoundsExisted | Safe fallback | Safe no-op | Recognized by the CNS runtime without changing game state; returns a fixed compatibility value instead of WinMUGEN semantics. See the machine-readable Trigger inventory. |
+| RoundState | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| ScreenHeight | Not applicable | Audit needed | MUGEN 1.1; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| ScreenPos X | Partial | Fallback 40% | Implemented: Uses internal position approximation. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current approximate behavior, runtime inventory, and focused-test inventory. |
+| ScreenPos Y | Partial | Fallback 40% | Implemented: Uses internal position approximation. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current approximate behavior, runtime inventory, and focused-test inventory. |
+| ScreenWidth | Not applicable | Audit needed | MUGEN 1.1; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| SelfAnimExist | Partial | Partial 55% | Implemented: Evaluates through runtime self-animation lookup when provided; redirect-specific AIR ownership still needs audit. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| Sin | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| StateNo | Complete | Complete | Numeric comparison. |
+| StateTime | Partial | Partial 55% | Implemented: Real-character compatibility alias reads the same current State time as Time; WinMUGEN-version provenance remains under audit. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| StateType | Complete | Complete | Basic support. |
+| SysFVar | Parser only | Audit needed | The CNS parser retains the expression string, but the runtime evaluator has no correct value source; unknown evaluation becomes false. |
+| SysVar | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| Tan | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| TargetDist X | Not applicable | Audit needed | not a standalone WinMUGEN trigger; use target redirect + Pos/P2Dist; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| TargetDist Y | Not applicable | Audit needed | not a standalone WinMUGEN trigger; use target redirect + Pos/P2Dist; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| TargetID | Partial | Partial 55% | Implemented: Returns the first registered target player id, optionally filtered by HitDef id. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| TargetLife | Not applicable | Audit needed | not a standalone WinMUGEN trigger; use target redirect + Life; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| TargetStateNo | Partial | Partial 55% | Implemented: Returns current StateNo for the selected two-player target; Helper/multi-player lookup remains incomplete. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| TargetVel X | Not applicable | Audit needed | not a standalone WinMUGEN trigger; use target redirect + Vel X; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| TargetVel Y | Not applicable | Audit needed | not a standalone WinMUGEN trigger; use target redirect + Vel Y; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| TeamMode | Parser only | Audit needed | The CNS parser retains the expression string, but the runtime evaluator has no correct value source; unknown evaluation becomes false. |
+| TeamSide | Partial | Fallback 40% | Implemented: Context/player id fallback. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current approximate behavior, runtime inventory, and focused-test inventory. |
+| TicksPerSecond | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| Time | Complete | Complete | State time comparison. |
+| TimeMod | Partial | Partial 40% | Implemented: Evaluates State time modulo a positive divisor against the requested remainder; invalid divisors fail safely. % remains the preferred equivalent. Missing: remaining WinMUGEN semantics not identified as covered by this row. Evidence: current implemented behavior, runtime inventory, and focused-test inventory. |
+| Timeremaining | Not applicable | Audit needed | not in the WinMUGEN 2002.04.14 official Trigger Index; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| TopEdge | Not applicable | Audit needed | MUGEN 1.1; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| UniqHitCount | Parser only | Audit needed | The CNS parser retains the expression string, but the runtime evaluator has no correct value source; unknown evaluation becomes false. |
+| Var | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| Vel X | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| Vel Y | Partial | Partial 80% | Implemented: The current evaluator has a runtime path for the documented subset. Missing: strict Issue #82 Complete evidence across arguments, redirects, entity ownership, pause timing, and real-character execution. Evidence: machine-readable inventory, current implementation, and focused-test audit. |
+| Win | Partial | Partial 70% | Implemented: Reads the live RoundState winner for P1/P2 after KO or time over. Missing: team/helper ownership and full match-series semantics. Evidence: focused P1/P2 KO RoundState and trigger-context tests. |
+| WinHyper | Not applicable | Audit needed | not in the WinMUGEN 2002.04.14 official Trigger Index; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| WinKO | Parser only | Audit needed | The CNS parser retains the expression string, but the runtime evaluator has no correct value source; unknown evaluation becomes false. |
+| WinPerfect | Parser only | Audit needed | The CNS parser retains the expression string, but the runtime evaluator has no correct value source; unknown evaluation becomes false. |
+| WinSpecial | Not applicable | Audit needed | not in the WinMUGEN 2002.04.14 official Trigger Index; tracked to prevent later-version or pseudo-trigger syntax from being mixed into the WinMUGEN scope. |
+| WinTime | Parser only | Audit needed | The CNS parser retains the expression string, but the runtime evaluator has no correct value source; unknown evaluation becomes false. |
 ## Redirects / Player References
 
 | Redirect | Status | Notes |

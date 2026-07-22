@@ -1,6 +1,6 @@
 # Compatibility Matrix Maintenance
 
-Updated: 2026-07-13
+Updated: 2026-07-22
 
 This document defines how to maintain the WebMUGEN compatibility matrix.
 
@@ -13,6 +13,12 @@ This document defines how to maintain the WebMUGEN compatibility matrix.
 Update both whenever compatibility behavior changes. When a row needs a special classification or progress value, update the HTML override table and the Markdown note together.
 
 Run `npm run matrix:check` after every Matrix edit. Use `node scripts/compatibility-matrix.mjs --write` only to migrate legacy four-status rows; normal edits must state the seven-status value directly in both files.
+
+Trigger rows additionally carry Issue #82's six-way audit classification in
+their Meaning column. Run `npm run trigger:audit` after Trigger changes. Use
+`npm run trigger:audit -- --write` only for an intentional inventory change;
+it synchronizes the Trigger sections in both Matrix mirrors and refreshes the
+bundled-character usage inventory.
 
 ## Status meanings
 
@@ -176,7 +182,7 @@ Before committing a Matrix update, verify:
 - every `Safe no-op` note says that no game effect occurs;
 - Fallback is not used merely because a feature is incomplete;
 - Complete rows have focused-test or confirmed-runtime evidence;
-- HTML and Markdown contain the same 414 row identities and canonical status/progress values;
+- HTML and Markdown contain the same row identities and canonical status/progress values (currently 446 rows);
 - HTML loads and parses the Markdown inventory;
 - search, section filter, and status filter still work;
 - `public/chars/common1.cns` is unchanged.
