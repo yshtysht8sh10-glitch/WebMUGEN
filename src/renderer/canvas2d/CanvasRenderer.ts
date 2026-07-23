@@ -243,9 +243,10 @@ export class CanvasRenderer {
 
   private drawPlayer(ctx: CanvasRenderingContext2D, player: PlayerState, color: string, diagnosticsEnabled: boolean): string {
     const hasOwnerAssetMap = Object.keys(this.ownerAssets).length > 0;
-    const assets = this.ownerAssets[player.id] ?? (hasOwnerAssetMap ? undefined : this.defaultAssets());
+    const animationOwner = player.animationOwnerId ?? player.id;
+    const assets = this.ownerAssets[animationOwner] ?? (hasOwnerAssetMap ? undefined : this.defaultAssets());
     const stateOwner = player.stateOwnerId ?? player.id;
-    const prefix = diagnosticsEnabled ? `raw.render entity=p${player.id} state=${player.stateNo} anim=${player.animNo} stateOwner=${stateOwner} animOwner=${player.id}` : '';
+    const prefix = diagnosticsEnabled ? `raw.render entity=p${player.id} state=${player.stateNo} anim=${player.animNo} stateOwner=${stateOwner} animOwner=${animationOwner}` : '';
     if (!assets) return diagnosticsEnabled ? `${prefix} result=skip reason=animation_owner_missing playerVisible=0 rendererDrawRequested=0` : '';
 
     const assertSpecial = (player.assertSpecialFlags ?? (player as PlayerState & { runtime?: { assertSpecial?: string[] } }).runtime?.assertSpecial ?? [])

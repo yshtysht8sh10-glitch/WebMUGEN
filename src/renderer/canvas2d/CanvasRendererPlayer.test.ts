@@ -188,6 +188,23 @@ describe('CanvasRenderer player sprite fallback', () => {
     expect(fillRect).toHaveBeenCalledWith(0, 0, 640, 360);
     expect(diagnostics).toContain('raw.envcolor_draw owner=1 remaining=5 color=(12,34,56) under=1 result=drawn');
   });
+
+  it('resolves ChangeAnim2 frames from the recorded animation owner', () => {
+    const drawImage = vi.fn();
+    const context = fakeContext(vi.fn(), vi.fn(), drawImage);
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+    const p1Assets = { airDocument: air(0, 10, 0), spritePack: spritePack(10, 0) };
+    const p2Assets = { airDocument: air(900, 20, 0), spritePack: spritePack(20, 0) };
+    const renderer = new CanvasRenderer(canvas, undefined, null, null, { 1: p1Assets, 2: p2Assets });
+    const state = createInitialGameState();
+    state.players[0] = { ...state.players[0], animNo: 900, stateOwnerId: 2, animationOwnerId: 2 };
+
+    const diagnostics = renderer.render(state).join('\n');
+
+    expect(drawImage).toHaveBeenCalledTimes(1);
+    expect(diagnostics).toContain('entity=p1 state=0 anim=900 stateOwner=2 animOwner=2');
+    expect(diagnostics).toContain('airElementSpriteGroup=20');
+  });
 });
 
 function fakeContext(

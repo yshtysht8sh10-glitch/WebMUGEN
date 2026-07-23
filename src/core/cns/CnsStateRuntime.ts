@@ -97,6 +97,7 @@ export type CnsRuntimeInput = {
   playerIdExists?: (entityId: number) => boolean;
   onHelperSpawn?: (request: HelperSpawnRequest) => void;
   onHelperDestroy?: (entityId: number) => void;
+  onParentVarChange?: (operation: { targetEntityId: number; kind: 'var' | 'fvar'; index: number; value: number; add: boolean }) => void;
 };
 
 export type CnsRuntimeResult = { state: GameState; traces: CnsRuntimeTrace[] };
@@ -181,6 +182,7 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
   const initialHelpers = state.helpers ?? createInitialHelperState();
   const pendingSpawns: HelperSpawnRequest[] = [];
   const pendingDestroys = new Set<number>();
+  const pendingParentVars: Array<{ targetEntityId: number; kind: 'var' | 'fvar'; index: number; value: number; add: boolean }> = [];
   const helperInput = (context: RuntimeEntityContext): CnsRuntimeInput => ({
     ...input,
     gameTime: state.frame,
@@ -194,6 +196,7 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
     )).length,
     onHelperSpawn: (request) => pendingSpawns.push(request),
     onHelperDestroy: (entityId) => pendingDestroys.add(entityId),
+    onParentVarChange: (operation) => pendingParentVars.push(operation),
     resolveEntity: (source, kind, argument) => resolveRuntimeEntity(state, initialHelpers, source, kind, argument),
     playerIdExists: (entityId) => entityId === 1 || entityId === 2 || initialHelpers.entries.some((entry) => entry.entityId === entityId),
   });
@@ -207,7 +210,7 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
   const afterP1Targets = applyTargetOperations([p1.player, state.players[1]], p1.targetOperations, cns, input);
   const p2Cns = resolvePlayerCns(afterP1Targets[1], cns, input);
   const p2 = stepPlayer(afterP1Targets[1], afterP1Targets[0], 2, p2Cns, { ...helperInput(p2Context), constants: p2Cns }, input.p2Commands, state.frame);
-  const players = applyTargetOperations([afterP1Targets[0], p2.player], p2.targetOperations, cns, input);
+  let players = applyTargetOperations([afterP1Targets[0], p2.player], p2.targetOperations, cns, input);
   const helperTraces: CnsRuntimeTrace[] = [];
   let helpers = {
     ...initialHelpers,
@@ -240,6 +243,19 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
   for (const entityId of pendingDestroys) helpers = destroyHelper(helpers, entityId);
   for (const request of pendingSpawns) {
     helpers = spawnHelper(helpers, request, resolveCnsByOwner(request.stateOwnerId, cns, input));
+  }
+  for (const operation of pendingParentVars) {
+    if (operation.targetEntityId === 1 || operation.targetEntityId === 2) {
+      const index = operation.targetEntityId - 1;
+      players = players.map((entry, playerIndex) => playerIndex === index ? applyVariableOperation(entry, operation) : entry) as [PlayerState, PlayerState];
+    } else {
+      helpers = {
+        ...helpers,
+        entries: helpers.entries.map((entry) => entry.entityId === operation.targetEntityId
+          ? { ...entry, player: applyVariableOperation(entry.player, operation) }
+          : entry),
+      };
+    }
   }
   const helperDiagnostics = input.hitDiagnostics === false ? [] : [
     ...pendingSpawns.map((request, index) => {
@@ -353,6 +369,8 @@ function stepPlayer(
       input.hitDiagnostics !== false,
     ), trace, traceDiagnosticsEnabled), targetOperations };
   }
+
+  next = applyStoredEntityBind(next, input);
 
   next = tickHitAttributeSlots(next);
 
@@ -1049,6 +1067,7 @@ function executeController(
   if (type === 'null') return withPlayer(player, true, 'Null');
   if (type === 'assertspecial') return assertSpecial(player, controller);
   if (type === 'changeanim') return changeAnim(player, opponent, controller, input, commands);
+  if (type === 'changeanim2') return changeAnim2(player, opponent, controller, input, commands);
   if (type === 'velset') return velSet(player, opponent, controller, input, commands);
   if (type === 'veladd') return velAdd(player, opponent, controller, input, commands);
   if (type === 'velmul') return velMul(player, controller);
@@ -1117,6 +1136,8 @@ function executeController(
   if (type === 'removeexplod') return removeExplod(player, opponent, controller, input, commands);
   if (type === 'explodbindtime') return setExplodBindTime(player, opponent, controller, input, commands);
   if (type === 'helper') return createHelper(player, opponent, controller, input, commands);
+  if (type === 'bindtoparent' || type === 'bindtoroot' || type === 'bindtotarget') return bindEntity(player, opponent, controller, input, commands, type);
+  if (type === 'parentvarset' || type === 'parentvaradd') return parentVar(player, opponent, controller, input, commands, type === 'parentvaradd');
   if (type === 'destroyself') {
     if (input.entityContext?.kind !== 'helper') return withPlayer(player, false, 'DestroySelf');
     input.onHelperDestroy?.(input.entityContext.entityId);
@@ -1127,7 +1148,11 @@ function executeController(
     if (value === null) return withPlayer(player, false, 'SelfState');
     const selfOwnerId = player.selfStateOwnerId ?? player.id;
     const selfCns = resolveCnsByOwner(selfOwnerId, cns, input);
-    return withPlayer({ ...enterState(player, opponent, value, selfCns, { ...input, constants: selfCns }, commands), stateOwnerId: selfOwnerId }, true, 'SelfState');
+    return withPlayer({
+      ...enterState(player, opponent, value, selfCns, { ...input, constants: selfCns }, commands),
+      stateOwnerId: selfOwnerId,
+      animationOwnerId: selfOwnerId as 1 | 2,
+    }, true, 'SelfState');
   }
   if (type === 'turn') return withPlayer({ ...player, facing: player.facing === 1 ? -1 : 1 }, true, 'Turn');
   if (type === 'varset') return setVarController(player, controller, input, commands, opponent);
@@ -1520,7 +1545,122 @@ function changeAnim(
     `raw.hit_anim_change target=p${player.id}`,
     `  activeHitDefId=${player.hitStun?.activeHitDefId ?? 'none'} from=${player.animNo} to=${value} state=${player.stateNo} controller=ChangeAnim reason=common_state_transition`,
   ] : player.hitDiagnosticLines;
-  return withPlayer({ ...player, hitDiagnosticLines, animNo: value, animTime: player.animNo === value ? player.animTime : 0 }, true, 'ChangeAnim');
+  return withPlayer({
+    ...player,
+    hitDiagnosticLines,
+    animNo: value,
+    animTime: player.animNo === value ? player.animTime : 0,
+    animationOwnerId: (player.selfStateOwnerId ?? player.id) as 1 | 2,
+  }, true, 'ChangeAnim');
+}
+
+function changeAnim2(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const value = num(controller, 'value', player, input, commands, opponent);
+  if (value === null) return withPlayer(player, true, 'ChangeAnim2');
+  const owner = player.stateOwnerId === 1 || player.stateOwnerId === 2 ? player.stateOwnerId : player.id;
+  return withPlayer({
+    ...player,
+    animNo: value,
+    animTime: player.animNo === value && player.animationOwnerId === owner ? player.animTime : 0,
+    animationOwnerId: owner,
+  }, true, 'ChangeAnim2');
+}
+
+function bindEntity(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands: ReadonlySet<string> | undefined,
+  type: 'bindtoparent' | 'bindtoroot' | 'bindtotarget',
+): ControllerResult {
+  const name = type === 'bindtoparent' ? 'BindToParent' : type === 'bindtoroot' ? 'BindToRoot' : 'BindToTarget';
+  const context = input.entityContext;
+  if (!context || ((type === 'bindtoparent' || type === 'bindtoroot') && context.kind !== 'helper')) return withPlayer(player, true, name);
+  const time = Math.trunc(num(controller, 'time', player, input, commands, opponent) ?? 1);
+  if (time === 0) return withPlayer({ ...player, entityBind: undefined }, true, name);
+
+  let targetEntityId: number | undefined;
+  if (type === 'bindtoparent') targetEntityId = context.parentEntityId ?? undefined;
+  else if (type === 'bindtoroot') targetEntityId = context.rootEntityId;
+  else {
+    const selected = selectTargets(player, num(controller, 'id', player, input, commands, opponent) ?? undefined);
+    targetEntityId = selected[0]?.playerId;
+  }
+  if (targetEntityId === undefined) return withPlayer(player, true, name);
+  const target = input.resolveEntity?.(context, 'playerid', targetEntityId);
+  if (!target) return withPlayer({ ...player, entityBind: undefined }, true, name);
+  const offset = pair(controller, 'pos', player, input, commands, opponent, 0, 0);
+  const rawPostype = (str(controller, 'postype') ?? 'foot').replace(/^['"]|['"]$/g, '').toLowerCase();
+  const postype = rawPostype === 'head' ? 'head' as const : rawPostype === 'mid' ? 'mid' as const : 'foot' as const;
+  const bind = {
+    targetEntityId,
+    remaining: time < 0 ? -1 : Math.max(0, time - 1),
+    offsetX: offset.x,
+    offsetY: offset.y,
+    postype,
+    facing: Math.trunc(num(controller, 'facing', player, input, commands, opponent) ?? 0),
+  };
+  return withPlayer(applyEntityBind({ ...player, entityBind: bind }, target, bind), true, name);
+}
+
+function applyStoredEntityBind(player: PlayerState, input: CnsRuntimeInput): PlayerState {
+  const bind = player.entityBind;
+  const context = input.entityContext;
+  if (!bind || !context || bind.remaining === 0) return bind?.remaining === 0 ? { ...player, entityBind: undefined } : player;
+  const target = input.resolveEntity?.(context, 'playerid', bind.targetEntityId);
+  if (!target) return { ...player, entityBind: undefined };
+  const nextBind = bind.remaining < 0 ? bind : { ...bind, remaining: Math.max(0, bind.remaining - 1) };
+  return applyEntityBind({ ...player, entityBind: nextBind.remaining === 0 ? undefined : nextBind }, target, bind);
+}
+
+function applyEntityBind(player: PlayerState, target: PlayerState, bind: NonNullable<PlayerState['entityBind']>): PlayerState {
+  const height = Math.max(0, target.collisionWidth?.height ?? 60);
+  const anchorY = target.y - (bind.postype === 'head' ? height : bind.postype === 'mid' ? height / 2 : 0);
+  const facing = bind.facing === 0 ? player.facing : (target.facing * (bind.facing < 0 ? -1 : 1)) as 1 | -1;
+  return {
+    ...player,
+    x: target.x + bind.offsetX * target.facing,
+    y: anchorY + bind.offsetY,
+    facing,
+    positionFrozen: true,
+  };
+}
+
+function parentVar(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands: ReadonlySet<string> | undefined,
+  add: boolean,
+): ControllerResult {
+  const name = add ? 'ParentVarAdd' : 'ParentVarSet';
+  const context = input.entityContext;
+  if (context?.kind !== 'helper' || context.parentEntityId === null) return withPlayer(player, true, name);
+  const fvar = num(controller, 'fv', player, input, commands, opponent);
+  const variable = num(controller, 'v', player, input, commands, opponent);
+  const kind: 'var' | 'fvar' = fvar !== null ? 'fvar' : 'var';
+  const index = Math.trunc(fvar ?? variable ?? -1);
+  if (!isValidPlayerVariableIndex(kind, index)) return withPlayer(player, true, name);
+  const value = num(controller, 'value', player, input, commands, opponent) ?? 0;
+  input.onParentVarChange?.({ targetEntityId: context.parentEntityId, kind, index, value, add });
+  return withPlayer(player, true, name);
+}
+
+function applyVariableOperation(
+  player: PlayerState,
+  operation: { kind: 'var' | 'fvar'; index: number; value: number; add: boolean },
+): PlayerState {
+  const key = operation.kind === 'var' ? 'vars' : 'fvars';
+  const current = player[key]?.[operation.index] ?? 0;
+  return { ...player, [key]: { ...(player[key] ?? {}), [operation.index]: operation.add ? current + operation.value : operation.value } };
 }
 
 function hitVelSet(player: PlayerState, controller: CnsStateController): ControllerResult {

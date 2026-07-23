@@ -50,6 +50,7 @@ export function spawnHelper(state: HelperRuntimeState, request: HelperSpawnReque
     moveContact: undefined,
     stateOwnerId: request.stateOwnerId,
     selfStateOwnerId: request.ownerCharacterId,
+    animationOwnerId: request.animationOwnerId,
     vars: {},
     fvars: {},
     sysVars: {},

@@ -252,6 +252,15 @@ export type PlayerState = {
   } | null>;
   stateOwnerId?: number;
   selfStateOwnerId?: number;
+  animationOwnerId?: 1 | 2;
+  entityBind?: {
+    targetEntityId: number;
+    remaining: number;
+    offsetX: number;
+    offsetY: number;
+    postype: 'foot' | 'mid' | 'head';
+    facing: number;
+  };
   moveContact?: {
     activeHitDefId: number;
     contact: boolean;
