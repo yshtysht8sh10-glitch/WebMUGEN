@@ -219,13 +219,25 @@ describe('CnsRuntimeTrigger', () => {
     expect(evaluateCnsRuntimeTrigger('ATan(0) = 0', { player })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('Exp(0) = 1', { player })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('Ln(E) = 1', { player })).toBe(true);
-    expect(evaluateCnsRuntimeTrigger('Log(100) = 2', { player })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('Log(10, 100) = 2', { player })).toBe(true);
+  });
+
+  it('returns bottom for invalid math domains and non-finite results', () => {
+    for (const expression of ['ACos(2)', 'ASin(-2)', 'Ln(0)', 'Log(1, 10)', 'Log(10, 0)', 'Exp(1000)', '1e308 * 1e308']) {
+      expect(readNumberExpression(expression, { player })).toBeNull();
+      expect(evaluateCnsRuntimeTrigger(`${expression} != 0`, { player })).toBe(false);
+    }
+    expect(readNumberExpression('Log(2, 64)', { player })).toBe(6);
+    expect(readNumberExpression('Log(100)', { player })).toBeNull();
   });
 
   it('evaluates conditional numeric functions', () => {
     expect(evaluateCnsRuntimeTrigger('IfElse(ctrl, 4, 9) = 4', { player })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('Cond(statetype = A, 4, 9) = 9', { player })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('IfElse(time > 5, time + 1, 0) = 7', { player })).toBe(true);
+    expect(readNumberExpression('Cond(Var(60), 1, 2)', { player })).toBeNull();
+    expect(readNumberExpression('IfElse(1, 2, 1 / 0)', { player })).toBe(2);
+    expect(readNumberExpression('IfElse(0, 1 / 0, 2)', { player })).toBe(2);
   });
 
   it('evaluates opponent and count-style triggers with safe defaults', () => {
@@ -266,6 +278,11 @@ describe('CnsRuntimeTrigger', () => {
     expect(evaluateCnsRuntimeTrigger('Random < 1000', { player })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('Random = [0,499]', { player, random: 499 })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('Random = [0,499]', { player, random: 500 })).toBe(false);
+    const frameZero = readNumberExpression('Random', { player, gameTime: 0 });
+    const frameOne = readNumberExpression('Random', { player, gameTime: 1 });
+    expect(frameZero).toBeGreaterThanOrEqual(0);
+    expect(frameZero).toBeLessThanOrEqual(999);
+    expect(frameOne).not.toBe(frameZero);
     expect(evaluateCnsRuntimeTrigger('ProjHitTime(1005) = 1', { player, projHitTime: (id) => id === 1005 ? 1 : -1 })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('ProjHit1005 = 1', { player, projHitTime: (id) => id === 1005 ? 1 : -1 })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('ProjHit1005 = 1', { player, projHitTime: (id) => id === 1005 ? 2 : -1 })).toBe(false);

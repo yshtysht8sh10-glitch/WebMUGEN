@@ -86,13 +86,20 @@ Examples:
 - range comparisons: `= [a,b]`, `!= [a,b]`;
 - boolean operators: `&&`, `||`, `!`;
 - math operators: `+`, `-`, `*`, `/`, `%`;
-- math constants/functions: `Pi`, `E`, `Sin`, `Cos`, `Tan`, `IfElse`, `Cond`.
+- math constants/functions: `Pi`, `E`, `ACos`, `ASin`, `ATan`, `Sin`, `Cos`, `Tan`, `Exp`, `Ln`, `Log(base, value)`, `IfElse`, `Cond`.
 
 `IfElse` and `Cond` preserve a leading WinMUGEN redirect condition as one argument even though the
 redirect itself contains a comma. For example,
 `IfElse(enemy, GetHitVar(hitcount) >= 7, 1, 0)` evaluates `GetHitVar` on the opponent rather than
 being rejected as a four-argument function. Bundled T-H-M-A State 233 uses this form in its third
 HitDef `air.velocity` expression.
+
+Invalid numeric domains and non-finite arithmetic results evaluate to bottom rather than leaking
+JavaScript `NaN` or `Infinity`. This includes `ACos` / `ASin` outside -1..1, non-positive `Ln`,
+non-positive `Log` base/value, base 1, overflow, and division or remainder by zero. `Cond` returns
+bottom when its condition is bottom and evaluates only its selected branch. `IfElse` evaluates both
+branches but returns bottom only when its condition or selected branch is bottom, matching the
+WinMUGEN expression rules relevant to Controller execution.
 
 When adding expression support, update Expression rows in the matrix, not unrelated Trigger rows.
 

@@ -8,7 +8,7 @@ import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 import { activateMoveContact, resetMoveContact } from '../hitdef/MoveContactState';
 import { removeTarget, selectTargets } from '../hitdef/TargetState';
 import { normalizeHitAttribute } from '../hitdef/HitAttribute';
-import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, evaluatePreparedCnsRuntimeTrigger, inspectCnsRuntimeRedirect, isValidPlayerVariableIndex, readNumberExpression, resolveCnsRuntimeRedirect, type CnsRuntimeTriggerContext, type PlayerVariableKind } from './CnsRuntimeTrigger';
+import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, evaluatePreparedCnsRuntimeTrigger, inspectCnsRuntimeRedirect, isValidPlayerVariableIndex, readNumberExpression, resolveCnsRuntimeRedirect, stableCnsRandomValue, type CnsRuntimeTriggerContext, type PlayerVariableKind } from './CnsRuntimeTrigger';
 import type { SoundPanEvent, SoundPlayEvent, SoundStopEvent } from '../audio/SoundEvent';
 import { canEntityMoveDuringPause, type PauseControllerEvent, type PauseState } from '../pause/PauseSystem';
 import {
@@ -710,7 +710,7 @@ function createTriggerContext(
     animationExists: input.getAnimationDuration ? (animNo) => input.getAnimationDuration?.(animNo) !== null : undefined,
     constants: input.constants,
     gameTime: input.gameTime,
-    random: input.random ?? stableRandomValue(input.gameTime ?? player.stateTime, player),
+    random: input.random ?? stableCnsRandomValue(input.gameTime ?? player.stateTime, player),
     roundState: input.roundState,
     roundNo: input.roundNo,
     matchOver: input.matchOver,
@@ -1015,17 +1015,6 @@ function executeController(
   if (noOpName) return withPlayer(player, true, noOpName);
 
   return withPlayer(player, false, controller.type);
-}
-
-function stableRandomValue(frame: number, player: PlayerState): number {
-  // Keep Trigger diagnostics and controller execution identical within a frame.
-  // The integer hash still provides the WinMUGEN Random range without depending
-  // on ambient Math.random(), which would make replays and focused tests diverge.
-  let value = Math.imul(Math.trunc(frame) + 1, 0x45d9f3b);
-  value ^= Math.imul(player.id, 0x27d4eb2d);
-  value ^= Math.imul(player.stateNo, 0x165667b1);
-  value ^= value >>> 16;
-  return (value >>> 0) % 1000;
 }
 
 function assertSpecial(player: PlayerState, controller: CnsStateController): ControllerResult {
@@ -2263,7 +2252,7 @@ function varRandom(
   const last = Math.trunc(values.length === 1 ? values[0]! : values[1]!);
   const least = Math.min(first, last);
   const greatest = Math.max(first, last);
-  const random = input.random ?? stableRandomValue(input.gameTime ?? player.stateTime, player);
+  const random = input.random ?? stableCnsRandomValue(input.gameTime ?? player.stateTime, player);
   const selected = least + Math.floor((Math.max(0, Math.min(999, Math.trunc(random))) / 1000) * (greatest - least + 1));
   return withPlayer(setVar(player, index, selected), true, 'VarRandom');
 }

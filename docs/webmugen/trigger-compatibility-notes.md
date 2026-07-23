@@ -85,6 +85,12 @@ Matrix rows retain their prior status because no Trigger result is intentionally
 
 For example, adding math support for `+`, `-`, `*`, `/`, `%`, `Sin`, `Cos`, or `IfElse` should update Expression rows, not arbitrary Trigger rows.
 
+The numeric evaluator enforces WinMUGEN-style bottom propagation for invalid math domains and
+non-finite arithmetic. `Log` takes the documented two arguments (`base`, `value`), `Cond` skips its
+unused branch, and `IfElse` evaluates both branches while ignoring bottom from the unselected result.
+`Random` uses the shared deterministic runtime hash when no injectable test/replay value is supplied;
+its range is 0..999, while exact Elecbyte PRNG seed/sequence parity remains intentionally Partial.
+
 ## Test expectations
 
 Trigger tests should verify both positive and negative cases when possible.

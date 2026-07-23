@@ -45,6 +45,18 @@ type NumberSource = (context: CnsRuntimeTriggerContext) => number | null;
 type StringSource = (context: CnsRuntimeTriggerContext) => string | null;
 type BooleanSource = (context: CnsRuntimeTriggerContext) => boolean;
 
+function finiteOrNull(value: number | null): number | null {
+  return value !== null && Number.isFinite(value) ? value : null;
+}
+
+export function stableCnsRandomValue(frame: number, player: PlayerState): number {
+  let value = Math.imul(Math.trunc(frame) + 1, 0x45d9f3b);
+  value ^= Math.imul(player.id, 0x27d4eb2d);
+  value ^= Math.imul(player.stateNo, 0x165667b1);
+  value ^= value >>> 16;
+  return (value >>> 0) % 1000;
+}
+
 export type CompiledCnsRuntimeTrigger = {
   expression: string;
   evaluate: BooleanSource;
@@ -246,7 +258,7 @@ function compileNumberExpression(rawExpression: string): NumberSource | null {
       const leftValue = left(context);
       const rightValue = right(context);
       if (leftValue === null || rightValue === null) return null;
-      return additive.operator === '+' ? leftValue + rightValue : leftValue - rightValue;
+      return finiteOrNull(additive.operator === '+' ? leftValue + rightValue : leftValue - rightValue);
     };
   }
 
@@ -259,9 +271,9 @@ function compileNumberExpression(rawExpression: string): NumberSource | null {
       const leftValue = left(context);
       const rightValue = right(context);
       if (leftValue === null || rightValue === null) return null;
-      if (multiplicative.operator === '*') return leftValue * rightValue;
-      if (multiplicative.operator === '/') return rightValue === 0 ? null : leftValue / rightValue;
-      return rightValue === 0 ? null : leftValue % rightValue;
+      if (multiplicative.operator === '*') return finiteOrNull(leftValue * rightValue);
+      if (multiplicative.operator === '/') return rightValue === 0 ? null : finiteOrNull(leftValue / rightValue);
+      return rightValue === 0 ? null : finiteOrNull(leftValue % rightValue);
     };
   }
 
@@ -269,24 +281,38 @@ function compileNumberExpression(rawExpression: string): NumberSource | null {
     abs: Math.abs,
     floor: Math.floor,
     ceil: Math.ceil,
-    acos: Math.acos,
-    asin: Math.asin,
+    acos: (value) => value >= -1 && value <= 1 ? Math.acos(value) : null,
+    asin: (value) => value >= -1 && value <= 1 ? Math.asin(value) : null,
     atan: Math.atan,
     cos: Math.cos,
-    exp: Math.exp,
+    exp: (value) => finiteOrNull(Math.exp(value)),
     ln: (value) => value > 0 ? Math.log(value) : null,
-    log: (value) => value > 0 ? Math.log10(value) : null,
     sin: Math.sin,
     tan: Math.tan,
   };
-  const functionMatch = expression.match(/^(abs|floor|ceil|acos|asin|atan|cos|exp|ln|log|sin|tan)\((.+)\)$/);
+  const functionMatch = expression.match(/^(abs|floor|ceil|acos|asin|atan|cos|exp|ln|sin|tan)\((.+)\)$/);
   if (functionMatch) {
     const argument = compileNumberExpression(functionMatch[2]);
     const operation = unaryFunctions[functionMatch[1]];
     if (!argument) return null;
     return (context) => {
       const value = argument(context);
-      return value === null ? null : operation(value);
+      return value === null ? null : finiteOrNull(operation(value));
+    };
+  }
+
+  const logMatch = expression.match(/^log\((.+)\)$/);
+  if (logMatch) {
+    const args = splitConditionalArguments(logMatch[1]);
+    if (args.length !== 2) return null;
+    const base = compileNumberExpression(args[0]);
+    const value = compileNumberExpression(args[1]);
+    if (!base || !value) return null;
+    return (context) => {
+      const resolvedBase = base(context);
+      const resolvedValue = value(context);
+      if (resolvedBase === null || resolvedValue === null || resolvedBase <= 0 || resolvedBase === 1 || resolvedValue <= 0) return null;
+      return finiteOrNull(Math.log(resolvedValue) / Math.log(resolvedBase));
     };
   }
 
@@ -294,10 +320,20 @@ function compileNumberExpression(rawExpression: string): NumberSource | null {
   if (conditionalMatch) {
     const args = splitConditionalArguments(conditionalMatch[2]);
     if (args.length !== 3) return null;
-    const condition = compileBooleanExpression(args[0]);
+    const condition = compileNumberExpression(args[0]);
+    if (!condition) return null;
     const whenTrue = compileNumberExpression(args[1]) ?? (() => null);
     const whenFalse = compileNumberExpression(args[2]) ?? (() => null);
-    return (context) => (condition(context) ? whenTrue(context) : whenFalse(context));
+    return (context) => {
+      const resolvedCondition = condition(context);
+      if (resolvedCondition === null) return null;
+      if (conditionalMatch[1] === 'ifelse') {
+        const trueValue = whenTrue(context);
+        const falseValue = whenFalse(context);
+        return resolvedCondition !== 0 ? trueValue : falseValue;
+      }
+      return resolvedCondition !== 0 ? whenTrue(context) : whenFalse(context);
+    };
   }
 
   if (splitTopLevelComparison(expression) || splitTopLevel(expression, '&&').length > 1 || splitTopLevel(expression, '||').length > 1 || expression.startsWith('!')) {
@@ -496,7 +532,7 @@ export function readNumberExpression(rawExpression: string, context: CnsRuntimeT
     const left = readNumberExpression(additive.left, context);
     const right = readNumberExpression(additive.right, context);
     if (left === null || right === null) return null;
-    return additive.operator === '+' ? left + right : left - right;
+    return finiteOrNull(additive.operator === '+' ? left + right : left - right);
   }
 
   const multiplicative = splitTopLevelArithmetic(expression, ['*', '/', '%']);
@@ -504,9 +540,9 @@ export function readNumberExpression(rawExpression: string, context: CnsRuntimeT
     const left = readNumberExpression(multiplicative.left, context);
     const right = readNumberExpression(multiplicative.right, context);
     if (left === null || right === null) return null;
-    if (multiplicative.operator === '*') return left * right;
-    if (multiplicative.operator === '/') return right === 0 ? null : left / right;
-    return right === 0 ? null : left % right;
+    if (multiplicative.operator === '*') return finiteOrNull(left * right);
+    if (multiplicative.operator === '/') return right === 0 ? null : finiteOrNull(left / right);
+    return right === 0 ? null : finiteOrNull(left % right);
   }
 
   const absMatch = expression.match(/^abs\((.+)\)$/);
@@ -527,18 +563,17 @@ export function readNumberExpression(rawExpression: string, context: CnsRuntimeT
     return value === null ? null : Math.ceil(value);
   }
 
-  const mathMatch = expression.match(/^(acos|asin|atan|cos|exp|ln|log|sin|tan)\((.+)\)$/);
+  const mathMatch = expression.match(/^(acos|asin|atan|cos|exp|ln|sin|tan)\((.+)\)$/);
   if (mathMatch) {
     const value = readNumberExpression(mathMatch[2], context);
     if (value === null) return null;
     switch (mathMatch[1]) {
-      case 'acos': return Math.acos(value);
-      case 'asin': return Math.asin(value);
+      case 'acos': return value >= -1 && value <= 1 ? Math.acos(value) : null;
+      case 'asin': return value >= -1 && value <= 1 ? Math.asin(value) : null;
       case 'atan': return Math.atan(value);
       case 'cos': return Math.cos(value);
-      case 'exp': return Math.exp(value);
+      case 'exp': return finiteOrNull(Math.exp(value));
       case 'ln': return value > 0 ? Math.log(value) : null;
-      case 'log': return value > 0 ? Math.log10(value) : null;
       case 'sin': return Math.sin(value);
       case 'tan': return Math.tan(value);
       default: return null;
@@ -549,7 +584,24 @@ export function readNumberExpression(rawExpression: string, context: CnsRuntimeT
   if (conditionalMatch) {
     const args = splitConditionalArguments(conditionalMatch[2]);
     if (args.length !== 3) return null;
-    return readNumberExpression(evaluateBooleanExpression(args[0], context) ? args[1] : args[2], context);
+    const condition = readNumberExpression(args[0], context);
+    if (condition === null) return null;
+    if (conditionalMatch[1] === 'ifelse') {
+      const trueValue = readNumberExpression(args[1], context);
+      const falseValue = readNumberExpression(args[2], context);
+      return condition !== 0 ? trueValue : falseValue;
+    }
+    return readNumberExpression(condition !== 0 ? args[1] : args[2], context);
+  }
+
+  const logMatch = expression.match(/^log\((.+)\)$/);
+  if (logMatch) {
+    const args = splitConditionalArguments(logMatch[1]);
+    if (args.length !== 2) return null;
+    const base = readNumberExpression(args[0], context);
+    const value = readNumberExpression(args[1], context);
+    if (base === null || value === null || base <= 0 || base === 1 || value <= 0) return null;
+    return finiteOrNull(Math.log(value) / Math.log(base));
   }
 
   if (splitTopLevelComparison(expression) || splitTopLevel(expression, '&&').length > 1 || splitTopLevel(expression, '||').length > 1 || expression.startsWith('!')) {
@@ -665,7 +717,9 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'palno': return (context) => context.player.palNo ?? 1;
     case 'life': return (context) => context.player.life;
     case 'lifemax': return () => 1000;
-    case 'random': return (context) => Math.max(0, Math.min(999, Math.trunc(context.random ?? 500)));
+    case 'random': return (context) => Math.max(0, Math.min(999, Math.trunc(
+      context.random ?? stableCnsRandomValue(context.gameTime ?? context.player.stateTime, context.player),
+    )));
     case 'facing': return (context) => context.player.facing;
     case 'posx':
     case 'pos x': return (context) => context.player.x;
