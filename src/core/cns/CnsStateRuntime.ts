@@ -70,6 +70,7 @@ export type CnsRuntimeInput = {
   onExplodBindTime?: (event: ExplodBindTimeEvent) => void;
   onPause?: (event: PauseControllerEvent) => void;
   onEnvironmentShake?: (event: { time: number; frequency: number; amplitude: number; phase: number }) => void;
+  onForceFeedback?: (event: { ownerEntityId: number; waveform: string; time: number; amplitude: number; frequency: number }) => void;
   onBgPalFx?: (event: BgPalFxEvent) => void;
   onProjectileCreate?: (projectile: ProjectileState) => void;
   pauseState?: PauseState;
@@ -275,6 +276,8 @@ function stepPlayer(
     },
     playerPush: true,
     noAutoTurn: false,
+    assertSpecialFlags: [],
+    screenBound: { value: true, moveCameraX: false, moveCameraY: false },
     hitDiagnosticLines: [],
     juggleMax,
     juggleRemaining: resetJuggle ? juggleMax : player.juggleRemaining ?? juggleMax,
@@ -986,6 +989,7 @@ function executeController(
   if (type === 'velmul') return velMul(player, controller);
   if (type === 'posset') return posSet(player, controller);
   if (type === 'posfreeze') return withPlayer({ ...player, positionFrozen: (num(controller, 'value') ?? 1) !== 0 }, true, 'PosFreeze');
+  if (type === 'gravity') return withPlayer({ ...player, vy: player.vy + readCnsConst(cns, 'movement.yaccel') }, true, 'Gravity');
   if (type === 'posadd') return withPlayer({ ...player, x: player.x + (num(controller, 'x') ?? 0), y: player.y + (num(controller, 'y') ?? 0) }, hasNum(controller, 'x') || hasNum(controller, 'y'), 'PosAdd');
   if (type === 'ctrlset') return setCtrl(player, controller);
   if (type === 'statetypeset') return stateTypeSet(player, controller);
@@ -1003,6 +1007,11 @@ function executeController(
   if (type === 'trans') return withExtendedPlayer(player, { transparent: str(controller, 'trans') ?? str(controller, 'value') ?? '' }, 'Trans');
   if (type === 'width') return withExtendedPlayer(player, { width: { edge: num(controller, 'edge') ?? undefined, player: num(controller, 'player') ?? undefined } }, 'Width');
   if (type === 'afterimage') return afterImage(player, opponent, controller, input, commands);
+  if (type === 'screenbound') return screenBound(player, opponent, controller, input, commands);
+  if (type === 'displaytoclipboard') return debugClipboard(player, opponent, controller, input, commands, false);
+  if (type === 'appendtoclipboard') return debugClipboard(player, opponent, controller, input, commands, true);
+  if (type === 'clearclipboard') return withPlayer({ ...player, debugClipboard: '' }, true, 'ClearClipboard');
+  if (type === 'forcefeedback') return forceFeedback(player, opponent, controller, input, commands);
   if (type === 'bgpalfx') return bgPalFx(player, opponent, controller, input, commands);
   if (type === 'afterimagetime') {
     const time = num(controller, 'time', player, input, commands, opponent) ?? num(controller, 'value', player, input, commands, opponent) ?? 0;
@@ -1069,8 +1078,78 @@ function assertSpecial(player: PlayerState, controller: CnsStateController): Con
     .map((key) => str(controller, key)?.trim().toLowerCase())
     .filter((flag): flag is string => Boolean(flag));
   return withExtendedPlayer(player, {
+    assertSpecialFlags: [...new Set([...(player.assertSpecialFlags ?? []), ...flags])],
     noAutoTurn: player.noAutoTurn === true || flags.includes('noautoturn'),
   }, 'AssertSpecial');
+}
+
+function screenBound(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const moveCamera = pair(controller, 'movecamera', player, input, commands, opponent, 0, 0);
+  return withPlayer({
+    ...player,
+    screenBound: {
+      value: (num(controller, 'value', player, input, commands, opponent) ?? 1) !== 0,
+      moveCameraX: moveCamera.x !== 0,
+      moveCameraY: moveCamera.y !== 0,
+    },
+  }, true, 'ScreenBound');
+}
+
+function debugClipboard(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands: ReadonlySet<string> | undefined,
+  append: boolean,
+): ControllerResult {
+  const rawText = (str(controller, 'text') ?? '').replace(/^"|"$/g, '');
+  const rawParams = controller.params.params;
+  const params = (Array.isArray(rawParams) ? rawParams : rawParams === undefined ? [] : String(rawParams).split(','))
+    .slice(0, 6)
+    .map((value) => cnsValueToNumber(value, player, input, commands, opponent) ?? 0);
+  let index = 0;
+  const formatted = rawText
+    .replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\\\/g, '\\')
+    .replace(/%%|%[-+ 0#]*\d*(?:\.\d+)?[diufeg]/gi, (token) => {
+      if (token === '%%') return '%';
+      const value = params[index++] ?? 0;
+      const type = token.at(-1)?.toLowerCase();
+      if (type === 'd' || type === 'i' || type === 'u') return String(Math.trunc(value));
+      if (type === 'e') return value.toExponential(readFormatPrecision(token, 6));
+      if (type === 'f') return value.toFixed(readFormatPrecision(token, 6));
+      return String(value);
+    });
+  const next = append && player.debugClipboard ? `${player.debugClipboard}\n${formatted}` : formatted;
+  return withPlayer({ ...player, debugClipboard: next }, true, append ? 'AppendToClipboard' : 'DisplayToClipboard');
+}
+
+function readFormatPrecision(token: string, fallback: number): number {
+  const match = token.match(/\.(\d+)/);
+  return match ? Math.max(0, Math.min(20, Number(match[1]))) : fallback;
+}
+
+function forceFeedback(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  input.onForceFeedback?.({
+    ownerEntityId: input.entityContext?.entityId ?? player.id,
+    waveform: str(controller, 'waveform') ?? 'sine',
+    time: Math.max(0, Math.trunc(num(controller, 'time', player, input, commands, opponent) ?? 0)),
+    amplitude: num(controller, 'ampl', player, input, commands, opponent) ?? 0,
+    frequency: num(controller, 'freq', player, input, commands, opponent) ?? 0,
+  });
+  return withPlayer(player, true, 'ForceFeedback');
 }
 
 function afterImage(

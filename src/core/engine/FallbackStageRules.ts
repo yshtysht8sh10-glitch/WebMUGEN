@@ -152,6 +152,7 @@ function isAirborne(player: PlayerState): boolean {
 }
 
 function clampToStage(player: PlayerState): PlayerState {
+  if (player.screenBound?.value === false) return player;
   return {
     ...player,
     x: Math.min(FALLBACK_STAGE_RIGHT, Math.max(FALLBACK_STAGE_LEFT, player.x)),

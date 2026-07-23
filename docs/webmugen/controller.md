@@ -55,7 +55,24 @@ These mutate state identity or state flags.
 
 `ChangeState` preserves the current State owner. `SelfState` resolves the player's `selfStateOwnerId`, enters that owner's CNS document, and clears borrowed ownership. In an ordinary StateDef, a successfully executed ChangeState or SelfState terminates that StateDef's remaining controller list; the entered State may then execute on the same frame. Negative common command states retain their existing entry-snapshot scan semantics. Helper/animation ownership remains Partial.
 
-`AssertSpecial noautoturn` is a per-game-tick flag. `flag`, `flag2`, and `flag3` are checked case-insensitively; once asserted, the flag survives a later ChangeState in the same CNS pass and prevents the grounded stage rule from changing Facing. It is cleared at the beginning of the next CNS tick unless asserted again. Other AssertSpecial flags and WinMUGEN-version-specific hitpause persistence remain Partial.
+`AssertSpecial` retains all values supplied through `flag`, `flag2`, and `flag3` as case-insensitive,
+per-game-tick player flags. They survive later Controllers and ChangeState in the same CNS pass, then
+clear at the beginning of the next CNS tick unless asserted again. `noautoturn` is connected to the
+grounded stage-facing rule; render, guard, round-flow, audio, and timer consumers for the other flags
+remain Partial and can inspect the retained flag list without reparsing CNS.
+
+`Gravity` adds the current character's `[Movement] yaccel` to Y velocity once per Controller
+execution. It is independent from `Physics = A`, so multiple explicit Gravity Controllers and the
+automatic air-physics step remain separately observable.
+
+`ScreenBound` stores tick-scoped `value` and `movecamera` X/Y state. `value = 0` bypasses the
+fallback stage clamp without clearing velocity. Camera-follow consumption of `movecamera` remains a
+browser integration boundary.
+
+`DisplayToClipboard`, `AppendToClipboard`, and `ClearClipboard` maintain a per-player debug buffer.
+The runtime supports six evaluated parameters, integer/floating/exponential formats, `%%`, and common
+escapes. `ForceFeedback` emits a normalized owner/waveform/time/amplitude/frequency request; device
+support and vibration execution remain adapter-dependent and unsupported devices are a safe no-op.
 
 ### Motion and position
 

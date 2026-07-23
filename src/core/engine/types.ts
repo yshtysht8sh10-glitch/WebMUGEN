@@ -271,6 +271,13 @@ export type PlayerState = {
   targetBind?: { ownerId: number; remaining: number; offsetX: number; offsetY: number };
   playerPush?: boolean;
   noAutoTurn?: boolean;
+  assertSpecialFlags?: string[];
+  debugClipboard?: string;
+  screenBound?: {
+    value: boolean;
+    moveCameraX: boolean;
+    moveCameraY: boolean;
+  };
   hitDiagnosticLines?: string[];
   hitStun?: {
     activeHitDefId: number | null;
