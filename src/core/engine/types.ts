@@ -174,6 +174,13 @@ export type ActiveHitDef = {
 
 export type PlayerState = {
   id: 1 | 2;
+  name?: string;
+  authorName?: string;
+  palNo?: number;
+  vars?: Record<number, number>;
+  fvars?: Record<number, number>;
+  sysVars?: Record<number, number>;
+  sysFVars?: Record<number, number>;
   x: number;
   y: number;
   vx: number;

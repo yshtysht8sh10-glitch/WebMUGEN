@@ -78,6 +78,15 @@ Examples:
 
 `ChangeAnim` is runtime animation selection. Its `value` parameter is evaluated through the CNS numeric expression evaluator, so expressions such as `ifelse((vel x)=0,44,45)+var(5)*4` can use the current player velocity and variables. `ChangeAnim2` depends on target/common animation ownership and remains Partial if only recognized.
 
+### Variables
+
+`VarSet` and `VarAdd` accept WinMUGEN `v`/`fv` parameters as well as the existing direct
+`var(n)`/`fvar(n)`/`sysvar(n)`/`sysfvar(n)` compatibility syntax. VarRangeSet defaults to the full
+selected family (Var 0..59 or FVar 0..39), and `fvalue` selects the float family. VarRandom supports
+the default range, one-bound form, and inclusive two-bound form; its sample uses the same injectable
+0..999 runtime random value as the Random trigger. Invalid indexes do not mutate state. The exact
+Elecbyte PRNG sequence is not reproduced, so VarRandom remains Partial.
+
 ### Hit and attack state
 
 Examples:

@@ -18,6 +18,11 @@ export function createInitialGameState(powerMax: number = DEFAULT_MAX_POWER): Ga
 function createPlayer(id: 1 | 2, x: number, y: number, facing: 1 | -1, powerMax: number): PlayerState {
   return {
     id,
+    palNo: 1,
+    vars: {},
+    fvars: {},
+    sysVars: {},
+    sysFVars: {},
     x,
     y,
     vx: 0,

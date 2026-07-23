@@ -84,7 +84,7 @@ const PARTIAL = new Set([
   'MoveContact', 'MoveGuarded', 'MoveHit', 'MoveType', 'Name', 'NumExplod', 'NumHelper', 'NumTarget', 'P2BodyDist X',
   'P2BodyDist Y', 'P2Dist X', 'P2Dist Y', 'P2Life', 'P2MoveType', 'P2Name', 'P2StateNo', 'P2StateType',
   'Pi', 'Pos X', 'Pos Y', 'Power', 'PowerMax', 'PrevStateNo', 'ProjHit', 'ProjHitTime', 'RoundNo', 'RoundState', 'ScreenPos X',
-  'ScreenPos Y', 'SelfAnimExist', 'Sin', 'StateTime', 'SysVar', 'Tan', 'TargetID', 'TargetStateNo', 'NumCommand',
+  'ScreenPos Y', 'SelfAnimExist', 'Sin', 'StateTime', 'SysFVar', 'SysVar', 'Tan', 'TargetID', 'TargetStateNo', 'NumCommand',
   'P2AuthorName', 'P2Ctrl', 'P2Facing', 'Physics',
   'Random', 'TeamSide', 'TicksPerSecond', 'TimeMod', 'Var', 'Vel X', 'Vel Y', 'Win',
 ]);
@@ -144,6 +144,10 @@ function matrixStatus(audit) {
 
 const MATRIX_STATUS_OVERRIDES = new Map([
   ['ProjHit', 'Partial 90%'],
+  ['FVar', 'Partial 90%'],
+  ['SysFVar', 'Partial 90%'],
+  ['SysVar', 'Partial 90%'],
+  ['Var', 'Partial 90%'],
 ]);
 
 function syntaxFor(name) {

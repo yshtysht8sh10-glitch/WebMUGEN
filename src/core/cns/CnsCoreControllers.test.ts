@@ -127,6 +127,78 @@ value = 5
     expect(result.traces[0].executedControllers).toEqual(['VarSet', 'VarAdd']);
   });
 
+  it('supports float/system variable syntax and rejects invalid indexes without mutation', () => {
+    const cns = parseCnsText(`
+[Statedef 305]
+type = S
+
+[State 305, Float Set]
+type = VarSet
+trigger1 = 1
+fv = 39
+value = 1.25
+
+[State 305, Float Add]
+type = VarAdd
+trigger1 = 1
+fvar(39) = .5
+
+[State 305, System Float]
+type = VarSet
+trigger1 = 1
+sysfvar(4) = 2.5
+
+[State 305, Invalid Int]
+type = VarSet
+trigger1 = 1
+v = 60
+value = 99
+`);
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime({
+      ...state,
+      players: [{ ...state.players[0], stateNo: 305 }, state.players[1]],
+    }, cns);
+
+    expect(result.state.players[0].fvars?.[39]).toBe(1.75);
+    expect(result.state.players[0].sysFVars?.[4]).toBe(2.5);
+    expect(result.state.players[0].vars?.[60]).toBeUndefined();
+    expect(result.traces[0].executedControllers).toEqual(['VarSet', 'VarAdd', 'VarSet']);
+  });
+
+  it('applies VarRangeSet kind defaults and deterministic inclusive VarRandom ranges', () => {
+    const cns = parseCnsText(`
+[Statedef 306]
+type = S
+
+[State 306, Float Range]
+type = VarRangeSet
+trigger1 = 1
+first = 38
+fvalue = 2.5
+
+[State 306, Random]
+type = VarRandom
+trigger1 = 1
+v = 5
+range = -2, 2
+`);
+    const state = createInitialGameState();
+    const low = stepCnsStateRuntime({
+      ...state,
+      players: [{ ...state.players[0], stateNo: 306 }, state.players[1]],
+    }, cns, { random: 0 }).state.players[0];
+    const high = stepCnsStateRuntime({
+      ...state,
+      players: [{ ...state.players[0], stateNo: 306 }, state.players[1]],
+    }, cns, { random: 999 }).state.players[0];
+
+    expect(low.fvars?.[38]).toBe(2.5);
+    expect(low.fvars?.[39]).toBe(2.5);
+    expect(low.vars?.[5]).toBe(-2);
+    expect(high.vars?.[5]).toBe(2);
+  });
+
   it('does not reduce life or power below zero', () => {
     const cns = parseCnsText(`
 [Statedef 304]

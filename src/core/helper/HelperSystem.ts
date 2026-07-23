@@ -53,8 +53,9 @@ export function spawnHelper(state: HelperRuntimeState, request: HelperSpawnReque
     vars: {},
     fvars: {},
     sysVars: {},
+    sysFVars: {},
     hitDiagnosticLines: [],
-  } as PlayerState;
+  };
   const entity: HelperEntity = {
     entityId: state.nextEntityId,
     helperId: request.helperId,

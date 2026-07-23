@@ -130,6 +130,15 @@ target selection, different local coordinate spaces, and Helper redirect ownersh
 
 `Power` reads the currently evaluated player's durable gauge value, and `PowerMax` reads that player's `[Data] power`-derived limit. P1 and P2 are independent. Issue #58 Phase1 gives Helper evaluation an explicit root/parent/owner identity, but root/parent redirect syntax remains Partial.
 
+## Persistent variables
+
+`Var(index)`, `FVar(index)`, `SysVar(index)`, and `SysFVar(index)` evaluate the index as a CNS
+expression and read the current redirected player. Their WinMUGEN ranges are enforced: Var 0..59,
+FVar 0..39, and both system-variable families 0..4. An out-of-range or non-integral index produces
+bottom instead of silently creating an extra slot. Integer variable writes are truncated; float
+variables preserve fractional values. Redirect ownership beyond the current two-player/root-helper
+paths remains Partial.
+
 Safe defaults are useful but should not be overclaimed.
 
 Examples:

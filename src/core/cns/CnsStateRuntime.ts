@@ -8,7 +8,7 @@ import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 import { activateMoveContact, resetMoveContact } from '../hitdef/MoveContactState';
 import { removeTarget, selectTargets } from '../hitdef/TargetState';
 import { normalizeHitAttribute } from '../hitdef/HitAttribute';
-import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, evaluatePreparedCnsRuntimeTrigger, inspectCnsRuntimeRedirect, readNumberExpression, resolveCnsRuntimeRedirect, type CnsRuntimeTriggerContext } from './CnsRuntimeTrigger';
+import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, evaluatePreparedCnsRuntimeTrigger, inspectCnsRuntimeRedirect, isValidPlayerVariableIndex, readNumberExpression, resolveCnsRuntimeRedirect, type CnsRuntimeTriggerContext, type PlayerVariableKind } from './CnsRuntimeTrigger';
 import type { SoundPanEvent, SoundPlayEvent, SoundStopEvent } from '../audio/SoundEvent';
 import { canEntityMoveDuringPause, type PauseControllerEvent, type PauseState } from '../pause/PauseSystem';
 import {
@@ -128,9 +128,6 @@ type ExtendedPlayerState = PlayerState & {
   hitBy?: string | null;
   notHitBy?: string | null;
   prevStateNo?: number;
-  vars?: Record<number, number>;
-  sysVars?: Record<number, number>;
-  fvars?: Record<number, number>;
 };
 
 const DEBUG_STATES = [-3, -2, -1, 0, 10, 11, 12] as const;
@@ -1004,8 +1001,8 @@ function executeController(
   if (type === 'turn') return withPlayer({ ...player, facing: player.facing === 1 ? -1 : 1 }, true, 'Turn');
   if (type === 'varset') return setVarController(player, controller, input, commands, opponent);
   if (type === 'varadd') return addVarController(player, controller, input, commands, opponent);
-  if (type === 'varrangeset') return varRangeSet(player, controller);
-  if (type === 'varrandom') return varRandom(player, controller);
+  if (type === 'varrangeset') return varRangeSet(player, controller, input, commands, opponent);
+  if (type === 'varrandom') return varRandom(player, controller, input, commands, opponent);
   if (type === 'changestate') {
     const value = num(controller, 'value', player, input, commands, opponent);
     if (value === null) return withPlayer(player, false, 'ChangeState');
@@ -2193,9 +2190,13 @@ function setVarController(
     return withPlayer(setIndexedVar(player, direct.kind, direct.index, direct.value), true, 'VarSet');
   }
 
-  const index = num(controller, 'v', player, input, commands, opponent);
+  const floatIndex = num(controller, 'fv', player, input, commands, opponent);
+  const kind: PlayerVariableKind = floatIndex === null ? 'var' : 'fvar';
+  const index = floatIndex ?? num(controller, 'v', player, input, commands, opponent);
   const value = num(controller, 'value', player, input, commands, opponent);
-  return index === null || value === null ? withPlayer(player, false, 'VarSet') : withPlayer(setVar(player, index, value), true, 'VarSet');
+  return index === null || value === null || !isValidPlayerVariableIndex(kind, index)
+    ? withPlayer(player, false, 'VarSet')
+    : withPlayer(setIndexedVar(player, kind, index, value), true, 'VarSet');
 }
 
 function addVarController(
@@ -2214,27 +2215,57 @@ function addVarController(
       getIndexedVar(player, direct.kind, direct.index) + direct.value,
     ), true, 'VarAdd');
   }
-  const index = num(controller, 'v', player, input, commands, opponent);
+  const floatIndex = num(controller, 'fv', player, input, commands, opponent);
+  const kind: PlayerVariableKind = floatIndex === null ? 'var' : 'fvar';
+  const index = floatIndex ?? num(controller, 'v', player, input, commands, opponent);
   const value = num(controller, 'value', player, input, commands, opponent);
-  return index === null || value === null ? withPlayer(player, false, 'VarAdd') : withPlayer(setVar(player, index, getVar(player, index) + value), true, 'VarAdd');
+  return index === null || value === null || !isValidPlayerVariableIndex(kind, index)
+    ? withPlayer(player, false, 'VarAdd')
+    : withPlayer(setIndexedVar(player, kind, index, getIndexedVar(player, kind, index) + value), true, 'VarAdd');
 }
 
-function varRangeSet(player: PlayerState, controller: CnsStateController): ControllerResult {
-  const first = num(controller, 'first');
-  const last = num(controller, 'last') ?? first;
-  const value = num(controller, 'value');
-  if (first === null || last === null || value === null) return withPlayer(player, false, 'VarRangeSet');
+function varRangeSet(
+  player: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands: ReadonlySet<string> | undefined,
+  opponent: PlayerState,
+): ControllerResult {
+  const floatValue = num(controller, 'fvalue', player, input, commands, opponent);
+  const kind: PlayerVariableKind = floatValue === null ? 'var' : 'fvar';
+  const value = floatValue ?? num(controller, 'value', player, input, commands, opponent);
+  const first = num(controller, 'first', player, input, commands, opponent) ?? 0;
+  const last = num(controller, 'last', player, input, commands, opponent) ?? (kind === 'var' ? 59 : 39);
+  if (value === null || !isValidPlayerVariableIndex(kind, first) || !isValidPlayerVariableIndex(kind, last) || first > last) {
+    return withPlayer(player, false, 'VarRangeSet');
+  }
 
   let next = player;
-  for (let index = first; index <= last; index += 1) next = setVar(next, index, value);
+  for (let index = first; index <= last; index += 1) next = setIndexedVar(next, kind, index, value);
   return withPlayer(next, true, 'VarRangeSet');
 }
 
-function varRandom(player: PlayerState, controller: CnsStateController): ControllerResult {
-  const index = num(controller, 'v');
-  const range = num(controller, 'range') ?? 1000;
-  if (index === null) return withPlayer(player, false, 'VarRandom');
-  return withPlayer(setVar(player, index, Math.floor(range / 2)), true, 'VarRandom');
+function varRandom(
+  player: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands: ReadonlySet<string> | undefined,
+  opponent: PlayerState,
+): ControllerResult {
+  const index = num(controller, 'v', player, input, commands, opponent);
+  if (index === null || !isValidPlayerVariableIndex('var', index)) return withPlayer(player, false, 'VarRandom');
+  const rawRange = controller.params.range;
+  const values = rawRange === undefined
+    ? [0, 1000]
+    : (Array.isArray(rawRange) ? rawRange : String(rawRange).split(',')).map((value) => cnsValueToNumber(value, player, input, commands, opponent));
+  if (values.length < 1 || values.length > 2 || values.some((value) => value === null)) return withPlayer(player, false, 'VarRandom');
+  const first = Math.trunc(values.length === 1 ? 0 : values[0]!);
+  const last = Math.trunc(values.length === 1 ? values[0]! : values[1]!);
+  const least = Math.min(first, last);
+  const greatest = Math.max(first, last);
+  const random = input.random ?? stableRandomValue(input.gameTime ?? player.stateTime, player);
+  const selected = least + Math.floor((Math.max(0, Math.min(999, Math.trunc(random))) / 1000) * (greatest - least + 1));
+  return withPlayer(setVar(player, index, selected), true, 'VarRandom');
 }
 
 function withExtendedPlayer(player: PlayerState, patch: Partial<ExtendedPlayerState>, name: string): ControllerResult {
@@ -2361,9 +2392,10 @@ function environmentShake(
   }, true, 'EnvShake');
 }
 
-function getIndexedVar(player: PlayerState, kind: 'var' | 'sysvar' | 'fvar', index: number): number {
+function getIndexedVar(player: PlayerState, kind: PlayerVariableKind, index: number): number {
   if (kind === 'sysvar') return (player as ExtendedPlayerState).sysVars?.[index] ?? 0;
   if (kind === 'fvar') return (player as ExtendedPlayerState).fvars?.[index] ?? 0;
+  if (kind === 'sysfvar') return player.sysFVars?.[index] ?? 0;
   return getVar(player, index);
 }
 
@@ -2498,18 +2530,19 @@ function cnsValueToNumber(
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function setIndexedVar(player: PlayerState, kind: 'var' | 'sysvar' | 'fvar', index: number, value: number): PlayerState {
+function setIndexedVar(player: PlayerState, kind: PlayerVariableKind, index: number, value: number): PlayerState {
+  if (!isValidPlayerVariableIndex(kind, index)) return player;
   if (kind === 'sysvar') {
-    const sysVars = (player as ExtendedPlayerState).sysVars ?? {};
-    return { ...player, sysVars: { ...sysVars, [index]: value } } as PlayerState;
+    return { ...player, sysVars: { ...player.sysVars, [index]: Math.trunc(value) } };
   }
 
   if (kind === 'fvar') {
-    const fvars = (player as ExtendedPlayerState).fvars ?? {};
-    return { ...player, fvars: { ...fvars, [index]: value } } as PlayerState;
+    return { ...player, fvars: { ...player.fvars, [index]: value } };
   }
 
-  return setVar(player, index, value);
+  if (kind === 'sysfvar') return { ...player, sysFVars: { ...player.sysFVars, [index]: value } };
+
+  return setVar(player, index, Math.trunc(value));
 }
 
 function findDirectVarAssignment(
@@ -2518,15 +2551,18 @@ function findDirectVarAssignment(
   input: CnsRuntimeInput,
   commands: ReadonlySet<string> | undefined,
   opponent: PlayerState,
-): { kind: 'var' | 'sysvar' | 'fvar'; index: number; value: number } | null {
+): { kind: PlayerVariableKind; index: number; value: number } | null {
   for (const [key, value] of Object.entries(controller.params)) {
-    const match = key.match(/^(var|sysvar|fvar)\((\d+)\)$/i);
+    const match = key.match(/^(var|sysvar|fvar|sysfvar)\((\d+)\)$/i);
     if (!match) continue;
     const resolved = cnsValueToNumber(value, player, input, commands, opponent);
     if (resolved === null) continue;
+    const kind = match[1].toLowerCase() as PlayerVariableKind;
+    const index = Number(match[2]);
+    if (!isValidPlayerVariableIndex(kind, index)) continue;
     return {
-      kind: match[1].toLowerCase() as 'var' | 'sysvar' | 'fvar',
-      index: Number(match[2]),
+      kind,
+      index,
       value: resolved,
     };
   }
@@ -2558,8 +2594,8 @@ function getVar(player: PlayerState, index: number): number {
 }
 
 function setVar(player: PlayerState, index: number, value: number): PlayerState {
-  const vars = (player as PlayerState & { vars?: Record<number, number> }).vars ?? {};
-  return { ...player, vars: { ...vars, [index]: value } } as PlayerState;
+  if (!isValidPlayerVariableIndex('var', index)) return player;
+  return { ...player, vars: { ...player.vars, [index]: Math.trunc(value) } };
 }
 
 function shouldDebugRuntime(commands?: ReadonlySet<string>): boolean {

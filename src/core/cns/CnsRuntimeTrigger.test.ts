@@ -120,6 +120,28 @@ describe('CnsRuntimeTrigger', () => {
     expect(evaluateCnsRuntimeTrigger('FVar(0) = 0', { player })).toBe(true);
   });
 
+  it('enforces WinMUGEN variable ranges and expression-valued indexes', () => {
+    const variablePlayer = {
+      ...player,
+      vars: { 2: 17, 59: 59 },
+      fvars: { 39: 3.25 },
+      sysVars: { 4: 44 },
+      sysFVars: { 4: 4.5 },
+    };
+
+    expect(readNumberExpression('Var(1 + 1)', { player: variablePlayer })).toBe(17);
+    expect(readNumberExpression('Var(59)', { player: variablePlayer })).toBe(59);
+    expect(readNumberExpression('FVar(39)', { player: variablePlayer })).toBe(3.25);
+    expect(readNumberExpression('SysVar(4)', { player: variablePlayer })).toBe(44);
+    expect(readNumberExpression('SysFVar(4)', { player: variablePlayer })).toBe(4.5);
+    expect(readNumberExpression('Var(60)', { player: variablePlayer })).toBeNull();
+    expect(readNumberExpression('FVar(40)', { player: variablePlayer })).toBeNull();
+    expect(readNumberExpression('SysVar(5)', { player: variablePlayer })).toBeNull();
+    expect(readNumberExpression('SysFVar(-1)', { player: variablePlayer })).toBeNull();
+    expect(readNumberExpression('Var(1.5)', { player: variablePlayer })).toBeNull();
+    expect(evaluateCnsRuntimeTrigger('Var(60) != 0', { player: variablePlayer })).toBe(false);
+  });
+
   it('evaluates physics and WinMUGEN y-position triggers', () => {
     const groundedAirPhysicsPlayer = {
       ...player,

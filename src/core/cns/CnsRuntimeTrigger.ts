@@ -560,14 +560,16 @@ export function readNumberExpression(rawExpression: string, context: CnsRuntimeT
 function getNumberSource(rawName: string): NumberSource | null {
   const name = normalizeName(rawName);
 
-  const varMatch = name.match(/^var\((\d+)\)$/);
-  if (varMatch) return (context) => readPlayerVar(context.player, Number(varMatch[1]));
-
-  const sysVarMatch = name.match(/^sysvar\((\d+)\)$/);
-  if (sysVarMatch) return (context) => readPlayerSysVar(context.player, Number(sysVarMatch[1]));
-
-  const fVarMatch = name.match(/^fvar\((\d+)\)$/);
-  if (fVarMatch) return (context) => readPlayerFVar(context.player, Number(fVarMatch[1]));
+  const indexedVariableMatch = name.match(/^(var|fvar|sysvar|sysfvar)\((.+)\)$/);
+  if (indexedVariableMatch) {
+    const kind = indexedVariableMatch[1] as PlayerVariableKind;
+    const indexSource = compileNumberExpression(indexedVariableMatch[2]);
+    if (!indexSource) return null;
+    return (context) => {
+      const index = indexSource(context);
+      return index === null ? null : readPlayerVariable(context.player, kind, index);
+    };
+  }
 
   const constMatch = name.match(/^const\(([^)]+)\)$/);
   if (constMatch) return (context) => readCnsConst(context.constants, constMatch[1]);
@@ -1108,16 +1110,21 @@ function readOptionalString(player: PlayerState | undefined, key: string, fallba
   return (player as PlayerState & Record<string, string | undefined> | undefined)?.[key] ?? fallback;
 }
 
-function readPlayerVar(player: PlayerState, index: number): number {
-  return (player as PlayerState & { vars?: Record<number, number> }).vars?.[index] ?? 0;
+export type PlayerVariableKind = 'var' | 'fvar' | 'sysvar' | 'sysfvar';
+
+export function isValidPlayerVariableIndex(kind: PlayerVariableKind, index: number): boolean {
+  if (!Number.isInteger(index)) return false;
+  if (kind === 'var') return index >= 0 && index <= 59;
+  if (kind === 'fvar') return index >= 0 && index <= 39;
+  return index >= 0 && index <= 4;
 }
 
-function readPlayerSysVar(player: PlayerState, index: number): number {
-  return (player as PlayerState & { sysVars?: Record<number, number> }).sysVars?.[index] ?? 0;
-}
-
-function readPlayerFVar(player: PlayerState, index: number): number {
-  return (player as PlayerState & { fvars?: Record<number, number> }).fvars?.[index] ?? 0;
+function readPlayerVariable(player: PlayerState, kind: PlayerVariableKind, index: number): number | null {
+  if (!isValidPlayerVariableIndex(kind, index)) return null;
+  if (kind === 'var') return player.vars?.[index] ?? 0;
+  if (kind === 'fvar') return player.fvars?.[index] ?? 0;
+  if (kind === 'sysvar') return player.sysVars?.[index] ?? 0;
+  return player.sysFVars?.[index] ?? 0;
 }
 
 function readGetHitVar(player: PlayerState, name: string): number {
