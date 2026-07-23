@@ -151,6 +151,8 @@ Issue #58 Phase1 connects `Helper` and `DestroySelf` to an independent runtime e
 
 `TargetState` assigns the controller owner's stable player id as the target's State owner and resolves that owner's CNS document. This matches HitDef `p2stateno` with `p2getp1state = 1`; `SelfState` returns the target to its own document. Animation ownership, Helpers, and multi-player targets remain Partial. `TargetBind` applies its position immediately and records duration/offset metadata; following-frame bind maintenance is not yet connected.
 
+`AttackDist` mutates the current ActiveHitDef's live guard distance; it never forces the opponent into a guard State. `HitOverride` retains eight timed, replaceable attribute slots and intercepts matching accepted contact before normal damage/reaction, entering the configured self-owned State and optionally forcing air StateType. `ReversalDef` is a separate attack-vs-attack path: both Clsn1 sets must intersect, `reversal.attr` must match the incoming HitDef, then p1/p2 State and pausetime are applied, the incoming HitDef is consumed, a Target is registered, and `MoveReversed` becomes observable. Spark/sound, Helper/projectile, and rare priority behavior remain Partial.
+
 HitDef `p1stateno` enters an attacker-owned State. `p2stateno` enters a target-owned State by default; only explicit `p2getp1state = 1` borrows the attacker document. `forcestand` changes the target StateType without changing ownership. Missing owner documents or State numbers remain safe and produce `raw.custom_state` diagnostics instead of falling back to a different character's CNS.
 
 ### Visual/audio effects

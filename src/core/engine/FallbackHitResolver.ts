@@ -54,6 +54,20 @@ export function resolveFallbackHits(
   const p2Attack = getPlayerAttackBoxes(collisionP2, airDocument);
   const p2Body = getPlayerBodyBoxes(collisionP2, airDocument);
 
+  const p1Reversal = resolveReversal(p1, p2, p1Attack, p2Attack, diagnosticsEnabled);
+  if (p1Reversal.accepted) {
+    p1 = p1Reversal.reverser;
+    p2 = p1Reversal.attacker;
+    hitDiagnosticLines.push(...p1Reversal.diagnosticLines);
+  } else {
+    const p2Reversal = resolveReversal(p2, p1, p2Attack, p1Attack, diagnosticsEnabled);
+    if (p2Reversal.accepted) {
+      p2 = p2Reversal.reverser;
+      p1 = p2Reversal.attacker;
+      hitDiagnosticLines.push(...p2Reversal.diagnosticLines);
+    }
+  }
+
   const p1PriorityCandidate = isPriorityCandidate(p1, p2, p1Attack, p2Body);
   const p2PriorityCandidate = isPriorityCandidate(p2, p1, p2Attack, p1Body);
   const priority = resolvePriorityClash(p1, p2, p1PriorityCandidate && p2PriorityCandidate);
@@ -68,8 +82,8 @@ export function resolveFallbackHits(
   hitDiagnosticLines.push(...p2Result.diagnosticLines);
   if (p2Result.hitEvent) hitEvents.push(p2Result.hitEvent);
 
-  p1 = mergeCombatRoles(p1Result.attacker, p2Result.target, Boolean(p2Result.hitEvent));
-  p2 = mergeCombatRoles(p2Result.attacker, p1Result.target, Boolean(p1Result.hitEvent));
+  p1 = mergeCombatRoles(p1Result.attacker, p2Result.target, Boolean(p2Result.hitEvent) || p2Result.contactApplied === true);
+  p2 = mergeCombatRoles(p2Result.attacker, p1Result.target, Boolean(p1Result.hitEvent) || p1Result.contactApplied === true);
 
   const helpers = state.helpers.entries.map((helper) => {
     const target = helper.rootEntityId === 1 ? p2 : p1;
@@ -87,8 +101,8 @@ export function resolveFallbackHits(
       diagnosticsEnabled,
     );
     hitDiagnosticLines.push(...result.diagnosticLines);
-    if (result.hitEvent) {
-      hitEvents.push(result.hitEvent);
+    if (result.hitEvent || result.contactApplied) {
+      if (result.hitEvent) hitEvents.push(result.hitEvent);
       hitDiagnosticLines.push(`raw.helper_hit_collision entity=${helper.entityId} helperId=${helper.helperId} root=p${helper.rootEntityId} target=p${target.id} result=accepted`);
       if (helper.rootEntityId === 1) p2 = result.target;
       else p1 = result.target;
@@ -115,7 +129,7 @@ function resolveAttack(
   airDocument: AirDocument,
   diagnosticsEnabled: boolean,
   priorityDecision: PriorityDecision = { allowed: true, reason: 'no_clash', own: 4, opponent: 4, ownType: 'Hit', opponentType: 'Hit' },
-): { attacker: PlayerState; target: PlayerState; hitEvent: HitEvent | null; diagnosticLines: string[] } {
+): { attacker: PlayerState; target: PlayerState; hitEvent: HitEvent | null; diagnosticLines: string[]; contactApplied?: boolean } {
   const diagnosticLines: string[] = [];
   if (attacker.moveType !== 'A' || attacker.hitPause > 0) {
     return { attacker, target, hitEvent: null, diagnosticLines };
@@ -192,6 +206,31 @@ function resolveAttack(
     `  own=${priorityDecision.own},${priorityDecision.ownType} opponent=${priorityDecision.opponent},${priorityDecision.opponentType} result=${priorityDecision.allowed ? 'accepted' : 'rejected'} reason=${priorityDecision.reason}`,
   );
   if (!priorityDecision.allowed) return { attacker, target, hitEvent: null, diagnosticLines };
+
+  const override = target.hitOverrides?.find((entry) => entry
+    && entry.remaining > 0
+    && hitAttributeMatchesFilter(active.attr, entry.attr));
+  if (override) {
+    const marked = activeHitDefId === null
+      ? attacker
+      : recordMoveContact(markAttackerHit(attacker, activeHitDefId, target.id, active.hitId, active.pauseTime.attacker), activeHitDefId, 'hit');
+    const overriddenTarget: PlayerState = {
+      ...target,
+      prevStateNo: target.stateNo,
+      stateNo: override.stateNo,
+      stateTime: 0,
+      ctrl: false,
+      stateType: override.forceAir ? 'A' : target.stateType,
+      stateOwnerId: override.stateOwnerId,
+      selfStateOwnerId: target.selfStateOwnerId ?? target.id,
+      hitPause: active.pauseTime.defender,
+    };
+    if (diagnosticsEnabled) diagnosticLines.push(
+      `raw.hit_override attacker=p${attacker.id} target=p${target.id}`,
+      `  activeHitDefId=${activeHitDefId ?? 'none'} slot=${override.slot} attr=${override.attr} state=${override.stateNo} forceair=${override.forceAir ? 1 : 0} remaining=${override.remaining} result=accepted damage=0`,
+    );
+    return { attacker: marked, target: overriddenTarget, hitEvent: null, diagnosticLines, contactApplied: true };
+  }
 
   const guardKind = selectGuardKind(target, active.guardFlag);
   const guardDistance = active.guardDistance ?? 160;
@@ -407,6 +446,69 @@ function resolveAttack(
     hitEvent,
     diagnosticLines,
   };
+}
+
+function resolveReversal(
+  reverser: PlayerState,
+  attacker: PlayerState,
+  reversalBoxes: ReturnType<typeof getPlayerAttackBoxes>,
+  attackBoxes: ReturnType<typeof getPlayerAttackBoxes>,
+  diagnosticsEnabled: boolean,
+): { accepted: boolean; reverser: PlayerState; attacker: PlayerState; diagnosticLines: string[] } {
+  const reversal = reverser.reversalDef;
+  const active = attacker.activeHitDef;
+  const overlap = reversal && active ? findOverlap(reversalBoxes, attackBoxes) : null;
+  if (!reversal || !active || !overlap || !hitAttributeMatchesFilter(active.attr, reversal.attr)) {
+    return { accepted: false, reverser, attacker, diagnosticLines: [] };
+  }
+
+  let nextReverser: PlayerState = {
+    ...reverser,
+    hitPause: reversal.pauseTime.p1,
+    moveContact: {
+      activeHitDefId: reversal.hitDefId,
+      contact: true,
+      hit: false,
+      guarded: false,
+      reversed: true,
+      elapsed: 1,
+      hitCount: reverser.moveContact?.hitCount ?? 0,
+    },
+  };
+  if (reversal.p1StateNo !== undefined) {
+    nextReverser = {
+      ...nextReverser,
+      prevStateNo: reverser.stateNo,
+      stateNo: Math.trunc(reversal.p1StateNo),
+      stateTime: 0,
+      ctrl: false,
+      stateOwnerId: (reverser.selfStateOwnerId ?? reverser.id) as 1 | 2,
+    };
+  }
+  nextReverser = registerTarget(nextReverser, attacker, reversal.hitDefId, 0);
+
+  let nextAttacker: PlayerState = {
+    ...attacker,
+    activeHitDef: null,
+    hitDefUsed: true,
+    hitPause: reversal.pauseTime.p2,
+  };
+  if (reversal.p2StateNo !== undefined) {
+    nextAttacker = {
+      ...nextAttacker,
+      prevStateNo: attacker.stateNo,
+      stateNo: Math.trunc(reversal.p2StateNo),
+      stateTime: 0,
+      ctrl: false,
+      stateOwnerId: reverser.id,
+      selfStateOwnerId: attacker.selfStateOwnerId ?? attacker.id,
+    };
+  }
+  const diagnosticLines = diagnosticsEnabled ? [
+    `raw.reversal attacker=p${attacker.id} reverser=p${reverser.id}`,
+    `  reversalDefId=${reversal.hitDefId} attr=${reversal.attr} incoming=${formatActiveAttr(active)} overlap=${formatOverlap(overlap)} p1state=${reversal.p1StateNo ?? '-'} p2state=${reversal.p2StateNo ?? '-'} pausetime=${reversal.pauseTime.p1},${reversal.pauseTime.p2} targetRegistered=1 result=accepted`,
+  ] : [];
+  return { accepted: true, reverser: nextReverser, attacker: nextAttacker, diagnosticLines };
 }
 
 function withSnapshotAnimation(player: PlayerState, snapshot?: PlayerState): PlayerState {

@@ -81,7 +81,7 @@ const PARTIAL = new Set([
   'Cos', 'DrawGame', 'E', 'Exp', 'Facing', 'Floor', 'FrontEdgeBodyDist', 'FrontEdgeDist', 'FVar',
   'GameTime', 'GetHitVar', 'HitCount', 'HitDefAttr', 'HitFall', 'HitOver', 'HitPauseTime', 'HitShakeOver', 'ID', 'IsHomeTeam',
   'HitVel X', 'HitVel Y', 'IfElse', 'InGuardDist', 'IsHelper', 'Life', 'Ln', 'Log', 'Lose', 'MatchOver',
-  'MatchNo', 'MoveContact', 'MoveGuarded', 'MoveHit', 'MoveType', 'Name', 'NumEnemy', 'NumExplod', 'NumHelper', 'NumPartner', 'NumTarget', 'P1Name', 'P2BodyDist X',
+  'MatchNo', 'MoveContact', 'MoveGuarded', 'MoveHit', 'MoveReversed', 'MoveType', 'Name', 'NumEnemy', 'NumExplod', 'NumHelper', 'NumPartner', 'NumTarget', 'P1Name', 'P2BodyDist X',
   'P2BodyDist Y', 'P2Dist X', 'P2Dist Y', 'P2Life', 'P2MoveType', 'P2Name', 'P2StateNo', 'P2StateType', 'P3Name', 'P4Name', 'PalNo',
   'Pi', 'PlayerIDExist', 'Pos X', 'Pos Y', 'Power', 'PowerMax', 'PrevStateNo', 'ProjContact', 'ProjContactTime', 'ProjGuarded', 'ProjGuardedTime', 'ProjHit', 'ProjHitTime', 'RoundNo', 'RoundsExisted', 'RoundState', 'ScreenPos X',
   'ScreenPos Y', 'SelfAnimExist', 'Sin', 'StateTime', 'SysFVar', 'SysVar', 'Tan', 'TargetID', 'TargetStateNo', 'NumCommand',

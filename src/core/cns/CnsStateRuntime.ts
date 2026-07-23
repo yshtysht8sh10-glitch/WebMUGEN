@@ -315,6 +315,7 @@ function stepPlayer(
     positionFrozen: false,
     drawAngle: undefined,
     drawScale: undefined,
+    reversalDef: undefined,
   };
   const trace: CnsRuntimeTrace = {
     playerId,
@@ -373,6 +374,7 @@ function stepPlayer(
   next = applyStoredEntityBind(next, input);
 
   next = tickHitAttributeSlots(next);
+  next = tickHitOverrides(next);
 
   const stateDefBeforeNegative = findState(cns, next.stateNo);
   if (stateDefBeforeNegative) {
@@ -1114,6 +1116,9 @@ function executeController(
   if (type === 'hitby') return hitAttributeController(player, controller, 'allow', 'HitBy');
   if (type === 'nothitby') return hitAttributeController(player, controller, 'deny', 'NotHitBy');
   if (type === 'hitdef') return activateHitDef(player, controller, input, commands, opponent);
+  if (type === 'attackdist') return attackDistance(player, opponent, controller, input, commands);
+  if (type === 'hitoverride') return hitOverride(player, opponent, controller, input, commands);
+  if (type === 'reversaldef') return reversalDef(player, opponent, controller, input, commands);
   if (type === 'projectile') return createProjectile(player, opponent, controller, input, commands);
   if (type === 'movehitreset') return withPlayer(resetMoveContact(player), true, 'MoveHitReset');
   if (type.startsWith('target')) return executeTargetController(player, opponent, controller, input, commands);
@@ -2808,6 +2813,75 @@ function triple(
     green: cnsValueToNumber(values[1], player, input, commands, opponent) ?? defaultGreen,
     blue: cnsValueToNumber(values[2], player, input, commands, opponent) ?? defaultBlue,
   };
+}
+
+function attackDistance(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const value = num(controller, 'value', player, input, commands, opponent);
+  if (value === null || !player.activeHitDef) return withPlayer(player, true, 'AttackDist');
+  return withPlayer({
+    ...player,
+    activeHitDef: { ...player.activeHitDef, guardDistance: Math.max(0, value) },
+  }, true, 'AttackDist');
+}
+
+function hitOverride(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const attr = str(controller, 'attr');
+  const stateNo = num(controller, 'stateno', player, input, commands, opponent);
+  if (!attr || stateNo === null) return withPlayer(player, true, 'HitOverride');
+  const slot = Math.max(0, Math.min(7, Math.trunc(num(controller, 'slot', player, input, commands, opponent) ?? 0)));
+  const entries = [...(player.hitOverrides ?? [])];
+  while (entries.length <= slot) entries.push(null);
+  entries[slot] = {
+    slot,
+    attr,
+    stateNo: Math.trunc(stateNo),
+    remaining: Math.max(0, Math.trunc(num(controller, 'time', player, input, commands, opponent) ?? 1)),
+    forceAir: (num(controller, 'forceair', player, input, commands, opponent) ?? 0) !== 0,
+    stateOwnerId: (player.selfStateOwnerId ?? player.id) as 1 | 2,
+  };
+  return withPlayer({ ...player, hitOverrides: entries }, true, 'HitOverride');
+}
+
+function tickHitOverrides(player: PlayerState): PlayerState {
+  if (!player.hitOverrides?.some((entry) => entry && entry.remaining > 0)) return player;
+  const entries = player.hitOverrides.map((entry) => entry && entry.remaining > 1
+    ? { ...entry, remaining: entry.remaining - 1 }
+    : null);
+  return { ...player, hitOverrides: entries };
+}
+
+function reversalDef(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const attr = str(controller, 'reversal.attr');
+  if (!attr) return withPlayer(player, true, 'ReversalDef');
+  const pause = pair(controller, 'pausetime', player, input, commands, opponent, 0, 0);
+  return withPlayer({
+    ...player,
+    reversalDef: {
+      attr,
+      p1StateNo: num(controller, 'p1stateno', player, input, commands, opponent) ?? undefined,
+      p2StateNo: num(controller, 'p2stateno', player, input, commands, opponent) ?? undefined,
+      pauseTime: { p1: Math.max(0, Math.trunc(pause.x)), p2: Math.max(0, Math.trunc(pause.y)) },
+      hitDefId: nextActiveHitDefDiagnosticId++,
+    },
+  }, true, 'ReversalDef');
 }
 
 function readHitReactionType(value: string | undefined): string | undefined {

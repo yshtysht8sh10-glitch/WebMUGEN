@@ -12,6 +12,7 @@ export function activateMoveContact(player: PlayerState, activeHitDefId: number)
       contact: current?.contact ?? false,
       hit: current?.hit ?? false,
       guarded: current?.guarded ?? false,
+      ...(current?.reversed ? { reversed: true } : {}),
       elapsed: current?.elapsed ?? (current?.contact ? 1 : 0),
       hitCount: current?.hitCount ?? 0,
     },
@@ -21,10 +22,11 @@ export function activateMoveContact(player: PlayerState, activeHitDefId: number)
 export function recordMoveContact(player: PlayerState, activeHitDefId: number, result: MoveContactResult): PlayerState {
   const activated = activateMoveContact(player, activeHitDefId);
   const current = activated.moveContact!;
+  const { reversed: _reversed, ...ordinaryContact } = current;
   return {
     ...activated,
     moveContact: {
-      ...current,
+      ...ordinaryContact,
       contact: true,
       hit: result === 'hit',
       guarded: result === 'guarded',
@@ -47,8 +49,9 @@ export function advanceMoveContact(player: PlayerState): PlayerState {
 
 export function resetMoveContact(player: PlayerState): PlayerState {
   if (!player.moveContact) return player;
+  const { reversed: _reversed, ...ordinaryContact } = player.moveContact;
   return {
     ...player,
-    moveContact: { ...player.moveContact, contact: false, hit: false, guarded: false, elapsed: 0 },
+    moveContact: { ...ordinaryContact, contact: false, hit: false, guarded: false, elapsed: 0 },
   };
 }

@@ -250,6 +250,21 @@ export type PlayerState = {
     value: string;
     time: number;
   } | null>;
+  hitOverrides?: Array<{
+    slot: number;
+    attr: string;
+    stateNo: number;
+    remaining: number;
+    forceAir: boolean;
+    stateOwnerId: 1 | 2;
+  } | null>;
+  reversalDef?: {
+    attr: string;
+    p1StateNo?: number;
+    p2StateNo?: number;
+    pauseTime: { p1: number; p2: number };
+    hitDefId: number;
+  };
   stateOwnerId?: number;
   selfStateOwnerId?: number;
   animationOwnerId?: 1 | 2;
@@ -266,6 +281,7 @@ export type PlayerState = {
     contact: boolean;
     hit: boolean;
     guarded: boolean;
+    reversed?: boolean;
     elapsed?: number;
     hitCount: number;
   };

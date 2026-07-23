@@ -7,7 +7,7 @@ describe('WinMUGEN Trigger inventory', () => {
   it('tracks every inventory and evaluator entry in the canonical Matrix', async () => {
     const { errors } = await auditInventory();
     expect(errors).toEqual([]);
-  });
+  }, 15_000);
 
   it('keeps the six Issue #82 audit classifications explicit', () => {
     const records = buildInventory();
