@@ -88,6 +88,12 @@ Examples:
 - math operators: `+`, `-`, `*`, `/`, `%`;
 - math constants/functions: `Pi`, `E`, `Sin`, `Cos`, `Tan`, `IfElse`, `Cond`.
 
+`IfElse` and `Cond` preserve a leading WinMUGEN redirect condition as one argument even though the
+redirect itself contains a comma. For example,
+`IfElse(enemy, GetHitVar(hitcount) >= 7, 1, 0)` evaluates `GetHitVar` on the opponent rather than
+being rejected as a four-argument function. Bundled T-H-M-A State 233 uses this form in its third
+HitDef `air.velocity` expression.
+
 When adding expression support, update Expression rows in the matrix, not unrelated Trigger rows.
 
 ## Velocity coordinates

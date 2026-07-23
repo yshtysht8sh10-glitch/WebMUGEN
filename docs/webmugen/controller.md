@@ -169,6 +169,11 @@ Accepted contact emits one effect envelope per ActiveHitDef/target generation. N
 
 The currently connected subset requires an ActiveHitDef and AIR Clsn overlap, then applies damage and selects ground/air hit time, animation type, and velocity from the defender StateType at contact. Standing contact enters State 5000, crouching contact enters State 5010, and air contact enters State 5020. S/C contacts select `ground.velocity`; A selects `air.velocity`; `fall.yvelocity` remains a separate GetHitVar value. Ground Light/Medium/Hard maps to required Anim 5000/5001/5002. Hit velocity X is converted once so the common negative value moves away from the attacker for either Facing; Y is applied directly. `HitVelSet` restores selected components after the common shake state, and `HitFallVel` restores the fall velocity for bounce. Hit pause preserves the applied velocity, and physics moves the defender after pause ends. Missing ActiveHitDef or Clsn boxes reject the hit. Less common animation types and broader combat semantics remain incomplete.
 
+HitDef velocity components use the runtime numeric-expression evaluator, including redirected
+conditions inside `IfElse`. T-H-M-A State 233's third hit evaluates
+`-15 + 9 * IfElse(enemy, GetHitVar(hitcount) >= 7, 1, 0)` to `-15` below seven hits and `-6` at
+seven or more, instead of discarding the expression and using the fallback air Y velocity.
+
 StateDef `velset` and HitDef velocity are separate: entering common shake State 5000 clears live `vx`/`vy`, but the saved `hitVelX`/`hitVelY` and GetHitVar snapshot remain available for StateTypeSet routing and the later component-selective `HitVelSet`.
 
 Guard contact snapshots Facing-relative `holdback`/`holddown` intent before collision. Within `guard.dist`, H/M permits standing guard, L/M crouching guard, and A air guard. Accepted guard uses `guard.damage`, `guard.pausetime`, `guard.hittime`, `guard.ctrltime`, and `guard.velocity`, enters common State 150/152/154, sets MoveContact/MoveGuarded without MoveHit, and follows the unmodified recoil/guard-end states. `guard.kill = 0` clamps chip damage at one Life; normal hit damage and KO behavior remain independent. Control cannot be enabled before guard control time. Missing input, a mismatched guardflag, or excessive distance falls through to the normal hit path.

@@ -28,6 +28,19 @@ describe('CnsRuntimeTrigger', () => {
     })).toBe(151);
   });
 
+  it('keeps a WinMUGEN redirect comparison together as an IfElse condition', () => {
+    const state = createInitialGameState();
+    const belowThreshold = { ...state.players[1], getHitVars: { hitcount: 6 } };
+    const atThreshold = { ...state.players[1], getHitVars: { hitcount: 7 } };
+    const expression = '-15+9*ifelse(enemy,GethitVar(hitcount) >= 7,1,0)';
+
+    expect(readNumberExpression(expression, { player: state.players[0], opponent: belowThreshold })).toBe(-15);
+    expect(readNumberExpression(expression, { player: state.players[0], opponent: atThreshold })).toBe(-6);
+    expect(evaluateCnsRuntimeTrigger(`${expression} = -6`, {
+      player: state.players[0], opponent: atThreshold,
+    })).toBe(true);
+  });
+
   it('matches HitDefAttr against the normalized active HitDef state and attack types', () => {
     const state = createInitialGameState();
     const player = { ...state.players[0], activeHitDef: {

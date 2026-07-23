@@ -307,6 +307,42 @@ describe('T-H-M-A State 232 full-width velocity regression', () => {
   });
 });
 
+describe('T-H-M-A State 233 third-hit launch regression', () => {
+  it.each([
+    { hitCount: 6, expectedY: -15 },
+    { hitCount: 7, expectedY: -6 },
+  ])('evaluates enemy GetHitVar(hitcount) in air.velocity at hitcount $hitCount', async ({ hitCount, expectedY }) => {
+    const assets = await loadCharacterFromDef('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.def', createFileSystemFetcher());
+    const state233 = assets.cns.states.find((state) => state.stateNo === 233);
+    const thirdHitDef = state233?.controllers.find((controller) =>
+      controller.type.trim().toLowerCase() === 'hitdef'
+      && String(controller.params['air.velocity']).includes('GethitVar(hitcount)'));
+    if (!state233 || !thirdHitDef) throw new Error('T-H-M-A State 233 third HitDef not found');
+    const focusedCns: CnsDocument = {
+      metadataSections: assets.cns.metadataSections,
+      states: [{
+        ...state233,
+        controllers: [{ ...thirdHitDef, triggers: [{ name: 'trigger1', expression: '1' }] }],
+      }],
+    };
+    const initial = createInitialGameState();
+    const activated = stepCnsStateRuntime({
+      ...initial,
+      players: [{
+        ...initial.players[0], stateNo: 233, stateType: 'S', moveType: 'A', physics: 'S', ctrl: false,
+        animNo: 233, fvars: { 1: 1, 2: 0 },
+      }, {
+        ...initial.players[1], getHitVars: { hitcount: hitCount },
+      }],
+    }, focusedCns, { hitDiagnostics: true }).state;
+
+    expect(activated.players[0].activeHitDef, activated.players[0].hitDiagnosticLines?.join('\n')).toMatchObject({
+      airVelocity: { x: -0.5, y: expectedY },
+    });
+    expect(activated.players[0].activeHitDef?.invalidParameters).not.toContain('air.velocity');
+  });
+});
+
 describe('T-H-M-A State 700 throw regression', () => {
   it('accepts hitflag M- against a neutral target and enters both custom throw states', async () => {
     const assets = await loadCharacterFromDef('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.def', createFileSystemFetcher());

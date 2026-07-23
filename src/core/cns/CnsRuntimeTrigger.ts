@@ -292,7 +292,7 @@ function compileNumberExpression(rawExpression: string): NumberSource | null {
 
   const conditionalMatch = expression.match(/^(cond|ifelse)\((.+)\)$/);
   if (conditionalMatch) {
-    const args = splitTopLevelArguments(conditionalMatch[2]);
+    const args = splitConditionalArguments(conditionalMatch[2]);
     if (args.length !== 3) return null;
     const condition = compileBooleanExpression(args[0]);
     const whenTrue = compileNumberExpression(args[1]) ?? (() => null);
@@ -544,7 +544,7 @@ export function readNumberExpression(rawExpression: string, context: CnsRuntimeT
 
   const conditionalMatch = expression.match(/^(cond|ifelse)\((.+)\)$/);
   if (conditionalMatch) {
-    const args = splitTopLevelArguments(conditionalMatch[2]);
+    const args = splitConditionalArguments(conditionalMatch[2]);
     if (args.length !== 3) return null;
     return readNumberExpression(evaluateBooleanExpression(args[0], context) ? args[1] : args[2], context);
   }
@@ -964,6 +964,15 @@ function splitTopLevelArguments(expression: string): string[] {
 
   parts.push(expression.slice(start).trim());
   return parts.filter(Boolean);
+}
+
+function splitConditionalArguments(expression: string): string[] {
+  const parts = splitTopLevelArguments(expression);
+  if (parts.length !== 4 || !/^(?:enemynear|enemy|target|parent|root)(?:\([^)]*\))?$/i.test(parts[0])) {
+    return parts;
+  }
+
+  return [`${parts[0]},${parts[1]}`, parts[2], parts[3]];
 }
 
 function splitTopLevelComparison(
