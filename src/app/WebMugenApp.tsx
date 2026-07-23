@@ -497,9 +497,12 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             screenWidth: canvas.width,
             roundState: nextRoundState.phase === 'fight' ? 2 : 3,
             roundNo: nextRoundState.roundNo,
+            roundsExisted: Math.max(0, nextRoundState.roundNo - 1),
+            matchNo: 1,
             matchOver: nextRoundState.phase === 'ko' || nextRoundState.phase === 'timeOver',
             roundWinner: nextRoundState.winner,
             roundEndReason: nextRoundState.endReason,
+            teamMode: 'single',
           });
           cnsMs = performance.now() - cnsStartedAt;
           nextState = cnsResult.state;

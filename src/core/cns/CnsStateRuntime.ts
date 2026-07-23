@@ -80,9 +80,12 @@ export type CnsRuntimeInput = {
   random?: number;
   roundState?: number;
   roundNo?: number;
+  roundsExisted?: number;
+  matchNo?: number;
   matchOver?: boolean;
   roundWinner?: 1 | 2 | 'draw' | null;
   roundEndReason?: 'ko' | 'double_ko' | 'time_over';
+  teamMode?: 'single' | 'simul' | 'turns';
   constants?: CnsDocument;
   entityContext?: RuntimeEntityContext;
   numHelper?: (helperId?: number) => number;
@@ -765,14 +768,22 @@ function createTriggerContext(
     animElemStarted: animationInfo?.elementStarted,
     animElemCount: animationInfo?.elementCount,
     animElemTimes: animationInfo?.elementTimes,
+    animElemNoAtOffset: (offset) => input.getAnimationElementNo?.(player.animNo, player.animTime + offset) ?? null,
     animationExists: input.getAnimationDuration ? (animNo) => input.getAnimationDuration?.(animNo) !== null : undefined,
     constants: input.constants,
     gameTime: input.gameTime,
     random: input.random ?? stableCnsRandomValue(input.gameTime ?? player.stateTime, player),
     roundState: input.roundState,
     roundNo: input.roundNo,
+    roundsExisted: input.roundsExisted,
+    matchNo: input.matchNo,
     matchOver: input.matchOver,
     roundWinner: input.roundWinner,
+    roundEndReason: input.roundEndReason,
+    teamMode: input.teamMode ?? 'single',
+    isHomeTeam: player.id === 1,
+    numEnemy: opponent ? 1 : 0,
+    numPartner: 0,
     isHelper: input.entityContext?.kind === 'helper',
     entityId: input.entityContext?.entityId ?? player.id,
     numHelper: input.numHelper,

@@ -17,10 +17,18 @@ export type CnsRuntimeTriggerContext = {
   animElemStarted?: boolean;
   animElemCount?: number;
   animElemTimes?: readonly number[];
+  animElemNoAtOffset?: (offset: number) => number | null;
   roundState?: number;
   roundNo?: number;
+  roundsExisted?: number;
+  matchNo?: number;
   matchOver?: boolean;
   roundWinner?: 1 | 2 | 'draw' | null;
+  roundEndReason?: 'ko' | 'double_ko' | 'time_over';
+  teamMode?: 'single' | 'simul' | 'turns';
+  isHomeTeam?: boolean;
+  numEnemy?: number;
+  numPartner?: number;
   aiLevel?: number;
   teamSide?: number;
   gameTime?: number;
@@ -498,7 +506,13 @@ function getBooleanSource(name: string): BooleanSource | null {
     case 'win': return (context) => context.roundWinner === context.player.id;
     case 'lose': return (context) => context.roundWinner !== null && context.roundWinner !== undefined && context.roundWinner !== 'draw' && context.roundWinner !== context.player.id;
     case 'drawgame': return (context) => context.roundWinner === 'draw';
-    case 'roundsexisted': return () => true;
+    case 'winko': return (context) => context.roundWinner === context.player.id && context.roundEndReason === 'ko';
+    case 'wintime': return (context) => context.roundWinner === context.player.id && context.roundEndReason === 'time_over';
+    case 'winperfect': return (context) => context.roundWinner === context.player.id && context.player.life >= 1000;
+    case 'loseko': return (context) => context.roundWinner !== context.player.id && context.roundWinner !== 'draw' && context.roundEndReason === 'ko';
+    case 'losetime': return (context) => context.roundWinner !== context.player.id && context.roundWinner !== 'draw' && context.roundEndReason === 'time_over';
+    case 'roundsexisted': return (context) => (context.roundsExisted ?? Math.max(0, (context.roundNo ?? 1) - 1)) !== 0;
+    case 'ishometeam': return (context) => context.isHomeTeam ?? context.player.id === 1;
     case 'p2ctrl': return (context) => context.opponent?.ctrl ?? true;
     case 'root': return () => true;
     case 'parent': return () => true;
@@ -522,6 +536,7 @@ function getStringSource(rawName: string): StringSource | null {
     case 'authorname': return (context) => readOptionalString(context.player, 'authorName', '');
     case 'p3name':
     case 'p4name': return () => '';
+    case 'teammode': return (context) => context.teamMode ?? 'single';
     default: return getRedirectStringSource(name);
   }
 }
@@ -720,10 +735,18 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'win': return (context) => context.roundWinner === context.player.id ? 1 : 0;
     case 'lose': return (context) => context.roundWinner !== null && context.roundWinner !== undefined && context.roundWinner !== 'draw' && context.roundWinner !== context.player.id ? 1 : 0;
     case 'drawgame': return (context) => context.roundWinner === 'draw' ? 1 : 0;
+    case 'winko': return (context) => context.roundWinner === context.player.id && context.roundEndReason === 'ko' ? 1 : 0;
+    case 'wintime': return (context) => context.roundWinner === context.player.id && context.roundEndReason === 'time_over' ? 1 : 0;
+    case 'winperfect': return (context) => context.roundWinner === context.player.id && context.player.life >= 1000 ? 1 : 0;
+    case 'loseko': return (context) => context.roundWinner !== context.player.id && context.roundWinner !== 'draw' && context.roundEndReason === 'ko' ? 1 : 0;
+    case 'losetime': return (context) => context.roundWinner !== context.player.id && context.roundWinner !== 'draw' && context.roundEndReason === 'time_over' ? 1 : 0;
     case 'stateno': return (context) => context.player.stateNo;
     case 'prevstateno': return (context) => readOptionalNumber(context.player, 'prevStateNo', context.player.stateNo);
     case 'roundstate': return (context) => context.roundState ?? 2;
     case 'roundno': return (context) => context.roundNo ?? 1;
+    case 'roundsexisted': return (context) => context.roundsExisted ?? Math.max(0, (context.roundNo ?? 1) - 1);
+    case 'matchno': return (context) => context.matchNo ?? 1;
+    case 'ishometeam': return (context) => (context.isHomeTeam ?? context.player.id === 1) ? 1 : 0;
     case 'ailevel': return (context) => context.aiLevel ?? 0;
     case 'teamside': return (context) => context.teamSide ?? context.player.id;
     case 'power': return (context) => readOptionalNumber(context.player, 'power', 0);
@@ -757,10 +780,10 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'movecontact': return (context) => context.player.moveContact?.contact ? context.player.moveContact.elapsed ?? 1 : 0;
     case 'movehit': return (context) => context.player.moveContact?.hit ? context.player.moveContact.elapsed ?? 1 : 0;
     case 'moveguarded': return (context) => context.player.moveContact?.guarded ? context.player.moveContact.elapsed ?? 1 : 0;
-    case 'numenemy': return (context) => (context.opponent ? 1 : 1);
+    case 'numenemy': return (context) => context.numEnemy ?? 1;
     case 'numproj': return (context) => context.numProj?.() ?? 0;
     case 'numexplod': return (context) => context.numExplod?.() ?? 0;
-    case 'numpartner': return () => 0;
+    case 'numpartner': return (context) => context.numPartner ?? 0;
     case 'numcommand': return (context) => context.commands?.size ?? 0;
     case 'ishelper': return (context) => context.isHelper ? 1 : 0;
     case 'id': return (context) => context.entityId ?? context.player.id;
@@ -809,6 +832,16 @@ function getFunctionNumberSource(name: string): NumberSource | null {
   if (animelemTimeMatch) {
     const elemNo = Number(animelemTimeMatch[1]);
     return (context) => context.animElemTimes?.[elemNo - 1] ?? null;
+  }
+
+  const animElemNoMatch = name.match(/^animelemno\((.+)\)$/);
+  if (animElemNoMatch) {
+    const offsetSource = compileNumberExpression(animElemNoMatch[1]);
+    if (!offsetSource) return null;
+    return (context) => {
+      const offset = offsetSource(context);
+      return offset === null ? null : context.animElemNoAtOffset?.(Math.trunc(offset)) ?? null;
+    };
   }
 
   const projContactTimeMatch = name.match(/^projcontacttime\((\d+)\)$/);

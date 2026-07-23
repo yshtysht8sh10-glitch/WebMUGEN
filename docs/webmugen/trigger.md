@@ -205,6 +205,15 @@ Root, Parent, Helper, and PlayerID redirects resolve committed runtime entities 
 back to self. Root players have no Parent, missing lookups return SFalse, MUGEN Helper IDs remain
 separate from unique entity IDs, and `ID` / `PlayerIDExist(expr)` use the unique entity ID space.
 
+Production RoundState supplies `RoundNo`, `RoundsExisted`, KO/time/draw winner data, and end reason.
+`WinKO`, `WinTime`, `WinPerfect`, `LoseKO`, and `LoseTime` are derived symmetrically from that state.
+The current production match explicitly declares `TeamMode = Single`, `MatchNo = 1`, one enemy, and
+no partner; Simul/Turns remain Partial rather than being fabricated from root players.
+
+`AnimElemNo(offset)` evaluates its offset expression and asks the active AIR lookup for the element at
+`animTime + offset`. Bare `AnimElemNo` still reports the current element. Redirected animation-owner
+and unusual infinite-loop timing remain Partial.
+
 Old-style `ProjHit[ID] = value` reads the same history. Its simple form reports a successful hit only while the matching history value is 1; the optional `, operator time` form compares the elapsed hit time. An omitted suffix or ID 0 selects the most recent contact from any Projectile ID. Guard and miss paths do not report a hit. Each accepted repeated hit resets the matching ID and ID-0 histories to 1, while other Projectile IDs remain distinguishable. Bundled T-H-M-A State -2 uses this path to execute `TargetState value = 280` after Projectile 1000 hit pause.
 
 ## Target lookup

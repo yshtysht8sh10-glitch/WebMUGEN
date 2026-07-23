@@ -72,21 +72,21 @@ const COMPLETE = new Set([
   'AnimElem', 'AnimElemTime', 'Command', 'Ctrl', 'StateNo', 'StateType', 'Time',
 ]);
 const SAFE_FALLBACK = new Set([
-  'AILevel', 'LifeMax', 'NumEnemy', 'NumPartner',
-  'ProjCancelTime', 'RoundsExisted',
+  'AILevel', 'LifeMax',
+  'ProjCancelTime',
 ]);
 const PARTIAL = new Set([
   'Abs', 'ACos', 'Alive', 'Anim', 'AnimElemNo', 'AnimExist', 'AnimTime', 'ASin', 'ATan', 'AuthorName',
   'BackEdgeBodyDist', 'BackEdgeDist', 'BodyDist X', 'BodyDist Y', 'CanRecover', 'Ceil', 'Cond', 'Const',
   'Cos', 'DrawGame', 'E', 'Exp', 'Facing', 'Floor', 'FrontEdgeBodyDist', 'FrontEdgeDist', 'FVar',
-  'GameTime', 'GetHitVar', 'HitCount', 'HitDefAttr', 'HitFall', 'HitOver', 'HitPauseTime', 'HitShakeOver', 'ID',
+  'GameTime', 'GetHitVar', 'HitCount', 'HitDefAttr', 'HitFall', 'HitOver', 'HitPauseTime', 'HitShakeOver', 'ID', 'IsHomeTeam',
   'HitVel X', 'HitVel Y', 'IfElse', 'InGuardDist', 'IsHelper', 'Life', 'Ln', 'Log', 'Lose', 'MatchOver',
-  'MoveContact', 'MoveGuarded', 'MoveHit', 'MoveType', 'Name', 'NumExplod', 'NumHelper', 'NumTarget', 'P1Name', 'P2BodyDist X',
+  'MatchNo', 'MoveContact', 'MoveGuarded', 'MoveHit', 'MoveType', 'Name', 'NumEnemy', 'NumExplod', 'NumHelper', 'NumPartner', 'NumTarget', 'P1Name', 'P2BodyDist X',
   'P2BodyDist Y', 'P2Dist X', 'P2Dist Y', 'P2Life', 'P2MoveType', 'P2Name', 'P2StateNo', 'P2StateType', 'P3Name', 'P4Name', 'PalNo',
-  'Pi', 'PlayerIDExist', 'Pos X', 'Pos Y', 'Power', 'PowerMax', 'PrevStateNo', 'ProjContact', 'ProjContactTime', 'ProjGuarded', 'ProjGuardedTime', 'ProjHit', 'ProjHitTime', 'RoundNo', 'RoundState', 'ScreenPos X',
+  'Pi', 'PlayerIDExist', 'Pos X', 'Pos Y', 'Power', 'PowerMax', 'PrevStateNo', 'ProjContact', 'ProjContactTime', 'ProjGuarded', 'ProjGuardedTime', 'ProjHit', 'ProjHitTime', 'RoundNo', 'RoundsExisted', 'RoundState', 'ScreenPos X',
   'ScreenPos Y', 'SelfAnimExist', 'Sin', 'StateTime', 'SysFVar', 'SysVar', 'Tan', 'TargetID', 'TargetStateNo', 'NumCommand',
   'P2AuthorName', 'P2Ctrl', 'P2Facing', 'Physics',
-  'Random', 'TeamSide', 'TicksPerSecond', 'TimeMod', 'Var', 'Vel X', 'Vel Y', 'Win', 'NumProj', 'NumProjID',
+  'Random', 'TeamMode', 'TeamSide', 'TicksPerSecond', 'TimeMod', 'Var', 'Vel X', 'Vel Y', 'Win', 'WinKO', 'WinPerfect', 'WinTime', 'LoseKO', 'LoseTime', 'NumProj', 'NumProjID',
 ]);
 
 const FUNCTION_ARGUMENTS = new Map([
