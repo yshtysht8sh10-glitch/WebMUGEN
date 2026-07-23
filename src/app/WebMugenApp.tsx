@@ -690,7 +690,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
         });
         const generatedHumanCharacters = captureHumanLogThisFrame ? appendReadableRuntimeHistoryIfNeeded({
           cns: character.cns,
-          commands: p1Commands,
+          p1Commands,
+          p2Commands,
           getAnimEndTime: (animNo) => getMugenAnimEndTime(character.air, animNo),
           inputConfig: config,
           frameNo: frameNoRef.current,
@@ -2075,7 +2076,7 @@ const RuntimeFrameIndexList = memo(function RuntimeFrameIndexList({
 
 function createSelectedReadableRuntimeHistory(entry: ReadableRuntimeEntry | null): VisibleRuntimeHistory {
   return {
-    lines: entry?.lines ?? [],
+    lines: entry ? [...entry.lines, ...entry.p2Lines] : [],
     mode: 'latest',
     targetFrame: entry?.frameNo ?? null,
     targetFound: Boolean(entry),
@@ -2143,8 +2144,19 @@ function HumanRuntimePanel({
             <div className="history-empty">Detail log is hidden. Select a frame or show the latest frame to open it.</div>
           ) : selectedEntry ? (
             <>
-              <div className="history-selected-frame">selected frame={selectedEntry.frameNo} state={selectedEntry.p1StateNo}</div>
-              <ReadableRuntimeHistoryMarkup lines={selectedEntry.lines} onOpenCnsSource={onOpenCnsSource} />
+              <div className="history-selected-frame">
+                selected frame={selectedEntry.frameNo} P1 state={selectedEntry.p1StateNo} P2 state={selectedEntry.p2StateNo}
+              </div>
+              <div className="human-detail-grid">
+                <section className="human-detail-player" aria-label="P1 detail log">
+                  <h3>P1</h3>
+                  <ReadableRuntimeHistoryMarkup lines={selectedEntry.lines} onOpenCnsSource={onOpenCnsSource} />
+                </section>
+                <section className="human-detail-player" aria-label="P2 detail log">
+                  <h3>P2</h3>
+                  <ReadableRuntimeHistoryMarkup lines={selectedEntry.p2Lines} onOpenCnsSource={onOpenCnsSource} />
+                </section>
+              </div>
             </>
           ) : (
             <div className="history-empty">Select a frame on the left.</div>
@@ -2335,7 +2347,7 @@ function ReadableRuntimeHistoryLine({
   if (trimmed === 'State状況:' || (trimmed.startsWith('State') && !trimmed.startsWith('StateNo='))) {
     return <div className="readable-history-section">State状況</div>;
   }
-  if (trimmed.startsWith('P1 StateNo=')) return <ReadableRuntimeHistoryMeta line={trimmed} />;
+  if (trimmed.startsWith('P1 StateNo=') || trimmed.startsWith('P2 StateNo=')) return <ReadableRuntimeHistoryMeta line={trimmed} />;
   if (trimmed.startsWith('StateDef ')) return <ReadableStateDefLink line={trimmed} onOpenCnsSource={onOpenCnsSource} />;
   if (trimmed.startsWith('keys=')) return <div className="readable-history-keys">{trimmed}</div>;
   if (trimmed.startsWith('Damage=')) return <div className="readable-history-damage">{trimmed}</div>;
@@ -3267,7 +3279,8 @@ function formatCodexTraceSummaryLines(traces: readonly CnsRuntimeTrace[]): strin
 
 function appendReadableRuntimeHistoryIfNeeded({
   cns,
-  commands,
+  p1Commands,
+  p2Commands,
   getAnimEndTime,
   inputConfig,
   frameNo,
@@ -3281,7 +3294,8 @@ function appendReadableRuntimeHistoryIfNeeded({
   setIndexEntries,
 }: {
   cns: CnsDocument;
-  commands: ReadonlySet<string>;
+  p1Commands: ReadonlySet<string>;
+  p2Commands: ReadonlySet<string>;
   getAnimEndTime?: (animNo: number) => number | null;
   inputConfig: InputConfig;
   frameNo: number;
@@ -3294,18 +3308,24 @@ function appendReadableRuntimeHistoryIfNeeded({
   lastSignatureRef: MutableRefObject<string>;
   setIndexEntries: (entries: RuntimeLogIndexEntry[]) => void;
 }): number {
-  const keySummary = formatMugenPressedKeys(pressedKeys, inputConfig.players[0]);
+  const p1KeySummary = formatMugenPressedKeys(pressedKeys, inputConfig.players[0]);
+  const p2KeySummary = formatMugenPressedKeys(pressedKeys, inputConfig.players[1]);
   const snapshots = createReadableRuntimeStateSnapshots(state, traces);
   const preparedSnapshots = snapshots.map((snapshot) => {
-    const [p1] = snapshot.players;
-    const triggerSummary = formatP1SatisfiedStateDefTriggerSummary(cns, snapshot, commands, getAnimEndTime);
+    const [p1, p2] = snapshot.players;
+    const p1TriggerSummary = formatPlayerSatisfiedStateDefTriggerSummary(cns, snapshot, 0, p1Commands, getAnimEndTime);
+    const p2TriggerSummary = formatPlayerSatisfiedStateDefTriggerSummary(cns, snapshot, 1, p2Commands, getAnimEndTime);
     const damageSummary = formatHitEventSummary(snapshot);
-    return { snapshot, triggerSummary, damageSummary, signature: [
+    return { snapshot, p1TriggerSummary, p2TriggerSummary, damageSummary, signature: [
       p1.stateNo,
       p1.animNo,
-      stripReadableRuntimeValueSummaries(triggerSummary),
+      stripReadableRuntimeValueSummaries(p1TriggerSummary),
+      p2.stateNo,
+      p2.animNo,
+      stripReadableRuntimeValueSummaries(p2TriggerSummary),
       damageSummary,
-      keySummary,
+      p1KeySummary,
+      p2KeySummary,
     ].join('|') };
   });
   const signature = preparedSnapshots.map((prepared) => prepared.signature).join('||');
@@ -3316,8 +3336,8 @@ function appendReadableRuntimeHistoryIfNeeded({
   let visibleEntries: RuntimeLogIndexEntry[] | null = null;
   let generatedCharacters = 0;
   const appendedKeys = new Set<string>();
-  for (const { snapshot, triggerSummary, damageSummary } of preparedSnapshots) {
-    const [p1] = snapshot.players;
+  for (const { snapshot, p1TriggerSummary, p2TriggerSummary, damageSummary } of preparedSnapshots) {
+    const [p1, p2] = snapshot.players;
     const key = createReadableRuntimeEntryKey(frameNo, p1.stateNo);
     if (appendedKeys.has(key)) continue;
     appendedKeys.add(key);
@@ -3327,18 +3347,28 @@ function appendReadableRuntimeHistoryIfNeeded({
       `---- ${timestamp} frame=${frameNo} state=${p1.stateNo} ----`,
       `P1 StateNo=${p1.stateNo} Time=${p1.stateTime} AnimNo=${p1.animNo}`,
       formatReadableStateDefLine(cns, p1.stateNo),
-      keySummary,
+      p1KeySummary,
       'State Status',
-      ...triggerSummary.split('\n').map((line) => `  ${line}`),
+      ...p1TriggerSummary.split('\n').map((line) => `  ${line}`),
       `Damage=${damageSummary}`,
       '',
     ]);
-    generatedCharacters += lines.reduce((total, line) => total + line.length, 0);
+    const p2Lines = freezeHistoryLines([
+      `---- ${timestamp} frame=${frameNo} state=${p2.stateNo} ----`,
+      `P2 StateNo=${p2.stateNo} Time=${p2.stateTime} AnimNo=${p2.animNo}`,
+      formatReadableStateDefLine(cns, p2.stateNo),
+      p2KeySummary,
+      'State Status',
+      ...p2TriggerSummary.split('\n').map((line) => `  ${line}`),
+      `Damage=${damageSummary}`,
+      '',
+    ]);
+    generatedCharacters += [...lines, ...p2Lines].reduce((total, line) => total + line.length, 0);
     visibleEntries = appendReadableRuntimeEntry({
       indexStore: indexStoreRef.current,
       entryStore: entryStoreRef.current,
       indexEntry: createRuntimeLogIndexEntry({ id, frameNo, timestamp, state: snapshot }),
-      entry: { id, key, frameNo, p1StateNo: p1.stateNo, lines },
+      entry: { id, key, frameNo, p1StateNo: p1.stateNo, p2StateNo: p2.stateNo, lines, p2Lines },
     });
   }
   if (visibleEntries) setIndexEntries(visibleEntries);
@@ -3445,17 +3475,20 @@ function formatRuntimeHistorySignature({
   ].join('|');
 }
 
-function formatP1SatisfiedStateDefTriggerSummary(
+function formatPlayerSatisfiedStateDefTriggerSummary(
   cns: CnsDocument,
   state: GameState,
+  playerIndex: 0 | 1,
   commands: ReadonlySet<string>,
   getAnimEndTime?: (animNo: number) => number | null,
 ): string {
   const [p1, p2] = state.players;
-  const mugenAnimTime = calculateMugenAnimTime(p1.animTime, getAnimEndTime?.(p1.animNo));
-  const context = { player: p1, opponent: p2, commands, animTime: mugenAnimTime, constants: cns, gameTime: state.frame };
+  const player = playerIndex === 0 ? p1 : p2;
+  const opponent = playerIndex === 0 ? p2 : p1;
+  const mugenAnimTime = calculateMugenAnimTime(player.animTime, getAnimEndTime?.(player.animNo));
+  const context = { player, opponent, commands, animTime: mugenAnimTime, constants: cns, gameTime: state.frame };
   const summaries = cns.states
-    .filter((stateDef) => stateDef.stateNo === p1.stateNo)
+    .filter((stateDef) => stateDef.stateNo === player.stateNo)
     .flatMap((stateDef) => formatSatisfiedStateDefTriggers(stateDef, context));
 
   return summaries.length > 0 ? summaries.join('\n') : '-';

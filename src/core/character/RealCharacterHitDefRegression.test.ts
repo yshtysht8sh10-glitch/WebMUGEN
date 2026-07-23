@@ -255,6 +255,58 @@ describe('T-H-M-A State 215 launch regression', () => {
   }, 30_000);
 });
 
+describe('T-H-M-A State 232 full-width velocity regression', () => {
+  it('keeps full-width punctuation and spacing out of CNS syntax', async () => {
+    const assets = await loadCharacterFromDef('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.def', createFileSystemFetcher());
+    const backHitSprite = assets.sprites?.sprites.get('5200,1');
+    expect(backHitSprite, 'T-H-M-A Anim 5030 sprite 5200,1 is missing').toBeDefined();
+    expect(Array.from(backHitSprite!.imageData.data).some((value, index) => index % 4 === 3 && value !== 0),
+      'T-H-M-A Anim 5030 sprite 5200,1 has no visible pixels').toBe(true);
+    const state232 = assets.cns.states.find((state) => state.stateNo === 232);
+    const hitDef = state232?.controllers.find((controller) =>
+      controller.type.trim().toLowerCase() === 'hitdef' && Number(controller.params.id) === 232);
+    if (!state232 || !hitDef) throw new Error('T-H-M-A State 232 HitDef not found');
+
+    expect(hitDef.params['ground.velocity']).toBeUndefined();
+    expect(hitDef.params['ground.velocity　']).toBe('　-3-fvar(2)*2，-5');
+
+    const forcedCns: CnsDocument = {
+      metadataSections: assets.cns.metadataSections,
+      states: [{ ...state232, controllers: [{ ...hitDef, triggers: [{ name: 'trigger1', expression: '1' }] }] }],
+    };
+    const initial = createInitialGameState();
+    const activated = stepCnsStateRuntime({
+      ...initial,
+      players: [{
+        ...initial.players[0], x: 400, stateNo: 232, stateType: 'S', moveType: 'A', physics: 'S', ctrl: false,
+        animNo: 232, fvars: { 1: 1, 2: 0 },
+      }, initial.players[1]],
+    }, forcedCns, { hitDiagnostics: true }).state;
+
+    expect(activated.players[0].activeHitDef).toMatchObject({
+      animType: 'Light', groundType: undefined, groundVelocity: { x: -3.5, y: 0 },
+    });
+
+    const attack = findActionCollisionElement(assets.air.actions, 232, 'attack');
+    const body = findCollisionElement(assets.air.actions, 'body');
+    expect(attack).not.toBeNull();
+    expect(body).not.toBeNull();
+    let contacted = findContact(activated, assets.air, 1, attack!, body!, 'ground', 1);
+    expect(contacted, contacted?.hitDiagnosticLines?.join('\n')).not.toBeNull();
+    expect(contacted!.players[1]).toMatchObject({ stateNo: 5000, animNo: 5000, hitVelY: 0, stateType: 'S' });
+
+    while (contacted!.players[1].hitPause > 0) contacted = stepCnsPhysicsMotion(contacted!, assets.cns);
+    const resumed = stepCnsStateRuntime(contacted!, assets.cns, {
+      getAnimationDuration: (animNo) => getMugenAnimEndTime(assets.air, animNo),
+      getAnimationTriggerInfo: (animNo, animTime) => getAnimationTriggerInfo(assets.air, animNo, animTime),
+      hitDiagnostics: true,
+    }).state;
+
+    expect(resumed.players[1].stateType).toBe('S');
+    expect(resumed.players[1].stateNo).not.toBe(5030);
+  });
+});
+
 describe('T-H-M-A State 700 throw regression', () => {
   it('accepts hitflag M- against a neutral target and enters both custom throw states', async () => {
     const assets = await loadCharacterFromDef('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.def', createFileSystemFetcher());

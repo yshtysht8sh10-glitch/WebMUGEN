@@ -974,7 +974,7 @@ export function createGetHitVarSnapshot(
 
 function hitAnimTypeCode(value: string): number {
   const codes: Record<string, number> = { light: 0, medium: 1, med: 1, hard: 2, heavy: 2, back: 3, up: 4, diagup: 5 };
-  return codes[value.trim().toLowerCase()] ?? 0;
+  return codes[trimCnsSyntaxText(value).toLowerCase()] ?? 0;
 }
 
 function hitReactionTypeCode(value: string | undefined): number {
@@ -989,7 +989,11 @@ function commonHitShakeAnim(value: string | undefined, reactionType: string | un
     const requested = 5047 + code;
     return airDocumentHasAction(document, requested) ? requested : 5030;
   }
-  return (reactionType === undefined || reactionType.trim().toLowerCase() === 'high' ? 5000 : 5010) + code;
+  return (reactionType === undefined || trimCnsSyntaxText(reactionType).toLowerCase() === 'high' ? 5000 : 5010) + code;
+}
+
+function trimCnsSyntaxText(value: string): string {
+  return value.replace(/^[\t\n\v\f\r ]+|[\t\n\v\f\r ]+$/g, '');
 }
 
 function airDocumentHasAction(document: AirDocument | null, actionNo: number): boolean {

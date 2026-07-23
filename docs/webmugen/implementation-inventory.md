@@ -1,6 +1,6 @@
 # Implementation Inventory
 
-Updated: 2026-07-22
+Updated: 2026-07-23
 
 This document is a high-level inventory of WebMUGEN implementation areas. It is not the source of truth for exact compatibility status; use the compatibility matrix for that.
 
@@ -9,7 +9,7 @@ This document is a high-level inventory of WebMUGEN implementation areas. It is 
 | Area | Status summary |
 |---|---|
 | DEF | Basic character metadata/file loading path exists. |
-| CNS | StateDef, State Controllers, triggers, and many parameters are parsed. Some syntax remains incomplete. |
+| CNS | StateDef, State Controllers, triggers, and many parameters are parsed. CNS punctuation and syntax whitespace remain ASCII-compatible; full-width punctuation/spacing is retained as data rather than promoted to syntax or silently trimmed from tokens. Other syntax remains incomplete. |
 | CMD | Commands, hold prefixes, simple sequences, and buffer time exist. The production matcher prevents one unchanged diagonal hold from manufacturing alternating cardinal steps, with T-H-M-A-style normal/super conflict coverage. WinMUGEN timing still needs audit. |
 | AIR | Actions, elements, timing, loop handling, Clsn blocks, and optional seventh-field blend values exist. Destination-alpha and subtractive Canvas rendering remain approximate. |
 | SFF/Sprites | SpritePack renderer prototype exists; full SFF compatibility may require further work. |

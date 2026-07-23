@@ -195,4 +195,49 @@ ctrl = 1
       getHitVarUnsupportedKeys: undefined,
     });
   });
+
+  it('does not force a borrowed custom state to State 0 when hit stun expires', () => {
+    const state = createInitialGameState();
+    const next = applyFallbackHitRecovery({
+      ...state,
+      players: [
+        state.players[0],
+        {
+          ...state.players[1],
+          stateNo: 280,
+          stateOwnerId: 1,
+          selfStateOwnerId: 2,
+          stateType: 'S',
+          moveType: 'H',
+          physics: 'N',
+          ctrl: false,
+          vx: 12,
+          vy: -0.2,
+          hitStun: {
+            activeHitDefId: 91,
+            selectedHitTime: 20,
+            kind: 'ground',
+            source: 'projectile',
+            targetStateTypeAtHit: 'S',
+            elapsed: 20,
+            lastStateNo: 280,
+          },
+        },
+      ],
+    }, true);
+
+    expect(next.players[1]).toMatchObject({
+      stateNo: 280,
+      stateOwnerId: 1,
+      selfStateOwnerId: 2,
+      moveType: 'H',
+      physics: 'N',
+      ctrl: false,
+      vx: 12,
+      vy: -0.2,
+      hitStun: undefined,
+      hitReactionElapsed: 20,
+    });
+    expect(next.hitDiagnosticLines?.join('\n')).toContain('recoveryPath=custom_state');
+  });
 });

@@ -39,6 +39,7 @@ Rules:
 - Do not embed another copy of `common1.cns` in TypeScript.
 - Do not patch `common1.cns` for WebMUGEN convenience.
 - Runtime incompatibilities should be fixed in parser/runtime/trigger/controller/physics layers.
+- CNS punctuation and syntax whitespace follow the ASCII forms accepted by WinMUGEN. Shift-JIS full-width punctuation/spacing is retained rather than normalized into separators or discarded around tokens; for example, State 232's full-width comma does not create a `ground.velocity` Y component and its trailing full-width `animtype` space makes that enum value invalid.
 
 Issue #58 Phase 5 builds a StateNo index whenever parsing or CNS/common/CMD merging produces a new
 document. Duplicate StateNo entries retain array precedence: only the first entry is inserted, so
@@ -95,6 +96,12 @@ Examples:
 - walk forward/back route;
 - temporary movement glue such as VelSet or ChangeAnim while full common-state semantics are incomplete.
 
+When State -1 is merged, a common baseline route and its State-number-gated movement glue stay
+together ahead of character command routes. This matters when an attack is entered from common
+walk State 20/21: the common `VelSet`/`ChangeAnim` may finish first, but cannot run afterward and
+replace the attack StateDef animation. Bundled T-H-M-A coverage verifies State 21 -> 205 leaves
+Anim 205 active rather than restoring Anim 21.
+
 ## Merge risks
 
 The loader must avoid these mistakes:
@@ -130,6 +137,7 @@ Loader tests should verify:
 - `common1.cns` states are available without modifying the file;
 - a DEF-selected `stcommon` State wins over `common1.cns`, and `common1.cns` wins over an identically numbered State in `common.cmd`;
 - State -1 merge keeps trigger/controller data intact.
+- common movement glue remains before character routes that can replace State 20/21;
 - DEF-relative and ZIP-relative SND paths load through `arrayBuffer`;
 - group/index lookup returns the original WAV bytes;
 - missing/invalid SND produces a load diagnostic without losing the character;

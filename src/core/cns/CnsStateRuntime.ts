@@ -186,14 +186,17 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
     onHelperSpawn: (request) => pendingSpawns.push(request),
     onHelperDestroy: (entityId) => pendingDestroys.add(entityId),
   });
-  const p1Cns = resolvePlayerCns(state.players[0], cns, input);
-  const p2Cns = resolvePlayerCns(state.players[1], cns, input);
   const p1Context: RuntimeEntityContext = { kind: 'root', entityId: 1, rootEntityId: 1, parentEntityId: null, ownerCharacterId: 1 };
   const p2Context: RuntimeEntityContext = { kind: 'root', entityId: 2, rootEntityId: 2, parentEntityId: null, ownerCharacterId: 2 };
+  const p1Cns = resolvePlayerCns(state.players[0], cns, input);
   const p1 = stepPlayer(state.players[0], state.players[1], 1, p1Cns, { ...helperInput(p1Context), constants: p1Cns }, input.p1Commands, state.frame);
-  const p2 = stepPlayer(state.players[1], state.players[0], 2, p2Cns, { ...helperInput(p2Context), constants: p2Cns }, input.p2Commands, state.frame);
 
-  const players = applyTargetOperations([p1.player, p2.player], [...p1.targetOperations, ...p2.targetOperations], cns, input);
+  // WinMUGEN processes P1 before P2. Apply P1's Target controllers now so a
+  // TargetState destination gets its Time=0 CNS pass before this tick's physics.
+  const afterP1Targets = applyTargetOperations([p1.player, state.players[1]], p1.targetOperations, cns, input);
+  const p2Cns = resolvePlayerCns(afterP1Targets[1], cns, input);
+  const p2 = stepPlayer(afterP1Targets[1], afterP1Targets[0], 2, p2Cns, { ...helperInput(p2Context), constants: p2Cns }, input.p2Commands, state.frame);
+  const players = applyTargetOperations([afterP1Targets[0], p2.player], p2.targetOperations, cns, input);
   const helperTraces: CnsRuntimeTrace[] = [];
   let helpers = {
     ...initialHelpers,
@@ -609,7 +612,7 @@ function enterState(
     ? cnsValueToNumber(stateDef.initialAnimExpression, player, input, commands, opponent)
     : null;
   const animNo = stateDef.initialAnim ?? expressionAnimNo ?? inferredAnimNo;
-  const animChanged = player.animNo !== animNo;
+  const startsExplicitAnimation = stateDef.initialAnim !== undefined || expressionAnimNo !== null;
   const powered = player as ExtendedPlayerState;
   const powerAdded = addPlayerPower(player, stateDef.powerAdd ?? 0);
   const preserveHitDef = stateDef.hitDefPersist === true;
@@ -630,7 +633,7 @@ function enterState(
     stateHeaderAppliedStateNo: stateNo,
     stateTime: 0,
     animNo,
-    animTime: animChanged ? 0 : player.animTime,
+    animTime: startsExplicitAnimation || player.animNo !== animNo ? 0 : player.animTime,
     vx: stateDef.velocitySet ? stateDef.velocitySet.x * player.facing : player.vx,
     vy: stateDef.velocitySet ? stateDef.velocitySet.y : player.vy,
     stateType: toStateType(stateDef.stateType ?? null) ?? player.stateType,
@@ -1913,7 +1916,7 @@ function evaluateHitDefSnapshot(
   const textValue = (key: string): string | undefined => {
     const raw = controller.params[key];
     if (raw === undefined) return undefined;
-    return (Array.isArray(raw) ? raw.map(String).join(',') : String(raw)).trim();
+    return trimCnsSyntaxText(Array.isArray(raw) ? raw.map(String).join(',') : String(raw));
   };
   const boolValue = (key: string): boolean | undefined => {
     const value = numValue(key);
@@ -2029,8 +2032,8 @@ function evaluateHitDefSnapshot(
     guardFlag: textValue('guardflag')?.toUpperCase(),
     priority: { value: priorityValue ?? 4, type: priorityValues[1] === undefined ? 'Hit' : String(priorityValues[1]).trim() },
     guardPauseTime: guardPause[0] === undefined && guardPause[1] === undefined ? undefined : { attacker: Math.max(0, guardPause[0] ?? 0), defender: Math.max(0, guardPause[1] ?? 0) },
-    groundType: textValue('ground.type'),
-    airType: textValue('air.type'),
+    groundType: readHitReactionType(textValue('ground.type')),
+    airType: readHitReactionType(textValue('air.type')),
     groundHitTime: nonNegative(numValue('ground.hittime')),
     airHitTime: nonNegative(numValue('air.hittime')),
     guardHitTime: nonNegative(numValue('guard.hittime')),
@@ -2168,7 +2171,7 @@ function formatFall(value: ActiveHitDef['fall']): string {
 
 function readGroundAnimType(value: CnsValue | undefined): ActiveHitDef['animType'] | null {
   if (value === undefined || value === null) return null;
-  const normalized = String(value).trim().toLowerCase();
+  const normalized = trimCnsSyntaxText(String(value)).toLowerCase();
   if (normalized === 'light') return 'Light';
   if (normalized === 'medium' || normalized === 'med') return 'Medium';
   if (normalized === 'hard' || normalized === 'heavy') return 'Hard';
@@ -2320,6 +2323,16 @@ function triple(
     green: cnsValueToNumber(values[1], player, input, commands, opponent) ?? defaultGreen,
     blue: cnsValueToNumber(values[2], player, input, commands, opponent) ?? defaultBlue,
   };
+}
+
+function readHitReactionType(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const trimmed = trimCnsSyntaxText(value);
+  return ['none', 'high', 'low', 'trip'].includes(trimmed.toLowerCase()) ? trimmed : undefined;
+}
+
+function trimCnsSyntaxText(value: string): string {
+  return value.replace(/^[\t\n\v\f\r ]+|[\t\n\v\f\r ]+$/g, '');
 }
 
 function environmentShake(

@@ -703,7 +703,9 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'p2bodydistx':
     case 'p2bodydist x': return (context) => readP2BodyDistX(context.player, context.opponent);
     case 'p2distx':
-    case 'p2dist x': return (context) => (context.opponent ? Math.abs(context.opponent.x - context.player.x) : 999);
+    case 'p2dist x': return (context) => (context.opponent
+      ? (context.opponent.x - context.player.x) * context.player.facing
+      : 999);
     case 'bodydistx':
     case 'bodydist x': return (context) => readP2BodyDistX(context.player, context.opponent);
     case 'p2bodydisty':

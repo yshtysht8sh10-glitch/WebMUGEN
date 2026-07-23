@@ -97,7 +97,10 @@ describe('CNS custom state ownership', () => {
 
     const missing = stepCnsStateRuntime({
       ...targeted,
-      players: [targeted.players[0], { ...targeted.players[1], stateNo: 999, stateOwnerId: 1 }],
+      players: [
+        { ...targeted.players[0], stateNo: 0, targets: [] },
+        { ...targeted.players[1], stateNo: 999, stateOwnerId: 1 },
+      ],
     }, owner1, input).state;
     expect(missing.players[1].hitDiagnosticLines?.join('\n')).toContain('state=999 owner=1 result=missing reason=state_not_found');
   });

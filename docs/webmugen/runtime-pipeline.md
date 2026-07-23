@@ -97,6 +97,11 @@ See `../mugen-spec/winmugen/state-processing-order.md` and `helper.md`.
 
 If a negative state changes `stateNo`, the old current State is not executed. The newly entered State is selected instead. Positive-State `ChangeState` stops the remaining controllers in that State; entered-State controllers may run in the same frame under the existing bounded pipeline. If that entered State immediately changes State again, the final unprocessed destination keeps `StateTime = 0` through the following physics increment, so its `Time = 0` controllers run on the next CNS tick.
 
+Merged `common.cmd` movement routes and their State-number-gated `VelSet`/`ChangeAnim` glue run
+before character State -1 attack routes. Consequently an attack selected from common walk State
+20/21 receives its own StateDef animation last. The T-H-M-A State 21 -> 205 regression specifically
+asserts Anim 205 at time zero; common walk-back Anim 21 cannot overwrite it later in that pass.
+
 When a player's HitDef hit-pause counter is positive, CNS StateDef headers and controllers are skipped for that player. The following physics step decrements only the counter; position, velocity, StateTime, and AnimTime remain frozen. Input buffers are updated before CNS execution and therefore continue collecting input during hit pause. Resolved commands containing a non-hold button are retained and exposed once on the first CNS-active frame after the pause, while direction-only hold commands continue to follow the live key state. Hit pause is per player and separate from SuperPause.
 
 Match-level Pause/SuperPause is checked before State -3/-2/-1 and the current StateDef. Non-moving players therefore emit no repeated Explod or sound events while paused. The controller owner runs only while its `movetime` remains; physics, round time, hit resolution, and Explod lifecycle use the same frame's pause snapshot. Explods consume `pausemovetime` or `supermovetime` independently. When the clock reaches zero, one guarded CNS pass advances StateTime through physics without replaying time-zero controllers. Already-started Browser Audio continues; the runtime does not suspend AudioContext.
@@ -104,6 +109,13 @@ Match-level Pause/SuperPause is checked before State -3/-2/-1 and the current St
 The App requestAnimationFrame loop synchronizes its monotonic frame counter into `GameState.frame` before CNS and subsystem stepping. Explod creation/lifecycle and `GameTime` therefore observe the real game tick; the frame must not remain at the initial zero or be incremented independently by each subsystem.
 
 Each player carries `stateOwnerId` and `selfStateOwnerId`. CNS execution resolves the current document by owner id before scanning negative/current States. HitDef `p2getp1state = 1` and TargetState borrow the attacker/controller document; ChangeState remains in the current document; SelfState returns to the self owner document. An explicit owner lookup failure uses an empty document and a diagnostic, never another player's or common CNS as a silent fallback.
+
+Fallback hit recovery does not end a borrowed CustomState when the original hit time expires. It clears the runtime hit-stun gate while preserving the current State, ownership, physics, and velocity, leaving the attacker-owned CNS route to reach `SelfState`. This prevents Projectile `TargetState` routes such as 280 -> 281 -> 282 from being replaced by an engine-forced State 0.
+
+Root players execute in WinMUGEN P1-then-P2 order. P1 Target operations are committed before P2's
+CNS pass, so a P1 `TargetState` destination executes its `Time = 0` controllers before the same
+tick's physics. Deferring all Target operations until after both players had executed skipped those
+controllers and let the destination inherit the previous State's velocity for one physics tick.
 
 ## Controller execution flow
 

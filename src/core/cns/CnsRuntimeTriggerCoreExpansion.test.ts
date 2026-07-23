@@ -106,6 +106,14 @@ describe('CnsRuntimeTrigger core expansion', () => {
     expect(evaluateCnsRuntimeTrigger('P2StateNo = 0', { player, opponent })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('P2BodyDist X = 8', { player, opponent })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('P2Dist X = 40', { player, opponent })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('P2Dist X = 40', {
+      player: { ...player, facing: -1 },
+      opponent: { ...opponent, x: 90 },
+    })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('P2Dist X = -40', {
+      player: { ...player, facing: -1 },
+      opponent,
+    })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('EnemyNear, StateNo = 0', { player, opponent })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('EnemyNear, Pos X = 170', { player, opponent })).toBe(true);
   });

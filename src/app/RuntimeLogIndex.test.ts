@@ -3,6 +3,7 @@ import {
   appendReadableRuntimeEntry,
   clearReadableRuntimeLogStores,
   formatAllReadableRuntimeEntriesCopy,
+  formatReadableRuntimeEntryCopy,
   getLatestReadableRuntimeEntry,
   getReadableRuntimeEntry,
   type ReadableRuntimeEntry,
@@ -28,7 +29,9 @@ function readableEntry(id: number, frameNo: number, p1StateNo = 50): ReadableRun
     key: `${frameNo}:${p1StateNo}`,
     frameNo,
     p1StateNo,
+    p2StateNo: 280,
     lines: [`---- 12:00:00 frame=${frameNo} ----`, `detail ${frameNo}`],
+    p2Lines: [`---- 12:00:00 frame=${frameNo} ----`, `P2 detail ${frameNo}`],
   };
 }
 
@@ -38,7 +41,9 @@ function readableEntryForState(id: number, frameNo: number, p1StateNo: number): 
     key: `${frameNo}:${p1StateNo}`,
     frameNo,
     p1StateNo,
+    p2StateNo: 282,
     lines: [`---- 12:00:00 frame=${frameNo} state=${p1StateNo} ----`, `detail ${frameNo}:${p1StateNo}`],
+    p2Lines: [`---- 12:00:00 frame=${frameNo} state=282 ----`, `P2 detail ${frameNo}:282`],
   };
 }
 
@@ -137,6 +142,14 @@ describe('RuntimeLogIndex', () => {
 
     expect(formatAllReadableRuntimeEntriesCopy({ indexStore, entryStore })).toContain('detail 30');
     expect(formatAllReadableRuntimeEntriesCopy({ indexStore, entryStore })).toContain('detail 31');
+    expect(formatAllReadableRuntimeEntriesCopy({ indexStore, entryStore })).toContain('P2 detail 31');
+  });
+
+  it('formats the selected frame with both P1 and P2 detail logs', () => {
+    const entry = readableEntry(1, 32);
+
+    expect(formatReadableRuntimeEntryCopy(entry)).toContain('detail 32');
+    expect(formatReadableRuntimeEntryCopy(entry)).toContain('P2 detail 32');
   });
 
   it('clears readable index and retained detail stores together', () => {

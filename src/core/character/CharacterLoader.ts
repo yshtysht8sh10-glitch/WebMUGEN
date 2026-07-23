@@ -315,9 +315,15 @@ export function mergeMissingCnsStates(base: CnsDocument, common: CnsDocument): C
 }
 
 function isBaselineMovementController(controller: CnsStateController): boolean {
-  if (controller.type.toLowerCase() !== 'changestate') return false;
-  const value = Number(controller.params.value);
-  return BASELINE_MOVEMENT_STATE_VALUES.has(value);
+  if (controller.type.toLowerCase() === 'changestate') {
+    const value = Number(controller.params.value);
+    return BASELINE_MOVEMENT_STATE_VALUES.has(value);
+  }
+
+  return controller.triggers.some((trigger) => {
+    const match = trigger.expression.match(/^\s*stateno\s*=\s*(-?\d+)\s*$/i);
+    return match ? BASELINE_MOVEMENT_STATE_VALUES.has(Number(match[1])) : false;
+  });
 }
 
 function isOverriddenByCharacterPrimaryCommand(

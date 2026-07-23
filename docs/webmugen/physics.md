@@ -68,6 +68,18 @@ Important interactions:
 
 For ordinary `Physics=A`, the physics step reads `Const(movement.yaccel)` from the current character CNS and adds it exactly once before integrating Y. The previous unconditional `0.6` gravity is retained only as the existing missing-value fallback. `Physics=N` receives no automatic gravity, so common air-hit/fall states continue to use their explicit `VelAdd y = GetHitVar(yaccel)` controllers without a second acceleration.
 
+`Physics=N` still integrates explicit X/Y velocity. T-H-M-A custom State 280 therefore keeps its
+`VelSet x = -12, y = -0.2` unchanged while moving each tick; the launch direction comes from the
+State's `P2Dist X < 0` Turn and Facing-relative VelSet, not from Physics=N.
+
+P1 Target controllers are committed before P2 CNS execution. On the Projectile-to-TargetState 280
+route, P2 therefore executes State 280's `Time = 0` VelSet before Physics=N integrates movement.
+The previous deferred TargetState ordering ran P2's old 5030 gravity first, skipped State 280's
+Time-zero VelSet, and produced a false gravity-like trajectory while already reporting State 280.
+After entry, expiry of the Projectile's original hit time does not invoke the ordinary State 0
+fallback while P2 remains in an attacker-owned CustomState. State 280 therefore retains Physics=N
+and its explicit velocity until its edge trigger changes to State 281.
+
 Jump State 40 comes from the character's DEF-selected `stcommon` or external `public/chars/common1.cns`; `public/chars/common.cmd` supplies only the visible `holdup -> State 40` route and does not replace the State body. `Const(velocity.jump.y)` resolves the character `jump.neu` Y, and directional X plus the standard forward run-jump override follow the selected common State. VelSet converts X by Facing once and leaves MUGEN Y unchanged. State 50 then uses character air acceleration until the tested State 52 ground transition.
 
 On HitDef contact, the defender receives `ground.velocity` or `air.velocity` according to its StateType at contact. CNS X is converted once into the defender reaction direction: the common negative value sends the target away from the attacker for either Facing. Y remains in CNS/internal velocity coordinates. Physics does not clear velocity during hit pause and begins integrating it when pause ends. Guard contact separately applies Facing-relative `guard.velocity`.

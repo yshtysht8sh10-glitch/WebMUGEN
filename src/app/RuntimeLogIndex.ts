@@ -19,7 +19,9 @@ export type ReadableRuntimeEntry = {
   key: string;
   frameNo: number;
   p1StateNo: number;
+  p2StateNo: number;
   lines: string[];
+  p2Lines: string[];
 };
 
 export function createRuntimeLogIndexEntry({
@@ -102,7 +104,7 @@ export function getLatestReadableRuntimeEntry({
 }
 
 export function formatReadableRuntimeEntryCopy(entry: ReadableRuntimeEntry | null): string {
-  return entry ? entry.lines.join('\n') : 'selected frame=-';
+  return entry ? [...entry.lines, ...entry.p2Lines].join('\n') : 'selected frame=-';
 }
 
 export function formatAllReadableRuntimeEntriesCopy({
@@ -115,7 +117,7 @@ export function formatAllReadableRuntimeEntriesCopy({
   return indexStore
     .map((indexEntry) => entryStore.get(indexEntry.key))
     .filter((entry): entry is ReadableRuntimeEntry => Boolean(entry))
-    .map((entry) => entry.lines.join('\n'))
+    .map((entry) => formatReadableRuntimeEntryCopy(entry))
     .join('\n');
 }
 

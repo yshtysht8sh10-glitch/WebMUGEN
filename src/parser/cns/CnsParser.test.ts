@@ -131,6 +131,23 @@ ground.velocity = -4, 0
     expect(doc.states[0].controllers[0].params['ground.velocity']).toEqual([-4, 0]);
   });
 
+  it('does not treat Shift-JIS full-width punctuation as CNS separators', () => {
+    const doc = parseCnsText(`
+[StateDef 232]
+type = S
+
+[State 232, Hit]
+type = HitDef
+trigger1 = 1
+ground.velocity\u3000=\u3000-3-fvar(2)*2\uff0c-5
+displayname = "A\uff0cB"
+`);
+
+    expect(doc.states[0].controllers[0].params['ground.velocity']).toBeUndefined();
+    expect(doc.states[0].controllers[0].params['ground.velocity\u3000']).toBe('\u3000-3-fvar(2)*2\uff0c-5');
+    expect(doc.states[0].controllers[0].params.displayname).toBe('A\uff0cB');
+  });
+
   it('parses StateDef poweradd header value', () => {
     const doc = parseCnsText(`
 [StateDef 200]

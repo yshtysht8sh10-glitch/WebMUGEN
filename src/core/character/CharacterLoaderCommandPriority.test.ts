@@ -315,6 +315,115 @@ value = 51
     });
     expect(result.traces[0].executedControllers).toContain('ChangeState');
   });
+
+  it('runs common walk glue before a character attack route replaces the walk State', async () => {
+    const character = await loadCharacterFromDef('/chars/test/test.def', createFetcher(new Map([
+      ['/chars/test/test.def', '[Files]\ncmd = test.cmd\ncns = test.cns\nanim = test.air\n'],
+      ['/chars/test/test.cns', `
+[StateDef 0]
+type = S
+movetype = I
+physics = S
+anim = 0
+ctrl = 1
+
+[StateDef 21]
+type = S
+movetype = I
+physics = S
+anim = 21
+ctrl = 1
+
+[StateDef 205]
+type = S
+movetype = A
+physics = S
+anim = 205
+ctrl = 0
+`],
+      ['/chars/test/test.air', 'Begin Action 0\n0,0, 0,0, 5\nBegin Action 21\n0,0, 0,0, 5\nBegin Action 205\n0,0, 0,0, 5\n'],
+      ['/chars/test/test.cmd', `
+[Command]
+name = "x"
+command = x
+
+[Statedef -1]
+
+[State -1, Attack]
+type = ChangeState
+triggerall = command = "x"
+trigger1 = statetype = S
+trigger1 = ctrl
+value = 205
+`],
+      ['/chars/common.cmd', `
+[Command]
+name = "holdback"
+command = /B
+
+[Statedef -1]
+
+[State -1, Common Walk Back]
+type = ChangeState
+triggerall = command = "holdback"
+trigger1 = statetype = S
+trigger1 = ctrl
+trigger1 = stateno != 21
+value = 21
+
+[State -1, Common Walk Back Velocity]
+type = VelSet
+triggerall = command = "holdback"
+trigger1 = stateno = 21
+x = -2.2
+
+[State -1, Common Walk Back Anim]
+type = ChangeAnim
+triggerall = command = "holdback"
+trigger1 = stateno = 21
+trigger1 = anim != 21
+value = 21
+`],
+      ['/chars/common1.cns', ''],
+    ])));
+
+    const commandState = character.cns.states.find((state) => state.stateNo === -1);
+    expect(commandState?.controllers.map((controller) => controller.type)).toEqual([
+      'ChangeState',
+      'VelSet',
+      'ChangeAnim',
+      'ChangeState',
+    ]);
+
+    const initial = createInitialGameState();
+    const result = stepCnsStateRuntime({
+      ...initial,
+      players: [{
+        ...initial.players[0],
+        stateNo: 21,
+        animNo: 0,
+        stateTime: 1,
+        animTime: 1,
+        ctrl: true,
+      }, initial.players[1]],
+    }, character.cns, {
+      p1Commands: new Set(['holdback', 'x']),
+      p2Commands: new Set(),
+    });
+
+    expect(result.state.players[0]).toMatchObject({
+      prevStateNo: 21,
+      stateNo: 205,
+      animNo: 205,
+      animTime: 0,
+      moveType: 'A',
+      ctrl: false,
+    });
+    expect(result.traces[0].executedControllers).toEqual([
+      'VelSet',
+      'ChangeState',
+    ]);
+  });
 });
 
 function createFetcher(textAssets: Map<string, string>): CharacterAssetFetcher {

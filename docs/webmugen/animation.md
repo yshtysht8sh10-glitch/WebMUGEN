@@ -47,7 +47,7 @@ StateDef headers and controllers can select animation:
 - `ChangeAnim` changes the current animation;
 - `ChangeAnim2` is not full behavior while target/common animation ownership is incomplete.
 
-StateDef `anim` is not reapplied on later ticks in the same State. A `ChangeAnim` selected after entry therefore remains active until another controller or State transition changes it. Bundled T-H-M-A State 102 is covered for its State 101 entry path: Anim 107 remains selected after the following physics/runtime tick instead of reverting to the StateDef's Anim 102.
+StateDef `anim` is not reapplied on later ticks in the same State. A `ChangeAnim` selected after entry therefore remains active until another controller or State transition changes it. On a new State entry, however, an explicit `anim` restarts at time zero even when its number equals the current animation; an omitted `anim` inherits both the current number and time. Bundled T-H-M-A State 102 is covered for its State 101 entry path: Anim 107 remains selected after the following physics/runtime tick instead of reverting to the StateDef's Anim 102. Its Projectile wall route also verifies that State 280 -> 281 restarts explicit Anim 5012, keeping State 281 observable to the attacker's State -1 wall Explod and sound Helper after a long flight.
 
 ## Trigger interaction
 

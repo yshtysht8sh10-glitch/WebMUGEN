@@ -29,7 +29,7 @@ export function parseCnsText(text: string, options: CnsParseOptions = {}): CnsDo
 
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
     const rawLine = lines[lineIndex];
-    const line = stripComment(rawLine).trim();
+    const line = trimCnsWhitespace(stripComment(rawLine));
 
     if (!line) {
       continue;
@@ -37,7 +37,7 @@ export function parseCnsText(text: string, options: CnsParseOptions = {}): CnsDo
 
     const sectionMatch = line.match(/^\[([^\]]+)\]$/);
     if (sectionMatch) {
-      const sectionName = sectionMatch[1].trim();
+      const sectionName = trimCnsWhitespace(sectionMatch[1]);
       const stateDefMatch = sectionName.match(/^statedef\s+(-?\d+)$/i);
       if (stateDefMatch) {
         currentState = {
@@ -89,8 +89,8 @@ export function parseCnsText(text: string, options: CnsParseOptions = {}): CnsDo
       continue;
     }
 
-    const key = line.slice(0, equalsIndex).trim().toLowerCase();
-    const valueText = line.slice(equalsIndex + 1).trim();
+    const key = trimCnsWhitespace(line.slice(0, equalsIndex)).toLowerCase();
+    const valueText = trimCnsWhitespace(line.slice(equalsIndex + 1));
     const value = parseValue(valueText);
 
     if (!current) {
@@ -202,6 +202,10 @@ function stripComment(line: string): string {
   return semicolonIndex >= 0 ? line.slice(0, semicolonIndex) : line;
 }
 
+function trimCnsWhitespace(value: string): string {
+  return value.replace(/^[\t\n\v\f\r ]+|[\t\n\v\f\r ]+$/g, '');
+}
+
 function parseValue(valueText: string): CnsValue {
   const commaParts = splitCommaValues(valueText);
 
@@ -232,7 +236,7 @@ function splitCommaValues(valueText: string): string[] {
     if (!inQuote && char === ']') bracketDepth = Math.max(0, bracketDepth - 1);
 
     if (char === ',' && !inQuote && parenthesisDepth === 0 && bracketDepth === 0) {
-      parts.push(current.trim());
+      parts.push(trimCnsWhitespace(current));
       current = '';
       continue;
     }
@@ -240,12 +244,12 @@ function splitCommaValues(valueText: string): string[] {
     current += char;
   }
 
-  parts.push(current.trim());
+  parts.push(trimCnsWhitespace(current));
   return parts;
 }
 
 function parseSingleValue(valueText: string): string | number | boolean {
-  const trimmed = valueText.trim();
+  const trimmed = trimCnsWhitespace(valueText);
 
   if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
     return Number(trimmed);

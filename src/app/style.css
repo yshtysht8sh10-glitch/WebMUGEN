@@ -552,6 +552,22 @@ canvas {
   margin: 0 0 8px;
 }
 
+.human-detail-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.human-detail-player {
+  min-width: 0;
+}
+
+.human-detail-player h3 {
+  color: #bfdbfe;
+  font-size: 13px;
+  margin: 0 0 6px;
+}
+
 .runtime-history-panel h2 {
   color: #e2e8f0;
   font-size: 15px;
@@ -1047,6 +1063,10 @@ canvas {
 
 @media (max-width: 980px) {
   .runtime-human-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .human-detail-grid {
     grid-template-columns: 1fr;
   }
 

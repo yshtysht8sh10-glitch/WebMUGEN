@@ -98,7 +98,7 @@ The human-facing runtime history uses a lightweight frame index plus a selected 
 - Source links from human detail entries switch the main UI to the static/files page before opening `Character Files`, keeping the normal game/runtime page lighter.
 - A runtime log clear action resets retained human entries, the lightweight frame index, AI history, and signatures together.
 
-This structure prevents thousands of retained detail rows from becoming DOM nodes. In normal use the right pane renders one frame's human detail log.
+This structure prevents thousands of retained detail rows from becoming DOM nodes. In normal use the right pane renders one frame's retained P1 and P2 human detail logs side by side. Both players keep their own input mapping and Trigger evaluation context; copying a selected frame or all retained entries includes both logs.
 
 ## AI render window
 

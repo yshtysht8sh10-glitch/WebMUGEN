@@ -108,6 +108,11 @@ P1's Facing direction. Each front is derived from the player's current ground/ai
 their normal 32-pixel push separation therefore report body distance 0, allowing the original CMD
 near/far branches to select States 200/203 for `x` and States 232/230 for `a`.
 
+`P2Dist X` measures the axis-to-axis distance in the evaluating player's Facing direction. It is
+positive in front and negative behind. T-H-M-A State 280 relies on the negative case to execute
+`Turn` before its Facing-relative `VelSet x = -12`; treating this distance as absolute launches the
+custom-stated target toward the attacker when its initial Facing is reversed.
+
 The current two-player runtime uses each player's active Facing and root character Size data. Team
 target selection, different local coordinate spaces, and Helper redirect ownership remain Partial.
 

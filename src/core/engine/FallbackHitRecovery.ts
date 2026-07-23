@@ -115,6 +115,13 @@ function recoverPlayer(player: PlayerState, diagnosticsEnabled: boolean): { play
       hitReactionElapsed: elapsed,
     }, diagnosticLines: diagnosticLines.map((line) => line.replace('recoveryPath=existing', 'recoveryPath=common_fall')) };
   }
+  if (isBorrowedCustomState(player)) {
+    return { player: {
+      ...player,
+      hitStun: undefined,
+      hitReactionElapsed: elapsed,
+    }, diagnosticLines: diagnosticLines.map((line) => line.replace('recoveryPath=existing', 'recoveryPath=custom_state')) };
+  }
   return { player: {
     ...player,
     stateNo: 0,
@@ -140,6 +147,11 @@ function recoverPlayer(player: PlayerState, diagnosticsEnabled: boolean): { play
     hitVelX: undefined,
     hitVelY: undefined,
   }, diagnosticLines };
+}
+
+function isBorrowedCustomState(player: PlayerState): boolean {
+  const selfOwnerId = player.selfStateOwnerId ?? player.id;
+  return (player.stateOwnerId ?? selfOwnerId) !== selfOwnerId;
 }
 
 function isFallbackHitState(player: PlayerState): boolean {
