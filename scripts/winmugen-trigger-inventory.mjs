@@ -72,8 +72,7 @@ const COMPLETE = new Set([
   'AnimElem', 'AnimElemTime', 'Command', 'Ctrl', 'StateNo', 'StateType', 'Time',
 ]);
 const SAFE_FALLBACK = new Set([
-  'AILevel', 'LifeMax',
-  'ProjCancelTime',
+  'AILevel',
 ]);
 const PARTIAL = new Set([
   'Abs', 'ACos', 'Alive', 'Anim', 'AnimElemNo', 'AnimExist', 'AnimTime', 'ASin', 'ATan', 'AuthorName',
@@ -83,10 +82,10 @@ const PARTIAL = new Set([
   'HitVel X', 'HitVel Y', 'IfElse', 'InGuardDist', 'IsHelper', 'Life', 'Ln', 'Log', 'Lose', 'MatchOver',
   'MatchNo', 'MoveContact', 'MoveGuarded', 'MoveHit', 'MoveReversed', 'MoveType', 'Name', 'NumEnemy', 'NumExplod', 'NumHelper', 'NumPartner', 'NumTarget', 'P1Name', 'P2BodyDist X',
   'P2BodyDist Y', 'P2Dist X', 'P2Dist Y', 'P2Life', 'P2MoveType', 'P2Name', 'P2StateNo', 'P2StateType', 'P3Name', 'P4Name', 'PalNo',
-  'Pi', 'PlayerIDExist', 'Pos X', 'Pos Y', 'Power', 'PowerMax', 'PrevStateNo', 'ProjContact', 'ProjContactTime', 'ProjGuarded', 'ProjGuardedTime', 'ProjHit', 'ProjHitTime', 'RoundNo', 'RoundsExisted', 'RoundState', 'ScreenPos X',
+  'LifeMax', 'ParentDist X', 'ParentDist Y', 'Pi', 'PlayerIDExist', 'Pos X', 'Pos Y', 'Power', 'PowerMax', 'PrevStateNo', 'ProjCancelTime', 'ProjContact', 'ProjContactTime', 'ProjGuarded', 'ProjGuardedTime', 'ProjHit', 'ProjHitTime', 'RootDist X', 'RootDist Y', 'RoundNo', 'RoundsExisted', 'RoundState', 'ScreenPos X',
   'ScreenPos Y', 'SelfAnimExist', 'Sin', 'StateTime', 'SysFVar', 'SysVar', 'Tan', 'TargetID', 'TargetStateNo', 'NumCommand',
   'P2AuthorName', 'P2Ctrl', 'P2Facing', 'Physics',
-  'Random', 'TeamMode', 'TeamSide', 'TicksPerSecond', 'TimeMod', 'Var', 'Vel X', 'Vel Y', 'Win', 'WinKO', 'WinPerfect', 'WinTime', 'LoseKO', 'LoseTime', 'NumProj', 'NumProjID',
+  'Random', 'TeamMode', 'TeamSide', 'TicksPerSecond', 'TimeMod', 'UniqHitCount', 'Var', 'Vel X', 'Vel Y', 'Win', 'WinKO', 'WinPerfect', 'WinTime', 'LoseKO', 'LoseTime', 'NumProj', 'NumProjID',
 ]);
 
 const FUNCTION_ARGUMENTS = new Map([
@@ -143,6 +142,17 @@ function matrixStatus(audit) {
 }
 
 const MATRIX_STATUS_OVERRIDES = new Map([
+  ['BackEdgeBodyDist', 'Partial 90%'],
+  ['BackEdgeDist', 'Partial 90%'],
+  ['FrontEdgeBodyDist', 'Partial 90%'],
+  ['FrontEdgeDist', 'Partial 90%'],
+  ['LifeMax', 'Partial 95%'],
+  ['ParentDist X', 'Partial 90%'],
+  ['ParentDist Y', 'Partial 90%'],
+  ['RootDist X', 'Partial 90%'],
+  ['RootDist Y', 'Partial 90%'],
+  ['ProjCancelTime', 'Partial 85%'],
+  ['UniqHitCount', 'Partial 85%'],
   ['ProjHit', 'Partial 90%'],
   ['FVar', 'Partial 90%'],
   ['SysFVar', 'Partial 90%'],

@@ -109,7 +109,7 @@ When adding expression support, update Expression rows in the matrix, not unrela
 
 ## Edge body distance
 
-`BackEdgeBodyDist` and `FrontEdgeBodyDist` are evaluated by the production compiled Trigger path. They select the stage edge behind or in front of the player from the player's current Facing. The current fallback stage clamps player centers to X=48 and X=912, so the matching edge-body distance is zero at those limits. This keeps wall-impact `ChangeState` routes observable after stage clamping.
+`BackEdgeDist`/`FrontEdgeDist` select the viewport edge behind/in front from current Facing. Their Body variants measure from the character Size-derived ground/air push box, not the old fixed X=48/912 center approximation. The runtime viewport width is supplied by the app. Scrolling camera origin/tension and dynamic Width overrides remain Partial.
 
 The result remains a fallback approximation: it uses fixed stage limits and the player center rather than a camera-relative screen edge and exact body-width adjustment.
 
@@ -177,7 +177,7 @@ For `GetHitVar(yvel)`, contact StateType S/C selects `ground.velocity.y` and A s
 
 ## Real-character audit findings
 
-The three-character HitDef audit observed `BackEdgeBodyDist`, `FrontEdgeBodyDist`, `ScreenPos`, `StateTime`, and `TimeMod`. Body-edge distance uses the existing fixed fallback stage bounds/player center and remains Partial. ScreenPos X/Y uses runtime player coordinates and remains Partial. `StateTime` now aliases current `Time`, and `TimeMod = divisor, remainder` evaluates State-time modulo for a positive divisor; both remain Partial pending broader WinMUGEN-version syntax audit. These names have separate Matrix rows so their presence in real CNS files is not hidden by a generic safe default.
+The three-character HitDef audit observed `BackEdgeBodyDist`, `FrontEdgeBodyDist`, `ScreenPos`, `StateTime`, and `TimeMod`. Body-edge distance now uses runtime viewport and Size geometry. ScreenPos X/Y uses runtime player coordinates and remains Partial until scrolling camera origin exists. `StateTime` aliases current `Time`, and `TimeMod = divisor, remainder` evaluates State-time modulo for a positive divisor; both remain Partial pending broader WinMUGEN-version syntax audit. These names have separate Matrix rows so their presence in real CNS files is not hidden by a generic safe default.
 
 ## AnimElem timing
 
@@ -198,12 +198,15 @@ Projectile contact uses the same attacker-side MoveContact result shape. This le
 `ProjContact`, `ProjHit`, and `ProjGuarded` share the same production contact history and support the
 old-style optional ID suffix, simple current-tick form, and elapsed-time comparison. Their `*Time(id)`
 forms read the same counters. Omitted or non-positive IDs select the most recent applicable history;
-exact cancel/replacement and Helper-owned Projectile ordering remain Partial. `NumProj` and
+cancel animation, Pause/SuperPause parity, and Helper-owned Projectile ordering remain Partial. `NumProj` and
 `NumProjID(id)` count live entries owned by the evaluating root.
+
+`ProjCancelTime(id)` reads the same elapsed-history model. Opposing active Projectile boxes decrement each projectile's evaluated `projpriority`; an exhausted projectile is removed and both owners receive ID-specific plus ID-0 cancel time 1. Normal unpaused physics advances the value.
 
 Root, Parent, Helper, and PlayerID redirects resolve committed runtime entities instead of falling
 back to self. Root players have no Parent, missing lookups return SFalse, MUGEN Helper IDs remain
 separate from unique entity IDs, and `ID` / `PlayerIDExist(expr)` use the unique entity ID space.
+`ParentDist X/Y` and `RootDist X/Y` use these same resolvers: X is relative to the evaluating entity's Facing, Y is axis-space, and a missing Parent does not fall back to self or root. `LifeMax` reads owner constants, while `UniqHitCount` counts accepted ActiveHitDef-generation/defender pairs rather than `numhits` weighting.
 
 Production RoundState supplies `RoundNo`, `RoundsExisted`, KO/time/draw winner data, and end reason.
 `WinKO`, `WinTime`, `WinPerfect`, `LoseKO`, and `LoseTime` are derived symmetrically from that state.

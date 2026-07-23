@@ -24,11 +24,10 @@ describe('WinMUGEN Trigger inventory', () => {
     expect(records.filter((record) => record.version === 'WinMUGEN 2002.04.14').length).toBe(122);
   });
 
-  it('does not treat a retained unknown expression as Complete', () => {
+  it('keeps unknown expressions unsupported after the inventory reaches zero parser-only rows', () => {
     const records = buildInventory();
     const parserOnly = records.filter((record) => record.matrixStatus === 'Parser only');
-    expect(parserOnly.length).toBeGreaterThan(0);
-    expect(parserOnly.every((record) => record.syntaxSupported && !record.evaluatorImplemented)).toBe(true);
+    expect(parserOnly).toHaveLength(0);
     expect(evaluateCnsRuntimeTrigger('DefinitelyUnknownTrigger = 1', { player: {} })).toBe(false);
   });
 

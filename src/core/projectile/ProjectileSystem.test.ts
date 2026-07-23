@@ -38,6 +38,16 @@ function createProjectile(): ProjectileState {
 }
 
 describe('ProjectileSystem', () => {
+  it('cancels opposing projectile priorities and records ProjCancelTime for both owners', () => {
+    const p1 = { ...createProjectile(), priority: 1 };
+    const p2 = { ...createProjectile(), id: 2000, ownerId: 2 as const, facing: -1 as const, priority: 1 };
+    const state = createInitialGameState();
+    const result = resolveProjectileHits(state.players, [p1, p2]);
+    expect(result.projectiles).toEqual([]);
+    expect(result.players[0].projectileContacts?.[1000].cancelTime).toBe(1);
+    expect(result.players[1].projectileContacts?.[2000].cancelTime).toBe(1);
+  });
+
   it('steps projectile position', () => {
     const projectile = { ...createProjectile(), ax: 0.5, ay: 0.25 };
     const result = stepProjectiles([projectile]);

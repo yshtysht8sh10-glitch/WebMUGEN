@@ -51,6 +51,10 @@ export function resolveProjectileHits(
 ): ProjectileHitResult {
   let p1 = players[0];
   let p2 = players[1];
+  const cancellation = resolveProjectileCancellations(p1, p2, projectiles);
+  p1 = cancellation.players[0];
+  p2 = cancellation.players[1];
+  projectiles = cancellation.projectiles;
   const remaining: ProjectileState[] = [];
   const hitEvents: HitEvent[] = [];
 
@@ -117,6 +121,52 @@ export function resolveProjectileHits(
     players: [p1, p2],
     projectiles: remaining,
     hitEvents,
+  };
+}
+
+function resolveProjectileCancellations(
+  p1: PlayerState,
+  p2: PlayerState,
+  projectiles: ProjectileState[],
+): { players: [PlayerState, PlayerState]; projectiles: ProjectileState[] } {
+  const next = projectiles.map((projectile) => ({ ...projectile, priority: Math.max(1, projectile.priority ?? 1) }));
+  const removed = new Set<number>();
+  for (let left = 0; left < next.length; left += 1) {
+    if (removed.has(left) || next[left].phase === 'hit') continue;
+    for (let right = left + 1; right < next.length; right += 1) {
+      if (removed.has(right) || next[right].phase === 'hit' || next[left].ownerId === next[right].ownerId) continue;
+      if (!intersects(getProjectileWorldBox(next[left]), getProjectileWorldBox(next[right]))) continue;
+      const leftPriority = Math.max(0, (next[left].priority ?? 1) - 1);
+      const rightPriority = Math.max(0, (next[right].priority ?? 1) - 1);
+      next[left] = { ...next[left], priority: leftPriority };
+      next[right] = { ...next[right], priority: rightPriority };
+      if (leftPriority === 0) removed.add(left);
+      if (rightPriority === 0) removed.add(right);
+      if (next[left].ownerId === 1) p1 = recordProjectileCancel(p1, next[left].id);
+      else p2 = recordProjectileCancel(p2, next[left].id);
+      if (next[right].ownerId === 1) p1 = recordProjectileCancel(p1, next[right].id);
+      else p2 = recordProjectileCancel(p2, next[right].id);
+      if (removed.has(left)) break;
+    }
+  }
+  return { players: [p1, p2], projectiles: next.filter((_, index) => !removed.has(index)) };
+}
+
+function recordProjectileCancel(player: PlayerState, projectileId: number): PlayerState {
+  const previous = player.projectileContacts?.[projectileId];
+  const contact = {
+    contactTime: previous?.contactTime ?? -1,
+    hitTime: previous?.hitTime ?? -1,
+    guardedTime: previous?.guardedTime ?? -1,
+    cancelTime: 1,
+  };
+  return {
+    ...player,
+    projectileContacts: { ...(player.projectileContacts ?? {}), [projectileId]: contact, 0: contact },
+    hitDiagnosticLines: [
+      ...(player.hitDiagnosticLines ?? []),
+      `raw.projectile_cancel owner=p${player.id} projectileId=${projectileId} projCancelTime=1 result=contact`,
+    ],
   };
 }
 

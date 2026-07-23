@@ -44,6 +44,7 @@ export type CnsRuntimeTriggerContext = {
   projContactTime?: (projectileId: number) => number;
   projHitTime?: (projectileId: number) => number;
   projGuardedTime?: (projectileId: number) => number;
+  projCancelTime?: (projectileId: number) => number;
   entityId?: number;
   resolveRedirectEntity?: (kind: 'root' | 'parent' | 'helper' | 'playerid' | 'partner', argument?: number) => PlayerState | undefined;
   playerIdExists?: (entityId: number) => boolean;
@@ -754,7 +755,7 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'powermax': return (context) => readPlayerPowerMax(context.player);
     case 'palno': return (context) => context.player.palNo ?? 1;
     case 'life': return (context) => context.player.life;
-    case 'lifemax': return () => 1000;
+    case 'lifemax': return (context) => readCnsConst(context.constants, 'data.life');
     case 'random': return (context) => Math.max(0, Math.min(999, Math.trunc(
       context.random ?? stableCnsRandomValue(context.gameTime ?? context.player.stateTime, context.player),
     )));
@@ -777,6 +778,7 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'hitvel y': return (context) => readOptionalNumber(context.player, 'hitVelY', 0);
     case 'hitpausetime': return (context) => context.player.hitPause;
     case 'hitcount': return (context) => context.player.moveContact?.hitCount ?? 0;
+    case 'uniqhitcount': return (context) => new Set((context.player.hitTargets ?? []).map((entry) => `${entry.activeHitDefId}:${entry.defenderId}`)).size;
     case 'hitfall': return (context) => readOptionalBool(context.player, 'hitFall', false) ? 1 : 0;
     case 'movecontact': return (context) => context.player.moveContact?.contact ? context.player.moveContact.elapsed ?? 1 : 0;
     case 'movehit': return (context) => context.player.moveContact?.hit ? context.player.moveContact.elapsed ?? 1 : 0;
@@ -789,14 +791,10 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'numcommand': return (context) => context.commands?.size ?? 0;
     case 'ishelper': return (context) => context.isHelper ? 1 : 0;
     case 'id': return (context) => context.entityId ?? context.player.id;
-    case 'backedgedist': return (context) => context.player.x;
-    case 'frontedgedist': return (context) => (context.screenWidth ?? 960) - context.player.x;
-    case 'backedgebodydist': return (context) => context.player.facing === 1
-      ? context.player.x - FALLBACK_STAGE_LEFT
-      : FALLBACK_STAGE_RIGHT - context.player.x;
-    case 'frontedgebodydist': return (context) => context.player.facing === 1
-      ? FALLBACK_STAGE_RIGHT - context.player.x
-      : context.player.x - FALLBACK_STAGE_LEFT;
+    case 'backedgedist': return (context) => readEdgeDistance(context.player, context.screenWidth ?? 960, 'back');
+    case 'frontedgedist': return (context) => readEdgeDistance(context.player, context.screenWidth ?? 960, 'front');
+    case 'backedgebodydist': return (context) => readEdgeBodyDistance(context.player, context.screenWidth, 'back');
+    case 'frontedgebodydist': return (context) => readEdgeBodyDistance(context.player, context.screenWidth, 'front');
     case 'p2life': return (context) => context.opponent?.life ?? 1000;
     case 'p2stateno': return (context) => context.opponent?.stateNo ?? 0;
     case 'p2facing': return (context) => context.opponent?.facing ?? -context.player.facing;
@@ -812,6 +810,20 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'p2bodydist y':
     case 'p2disty':
     case 'p2dist y': return (context) => (context.opponent ? context.opponent.y - context.player.y : 0);
+    case 'parentdistx':
+    case 'parentdist x': return (context) => {
+      const parent = context.resolveRedirectEntity?.('parent');
+      return parent ? (parent.x - context.player.x) * context.player.facing : 0;
+    };
+    case 'parentdisty':
+    case 'parentdist y': return (context) => (context.resolveRedirectEntity?.('parent')?.y ?? context.player.y) - context.player.y;
+    case 'rootdistx':
+    case 'rootdist x': return (context) => {
+      const root = context.resolveRedirectEntity?.('root');
+      return root ? (root.x - context.player.x) * context.player.facing : 0;
+    };
+    case 'rootdisty':
+    case 'rootdist y': return (context) => (context.resolveRedirectEntity?.('root')?.y ?? context.player.y) - context.player.y;
     case 'bodydisty':
     case 'bodydist y': return (context) => (context.opponent ? context.opponent.y - context.player.y : 0);
     case 'p2statetype': return (context) => stateTypeToNumber(context.opponent?.stateType ?? 'S');
@@ -827,6 +839,21 @@ function readP2BodyDistX(player: PlayerState, opponent: PlayerState | undefined)
   const playerFront = player.facing === 1 ? playerBox.right : playerBox.left;
   const opponentFront = opponent.facing === 1 ? opponentBox.right : opponentBox.left;
   return player.facing * (opponentFront - playerFront);
+}
+
+function readEdgeDistance(player: PlayerState, screenWidth: number, edge: 'back' | 'front'): number {
+  const leftDistance = player.x;
+  const rightDistance = screenWidth - player.x;
+  if (edge === 'back') return player.facing === 1 ? leftDistance : rightDistance;
+  return player.facing === 1 ? rightDistance : leftDistance;
+}
+
+function readEdgeBodyDistance(player: PlayerState, screenWidth: number | undefined, edge: 'back' | 'front'): number {
+  const box = buildPushBox(player);
+  const leftDistance = box.left - (screenWidth === undefined ? FALLBACK_STAGE_LEFT : 0);
+  const rightDistance = (screenWidth ?? FALLBACK_STAGE_RIGHT) - box.right;
+  if (edge === 'back') return player.facing === 1 ? leftDistance : rightDistance;
+  return player.facing === 1 ? rightDistance : leftDistance;
 }
 
 function getFunctionNumberSource(name: string): NumberSource | null {
@@ -853,7 +880,7 @@ function getFunctionNumberSource(name: string): NumberSource | null {
   const projGuardedTimeMatch = name.match(/^projguardedtime\((\d+)\)$/);
   if (projGuardedTimeMatch) return (context) => context.projGuardedTime?.(Number(projGuardedTimeMatch[1])) ?? -1;
   const projCancelTimeMatch = name.match(/^projcanceltime\((\d+)\)$/);
-  if (projCancelTimeMatch) return () => -1;
+  if (projCancelTimeMatch) return (context) => context.projCancelTime?.(Number(projCancelTimeMatch[1])) ?? -1;
 
   return null;
 }

@@ -33,6 +33,42 @@ describe('entity and projectile Trigger integration', () => {
     expect(evaluateCnsRuntimeTrigger('Helper(100), StateNo = 300', context)).toBe(true);
     expect(evaluateCnsRuntimeTrigger('PlayerID(3), StateNo = 200', context)).toBe(true);
     expect(evaluateCnsRuntimeTrigger('Partner, StateNo = 0', context)).toBe(false);
+    expect(evaluateCnsRuntimeTrigger('ParentDist X = 0', context)).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('ParentDist Y = 0', context)).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('RootDist X = 0', context)).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('RootDist Y = 0', context)).toBe(true);
+  });
+
+  it('reads character LifeMax and unique accepted HitDef generations', () => {
+    const player = {
+      ...state.players[0],
+      hitTargets: [
+        { activeHitDefId: 10, defenderId: 2, hitDefId: 1 },
+        { activeHitDefId: 10, defenderId: 2, hitDefId: 1 },
+        { activeHitDefId: 11, defenderId: 2, hitDefId: 1 },
+      ],
+    };
+    expect(evaluateCnsRuntimeTrigger('LifeMax = 1500', {
+      player,
+      constants: { states: [], metadataSections: [{ name: 'Data', values: { life: '1500' } }] },
+    })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('UniqHitCount = 2', { player })).toBe(true);
+  });
+
+  it('uses Facing-aware screen and character body edges without fixed 48/912 constants', () => {
+    const player = {
+      ...state.players[0],
+      x: 100,
+      facing: 1 as const,
+      collisionWidth: { groundFront: 20, groundBack: 10, airFront: 12, airBack: 12, height: 60 },
+    };
+    expect(evaluateCnsRuntimeTrigger('BackEdgeDist = 100', { player, screenWidth: 640 })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('FrontEdgeDist = 540', { player, screenWidth: 640 })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('BackEdgeBodyDist = 90', { player, screenWidth: 640 })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('FrontEdgeBodyDist = 520', { player, screenWidth: 640 })).toBe(true);
+    const reversed = { ...player, facing: -1 as const };
+    expect(evaluateCnsRuntimeTrigger('BackEdgeDist = 540', { player: reversed, screenWidth: 640 })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('FrontEdgeBodyDist = 80', { player: reversed, screenWidth: 640 })).toBe(true);
   });
 
   it('counts live projectiles and evaluates hit, contact, and guarded histories', () => {
@@ -51,6 +87,7 @@ describe('entity and projectile Trigger integration', () => {
       projContactTime: (id: number) => elapsed(id, 'contactTime'),
       projHitTime: (id: number) => elapsed(id, 'hitTime'),
       projGuardedTime: (id: number) => elapsed(id, 'guardedTime'),
+      projCancelTime: (id: number) => id === 1000 ? 3 : -1,
     };
 
     expect(evaluateCnsRuntimeTrigger('NumProj = 2', context)).toBe(true);
@@ -59,5 +96,6 @@ describe('entity and projectile Trigger integration', () => {
     expect(evaluateCnsRuntimeTrigger('ProjGuarded2000 = 1', context)).toBe(true);
     expect(evaluateCnsRuntimeTrigger('ProjHit1000 = 1, >= 4', context)).toBe(true);
     expect(evaluateCnsRuntimeTrigger('ProjContact = 1', context)).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('ProjCancelTime(1000) = 3', context)).toBe(true);
   });
 });

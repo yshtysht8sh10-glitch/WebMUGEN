@@ -141,6 +141,7 @@ function advanceProjectileContacts(player: PlayerState): PlayerState {
       contactTime: contact.contactTime < 0 ? -1 : contact.contactTime + 1,
       hitTime: contact.hitTime < 0 ? -1 : contact.hitTime + 1,
       guardedTime: contact.guardedTime < 0 ? -1 : contact.guardedTime + 1,
+      cancelTime: contact.cancelTime === undefined || contact.cancelTime < 0 ? -1 : contact.cancelTime + 1,
     }])),
   };
 }

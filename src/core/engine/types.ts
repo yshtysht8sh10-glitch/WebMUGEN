@@ -289,6 +289,7 @@ export type PlayerState = {
     contactTime: number;
     hitTime: number;
     guardedTime: number;
+    cancelTime?: number;
   }>;
   targets?: Array<{
     playerId: number;
@@ -359,6 +360,7 @@ export type ProjectileState = {
   hitAnimDuration?: number;
   phase?: 'active' | 'hit';
   removeOnHit?: boolean;
+  priority?: number;
   lifeTime: number;
   removeTime: number;
   hitDef: ActiveHitDef;

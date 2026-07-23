@@ -816,6 +816,7 @@ function createTriggerContext(
     projContactTime: (projectileId) => readProjectileElapsed(player, projectileId, 'contactTime'),
     projHitTime: (projectileId) => readProjectileElapsed(player, projectileId, 'hitTime'),
     projGuardedTime: (projectileId) => readProjectileElapsed(player, projectileId, 'guardedTime'),
+    projCancelTime: (projectileId) => readProjectileElapsed(player, projectileId, 'cancelTime'),
     resolveRedirectEntity: (kind, argument) => input.entityContext && input.resolveEntity
       ? input.resolveEntity(input.entityContext, kind, argument)
       : undefined,
@@ -860,7 +861,7 @@ function resolveRuntimeEntity(
 function readProjectileElapsed(
   player: PlayerState,
   projectileId: number,
-  field: 'contactTime' | 'hitTime' | 'guardedTime',
+  field: 'contactTime' | 'hitTime' | 'guardedTime' | 'cancelTime',
 ): number {
   const contacts = player.projectileContacts ?? {};
   if (projectileId > 0) return contacts[Math.trunc(projectileId)]?.[field] ?? -1;
@@ -2973,6 +2974,7 @@ function createProjectile(
     hitAnimDuration: hitAnimNo === null ? undefined : input.getAnimationDuration?.(Math.trunc(hitAnimNo)) ?? undefined,
     phase: 'active',
     removeOnHit: (num(controller, 'projremove', player, input, commands, opponent) ?? 1) !== 0,
+    priority: Math.max(1, Math.trunc(num(controller, 'projpriority', player, input, commands, opponent) ?? 1)),
     lifeTime: 0,
     removeTime: Math.trunc(num(controller, 'projremovetime', player, input, commands, opponent) ?? 90),
     hitDef: snapshot,

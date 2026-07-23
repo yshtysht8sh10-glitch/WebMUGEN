@@ -9,9 +9,9 @@
   ],
   "counts": {
     "Not implemented": 0,
-    "Parser only": 5,
-    "Safe fallback": 2,
-    "Partial": 118,
+    "Parser only": 0,
+    "Safe fallback": 0,
+    "Partial": 125,
     "Complete": 7,
     "Not applicable": 26
   },
@@ -725,7 +725,7 @@
         }
       ],
       "matrixStatus": "Partial",
-      "canonicalMatrixStatus": "Partial 40%",
+      "canonicalMatrixStatus": "Partial 90%",
       "knownLimitations": "Partial; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
     },
     {
@@ -770,7 +770,7 @@
         }
       ],
       "matrixStatus": "Partial",
-      "canonicalMatrixStatus": "Partial 40%",
+      "canonicalMatrixStatus": "Partial 90%",
       "knownLimitations": "Partial; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
     },
     {
@@ -1713,7 +1713,7 @@
         }
       ],
       "matrixStatus": "Partial",
-      "canonicalMatrixStatus": "Partial 40%",
+      "canonicalMatrixStatus": "Partial 90%",
       "knownLimitations": "Partial; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
     },
     {
@@ -1753,7 +1753,7 @@
         }
       ],
       "matrixStatus": "Partial",
-      "canonicalMatrixStatus": "Partial 40%",
+      "canonicalMatrixStatus": "Partial 90%",
       "knownLimitations": "Partial; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
     },
     {
@@ -2656,10 +2656,10 @@
       "parserBehavior": "CnsParser retains the complete expression string; trigger names are not enumerated in the production parser AST.",
       "evaluatorImplemented": true,
       "implementationLocation": "src/core/cns/CnsRuntimeTrigger.ts",
-      "runtimeDataSource": "fixed compatibility value",
+      "runtimeDataSource": "CnsRuntimeTriggerContext / PlayerState and connected subsystem state",
       "argumentSupport": "See syntax and knownLimitations; irregular/optional argument coverage is conservative.",
       "redirectSupport": "enemy/enemynear/target subset only; root/parent are fallbacks and helper/partner/playerid are missing",
-      "fallbackBehavior": "Returns a fixed compatibility value.",
+      "fallbackBehavior": "No general self fallback is intended for missing redirects.",
       "updateTiming": "not fully verified against WinMUGEN tick ordering",
       "pauseBehavior": "not comprehensively verified for hitpause, Pause and SuperPause",
       "rootBehavior": "root-player path exists",
@@ -2668,9 +2668,9 @@
       "projectileBehavior": "not applicable to direct value source; projectile-owner parity unverified",
       "testCoverage": "focused tests exist for the implemented subset; inventory audit records exact Matrix coverage",
       "realCharacterUsage": [],
-      "matrixStatus": "Safe fallback",
-      "canonicalMatrixStatus": "Safe no-op",
-      "knownLimitations": "Safe fallback; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
+      "matrixStatus": "Partial",
+      "canonicalMatrixStatus": "Partial 95%",
+      "knownLimitations": "Partial; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
     },
     {
       "name": "Ln",
@@ -4333,19 +4333,19 @@
       "officialSummary": "Returns the WinMUGEN ParentDist value described by Elecbyte's Trigger Reference.",
       "syntaxSupported": true,
       "parserBehavior": "CnsParser retains the complete expression string; trigger names are not enumerated in the production parser AST.",
-      "evaluatorImplemented": false,
-      "implementationLocation": null,
-      "runtimeDataSource": null,
-      "argumentSupport": "Expression is retained but no correct runtime value is produced.",
+      "evaluatorImplemented": true,
+      "implementationLocation": "src/core/cns/CnsRuntimeTrigger.ts",
+      "runtimeDataSource": "CnsRuntimeTriggerContext / PlayerState and connected subsystem state",
+      "argumentSupport": "See syntax and knownLimitations; irregular/optional argument coverage is conservative.",
       "redirectSupport": "enemy/enemynear/target subset only; root/parent are fallbacks and helper/partner/playerid are missing",
-      "fallbackBehavior": "Unknown runtime term makes the containing trigger false.",
+      "fallbackBehavior": "No general self fallback is intended for missing redirects.",
       "updateTiming": "not fully verified against WinMUGEN tick ordering",
       "pauseBehavior": "not comprehensively verified for hitpause, Pause and SuperPause",
-      "rootBehavior": "not implemented",
+      "rootBehavior": "root-player path exists",
       "helperBehavior": "not comprehensively verified",
       "targetBehavior": "redirect child behavior only where the redirect resolver supports it",
       "projectileBehavior": "not applicable to direct value source; projectile-owner parity unverified",
-      "testCoverage": "inventory/Matrix coverage only",
+      "testCoverage": "focused tests exist for the implemented subset; inventory audit records exact Matrix coverage",
       "realCharacterUsage": [
         {
           "file": "public/chars/itoko/itoko.cns",
@@ -4353,9 +4353,9 @@
           "exampleLine": 2020
         }
       ],
-      "matrixStatus": "Parser only",
-      "canonicalMatrixStatus": "Audit needed",
-      "knownLimitations": "Parser only; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
+      "matrixStatus": "Partial",
+      "canonicalMatrixStatus": "Partial 90%",
+      "knownLimitations": "Partial; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
     },
     {
       "name": "ParentDist Y",
@@ -4373,19 +4373,19 @@
       "officialSummary": "Returns the WinMUGEN ParentDist value described by Elecbyte's Trigger Reference.",
       "syntaxSupported": true,
       "parserBehavior": "CnsParser retains the complete expression string; trigger names are not enumerated in the production parser AST.",
-      "evaluatorImplemented": false,
-      "implementationLocation": null,
-      "runtimeDataSource": null,
-      "argumentSupport": "Expression is retained but no correct runtime value is produced.",
+      "evaluatorImplemented": true,
+      "implementationLocation": "src/core/cns/CnsRuntimeTrigger.ts",
+      "runtimeDataSource": "CnsRuntimeTriggerContext / PlayerState and connected subsystem state",
+      "argumentSupport": "See syntax and knownLimitations; irregular/optional argument coverage is conservative.",
       "redirectSupport": "enemy/enemynear/target subset only; root/parent are fallbacks and helper/partner/playerid are missing",
-      "fallbackBehavior": "Unknown runtime term makes the containing trigger false.",
+      "fallbackBehavior": "No general self fallback is intended for missing redirects.",
       "updateTiming": "not fully verified against WinMUGEN tick ordering",
       "pauseBehavior": "not comprehensively verified for hitpause, Pause and SuperPause",
-      "rootBehavior": "not implemented",
+      "rootBehavior": "root-player path exists",
       "helperBehavior": "not comprehensively verified",
       "targetBehavior": "redirect child behavior only where the redirect resolver supports it",
       "projectileBehavior": "not applicable to direct value source; projectile-owner parity unverified",
-      "testCoverage": "inventory/Matrix coverage only",
+      "testCoverage": "focused tests exist for the implemented subset; inventory audit records exact Matrix coverage",
       "realCharacterUsage": [
         {
           "file": "public/chars/itoko/itoko.cns",
@@ -4393,9 +4393,9 @@
           "exampleLine": 2022
         }
       ],
-      "matrixStatus": "Parser only",
-      "canonicalMatrixStatus": "Audit needed",
-      "knownLimitations": "Parser only; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
+      "matrixStatus": "Partial",
+      "canonicalMatrixStatus": "Partial 90%",
+      "knownLimitations": "Partial; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
     },
     {
       "name": "Physics",
@@ -4822,10 +4822,10 @@
       "parserBehavior": "CnsParser retains the complete expression string; trigger names are not enumerated in the production parser AST.",
       "evaluatorImplemented": true,
       "implementationLocation": "src/core/cns/CnsRuntimeTrigger.ts",
-      "runtimeDataSource": "fixed compatibility value",
+      "runtimeDataSource": "CnsRuntimeTriggerContext / PlayerState and connected subsystem state",
       "argumentSupport": "See syntax and knownLimitations; irregular/optional argument coverage is conservative.",
       "redirectSupport": "enemy/enemynear/target subset only; root/parent are fallbacks and helper/partner/playerid are missing",
-      "fallbackBehavior": "Returns a fixed compatibility value.",
+      "fallbackBehavior": "No general self fallback is intended for missing redirects.",
       "updateTiming": "not fully verified against WinMUGEN tick ordering",
       "pauseBehavior": "not comprehensively verified for hitpause, Pause and SuperPause",
       "rootBehavior": "root-player path exists",
@@ -4834,9 +4834,9 @@
       "projectileBehavior": "projectile Trigger integration is absent or fixed fallback",
       "testCoverage": "focused tests exist for the implemented subset; inventory audit records exact Matrix coverage",
       "realCharacterUsage": [],
-      "matrixStatus": "Safe fallback",
-      "canonicalMatrixStatus": "Safe no-op",
-      "knownLimitations": "Safe fallback; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
+      "matrixStatus": "Partial",
+      "canonicalMatrixStatus": "Partial 85%",
+      "knownLimitations": "Partial; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
     },
     {
       "name": "ProjContact",
@@ -5164,19 +5164,19 @@
       "officialSummary": "Returns the WinMUGEN RootDist value described by Elecbyte's Trigger Reference.",
       "syntaxSupported": true,
       "parserBehavior": "CnsParser retains the complete expression string; trigger names are not enumerated in the production parser AST.",
-      "evaluatorImplemented": false,
-      "implementationLocation": null,
-      "runtimeDataSource": null,
-      "argumentSupport": "Expression is retained but no correct runtime value is produced.",
+      "evaluatorImplemented": true,
+      "implementationLocation": "src/core/cns/CnsRuntimeTrigger.ts",
+      "runtimeDataSource": "CnsRuntimeTriggerContext / PlayerState and connected subsystem state",
+      "argumentSupport": "See syntax and knownLimitations; irregular/optional argument coverage is conservative.",
       "redirectSupport": "enemy/enemynear/target subset only; root/parent are fallbacks and helper/partner/playerid are missing",
-      "fallbackBehavior": "Unknown runtime term makes the containing trigger false.",
+      "fallbackBehavior": "No general self fallback is intended for missing redirects.",
       "updateTiming": "not fully verified against WinMUGEN tick ordering",
       "pauseBehavior": "not comprehensively verified for hitpause, Pause and SuperPause",
-      "rootBehavior": "not implemented",
+      "rootBehavior": "root-player path exists",
       "helperBehavior": "not comprehensively verified",
       "targetBehavior": "redirect child behavior only where the redirect resolver supports it",
       "projectileBehavior": "not applicable to direct value source; projectile-owner parity unverified",
-      "testCoverage": "inventory/Matrix coverage only",
+      "testCoverage": "focused tests exist for the implemented subset; inventory audit records exact Matrix coverage",
       "realCharacterUsage": [
         {
           "file": "public/chars/itoko/itoko.cns",
@@ -5184,9 +5184,9 @@
           "exampleLine": 1935
         }
       ],
-      "matrixStatus": "Parser only",
-      "canonicalMatrixStatus": "Audit needed",
-      "knownLimitations": "Parser only; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
+      "matrixStatus": "Partial",
+      "canonicalMatrixStatus": "Partial 90%",
+      "knownLimitations": "Partial; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
     },
     {
       "name": "RootDist Y",
@@ -5204,23 +5204,23 @@
       "officialSummary": "Returns the WinMUGEN RootDist value described by Elecbyte's Trigger Reference.",
       "syntaxSupported": true,
       "parserBehavior": "CnsParser retains the complete expression string; trigger names are not enumerated in the production parser AST.",
-      "evaluatorImplemented": false,
-      "implementationLocation": null,
-      "runtimeDataSource": null,
-      "argumentSupport": "Expression is retained but no correct runtime value is produced.",
+      "evaluatorImplemented": true,
+      "implementationLocation": "src/core/cns/CnsRuntimeTrigger.ts",
+      "runtimeDataSource": "CnsRuntimeTriggerContext / PlayerState and connected subsystem state",
+      "argumentSupport": "See syntax and knownLimitations; irregular/optional argument coverage is conservative.",
       "redirectSupport": "enemy/enemynear/target subset only; root/parent are fallbacks and helper/partner/playerid are missing",
-      "fallbackBehavior": "Unknown runtime term makes the containing trigger false.",
+      "fallbackBehavior": "No general self fallback is intended for missing redirects.",
       "updateTiming": "not fully verified against WinMUGEN tick ordering",
       "pauseBehavior": "not comprehensively verified for hitpause, Pause and SuperPause",
-      "rootBehavior": "not implemented",
+      "rootBehavior": "root-player path exists",
       "helperBehavior": "not comprehensively verified",
       "targetBehavior": "redirect child behavior only where the redirect resolver supports it",
       "projectileBehavior": "not applicable to direct value source; projectile-owner parity unverified",
-      "testCoverage": "inventory/Matrix coverage only",
+      "testCoverage": "focused tests exist for the implemented subset; inventory audit records exact Matrix coverage",
       "realCharacterUsage": [],
-      "matrixStatus": "Parser only",
-      "canonicalMatrixStatus": "Audit needed",
-      "knownLimitations": "Parser only; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
+      "matrixStatus": "Partial",
+      "canonicalMatrixStatus": "Partial 90%",
+      "knownLimitations": "Partial; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
     },
     {
       "name": "RoundNo",
@@ -6496,23 +6496,23 @@
       "officialSummary": "Returns the WinMUGEN UniqHitCount value described by Elecbyte's Trigger Reference.",
       "syntaxSupported": true,
       "parserBehavior": "CnsParser retains the complete expression string; trigger names are not enumerated in the production parser AST.",
-      "evaluatorImplemented": false,
-      "implementationLocation": null,
-      "runtimeDataSource": null,
-      "argumentSupport": "Expression is retained but no correct runtime value is produced.",
+      "evaluatorImplemented": true,
+      "implementationLocation": "src/core/cns/CnsRuntimeTrigger.ts",
+      "runtimeDataSource": "CnsRuntimeTriggerContext / PlayerState and connected subsystem state",
+      "argumentSupport": "See syntax and knownLimitations; irregular/optional argument coverage is conservative.",
       "redirectSupport": "enemy/enemynear/target subset only; root/parent are fallbacks and helper/partner/playerid are missing",
-      "fallbackBehavior": "Unknown runtime term makes the containing trigger false.",
+      "fallbackBehavior": "No general self fallback is intended for missing redirects.",
       "updateTiming": "not fully verified against WinMUGEN tick ordering",
       "pauseBehavior": "not comprehensively verified for hitpause, Pause and SuperPause",
-      "rootBehavior": "not implemented",
+      "rootBehavior": "root-player path exists",
       "helperBehavior": "not comprehensively verified",
       "targetBehavior": "redirect child behavior only where the redirect resolver supports it",
       "projectileBehavior": "not applicable to direct value source; projectile-owner parity unverified",
-      "testCoverage": "inventory/Matrix coverage only",
+      "testCoverage": "focused tests exist for the implemented subset; inventory audit records exact Matrix coverage",
       "realCharacterUsage": [],
-      "matrixStatus": "Parser only",
-      "canonicalMatrixStatus": "Audit needed",
-      "knownLimitations": "Parser only; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
+      "matrixStatus": "Partial",
+      "canonicalMatrixStatus": "Partial 85%",
+      "knownLimitations": "Partial; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
     },
     {
       "name": "Var",
