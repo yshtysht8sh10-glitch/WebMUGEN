@@ -222,6 +222,8 @@ MoveContact/MoveHit/MoveGuarded use an elapsed value: contact records value 1, a
 
 `raw.target_register` records owner, target player id, HitDef id, ActiveHitDef generation, target life, registration result, and KO rejection reason.
 
+`raw.projectile_contact` records owner, Projectile ID, hit/guard result, contact/hit/guard times, and whether the live defender was registered as a Target. The ID-0 history entry is the most recent contact across all Projectile IDs. `raw.envshake` records controller-evaluated time/frequency/amplitude/phase and whether shared Canvas shake started.
+
 `raw.target_controller` records the owner, controller, optional HitDef id filter, selected player ids, and whether the operation was queued, dropped, or safely skipped because no target matched.
 
 `raw.cross` records airborne state, both players' current `AssertSpecial noautoturn` values, Facing before/after, and whether stage auto-turn changed either player. This distinguishes an AIR/rendering flip from a stage-facing change and verifies that a same-tick State transition retains the asserted flag.

@@ -103,13 +103,13 @@ Classification counts:
 
 `ID`, `IsHomeTeam`, `LoseKO`, `LoseTime`, `MatchNo`, `MoveReversed`, `P1Name`,
 `P3Name`, `P4Name`, `PalNo`, `ParentDist X`, `ParentDist Y`, `PlayerIDExist`,
-`ProjContact`, `ProjGuarded`, `ProjHit`, `RootDist X`, `RootDist Y`, `SysFVar`,
+`ProjContact`, `ProjGuarded`, `RootDist X`, `RootDist Y`, `SysFVar`,
 `TeamMode`, `UniqHitCount`, `WinKO`, `WinPerfect`, `WinTime`.
 
 ### Safe fallback
 
 `LifeMax`, `NumEnemy`, `NumExplod`, `NumPartner`, `NumProj`, `NumProjID`,
-`ProjCancelTime`, `ProjContactTime`, `ProjGuardedTime`, `ProjHitTime`, `Random`,
+`ProjCancelTime`, `ProjContactTime`, `ProjGuardedTime`, `Random`,
 `RoundsExisted`.
 
 ### Partial
@@ -125,7 +125,7 @@ Classification counts:
 `P2AuthorName`, `P2BodyDist X`, `P2BodyDist Y`, `P2Ctrl`, `P2Dist X`,
 `P2Dist Y`, `P2Facing`, `P2Life`, `P2MoveType`, `P2Name`, `P2StateNo`,
 `P2StateType`, `Physics`, `Pi`, `Pos X`, `Pos Y`, `Power`, `PowerMax`,
-`PrevStateNo`, `RoundNo`, `RoundState`, `ScreenPos X`, `ScreenPos Y`,
+`PrevStateNo`, `ProjHit`, `ProjHitTime`, `RoundNo`, `RoundState`, `ScreenPos X`, `ScreenPos Y`,
 `SelfAnimExist`, `Sin`, `StateTime`, `SysVar`, `Tan`, `TargetID`,
 `TargetStateNo`, `TeamSide`, `TicksPerSecond`, `TimeMod`, `Var`, `Vel X`,
 `Vel Y`, `Win`.

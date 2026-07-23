@@ -147,7 +147,6 @@ const RECOGNIZED_NO_OP_CONTROLLERS = new Map<string, string>([
   ['clearclipboard', 'ClearClipboard'],
   ['displaytoclipboard', 'DisplayToClipboard'],
   ['envcolor', 'EnvColor'],
-  ['envshake', 'EnvShake'],
   ['forcefeedback', 'ForceFeedback'],
   ['gamemakeanim', 'GameMakeAnim'],
   ['gravity', 'Gravity'],
@@ -976,6 +975,7 @@ function executeController(
   if (type === 'hitvelset') return hitVelSet(player, controller);
   if (type === 'hitfalldamage') return hitFallDamage(player, controller, input);
   if (type === 'fallenvshake') return fallEnvShake(player, input);
+  if (type === 'envshake') return environmentShake(player, opponent, controller, input, commands);
   if (type === 'pause') return pauseController(player, opponent, controller, input, commands, false);
   if (type === 'superpause') return pauseController(player, opponent, controller, input, commands, true);
   if (type === 'playsnd') return playSound(player, opponent, controller, input, commands);
@@ -2320,6 +2320,32 @@ function triple(
     green: cnsValueToNumber(values[1], player, input, commands, opponent) ?? defaultGreen,
     blue: cnsValueToNumber(values[2], player, input, commands, opponent) ?? defaultBlue,
   };
+}
+
+function environmentShake(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const time = Math.max(0, Math.trunc(num(controller, 'time', player, input, commands, opponent) ?? 0));
+  const frequency = num(controller, 'freq', player, input, commands, opponent) ?? 60;
+  const event = {
+    time,
+    frequency,
+    amplitude: num(controller, 'ampl', player, input, commands, opponent) ?? -4,
+    phase: num(controller, 'phase', player, input, commands, opponent) ?? (frequency >= 90 ? 90 : 0),
+  };
+  if (event.time > 0) input.onEnvironmentShake?.(event);
+  return withPlayer({
+    ...player,
+    hitDiagnosticLines: input.hitDiagnostics === false ? player.hitDiagnosticLines : [
+      ...(player.hitDiagnosticLines ?? []),
+      `raw.envshake owner=p${player.id}`,
+      `  time=${event.time} frequency=${event.frequency} amplitude=${event.amplitude} phase=${event.phase} result=${event.time > 0 ? 'started' : 'no_effect'}`,
+    ],
+  }, true, 'EnvShake');
 }
 
 function getIndexedVar(player: PlayerState, kind: 'var' | 'sysvar' | 'fvar', index: number): number {

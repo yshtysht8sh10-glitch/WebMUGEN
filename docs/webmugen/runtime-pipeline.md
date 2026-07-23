@@ -63,7 +63,7 @@ ends. Rendering uses the owner AIR action. This path remains Partial because
 animated Clsn changes, remaining HitDef parity, projectile interactions, exact PalFX arithmetic, and pause semantics are not
 yet connected.
 
-Projectile contact records owner-local contact/hit/guard times after collision. The following CNS pass therefore observes `ProjHitTime(id) = 1`. If the attacker is in HitPause, normal Controllers remain frozen but `ignorehitpause != 0` Controllers in special/current States are evaluated. `NumExplod(id)` is resolved from the committed Explod collection at frame start, so State -2 impact effects can be created once and rejected on later paused frames.
+Projectile contact records owner-local contact/hit/guard times after collision. A normal hit also registers the struck live player in the owner's Target list under the Projectile ID; guards and KO/removed targets do not register. The following CNS pass therefore observes `ProjHitTime(id) = 1` and old-style `ProjHit<ID> = 1`. The simple `ProjHit` form is true for one unpaused owner tick; owner HitPause freezes that tick, so a non-`ignorehitpause` State -2 `TargetState` can consume it when HitPause ends. If the attacker is in HitPause, other normal Controllers remain frozen but `ignorehitpause != 0` Controllers in special/current States are evaluated. `NumExplod(id)` is resolved from the committed Explod collection at frame start, so State -2 impact effects can be created once and rejected on later paused frames.
 
 ## CNS State Runtime flow
 

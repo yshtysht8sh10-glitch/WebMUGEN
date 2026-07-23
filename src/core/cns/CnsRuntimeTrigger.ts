@@ -139,6 +139,9 @@ function compileBooleanExpression(expression: string): BooleanSource {
 }
 
 function compileComparison(expression: string): BooleanSource {
+  const projHit = compileProjHitComparison(expression);
+  if (projHit) return projHit;
+
   const animElemMatch = expression.match(/^animelem\s*=\s*(-?\d+)(?:\s*,\s*(=|!=|>=|<=|>|<)?\s*(-?\d+))?$/i);
   if (animElemMatch) {
     const elementNo = Number(animElemMatch[1]);
@@ -331,6 +334,9 @@ function evaluateBooleanExpression(expression: string, context: CnsRuntimeTrigge
 }
 
 function evaluateComparison(expression: string, context: CnsRuntimeTriggerContext): boolean {
+  const projHit = compileProjHitComparison(expression);
+  if (projHit) return projHit(context);
+
   const animElemMatch = expression.match(/^animelem\s*=\s*(-?\d+)(?:\s*,\s*(=|!=|>=|<=|>|<)?\s*(-?\d+))?$/i);
   if (animElemMatch) {
     const elementNo = Number(animElemMatch[1]);
@@ -738,6 +744,28 @@ function getFunctionNumberSource(name: string): NumberSource | null {
   if (projCancelTimeMatch) return () => -1;
 
   return null;
+}
+
+function compileProjHitComparison(expression: string): BooleanSource | null {
+  const match = expression.match(
+    /^projhit(\d*)\s*(=|!=|>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)(?:\s*,\s*(=|!=|>=|<=|>|<)\s*(-?\d+(?:\.\d+)?))?$/i,
+  );
+  if (!match) return null;
+  const projectileId = match[1] === '' ? 0 : Number(match[1]);
+  const valueOperator = match[2];
+  const expectedValue = Number(match[3]);
+  const timeOperator = match[4];
+  const expectedTime = match[5] === undefined ? undefined : Number(match[5]);
+
+  return (context) => {
+    const hitTime = context.projHitTime?.(projectileId) ?? -1;
+    if (timeOperator && expectedTime !== undefined) {
+      return compareNumber(hitTime >= 0 ? 1 : 0, valueOperator, expectedValue)
+        && hitTime >= 0
+        && compareNumber(hitTime, timeOperator, expectedTime);
+    }
+    return compareNumber(hitTime === 1 ? 1 : 0, valueOperator, expectedValue);
+  };
 }
 
 function getRedirectNumberSource(name: string): NumberSource | null {

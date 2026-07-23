@@ -68,6 +68,24 @@ describe('ProjectileSystem', () => {
     expect(result.players[1].life).toBe(910);
     expect(result.players[1].stateNo).toBe(5000);
     expect(result.players[0].moveContact).toMatchObject({ hit: true, guarded: false, hitCount: 1 });
+    expect(result.players[0].projectileContacts).toMatchObject({
+      0: { hitTime: 1, guardedTime: -1 },
+      1000: { hitTime: 1, guardedTime: -1 },
+    });
+    expect(result.players[0].targets).toEqual([{
+      playerId: 2,
+      hitDefId: 1000,
+      activeHitDefId: 1000,
+    }]);
+  });
+
+  it('does not set ProjHit or acquire a Target when a projectile misses', () => {
+    const state = createInitialGameState();
+    const result = resolveProjectileHits(state.players, [{ ...createProjectile(), x: 40 }]);
+
+    expect(result.hitEvents).toHaveLength(0);
+    expect(result.players[0].projectileContacts).toBeUndefined();
+    expect(result.players[0].targets).toEqual([]);
   });
 
   it('connects guard, power transfer, MoveGuarded and defender PalFX for Projectile HitDef data', () => {
@@ -95,6 +113,11 @@ describe('ProjectileSystem', () => {
       state.players[0], { ...state.players[1], guardIntent: true },
     ], [projectile]);
     expect(guarded.players[0]).toMatchObject({ power: 20, hitPause: 3, moveContact: { hit: false, guarded: true, hitCount: 0 } });
+    expect(guarded.players[0].projectileContacts).toMatchObject({
+      0: { hitTime: -1, guardedTime: 1 },
+      1000: { hitTime: -1, guardedTime: 1 },
+    });
+    expect(guarded.players[0].targets).toEqual([]);
     expect(guarded.players[1]).toMatchObject({ life: 980, power: 10, stateNo: 150, vx: -2, hitPause: 4 });
     expect(guarded.players[1].palFx).toBeUndefined();
     expect(guarded.hitEvents[0].guarded).toBe(true);
@@ -102,6 +125,63 @@ describe('ProjectileSystem', () => {
     const hit = resolveProjectileHits(state.players, [projectile]);
     expect(hit.players[0]).toMatchObject({ power: 280, moveContact: { hit: true, guarded: false, hitCount: 1 } });
     expect(hit.players[1]).toMatchObject({ power: 140, palFx: { remainingTime: 50, elapsedTime: 0, color: 0, invertAll: true } });
+  });
+
+  it('keeps Projectile IDs distinct and refreshes repeated hit timing and Target generation', () => {
+    const initial = createInitialGameState();
+    const first = resolveProjectileHits(initial.players, [{
+      ...createProjectile(),
+      id: 1000,
+      hitDef: { ...createProjectile().hitDef, diagnosticId: 41 },
+    }]);
+    const secondPlayers = [
+      { ...first.players[0], hitPause: 0 },
+      { ...first.players[1], hitPause: 0 },
+    ] as typeof first.players;
+    const second = resolveProjectileHits(secondPlayers, [{
+      ...createProjectile(),
+      id: 2000,
+      hitDef: { ...createProjectile().hitDef, diagnosticId: 42 },
+    }]);
+
+    expect(second.players[0].projectileContacts).toMatchObject({
+      0: { hitTime: 1 },
+      1000: { hitTime: 1 },
+      2000: { hitTime: 1 },
+    });
+    expect(second.players[0].targets).toEqual([{
+      playerId: 2,
+      hitDefId: 2000,
+      activeHitDefId: 42,
+    }]);
+
+    const repeatedPlayers = [
+      { ...second.players[0], hitPause: 0 },
+      { ...second.players[1], hitPause: 0 },
+    ] as typeof second.players;
+    const repeated = resolveProjectileHits(repeatedPlayers, [{
+      ...createProjectile(),
+      id: 2000,
+      hitDef: { ...createProjectile().hitDef, diagnosticId: 43 },
+    }]);
+    expect(repeated.players[0].projectileContacts?.[2000].hitTime).toBe(1);
+    expect(repeated.players[0].targets).toEqual([{
+      playerId: 2,
+      hitDefId: 2000,
+      activeHitDefId: 43,
+    }]);
+  });
+
+  it('does not retain a projectile-acquired Target when the hit removes it', () => {
+    const state = createInitialGameState();
+    const result = resolveProjectileHits(state.players, [{
+      ...createProjectile(),
+      hitDef: { ...createProjectile().hitDef, damage: 1000 },
+    }]);
+
+    expect(result.players[1].life).toBe(0);
+    expect(result.players[0].projectileContacts?.[1000].hitTime).toBe(1);
+    expect(result.players[0].targets).toEqual([]);
   });
 
   it('connects launched projectile hits to common get-hit gravity and hit-stun data', () => {

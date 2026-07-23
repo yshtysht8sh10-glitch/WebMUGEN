@@ -9,9 +9,9 @@
   ],
   "counts": {
     "Not implemented": 0,
-    "Parser only": 24,
+    "Parser only": 23,
     "Safe fallback": 9,
-    "Partial": 92,
+    "Partial": 93,
     "Complete": 7,
     "Not applicable": 26
   },
@@ -4981,38 +4981,43 @@
         "projhit"
       ],
       "caseInsensitive": true,
-      "syntax": "ProjHit",
-      "arguments": "none",
+      "syntax": "ProjHit[ID] = boolean[, operator time]",
+      "arguments": "optional projectile ID suffix, boolean value, optional elapsed-time comparison",
       "returnType": "boolean int",
       "redirectable": true,
       "version": "WinMUGEN 2002.04.14",
       "officialReference": "https://bluesura.github.io/MUGEN/document/Official/2002.04.14/trigger.html",
-      "officialSummary": "Returns the WinMUGEN ProjHit value described by Elecbyte's Trigger Reference.",
+      "officialSummary": "Checks whether the optional projectile ID suffix hit on the current unpaused owner tick, with the old-style optional elapsed-time comparison.",
       "syntaxSupported": true,
       "parserBehavior": "CnsParser retains the complete expression string; trigger names are not enumerated in the production parser AST.",
-      "evaluatorImplemented": false,
-      "implementationLocation": null,
-      "runtimeDataSource": null,
-      "argumentSupport": "Expression is retained but no correct runtime value is produced.",
+      "evaluatorImplemented": true,
+      "implementationLocation": "src/core/cns/CnsRuntimeTrigger.ts",
+      "runtimeDataSource": "CnsRuntimeTriggerContext / PlayerState and connected subsystem state",
+      "argumentSupport": "See syntax and knownLimitations; irregular/optional argument coverage is conservative.",
       "redirectSupport": "enemy/enemynear/target subset only; root/parent are fallbacks and helper/partner/playerid are missing",
-      "fallbackBehavior": "Unknown runtime term makes the containing trigger false.",
+      "fallbackBehavior": "No general self fallback is intended for missing redirects.",
       "updateTiming": "not fully verified against WinMUGEN tick ordering",
-      "pauseBehavior": "not comprehensively verified for hitpause, Pause and SuperPause",
-      "rootBehavior": "not implemented",
+      "pauseBehavior": "specific hit-pause behavior is connected; global pause edges remain audited as Partial where applicable",
+      "rootBehavior": "root-player path exists",
       "helperBehavior": "not comprehensively verified",
       "targetBehavior": "redirect child behavior only where the redirect resolver supports it",
-      "projectileBehavior": "projectile Trigger integration is absent or fixed fallback",
-      "testCoverage": "inventory/Matrix coverage only",
+      "projectileBehavior": "root-owner Projectile hit history is connected and advances on unpaused owner ticks",
+      "testCoverage": "focused tests exist for the implemented subset; inventory audit records exact Matrix coverage",
       "realCharacterUsage": [
         {
           "file": "public/chars/itoko/itoko.cns",
-          "count": 3,
-          "exampleLine": 18755
+          "count": 8,
+          "exampleLine": 18454
+        },
+        {
+          "file": "public/chars/T-H-M-A/T-H-M-A/T-H-M-A-2.cns",
+          "count": 1,
+          "exampleLine": 403
         }
       ],
-      "matrixStatus": "Parser only",
-      "canonicalMatrixStatus": "Audit needed",
-      "knownLimitations": "Parser only; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
+      "matrixStatus": "Partial",
+      "canonicalMatrixStatus": "Partial 90%",
+      "knownLimitations": "Partial; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above."
     },
     {
       "name": "ProjHitTime",

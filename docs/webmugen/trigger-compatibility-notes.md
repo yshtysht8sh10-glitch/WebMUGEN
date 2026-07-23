@@ -50,7 +50,7 @@ Do not mark safe defaults as Complete.
 | `NumTarget` / `TargetID` / `TargetStateNo` | Partial | Reads a multi-entry attacker Target list, supports HitDef id filtering, and returns current two-player target State. `target(ID),MoveType` uses the same registry and SFalse on lookup failure. | Helper/team/multi-player selection and other redirected trigger families remain incomplete. |
 | `PrevStateNo` | Partial | Stores the immediate source State on entry, including re-entry and multiple same-frame transitions; round reset starts without stale history. | Helper/custom-state ownership and broader real-character routes remain incomplete. |
 | `enemy` / `enemynear` redirects | Partial | Root P1/P2, index 0, numeric/string/boolean/AIR child context, SFalse failure, grouping, diagnostics, and bundled 3405/3415 are tested. | Team/multiple-enemy nearest/index ordering and Helper ownership remain incomplete. |
-| Projectile triggers | Partial / Unsupported | Some `Proj*Time` safe defaults exist; boolean projectile triggers are incomplete. | Requires projectile subsystem integration. |
+| Projectile triggers | Partial | `ProjHit[ID]` supports the one-tick and optional elapsed-time forms from owner-local hit history, including ID 0/omitted selection, multiple IDs, repeated hits, HitPause freezing, and real T-H-M-A State -2 execution. `ProjHitTime` uses the same history. | `ProjContact`, `ProjGuarded`, cancel timing, Helper ownership, and exact Pause/SuperPause ordering remain incomplete. |
 
 ## Trigger group policy
 

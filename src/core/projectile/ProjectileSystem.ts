@@ -3,6 +3,7 @@ import { intersects } from '../collision/CollisionBox';
 import { createGetHitVarSnapshot, createHitEffectEvent } from '../engine/FallbackHitResolver';
 import { recordMoveContact } from '../hitdef/MoveContactState';
 import { addPlayerPower } from '../power/PowerGauge';
+import { registerTarget } from '../hitdef/TargetState';
 
 export type ProjectileStepResult = {
   projectiles: ProjectileState[];
@@ -68,12 +69,20 @@ export function resolveProjectileHits(
       const reactedTarget = guarded ? applyProjectileGuard(target, projectile) : applyProjectileHit(target, projectile);
       const givePower = guarded ? projectile.hitDef.givePower?.guarded : projectile.hitDef.givePower?.hit;
       const hitTarget = givePower === undefined ? reactedTarget : addPlayerPower(reactedTarget, givePower);
-      const contactedOwner = applyProjectileOwnerContact(owner, projectile, guarded);
+      const contactedOwner = applyProjectileOwnerContact(owner, projectile, guarded, !guarded && hitTarget.life > 0);
+      const targetedOwner = guarded
+        ? contactedOwner
+        : registerTarget(
+            contactedOwner,
+            hitTarget,
+            projectile.hitDef.diagnosticId ?? projectile.id,
+            projectile.id,
+          );
       if (projectile.ownerId === 1) {
-        p1 = contactedOwner;
+        p1 = targetedOwner;
         p2 = hitTarget;
       } else {
-        p2 = contactedOwner;
+        p2 = targetedOwner;
         p1 = hitTarget;
       }
       hitEvents.push(createHitEffectEvent(
@@ -274,20 +283,34 @@ function applyProjectileGuard(defender: PlayerState, projectile: ProjectileState
   };
 }
 
-function applyProjectileOwnerContact(owner: PlayerState, projectile: ProjectileState, guarded: boolean): PlayerState {
+function applyProjectileOwnerContact(
+  owner: PlayerState,
+  projectile: ProjectileState,
+  guarded: boolean,
+  targetRegistered: boolean,
+): PlayerState {
   const power = guarded ? projectile.hitDef.getPower?.guarded : projectile.hitDef.getPower?.hit;
   const pause = guarded ? projectile.hitDef.guardPauseTime?.attacker ?? projectile.hitDef.pauseTime.attacker : projectile.hitDef.pauseTime.attacker;
   const contacted = recordMoveContact(owner, projectile.hitDef.diagnosticId ?? projectile.id, guarded ? 'guarded' : 'hit');
+  const powered = power === undefined ? contacted : addPlayerPower(contacted, power);
+  const projectileContact = {
+    contactTime: 1,
+    hitTime: guarded ? -1 : 1,
+    guardedTime: guarded ? 1 : -1,
+  };
   return {
-    ...(power === undefined ? contacted : addPlayerPower(contacted, power)),
-    hitPause: Math.max(contacted.hitPause, pause),
+    ...powered,
+    hitPause: Math.max(powered.hitPause, pause),
     projectileContacts: {
-      ...(contacted.projectileContacts ?? {}),
-      [projectile.id]: {
-        contactTime: 1,
-        hitTime: guarded ? -1 : 1,
-        guardedTime: guarded ? 1 : -1,
-      },
+      ...(powered.projectileContacts ?? {}),
+      [projectile.id]: projectileContact,
+      // ID 0 is WinMUGEN's alias for the most recent contact from any Projectile ID.
+      0: projectileContact,
     },
+    hitDiagnosticLines: [
+      ...(powered.hitDiagnosticLines ?? []),
+      `raw.projectile_contact owner=p${owner.id} projectileId=${projectile.id} targetResult=${guarded ? 'guarded' : 'hit'}`,
+      `  projContactTime=1 projHitTime=${guarded ? -1 : 1} projGuardedTime=${guarded ? 1 : -1} targetRegistered=${targetRegistered ? 1 : 0}`,
+    ],
   };
 }

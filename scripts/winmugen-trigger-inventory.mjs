@@ -83,7 +83,7 @@ const PARTIAL = new Set([
   'HitVel X', 'HitVel Y', 'IfElse', 'InGuardDist', 'IsHelper', 'Life', 'Ln', 'Log', 'Lose', 'MatchOver',
   'MoveContact', 'MoveGuarded', 'MoveHit', 'MoveType', 'Name', 'NumExplod', 'NumHelper', 'NumTarget', 'P2BodyDist X',
   'P2BodyDist Y', 'P2Dist X', 'P2Dist Y', 'P2Life', 'P2MoveType', 'P2Name', 'P2StateNo', 'P2StateType',
-  'Pi', 'Pos X', 'Pos Y', 'Power', 'PowerMax', 'PrevStateNo', 'ProjHitTime', 'RoundNo', 'RoundState', 'ScreenPos X',
+  'Pi', 'Pos X', 'Pos Y', 'Power', 'PowerMax', 'PrevStateNo', 'ProjHit', 'ProjHitTime', 'RoundNo', 'RoundState', 'ScreenPos X',
   'ScreenPos Y', 'SelfAnimExist', 'Sin', 'StateTime', 'SysVar', 'Tan', 'TargetID', 'TargetStateNo', 'NumCommand',
   'P2AuthorName', 'P2Ctrl', 'P2Facing', 'Physics',
   'Random', 'TeamSide', 'TicksPerSecond', 'TimeMod', 'Var', 'Vel X', 'Vel Y', 'Win',
@@ -117,6 +117,7 @@ const NOTES = {
   MoveGuarded: 'Elapsed unpaused ticks since the current attack was guarded.',
   NumExplod: 'Counts active Explods owned by the current runtime entity, optionally filtered by MUGEN id.',
   ProjHitTime: 'Returns elapsed unpaused ticks since the requested projectile id last hit, or -1 when it has not hit.',
+  ProjHit: 'Checks whether the optional projectile ID suffix hit on the current unpaused owner tick, with the old-style optional elapsed-time comparison.',
   Random: 'Returns an integer from 0 through 999; WebMUGEN supplies a deterministic per-frame value so runtime traces and replays remain stable.',
   Time: 'Returns ticks elapsed in the current State.',
   StateNo: 'Returns the currently executing State number.',
@@ -141,12 +142,17 @@ function matrixStatus(audit) {
   return 'Audit needed';
 }
 
+const MATRIX_STATUS_OVERRIDES = new Map([
+  ['ProjHit', 'Partial 90%'],
+]);
+
 function syntaxFor(name) {
   if (name === 'Command') return 'Command = "name"';
   if (name === 'AnimElem') return 'AnimElem = element[, operator time]';
   if (name === 'HitDefAttr') return 'HitDefAttr = state-attrs, attack-attrs';
   if (name === 'TeamMode') return 'TeamMode = Single|Simul|Turns';
   if (name === 'TimeMod') return 'TimeMod operator divisor, remainder';
+  if (name === 'ProjHit') return 'ProjHit[ID] = boolean[, operator time]';
   const args = FUNCTION_ARGUMENTS.get(name.replace(AXIS, '')) ?? FUNCTION_ARGUMENTS.get(name);
   if (args) return `${name.replace(AXIS, '')}(${args})`;
   return name;
@@ -162,7 +168,9 @@ function createBaseRecord(name, version = 'WinMUGEN 2002.04.14', reference = OFF
     aliases: [name.toLowerCase()],
     caseInsensitive: true,
     syntax: syntaxFor(name),
-    arguments: FUNCTION_ARGUMENTS.get(canonicalName) ?? (AXIS.test(name) ? 'axis is part of old-style syntax' : 'none'),
+    arguments: name === 'ProjHit'
+      ? 'optional projectile ID suffix, boolean value, optional elapsed-time comparison'
+      : FUNCTION_ARGUMENTS.get(canonicalName) ?? (AXIS.test(name) ? 'axis is part of old-style syntax' : 'none'),
     returnType: STRING_RETURN.has(name) ? 'string or enum' : BOOLEAN_RETURN.has(name) ? 'boolean int' : 'number',
     redirectable: !REDIRECT_EXCEPTIONS.has(canonicalName),
     version,
@@ -177,17 +185,17 @@ function createBaseRecord(name, version = 'WinMUGEN 2002.04.14', reference = OFF
     redirectSupport: REDIRECT_EXCEPTIONS.has(canonicalName) ? 'not redirectable by specification' : 'enemy/enemynear/target subset only; root/parent are fallbacks and helper/partner/playerid are missing',
     fallbackBehavior: audit === 'Safe fallback' ? 'Returns a fixed compatibility value.' : audit === 'Parser only' ? 'Unknown runtime term makes the containing trigger false.' : 'No general self fallback is intended for missing redirects.',
     updateTiming: COMPLETE.has(name) ? 'covered for the implemented root-player path' : 'not fully verified against WinMUGEN tick ordering',
-    pauseBehavior: ['MoveContact', 'MoveHit', 'MoveGuarded', 'HitPauseTime', 'HitShakeOver'].includes(name) ? 'specific hit-pause behavior is connected; global pause edges remain audited as Partial where applicable' : 'not comprehensively verified for hitpause, Pause and SuperPause',
+    pauseBehavior: ['MoveContact', 'MoveHit', 'MoveGuarded', 'HitPauseTime', 'HitShakeOver', 'ProjHit'].includes(name) ? 'specific hit-pause behavior is connected; global pause edges remain audited as Partial where applicable' : 'not comprehensively verified for hitpause, Pause and SuperPause',
     rootBehavior: evaluatorImplemented ? 'root-player path exists' : 'not implemented',
     helperBehavior: name === 'IsHelper' || name === 'NumHelper' ? 'focused Helper coverage exists' : 'not comprehensively verified',
     targetBehavior: name.startsWith('Target') || name === 'NumTarget' ? 'two-root-player Target registry subset' : 'redirect child behavior only where the redirect resolver supports it',
-    projectileBehavior: name === 'ProjHitTime'
+    projectileBehavior: name === 'ProjHitTime' || name === 'ProjHit'
       ? 'root-owner Projectile hit history is connected and advances on unpaused owner ticks'
       : name.startsWith('Proj') || name === 'NumProj' || name === 'NumProjID' ? 'projectile Trigger integration is absent or fixed fallback' : 'not applicable to direct value source; projectile-owner parity unverified',
     testCoverage: evaluatorImplemented ? 'focused tests exist for the implemented subset; inventory audit records exact Matrix coverage' : 'inventory/Matrix coverage only',
     realCharacterUsage: [],
     matrixStatus: audit,
-    canonicalMatrixStatus: matrixStatus(audit),
+    canonicalMatrixStatus: MATRIX_STATUS_OVERRIDES.get(name) ?? matrixStatus(audit),
     knownLimitations: audit === 'Complete' ? 'Complete only for the documented scope and available real-character path.' : `${audit}; redirect, entity ownership, pause timing, arguments, or real-character evidence is incomplete as described above.`,
   };
 }
@@ -203,7 +211,8 @@ function triggerPattern(name) {
   const axis = name.match(AXIS)?.[1];
   const base = name.replace(AXIS, '');
   const escaped = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`(^|[^a-z0-9_.])${escaped}${axis ? `\\s+${axis}` : ''}(?=\\s|\\(|=|!|<|>|,|$)`, 'i');
+  const idSuffix = name === 'ProjContact' || name === 'ProjGuarded' || name === 'ProjHit' ? '\\d*' : '';
+  return new RegExp(`(^|[^a-z0-9_.])${escaped}${idSuffix}${axis ? `\\s+${axis}` : ''}(?=\\s|\\(|=|!|<|>|,|$)`, 'i');
 }
 
 async function collectRealCharacterUsage(records) {

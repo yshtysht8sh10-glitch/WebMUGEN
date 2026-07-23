@@ -159,6 +159,8 @@ Projectile contact uses the same attacker-side MoveContact result shape. This le
 
 `ProjHitTime(id)` reads root-owner Projectile contact history. A successful hit stores time 1 for the next CNS evaluation, the value remains frozen during attacker HitPause, and subsequent unpaused ticks increment it. `NumExplod(id)` counts live Explods owned by the evaluating entity and supports an evaluated optional id. Together with selective `ignorehitpause` execution, these drive bundled T-H-M-A State -2's four fire Explods after Projectile 1005 hits.
 
+Old-style `ProjHit[ID] = value` reads the same history. Its simple form reports a successful hit only while the matching history value is 1; the optional `, operator time` form compares the elapsed hit time. An omitted suffix or ID 0 selects the most recent contact from any Projectile ID. Guard and miss paths do not report a hit. Each accepted repeated hit resets the matching ID and ID-0 histories to 1, while other Projectile IDs remain distinguishable. Bundled T-H-M-A State -2 uses this path to execute `TargetState value = 280` after Projectile 1000 hit pause.
+
 ## Target lookup
 
 Successful HitDef contact registers `{playerId, hitDefId, activeHitDefId}` on the attacker. NumTarget optionally filters by HitDef id; TargetID and TargetStateNo select the first matching entry. The storage permits multiple targets and is pruned for KO/destroyed players; round restart creates an empty list. Current TargetStateNo lookup is verified for the two-player runtime, while Helper/multi-player lookup remains Partial.
