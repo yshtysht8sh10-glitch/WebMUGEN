@@ -174,6 +174,20 @@ describe('CanvasRenderer player sprite fallback', () => {
     expect(drawImage).toHaveBeenCalledTimes(3);
     expect(diagnostics.match(/spriteExists=1 result=drawn/g)).toHaveLength(3);
   });
+
+  it('renders the timed EnvColor layer and reports its ordering', () => {
+    const fillRect = vi.fn();
+    const context = fakeContext(fillRect, vi.fn());
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+    const renderer = new CanvasRenderer(canvas);
+    const state = createInitialGameState();
+    state.envColor = { color: { red: 12, green: 34, blue: 56 }, remainingTime: 5, under: true, ownerEntityId: 1 };
+
+    const diagnostics = renderer.render(state).join('\n');
+
+    expect(fillRect).toHaveBeenCalledWith(0, 0, 640, 360);
+    expect(diagnostics).toContain('raw.envcolor_draw owner=1 remaining=5 color=(12,34,56) under=1 result=drawn');
+  });
 });
 
 function fakeContext(

@@ -362,6 +362,7 @@ export type GameState = {
   helpers: HelperRuntimeState;
   pause?: PauseState;
   bgPalFx?: BgPalFxState;
+  envColor?: { color: { red: number; green: number; blue: number }; remainingTime: number; under: boolean; ownerEntityId: number };
   hitDiagnosticLines?: string[];
   commandBuffers?: [InputBuffer, InputBuffer];
   commandNames?: [ReadonlySet<string>, ReadonlySet<string>];

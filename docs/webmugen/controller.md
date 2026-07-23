@@ -78,6 +78,7 @@ support and vibration execution remain adapter-dependent and unsupported devices
 `invertall`, and `color`; Canvas applies the same documented filter approximation already used by
 HitDef PalFX. `AllPalFX` emits the same normalized state for both root players and the stage.
 `AngleDraw` exposes tick-scoped angle and X/Y scale to Canvas without rotating collision boxes.
+`EnvColor` stores a timed RGB overlay and honors `under` by placing it below or above ordinary character/effect drawing. Legacy `GameMakeAnim` and `MakeDust` emit common `fightfx` animations through the shared Explod lifecycle (`MakeDust` uses Action 120 and supports both `pos` and `pos2`). The bundled app lacks common fightfx AIR/SFF assets, so missing actions remain diagnosed safe skips. `Zoom` is a MUGEN 1.1 Controller and is outside the WinMUGEN 2002.04.14 target.
 `AssertSpecial invisible` now reads the canonical tick flag list directly in the renderer.
 
 ### Motion and position

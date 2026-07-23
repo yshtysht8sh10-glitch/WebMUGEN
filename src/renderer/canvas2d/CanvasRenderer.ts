@@ -72,6 +72,7 @@ export class CanvasRenderer {
     ctx.filter = bgPalFxFilter;
     this.drawStage(ctx);
     ctx.restore();
+    if (state.envColor?.under) this.drawEnvironmentColor(ctx, state.envColor.color);
     this.drawLifeBars(ctx, state);
     const powerDiagnostics = this.drawPowerBars(ctx, state, diagnosticsEnabled);
     if (roundState) this.roundStateRenderer.render(ctx, roundState, roundScore);
@@ -124,6 +125,10 @@ export class CanvasRenderer {
         if (diagnostic) renderDiagnostics.push(diagnostic);
       }
     }
+    if (state.envColor && !state.envColor.under) this.drawEnvironmentColor(ctx, state.envColor.color);
+    if (diagnosticsEnabled && state.envColor) {
+      renderDiagnostics.push(`raw.envcolor_draw owner=${state.envColor.ownerEntityId} remaining=${state.envColor.remainingTime} color=(${state.envColor.color.red},${state.envColor.color.green},${state.envColor.color.blue}) under=${state.envColor.under ? 1 : 0} result=drawn`);
+    }
     if ((state.pause?.superPauseTime ?? 0) > 0 && state.pause?.darken) {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
       ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
@@ -168,6 +173,12 @@ export class CanvasRenderer {
     ctx.fillRect(0, splitY, this.canvas.width, this.canvas.height - splitY);
     ctx.fillStyle = '#26351e';
     ctx.fillRect(0, 285, this.canvas.width, 80);
+  }
+
+  private drawEnvironmentColor(ctx: CanvasRenderingContext2D, color: { red: number; green: number; blue: number }): void {
+    const channel = (value: number): number => Math.max(0, Math.min(255, Math.trunc(value)));
+    ctx.fillStyle = `rgb(${channel(color.red)}, ${channel(color.green)}, ${channel(color.blue)})`;
+    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
   }
 
   private drawLifeBars(ctx: CanvasRenderingContext2D, state: GameState): void {

@@ -433,6 +433,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
         const environmentShakeEvents: EnvironmentShake[] = [];
         const bgPalFxEvents: BgPalFxEvent[] = [];
         const allPalFxEvents: BgPalFxEvent[] = [];
+        const envColorEvents: Array<{ color: { red: number; green: number; blue: number }; time: number; under: boolean; ownerEntityId: number }> = [];
 
         if (
           inputSnapshot.system.restartRound &&
@@ -491,6 +492,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             onEnvironmentShake: (event) => environmentShakeEvents.push(event),
             onBgPalFx: (event) => bgPalFxEvents.push(event),
             onAllPalFx: (event) => allPalFxEvents.push(event),
+            onEnvColor: (event) => envColorEvents.push(event),
             onProjectileCreate: (projectile) => projectileEvents.push({
               ...projectile,
               hitBox: getProjectileHitBox(character.air, projectile.animNo) ?? projectile.hitBox,
@@ -521,6 +523,10 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
                 palFx: { ...event, remainingTime: event.duration, elapsedTime: 0 },
               })) as GameState['players'],
             }, [event]);
+          }
+          if (envColorEvents.length > 0) {
+            const event = envColorEvents[envColorEvents.length - 1];
+            nextState = { ...nextState, envColor: { ...event, remainingTime: event.time } };
           }
           if (pauseEvents.length > 0) {
             const pause = applyPauseControllerEvents(nextState.pause ?? createInitialPauseState(), pauseEvents);
@@ -606,6 +612,9 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           nextState = {
             ...nextState,
             bgPalFx: stepBgPalFx(nextState.bgPalFx),
+            envColor: nextState.envColor && nextState.envColor.remainingTime > 1
+              ? { ...nextState.envColor, remainingTime: nextState.envColor.remainingTime - 1 }
+              : undefined,
             players: nextState.players.map((player) => (
               !pausedThisFrame || canEntityMoveDuringPause(pauseDuringFrame, player.id)
                 ? { ...player, afterImage: stepAfterImage(player.afterImage, player) }

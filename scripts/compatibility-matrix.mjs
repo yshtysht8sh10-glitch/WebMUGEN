@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
-export const STATUS_PATTERN = /^(Complete|Partial ([1-9]|[1-9][0-9])%|Fallback ([1-9]|[1-9][0-9])%|Safe no-op|Issue ready|Not started|Audit needed)$/;
+export const STATUS_PATTERN = /^(Complete|Partial ([1-9]|[1-9][0-9])%|Fallback ([1-9]|[1-9][0-9])%|Safe no-op|Issue ready|Not started|Audit needed|Not applicable)$/;
 
 export function splitMarkdownRow(line) {
   const cells = [];
@@ -66,6 +66,7 @@ function statusLabel(detail) {
   if (detail.kind === 'safe-noop') return 'Safe no-op';
   if (detail.kind === 'issue-ready') return 'Issue ready';
   if (detail.kind === 'not-started') return 'Not started';
+  if (detail.kind === 'not-applicable') return 'Not applicable';
   return 'Audit needed';
 }
 
@@ -82,7 +83,7 @@ async function loadHtmlModel(htmlPath) {
 
 function updateSummary(markdown) {
   const { rows } = validateMatrix(markdown);
-  const order = ['Complete', 'Partial', 'Fallback', 'Safe no-op', 'Issue ready', 'Not started', 'Audit needed'];
+  const order = ['Complete', 'Partial', 'Fallback', 'Safe no-op', 'Issue ready', 'Not started', 'Audit needed', 'Not applicable'];
   const counts = Object.fromEntries(order.map((key) => [key, 0]));
   for (const row of rows) counts[row.status.replace(/ \d+%$/, '')] += 1;
   const summary = `<!-- status-summary:start -->\n${order.map((key) => `- ${key}: ${counts[key]}`).join('\n')}\n<!-- status-summary:end -->`;

@@ -62,4 +62,46 @@ scale = 1.5, .5
     }, cns);
     expect(result.state.players[0]).toMatchObject({ drawAngle: undefined, drawScale: undefined });
   });
+
+  it('emits timed EnvColor and legacy fightfx effects through shared runtime events', () => {
+    const cns = parseCnsText(`
+[Statedef 200]
+type = S
+physics = N
+[State 200, color]
+type = EnvColor
+trigger1 = 1
+value = 12, 34, 56
+time = 7
+under = 1
+[State 200, fall dust]
+type = GameMakeAnim
+trigger1 = 1
+value = 62
+pos = 3, -4
+under = 1
+[State 200, run dust]
+type = MakeDust
+trigger1 = 1
+pos = -5, -2
+pos2 = 5, -2
+`);
+    const onEnvColor = vi.fn();
+    const onExplodCreate = vi.fn();
+    const initial = createInitialGameState();
+    const result = stepCnsStateRuntime({
+      ...initial,
+      players: [{ ...initial.players[0], stateNo: 200, x: 100, y: 20 }, initial.players[1]],
+    }, cns, { onEnvColor, onExplodCreate });
+
+    expect(onEnvColor).toHaveBeenCalledWith({
+      color: { red: 12, green: 34, blue: 56 }, time: 7, under: true, ownerEntityId: 1,
+    });
+    expect(onExplodCreate).toHaveBeenCalledTimes(3);
+    expect(onExplodCreate.mock.calls[0][0]).toMatchObject({
+      type: 'create', request: { animationSource: 'fightfx', animNo: 62, position: { x: 103, y: 16 }, spritePriority: -5 },
+    });
+    expect(onExplodCreate.mock.calls.slice(1).map(([event]) => event.request.animNo)).toEqual([120, 120]);
+    expect(result.traces[0].executedControllers).toEqual(['EnvColor', 'GameMakeAnim', 'MakeDust']);
+  });
 });

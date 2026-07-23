@@ -73,6 +73,7 @@ export type CnsRuntimeInput = {
   onForceFeedback?: (event: { ownerEntityId: number; waveform: string; time: number; amplitude: number; frequency: number }) => void;
   onBgPalFx?: (event: BgPalFxEvent) => void;
   onAllPalFx?: (event: BgPalFxEvent) => void;
+  onEnvColor?: (event: { color: { red: number; green: number; blue: number }; time: number; under: boolean; ownerEntityId: number }) => void;
   onProjectileCreate?: (projectile: ProjectileState) => void;
   pauseState?: PauseState;
   screenWidth?: number;
@@ -1103,12 +1104,15 @@ function executeController(
   if (type === 'hitfalldamage') return hitFallDamage(player, controller, input);
   if (type === 'fallenvshake') return fallEnvShake(player, input);
   if (type === 'envshake') return environmentShake(player, opponent, controller, input, commands);
+  if (type === 'envcolor') return environmentColor(player, opponent, controller, input, commands);
   if (type === 'pause') return pauseController(player, opponent, controller, input, commands, false);
   if (type === 'superpause') return pauseController(player, opponent, controller, input, commands, true);
   if (type === 'playsnd') return playSound(player, opponent, controller, input, commands);
   if (type === 'stopsnd') return stopSound(player, opponent, controller, input, commands);
   if (type === 'sndpan') return panSound(player, opponent, controller, input, commands);
   if (type === 'explod') return createExplod(player, opponent, controller, input, commands);
+  if (type === 'gamemakeanim') return gameMakeAnim(player, opponent, controller, input, commands);
+  if (type === 'makedust') return makeDust(player, opponent, controller, input, commands);
   if (type === 'modifyexplod') return modifyExplod(player, opponent, controller, input, commands);
   if (type === 'removeexplod') return removeExplod(player, opponent, controller, input, commands);
   if (type === 'explodbindtime') return setExplodBindTime(player, opponent, controller, input, commands);
@@ -1853,6 +1857,81 @@ function panSound(
   return withPlayer(player, true, 'SndPan');
 }
 
+function gameMakeAnim(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const animNo = num(controller, 'value', player, input, commands, opponent);
+  if (animNo === null) return withPlayer(player, true, 'GameMakeAnim');
+  const offset = pair(controller, 'pos', player, input, commands, opponent, 0, 0);
+  emitLegacyFightFx(player, input, Math.trunc(animNo), offset, (num(controller, 'under', player, input, commands, opponent) ?? 0) !== 0);
+  return withPlayer(player, true, 'GameMakeAnim');
+}
+
+function makeDust(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const first = pair(controller, 'pos', player, input, commands, opponent, 0, 0);
+  emitLegacyFightFx(player, input, 120, first, false);
+  if (hasParam(controller, 'pos2')) {
+    emitLegacyFightFx(player, input, 120, pair(controller, 'pos2', player, input, commands, opponent, 0, 0), false);
+  }
+  return withPlayer(player, true, 'MakeDust');
+}
+
+function emitLegacyFightFx(
+  player: PlayerState,
+  input: CnsRuntimeInput,
+  animNo: number,
+  offset: { x: number; y: number },
+  under: boolean,
+): void {
+  const entityId = input.entityContext?.entityId ?? player.id;
+  const rootPlayerId = input.entityContext?.rootEntityId ?? player.id;
+  const facing = player.facing;
+  input.onExplodCreate?.({
+    type: 'create',
+    request: {
+      mugenId: 0,
+      owner: { entityId, rootPlayerId },
+      animationOwner: null,
+      animationSource: 'fightfx',
+      animNo,
+      position: { x: player.x + offset.x * facing, y: player.y + offset.y },
+      offset,
+      velocity: { x: 0, y: 0 },
+      acceleration: { x: 0, y: 0 },
+      facing,
+      verticalFacing: 1,
+      postype: 'none',
+      coordinateSpace: 'stage',
+      bind: null,
+      removeTime: -2,
+      spritePriority: under ? -5 : 5,
+      onTop: false,
+      pauseMoveTime: 0,
+      superMoveTime: 0,
+      removeOnGetHit: false,
+      random: { x: 0, y: 0 },
+      render: {
+        transparency: null,
+        alpha: null,
+        scaleX: 1,
+        scaleY: 1,
+        ownPalette: true,
+        shadow: { red: 0, green: 0, blue: 0 },
+      },
+    },
+  });
+}
+
 function createExplod(
   player: PlayerState,
   opponent: PlayerState,
@@ -1860,7 +1939,10 @@ function createExplod(
   input: CnsRuntimeInput,
   commands?: ReadonlySet<string>,
 ): ControllerResult {
-  const owner: RuntimeEntityRef = { entityId: player.id, rootPlayerId: player.id };
+  const owner: RuntimeEntityRef = {
+    entityId: input.entityContext?.entityId ?? player.id,
+    rootPlayerId: input.entityContext?.rootEntityId ?? player.id,
+  };
   const rawAnim = controller.params.anim;
   if (rawAnim === undefined) {
     input.onExplodCreate?.({ type: 'rejected', owner, reason: 'missing_anim', rawAnim: '' });
@@ -2622,6 +2704,23 @@ function environmentShake(
       `  time=${event.time} frequency=${event.frequency} amplitude=${event.amplitude} phase=${event.phase} result=${event.time > 0 ? 'started' : 'no_effect'}`,
     ],
   }, true, 'EnvShake');
+}
+
+function environmentColor(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const color = triple(controller, 'value', player, input, commands, opponent, 0, 0, 0);
+  input.onEnvColor?.({
+    color,
+    time: Math.max(0, Math.trunc(num(controller, 'time', player, input, commands, opponent) ?? 1)),
+    under: (num(controller, 'under', player, input, commands, opponent) ?? 0) !== 0,
+    ownerEntityId: input.entityContext?.entityId ?? player.id,
+  });
+  return withPlayer(player, true, 'EnvColor');
 }
 
 function getIndexedVar(player: PlayerState, kind: PlayerVariableKind, index: number): number {

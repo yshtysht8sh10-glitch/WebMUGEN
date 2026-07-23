@@ -31,6 +31,7 @@ bundled-character usage inventory.
 | Issue ready | Implementation has not started, but a GitHub Issue defines scope, completion criteria, and tests. | 0% |
 | Not started | No implementation, compatibility shim, or prepared Issue has been confirmed. | 0% |
 | Audit needed | Related code may exist, but runtime integration, compatibility, or test evidence has not been verified. | unknown |
+| Not applicable | A later-version or out-of-scope item is retained only to make the WinMUGEN version boundary explicit. | n/a |
 
 Do not combine these meanings under a generic `Partial` label.
 
