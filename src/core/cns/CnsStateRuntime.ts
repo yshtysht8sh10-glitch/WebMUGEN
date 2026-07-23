@@ -86,7 +86,10 @@ export type CnsRuntimeInput = {
   constants?: CnsDocument;
   entityContext?: RuntimeEntityContext;
   numHelper?: (helperId?: number) => number;
+  numProj?: (projectileId?: number) => number;
   numExplod?: (explodId?: number) => number;
+  resolveEntity?: (context: RuntimeEntityContext, kind: 'root' | 'parent' | 'helper' | 'playerid' | 'partner', argument?: number) => PlayerState | undefined;
+  playerIdExists?: (entityId: number) => boolean;
   onHelperSpawn?: (request: HelperSpawnRequest) => void;
   onHelperDestroy?: (entityId: number) => void;
 };
@@ -178,11 +181,16 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
     gameTime: state.frame,
     entityContext: context,
     numHelper: (helperId) => countHelpers(initialHelpers, context.rootEntityId, helperId),
+    numProj: (projectileId) => state.projectiles.filter((entry) => (
+      entry.ownerId === context.rootEntityId && (projectileId === undefined || entry.id === Math.trunc(projectileId))
+    )).length,
     numExplod: (explodId) => state.explods.entries.filter((entry) => (
       entry.owner.entityId === context.entityId && (explodId === undefined || entry.mugenId === Math.trunc(explodId))
     )).length,
     onHelperSpawn: (request) => pendingSpawns.push(request),
     onHelperDestroy: (entityId) => pendingDestroys.add(entityId),
+    resolveEntity: (source, kind, argument) => resolveRuntimeEntity(state, initialHelpers, source, kind, argument),
+    playerIdExists: (entityId) => entityId === 1 || entityId === 2 || initialHelpers.entries.some((entry) => entry.entityId === entityId),
   });
   const p1Context: RuntimeEntityContext = { kind: 'root', entityId: 1, rootEntityId: 1, parentEntityId: null, ownerCharacterId: 1 };
   const p2Context: RuntimeEntityContext = { kind: 'root', entityId: 2, rootEntityId: 2, parentEntityId: null, ownerCharacterId: 2 };
@@ -766,11 +774,17 @@ function createTriggerContext(
     matchOver: input.matchOver,
     roundWinner: input.roundWinner,
     isHelper: input.entityContext?.kind === 'helper',
+    entityId: input.entityContext?.entityId ?? player.id,
     numHelper: input.numHelper,
+    numProj: input.numProj,
     numExplod: input.numExplod,
-    projContactTime: (projectileId) => player.projectileContacts?.[Math.trunc(projectileId)]?.contactTime ?? -1,
-    projHitTime: (projectileId) => player.projectileContacts?.[Math.trunc(projectileId)]?.hitTime ?? -1,
-    projGuardedTime: (projectileId) => player.projectileContacts?.[Math.trunc(projectileId)]?.guardedTime ?? -1,
+    projContactTime: (projectileId) => readProjectileElapsed(player, projectileId, 'contactTime'),
+    projHitTime: (projectileId) => readProjectileElapsed(player, projectileId, 'hitTime'),
+    projGuardedTime: (projectileId) => readProjectileElapsed(player, projectileId, 'guardedTime'),
+    resolveRedirectEntity: (kind, argument) => input.entityContext && input.resolveEntity
+      ? input.resolveEntity(input.entityContext, kind, argument)
+      : undefined,
+    playerIdExists: input.playerIdExists,
     getRedirectAnimationContext: (candidate) => {
       const info = input.getAnimationTriggerInfo?.(candidate.animNo, candidate.animTime) ?? null;
       return {
@@ -783,6 +797,42 @@ function createTriggerContext(
       };
     },
   };
+}
+
+function resolveRuntimeEntity(
+  state: GameState,
+  helpers: GameState['helpers'],
+  source: RuntimeEntityContext,
+  kind: 'root' | 'parent' | 'helper' | 'playerid' | 'partner',
+  argument?: number,
+): PlayerState | undefined {
+  if (kind === 'root') return state.players[source.rootEntityId - 1];
+  if (kind === 'partner') return undefined;
+  if (kind === 'parent') {
+    if (source.parentEntityId === null) return undefined;
+    if (source.parentEntityId === 1 || source.parentEntityId === 2) return state.players[source.parentEntityId - 1];
+    return helpers.entries.find((entry) => entry.entityId === source.parentEntityId)?.player;
+  }
+  if (kind === 'helper') {
+    return helpers.entries.find((entry) => (
+      entry.rootEntityId === source.rootEntityId && (argument === undefined || entry.helperId === argument)
+    ))?.player;
+  }
+  if (argument === 1 || argument === 2) return state.players[argument - 1];
+  return helpers.entries.find((entry) => entry.entityId === argument)?.player;
+}
+
+function readProjectileElapsed(
+  player: PlayerState,
+  projectileId: number,
+  field: 'contactTime' | 'hitTime' | 'guardedTime',
+): number {
+  const contacts = player.projectileContacts ?? {};
+  if (projectileId > 0) return contacts[Math.trunc(projectileId)]?.[field] ?? -1;
+  const elapsed = Object.values(contacts)
+    .map((entry) => entry[field])
+    .filter((value) => value >= 0);
+  return elapsed.length > 0 ? Math.min(...elapsed) : -1;
 }
 
 function evaluateTriggerRecords(controller: CnsStateController, context: CnsRuntimeTriggerContext): boolean {

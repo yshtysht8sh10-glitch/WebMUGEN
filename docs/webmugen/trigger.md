@@ -195,6 +195,16 @@ Projectile contact uses the same attacker-side MoveContact result shape. This le
 
 `ProjHitTime(id)` reads root-owner Projectile contact history. A successful hit stores time 1 for the next CNS evaluation, the value remains frozen during attacker HitPause, and subsequent unpaused ticks increment it. `NumExplod(id)` counts live Explods owned by the evaluating entity and supports an evaluated optional id. Together with selective `ignorehitpause` execution, these drive bundled T-H-M-A State -2's four fire Explods after Projectile 1005 hits.
 
+`ProjContact`, `ProjHit`, and `ProjGuarded` share the same production contact history and support the
+old-style optional ID suffix, simple current-tick form, and elapsed-time comparison. Their `*Time(id)`
+forms read the same counters. Omitted or non-positive IDs select the most recent applicable history;
+exact cancel/replacement and Helper-owned Projectile ordering remain Partial. `NumProj` and
+`NumProjID(id)` count live entries owned by the evaluating root.
+
+Root, Parent, Helper, and PlayerID redirects resolve committed runtime entities instead of falling
+back to self. Root players have no Parent, missing lookups return SFalse, MUGEN Helper IDs remain
+separate from unique entity IDs, and `ID` / `PlayerIDExist(expr)` use the unique entity ID space.
+
 Old-style `ProjHit[ID] = value` reads the same history. Its simple form reports a successful hit only while the matching history value is 1; the optional `, operator time` form compares the elapsed hit time. An omitted suffix or ID 0 selects the most recent contact from any Projectile ID. Guard and miss paths do not report a hit. Each accepted repeated hit resets the matching ID and ID-0 histories to 1, while other Projectile IDs remain distinguishable. Bundled T-H-M-A State -2 uses this path to execute `TargetState value = 280` after Projectile 1000 hit pause.
 
 ## Target lookup

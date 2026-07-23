@@ -31,10 +31,14 @@ export type CnsRuntimeTriggerContext = {
   constants?: CnsDocument;
   isHelper?: boolean;
   numHelper?: (helperId?: number) => number;
+  numProj?: (projectileId?: number) => number;
   numExplod?: (explodId?: number) => number;
   projContactTime?: (projectileId: number) => number;
   projHitTime?: (projectileId: number) => number;
   projGuardedTime?: (projectileId: number) => number;
+  entityId?: number;
+  resolveRedirectEntity?: (kind: 'root' | 'parent' | 'helper' | 'playerid' | 'partner', argument?: number) => PlayerState | undefined;
+  playerIdExists?: (entityId: number) => boolean;
   getRedirectAnimationContext?: (player: PlayerState) => Pick<
     CnsRuntimeTriggerContext,
     'animTime' | 'animElemNo' | 'animElemTime' | 'animElemStarted' | 'animElemCount' | 'animElemTimes'
@@ -151,8 +155,8 @@ function compileBooleanExpression(expression: string): BooleanSource {
 }
 
 function compileComparison(expression: string): BooleanSource {
-  const projHit = compileProjHitComparison(expression);
-  if (projHit) return projHit;
+  const projectileStatus = compileProjectileStatusComparison(expression);
+  if (projectileStatus) return projectileStatus;
 
   const animElemMatch = expression.match(/^animelem\s*=\s*(-?\d+)(?:\s*,\s*(=|!=|>=|<=|>|<)?\s*(-?\d+))?$/i);
   if (animElemMatch) {
@@ -370,8 +374,8 @@ function evaluateBooleanExpression(expression: string, context: CnsRuntimeTrigge
 }
 
 function evaluateComparison(expression: string, context: CnsRuntimeTriggerContext): boolean {
-  const projHit = compileProjHitComparison(expression);
-  if (projHit) return projHit(context);
+  const projectileStatus = compileProjectileStatusComparison(expression);
+  if (projectileStatus) return projectileStatus(context);
 
   const animElemMatch = expression.match(/^animelem\s*=\s*(-?\d+)(?:\s*,\s*(=|!=|>=|<=|>|<)?\s*(-?\d+))?$/i);
   if (animElemMatch) {
@@ -633,7 +637,17 @@ function getNumberSource(rawName: string): NumberSource | null {
   if (getHitVarMatch) return (context) => readGetHitVar(context.player, getHitVarMatch[1]);
 
   const numProjIdMatch = name.match(/^numprojid\((\d+)\)$/);
-  if (numProjIdMatch) return () => 0;
+  if (numProjIdMatch) return (context) => context.numProj?.(Number(numProjIdMatch[1])) ?? 0;
+
+  const playerIdExistMatch = name.match(/^playeridexist\((.+)\)$/);
+  if (playerIdExistMatch) {
+    const idSource = compileNumberExpression(playerIdExistMatch[1]);
+    if (!idSource) return null;
+    return (context) => {
+      const id = idSource(context);
+      return id === null ? null : context.playerIdExists?.(Math.trunc(id)) ? 1 : 0;
+    };
+  }
 
   const numHelperMatch = name.match(/^numhelper(?:\((.+)\))?$/);
   if (numHelperMatch) {
@@ -744,11 +758,12 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'movehit': return (context) => context.player.moveContact?.hit ? context.player.moveContact.elapsed ?? 1 : 0;
     case 'moveguarded': return (context) => context.player.moveContact?.guarded ? context.player.moveContact.elapsed ?? 1 : 0;
     case 'numenemy': return (context) => (context.opponent ? 1 : 1);
-    case 'numproj': return () => 0;
+    case 'numproj': return (context) => context.numProj?.() ?? 0;
     case 'numexplod': return (context) => context.numExplod?.() ?? 0;
     case 'numpartner': return () => 0;
     case 'numcommand': return (context) => context.commands?.size ?? 0;
     case 'ishelper': return (context) => context.isHelper ? 1 : 0;
+    case 'id': return (context) => context.entityId ?? context.player.id;
     case 'backedgedist': return (context) => context.player.x;
     case 'frontedgedist': return (context) => (context.screenWidth ?? 960) - context.player.x;
     case 'backedgebodydist': return (context) => context.player.facing === 1
@@ -808,25 +823,30 @@ function getFunctionNumberSource(name: string): NumberSource | null {
   return null;
 }
 
-function compileProjHitComparison(expression: string): BooleanSource | null {
+function compileProjectileStatusComparison(expression: string): BooleanSource | null {
   const match = expression.match(
-    /^projhit(\d*)\s*(=|!=|>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)(?:\s*,\s*(=|!=|>=|<=|>|<)\s*(-?\d+(?:\.\d+)?))?$/i,
+    /^proj(hit|contact|guarded)(-?\d*)\s*(=|!=|>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)(?:\s*,\s*(=|!=|>=|<=|>|<)\s*(-?\d+(?:\.\d+)?))?$/i,
   );
   if (!match) return null;
-  const projectileId = match[1] === '' ? 0 : Number(match[1]);
-  const valueOperator = match[2];
-  const expectedValue = Number(match[3]);
-  const timeOperator = match[4];
-  const expectedTime = match[5] === undefined ? undefined : Number(match[5]);
+  const kind = match[1].toLowerCase();
+  const projectileId = match[2] === '' ? 0 : Number(match[2]);
+  const valueOperator = match[3];
+  const expectedValue = Number(match[4]);
+  const timeOperator = match[5];
+  const expectedTime = match[6] === undefined ? undefined : Number(match[6]);
 
   return (context) => {
-    const hitTime = context.projHitTime?.(projectileId) ?? -1;
+    const elapsed = kind === 'contact'
+      ? context.projContactTime?.(projectileId) ?? -1
+      : kind === 'guarded'
+        ? context.projGuardedTime?.(projectileId) ?? -1
+        : context.projHitTime?.(projectileId) ?? -1;
     if (timeOperator && expectedTime !== undefined) {
-      return compareNumber(hitTime >= 0 ? 1 : 0, valueOperator, expectedValue)
-        && hitTime >= 0
-        && compareNumber(hitTime, timeOperator, expectedTime);
+      return compareNumber(elapsed >= 0 ? 1 : 0, valueOperator, expectedValue)
+        && elapsed >= 0
+        && compareNumber(elapsed, timeOperator, expectedTime);
     }
-    return compareNumber(hitTime === 1 ? 1 : 0, valueOperator, expectedValue);
+    return compareNumber(elapsed === 1 ? 1 : 0, valueOperator, expectedValue);
   };
 }
 
@@ -870,10 +890,10 @@ function getRedirectBooleanSource(name: string): BooleanSource | null {
   };
 }
 
-type RedirectKind = 'enemynear' | 'enemy' | 'target' | 'parent' | 'root';
+type RedirectKind = 'enemynear' | 'enemy' | 'target' | 'parent' | 'root' | 'helper' | 'playerid' | 'partner';
 
 function parseRedirect(name: string): { kind: RedirectKind; argument?: string; expression: string } | null {
-  const match = name.match(/^(enemynear|enemy|target|parent|root)(?:\(([^)]*)\))?\s*,\s*(.+)$/);
+  const match = name.match(/^(enemynear|enemy|target|parent|root|helper|playerid|partner)(?:\(([^)]*)\))?\s*,\s*(.+)$/);
   if (!match) return null;
   return { kind: match[1] as RedirectKind, argument: match[2]?.trim() || undefined, expression: match[3] };
 }
@@ -883,7 +903,11 @@ function compileRedirectPlayerResolver(
 ): (context: CnsRuntimeTriggerContext) => PlayerState | undefined {
   const argumentSource = parsed.argument === undefined ? null : compileNumberExpression(parsed.argument);
   return (context) => {
-    if (parsed.kind === 'parent' || parsed.kind === 'root') return context.player;
+    if (parsed.kind === 'parent' || parsed.kind === 'root' || parsed.kind === 'helper' || parsed.kind === 'playerid' || parsed.kind === 'partner') {
+      const argument = parsed.argument === undefined ? undefined : argumentSource?.(context);
+      if (parsed.argument !== undefined && (argument === null || argument === undefined)) return undefined;
+      return context.resolveRedirectEntity?.(parsed.kind, argument === undefined ? undefined : Math.trunc(argument));
+    }
     if (parsed.kind === 'target') {
       const requestedId = parsed.argument === undefined ? undefined : argumentSource?.(context);
       if (parsed.argument !== undefined && (requestedId === null || requestedId === undefined)) return undefined;
@@ -908,7 +932,11 @@ function resolveRedirectPlayer(
   argument: string | undefined,
   context: CnsRuntimeTriggerContext,
 ): PlayerState | undefined {
-  if (kind === 'parent' || kind === 'root') return context.player;
+  if (kind === 'parent' || kind === 'root' || kind === 'helper' || kind === 'playerid' || kind === 'partner') {
+    const requestedId = argument === undefined ? undefined : readNumberExpression(argument, context);
+    if (argument !== undefined && requestedId === null) return undefined;
+    return context.resolveRedirectEntity?.(kind, requestedId === undefined ? undefined : Math.trunc(requestedId));
+  }
   if (kind === 'target') {
     const requestedId = argument === undefined ? undefined : readNumberExpression(argument, context);
     if (argument !== undefined && requestedId === null) return undefined;
