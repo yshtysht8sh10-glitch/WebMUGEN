@@ -210,6 +210,8 @@ export type PlayerState = {
   moveType: 'I' | 'A' | 'H';
   physics: 'S' | 'C' | 'A' | 'N';
   ctrl: boolean;
+  airJumpsUsed?: number;
+  airJumpInputHeld?: boolean;
   animNo: number;
   animTime: number;
   hitPause: number;

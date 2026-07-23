@@ -35,8 +35,14 @@ The baseline common movement flow is:
 holdup command
   -> State 40 jump start
   -> State 50 airborne movement through physics = A
+  -> fresh Up above airjump.height and within airjump.num enters State 45
+  -> State 45 applies airjump.neu/fwd/back velocity and returns to State 50
   -> State 52 jump land when air physics reaches the ground
 ```
+
+AirJump is root-player special-State behavior, not a hidden KFM route or a replacement State body in
+`common.cmd`. The runtime tracks a fresh Up press and the per-jump budget, while the unmodified State
+45 CNS remains responsible for animation, direction selection, velocity, and the State 50 return.
 
 `State 51` is not the general landing target. It can exist for compatibility or character-specific air-state routing, but ground contact should not require a `50 -> 51` command route.
 

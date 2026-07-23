@@ -17,7 +17,7 @@ Follow `docs/webmugen/development-policy.md`: common movement routing belongs in
 | Hold direction `/D` | Complete | Used for crouch route. | Complex combined syntax needs audit. |
 | Hold direction `/F` | Complete | Used for walk-forward route. | Direction depends on facing/context assumptions. |
 | Hold direction `/B` | Complete | Used for walk-back route. | Direction depends on facing/context assumptions. |
-| Hold direction `/U` | Complete | Used for jump route. | Air-jump/common-state behavior incomplete. |
+| Hold direction `/U` | Complete | Used for ground jump routing; a release/re-press also feeds root-player special State 45 AirJump handling. | Exact Pause/SuperPause timing remains under audit. |
 | Direction sequences | Partial | Facing-relative sequences are verified through T-H-M-A and focused tests. A held diagonal may satisfy a neighboring cardinal step for normal leniency, but one unchanged diagonal stretch cannot be reused as alternating `D, F, D, F` inputs. | Other sequence forms and charge syntax need audit. |
 | Button sequences | Partial | Basic support; simple button commands are kept briefly active. | Full sequence timing and cancel windows need audit. |
 | Simultaneous buttons | Partial | Basic syntax exists. | Full parsing/timing behavior needs audit. |

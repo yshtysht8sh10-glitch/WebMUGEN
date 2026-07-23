@@ -369,6 +369,10 @@ function stepPlayer(
     }
   }
 
+  const airJump = applyCommonAirJump(next, opponent, cns, input, commands);
+  next = airJump.player;
+  if (traceDiagnosticsEnabled && airJump.diagnostic) appendDebug(trace, airJump.diagnostic);
+
   const stateDef = findState(cns, next.stateNo);
   trace.stateFound = Boolean(stateDef);
   if (!stateDef) {
@@ -682,6 +686,49 @@ function applyStateHeader(player: PlayerState, stateDef: CnsStateDefinition): Pl
     animTime: player.animTime,
     vx: applyEntryVelocity ? stateDef.velocitySet!.x * player.facing : player.vx,
     vy: applyEntryVelocity ? stateDef.velocitySet!.y : player.vy,
+  };
+}
+
+function applyCommonAirJump(
+  player: PlayerState,
+  opponent: PlayerState,
+  cns: CnsDocument,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): { player: PlayerState; diagnostic?: string } {
+  const upHeld = commands?.has('up') === true || commands?.has('holdup') === true;
+  const newlyPressed = upHeld && player.airJumpInputHeld !== true;
+  const airJumpsUsed = player.stateType === 'A' ? player.airJumpsUsed ?? 0 : 0;
+  const tracked = { ...player, airJumpsUsed, airJumpInputHeld: upHeld };
+  const allowed = Math.max(0, Math.trunc(readCnsConst(cns, 'movement.airjump.num')));
+  const minimumHeight = Math.max(0, readCnsConst(cns, 'movement.airjump.height'));
+  const mugenY = player.y - DEFAULT_GROUND_Y;
+  const isRoot = input.entityContext?.kind !== 'helper';
+  const airJumpState = findState(cns, 45);
+  const canEnter = isRoot
+    && player.stateType === 'A'
+    && player.ctrl
+    && newlyPressed
+    && airJumpsUsed < allowed
+    && mugenY <= -minimumHeight
+    && Boolean(airJumpState);
+
+  if (!canEnter) {
+    return {
+      player: tracked,
+      diagnostic: newlyPressed && player.stateType === 'A'
+        ? `airjump skip used=${airJumpsUsed}/${allowed} posY=${mugenY} height=${minimumHeight} ctrl=${player.ctrl ? 1 : 0} state45=${airJumpState ? 1 : 0} root=${isRoot ? 1 : 0}`
+        : undefined,
+    };
+  }
+
+  return {
+    player: {
+      ...enterState(tracked, opponent, 45, cns, input, commands),
+      airJumpsUsed: airJumpsUsed + 1,
+      airJumpInputHeld: true,
+    },
+    diagnostic: `airjump enter used=${airJumpsUsed + 1}/${allowed} posY=${mugenY} height=${minimumHeight}`,
   };
 }
 

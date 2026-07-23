@@ -64,6 +64,9 @@ describe('character-specific common jump profile', () => {
     expect(readNumberExpression('Const(velocity.jump.neu.y)', { player, constants: profile })).toBe(-8.4);
     expect(readNumberExpression('Const(velocity.jump.fwd.x)', { player, constants: profile })).toBe(2.5);
     expect(readNumberExpression('Const(velocity.runjump.back.y)', { player, constants: profile })).toBe(-8.2);
+    expect(readNumberExpression('Const(velocity.airjump.y)', { player, constants: profile })).toBe(-8.1);
+    expect(readNumberExpression('Const(velocity.airjump.fwd.x)', { player, constants: profile })).toBe(2.5);
+    expect(readNumberExpression('Const(velocity.airjump.back.x)', { player, constants: profile })).toBe(-2.55);
     expect(evaluateCnsRuntimeTrigger('Const(movement.yaccel) = .44', { player, constants: profile })).toBe(true);
   });
 
@@ -108,6 +111,97 @@ yaccel = .47
     const next = stepCnsPhysicsMotion(state, profile);
     expect(next.players[0]).toMatchObject({ physics: 'N', vy: -3, y: DEFAULT_GROUND_Y - 3 });
   });
+
+  it('enters common State 45 on a fresh up press after reaching the configured air-jump height', () => {
+    const state = withAirPlayer(createInitialGameState(), {
+      ctrl: true,
+      y: DEFAULT_GROUND_Y - 50,
+      airJumpInputHeld: false,
+    });
+    const result = stepCnsStateRuntime(state, profile, {
+      p1Commands: new Set(['holdup', 'up', 'holdfwd']),
+      p2Commands: new Set(),
+      getAnimationDuration: () => 60,
+    });
+
+    expect(result.state.players[0]).toMatchObject({
+      stateNo: 45,
+      stateType: 'A',
+      physics: 'N',
+      ctrl: false,
+      airJumpsUsed: 1,
+      airJumpInputHeld: true,
+    });
+    expect(result.traces[0].debugLines).toContain('airjump enter used=1/1 posY=-50 height=35');
+
+    let advanced = stepCnsPhysicsMotion(result.state, profile);
+    advanced = stepCnsStateRuntime(advanced, profile, {
+      p1Commands: new Set(['holdup', 'up', 'holdfwd']),
+      p2Commands: new Set(),
+      getAnimationDuration: () => 60,
+    }).state;
+    advanced = stepCnsPhysicsMotion(advanced, profile);
+    advanced = stepCnsStateRuntime(advanced, profile, {
+      p1Commands: new Set(['holdup', 'up', 'holdfwd']),
+      p2Commands: new Set(),
+      getAnimationDuration: () => 60,
+    }).state;
+    expect(advanced.players[0]).toMatchObject({ stateNo: 50, physics: 'A', ctrl: true });
+    expect(advanced.players[0].vx).toBeCloseTo(2.5);
+    expect(advanced.players[0].vy).toBeCloseTo(-8.1);
+  });
+
+  it('requires a released up input and enforces height, count, and control gates', () => {
+    const base = withAirPlayer(createInitialGameState(), {
+      ctrl: true,
+      y: DEFAULT_GROUND_Y - 50,
+      airJumpInputHeld: true,
+    });
+    const held = stepCnsStateRuntime(base, profile, {
+      p1Commands: new Set(['holdup', 'up']),
+      p2Commands: new Set(),
+    }).state;
+    expect(held.players[0].stateNo).toBe(50);
+
+    const released = stepCnsStateRuntime(held, profile, {
+      p1Commands: new Set(),
+      p2Commands: new Set(),
+    }).state;
+    expect(released.players[0].airJumpInputHeld).toBe(false);
+    expect(stepCnsStateRuntime(released, profile, {
+      p1Commands: new Set(['holdup', 'up']),
+      p2Commands: new Set(),
+    }).state.players[0].stateNo).toBe(45);
+
+    for (const patch of [
+      { y: DEFAULT_GROUND_Y - 34 },
+      { airJumpsUsed: 1 },
+      { ctrl: false },
+    ] satisfies Array<Partial<PlayerState>>) {
+      const blocked = withAirPlayer(createInitialGameState(), {
+        ctrl: true,
+        y: DEFAULT_GROUND_Y - 50,
+        airJumpInputHeld: false,
+        ...patch,
+      });
+      expect(stepCnsStateRuntime(blocked, profile, {
+        p1Commands: new Set(['holdup', 'up']),
+        p2Commands: new Set(),
+      }).state.players[0].stateNo).toBe(50);
+    }
+
+    const disabledProfile = createProfile({
+      neutral: [0, -8.4], forward: [2.5, -8.1], back: [-2.55, -8.1],
+      runForward: [4, -8.1], runBack: [-3.5, -8.2], yAccel: 0.44, airJumpNum: 0,
+    });
+    expect(stepCnsStateRuntime({
+      ...base,
+      players: [{ ...base.players[0], airJumpInputHeld: false }, base.players[1]],
+    }, disabledProfile, {
+      p1Commands: new Set(['holdup', 'up']),
+      p2Commands: new Set(),
+    }).state.players[0].stateNo).toBe(50);
+  });
 });
 
 function createProfile(values: {
@@ -117,6 +211,7 @@ function createProfile(values: {
   runForward: [number, number];
   runBack: [number, number];
   yAccel: number;
+  airJumpNum?: number;
 }) {
   const character = parseCnsText(`
 [Velocity]
@@ -125,8 +220,13 @@ jump.fwd = ${values.forward.join(',')}
 jump.back = ${values.back.join(',')}
 runjump.fwd = ${values.runForward.join(',')}
 runjump.back = ${values.runBack.join(',')}
+airjump.neu = 0,-8.1
+airjump.fwd = 2.5,-8.1
+airjump.back = -2.55,-8.1
 
 [Movement]
+airjump.num = ${values.airJumpNum ?? 1}
+airjump.height = 35
 yaccel = ${values.yAccel}
 `);
   return mergeMissingCnsStates(mergeMissingCnsStates(character, commonCns), commonCmd);

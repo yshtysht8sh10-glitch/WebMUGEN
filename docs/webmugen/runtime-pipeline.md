@@ -180,6 +180,21 @@ Debug shows state=10
 
 If the screen does not crouch, check whether the runtime reached State 10 or whether rendering/animation failed after State 10.
 
+## Common movement route example: air jump
+
+```text
+release Up after the ground jump
+  -> fresh Up press while controlled and StateType=A
+  -> Pos Y <= -Const(movement.airjump.height)
+  -> used air jumps < Const(movement.airjump.num)
+  -> root-player special handling enters State 45
+  -> common State 45 selects airjump.neu/fwd/back velocity
+  -> State 50 resumes air physics
+```
+
+The runtime trace records `airjump enter` or a gated `airjump skip` with count, height, control,
+State 45 availability, and root/helper scope. Holding the original Up input is not a fresh press.
+
 ## Common hit fall route example: launched defender
 
 ```text

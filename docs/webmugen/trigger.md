@@ -131,7 +131,7 @@ target selection, different local coordinate spaces, and Helper redirect ownersh
 
 ## Character constants
 
-`Const(...)` first resolves the current character CNS metadata. `[Velocity]` pairs expose their requested X/Y component, including `jump.neu`, `jump.fwd`, `jump.back`, `runjump.fwd`, and `runjump.back`; a directional entry that defines only X inherits the same character's `jump.neu` Y, as used by bundled real character data. `[Movement] yaccel` feeds both expressions and `Physics=A`. Existing defaults remain only for missing values already covered by the former compatibility table. Other WinMUGEN constant families and coordinate scaling remain Partial.
+`Const(...)` first resolves the current character CNS metadata. `[Velocity]` pairs expose their requested X/Y component, including `jump.neu`, `jump.fwd`, `jump.back`, `runjump.fwd`, `runjump.back`, and `airjump.neu/fwd/back`; `Const(velocity.airjump.y)` reads the neutral AirJump Y component. A directional entry that defines only X inherits the matching neutral jump or air-jump Y. `[Movement] airjump.num`, `airjump.height`, and `yaccel` feed special State 45 handling, expressions, and `Physics=A`. Existing defaults remain only for missing values already covered by the former compatibility table. Other WinMUGEN constant families and coordinate scaling remain Partial.
 
 ## Safe defaults
 

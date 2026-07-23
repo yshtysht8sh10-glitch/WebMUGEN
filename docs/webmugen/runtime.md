@@ -17,6 +17,13 @@ Its responsibilities are:
 - apply centralized state entry;
 - record traces for Debug Overlay and Runtime History.
 
+Root-player common-state handling also owns WinMUGEN's special AirJump bookkeeping. After ordinary
+negative-State command routes have had priority, a fresh Up press may enter State 45 only while the
+player has control, is airborne at least `Const(movement.airjump.height)` above ground, and has not
+used `Const(movement.airjump.num)` air jumps. Grounded execution resets the count. A held Up input is
+latched so the original jump press cannot automatically trigger the air jump when the height threshold
+is crossed. Helpers do not receive this root-only special-State behavior.
+
 ## Runtime order
 
 For each root player, the current order is:

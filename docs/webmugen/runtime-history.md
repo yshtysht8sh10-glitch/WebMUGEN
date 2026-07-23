@@ -18,6 +18,7 @@ This is especially important for short routes such as:
 - State 10 → State 11 crouch hold;
 - State 0 → State 20 walk;
 - State 40 → State 50 jump, including character `jump.*` / `runjump.*` velocity and `movement.yaccel` in the physics line;
+- State 50 -> State 45 -> State 50 air jump, including fresh-Up gating, used/allowed count, minimum height, and character `airjump.*` velocity;
 - attack startup and cancel windows.
 
 ## Snapshot rule

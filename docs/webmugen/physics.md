@@ -82,6 +82,12 @@ and its explicit velocity until its edge trigger changes to State 281.
 
 Jump State 40 comes from the character's DEF-selected `stcommon` or external `public/chars/common1.cns`; `public/chars/common.cmd` supplies only the visible `holdup -> State 40` route and does not replace the State body. `Const(velocity.jump.y)` resolves the character `jump.neu` Y, and directional X plus the standard forward run-jump override follow the selected common State. VelSet converts X by Facing once and leaves MUGEN Y unchanged. State 50 then uses character air acceleration until the tested State 52 ground transition.
 
+For root players, a released-and-pressed Up input in controlled StateType A enters special State 45
+only after the character's `movement.airjump.height` threshold and while its `movement.airjump.num`
+budget remains. State 45 remains data-driven: `Const(velocity.airjump.y)` resolves `airjump.neu` Y,
+directional X resolves `airjump.neu/fwd/back`, and the unmodified common State returns to State 50.
+The count resets on grounded execution; holding the original jump input does not retrigger it.
+
 On HitDef contact, the defender receives `ground.velocity` or `air.velocity` according to its StateType at contact. CNS X is converted once into the defender reaction direction: the common negative value sends the target away from the attacker for either Facing. Y remains in CNS/internal velocity coordinates. Physics does not clear velocity during hit pause and begins integrating it when pause ends. Guard contact separately applies Facing-relative `guard.velocity`.
 
 Projectile contact uses the same split between world-space live velocity and the WinMUGEN-relative HitDef snapshot. It records `hitVel`, hit time, fall values, and `GetHitVar(yaccel)` before entering the common get-hit States with `Physics=N`. This is required because States 5030/5040 apply gravity explicitly; retaining only the initial projectile Y velocity would send a launched defender upward indefinitely.

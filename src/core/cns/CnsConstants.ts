@@ -5,8 +5,8 @@ export function readCnsConst(document: CnsDocument | null | undefined, rawName: 
   const configured = readConfiguredConst(document, name);
   if (configured !== null) return configured;
 
-  if (/^velocity\.(?:jump\.(?:fwd|back)|runjump\.(?:fwd|back))\.y$/.test(name)) {
-    const sharedJumpY = readConfiguredConst(document, 'velocity.jump.neu.y');
+  if (/^velocity\.(?:jump\.(?:fwd|back)|runjump\.(?:fwd|back)|airjump\.(?:fwd|back))\.y$/.test(name)) {
+    const sharedJumpY = readConfiguredConst(document, name.includes('airjump.') ? 'velocity.airjump.neu.y' : 'velocity.jump.neu.y');
     if (sharedJumpY !== null) return sharedJumpY;
   }
 
@@ -19,6 +19,7 @@ function readConfiguredConst(document: CnsDocument | null | undefined, name: str
   if (name.startsWith('velocity.')) {
     const velocityName = name.slice('velocity.'.length);
     if (velocityName === 'jump.y') return readSectionComponent(document, 'velocity', 'jump.neu', 1);
+    if (velocityName === 'airjump.y') return readSectionComponent(document, 'velocity', 'airjump.neu', 1);
 
     const componentMatch = velocityName.match(/^(.+)\.(x|y)$/);
     if (!componentMatch) return null;
@@ -62,6 +63,10 @@ function readDefaultConst(name: string): number {
     case 'velocity.jump.neu.x': return 0;
     case 'velocity.jump.fwd.x': return 3.2;
     case 'velocity.jump.back.x': return -3.2;
+    case 'velocity.airjump.y': return -8.1;
+    case 'velocity.airjump.neu.x': return 0;
+    case 'velocity.airjump.fwd.x': return 3.2;
+    case 'velocity.airjump.back.x': return -3.2;
     case 'movement.airjump.num': return 1;
     case 'movement.airjump.height': return 35;
     case 'movement.yaccel': return 0.6;
