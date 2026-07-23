@@ -8,7 +8,7 @@ describe('PhysicsDebugOverlay', () => {
     const lines = formatPhysicsDebugOverlay({
       ...state,
       players: [
-        { ...state.players[0], power: 120 },
+        { ...state.players[0], power: 120, debugClipboard: 'x=12' },
         { ...state.players[1], juggle: 6, juggleRemaining: 4, juggleMax: 15, guardIntent: true, guardCrouchIntent: true },
       ],
     });
@@ -22,5 +22,6 @@ describe('PhysicsDebugOverlay', () => {
     expect(lines[1]).toContain('juggleRemaining=4/15');
     expect(lines[1]).toContain('guard=back+down');
     expect(lines[1]).toContain('owner=2/2');
+    expect(lines[0]).toContain('clipboard="x=12"');
   });
 });

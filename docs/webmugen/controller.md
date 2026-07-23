@@ -73,8 +73,10 @@ browser integration boundary.
 
 `DisplayToClipboard`, `AppendToClipboard`, and `ClearClipboard` maintain a per-player debug buffer.
 The runtime supports six evaluated parameters, integer/floating/exponential formats, `%%`, and common
-escapes. `ForceFeedback` emits a normalized owner/waveform/time/amplitude/frequency request; device
-support and vibration execution remain adapter-dependent and unsupported devices are a safe no-op.
+escapes, and Physics Debug Overlay shows each player's retained buffer. `ForceFeedback` emits a
+normalized owner/waveform/time/amplitude/frequency request; the app maps it to a connected browser
+Gamepad dual-rumble actuator and safely ignores missing/rejected hardware. Physical-device behavior,
+player-to-pad assignment, disconnect cancellation, and waveform parity remain manual/incomplete.
 
 `PalFX` creates a timed player-scoped palette state using `time`, `add`, `mul`, `sinadd`,
 `invertall`, and `color`; Canvas applies the same documented filter approximation already used by

@@ -88,6 +88,7 @@ import { formatCnsRuntimeDebugOverlay } from './CnsRuntimeDebugOverlay';
 import { formatCnsCommandDebugOverlay } from './CnsCommandDebugOverlay';
 import { formatCnsCoverageDebugOverlay } from './CnsCoverageDebugOverlay';
 import { formatPhysicsDebugOverlay } from './PhysicsDebugOverlay';
+import { playForceFeedback } from '../core/input/ForceFeedbackAdapter';
 import { InputBuffer } from '../input/InputBuffer';
 import { HitPauseCommandBuffer } from '../input/HitPauseCommandBuffer';
 import { resolveCommands } from '../input/CommandResolver';
@@ -493,6 +494,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             onBgPalFx: (event) => bgPalFxEvents.push(event),
             onAllPalFx: (event) => allPalFxEvents.push(event),
             onEnvColor: (event) => envColorEvents.push(event),
+            onForceFeedback: (event) => { void playForceFeedback(event); },
             onProjectileCreate: (projectile) => projectileEvents.push({
               ...projectile,
               hitBox: getProjectileHitBox(character.air, projectile.animNo) ?? projectile.hitBox,

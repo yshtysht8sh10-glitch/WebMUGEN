@@ -24,6 +24,7 @@ function formatPlayerPhysicsDebug(label: string, player: PlayerState): string {
     `vel=(${formatNumber(player.vx)},${formatNumber(player.vy)})`,
     `time=${player.stateTime}`,
     `anim=${player.animNo}:${player.animTime}`,
+    `clipboard=${JSON.stringify(player.debugClipboard ?? '')}`,
   ].join(' ');
 }
 
