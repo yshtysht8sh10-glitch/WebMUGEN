@@ -9,7 +9,7 @@ import { readNumberExpression } from '../core/cns/CnsRuntimeTrigger';
 import { analyzeCnsCoverage } from '../core/cns/CnsCoverageDiagnostics';
 import { createInitialGameState } from '../core/engine/GameState';
 import { formatScenarioFrame, holdP1Keys, neutral, simulateCnsInputScenario } from '../testing/CnsInputScenarioSimulator';
-import { createSampleCharacterAssets, loadAppCharacter } from './AppCharacterLoader';
+import { createSampleCharacterAssets, loadAppCharacter, readCharacterRuntimeMetadata } from './AppCharacterLoader';
 
 class FakeImageData {
   data: Uint8ClampedArray;
@@ -39,11 +39,12 @@ describe('AppCharacterLoader', () => {
   it('loads a character from a zip archive', async () => {
     const sndBytes = makeSingleSampleSnd(4, 2, new Uint8Array([82, 73, 70, 70, 1, 0, 0, 0, 87, 65, 86, 69]));
     const zipBytes = zipSync({
-      'Demo/Demo.def': strToU8('[Files]\ncmd = Demo.cmd\ncns = Demo.cns\nanim = Demo.air\nsound = audio/Demo.snd\n'),
+      'Demo/Demo.def': strToU8('[Info]\nname = "Metadata Fighter"\nauthor = "Metadata Author"\n\n[Files]\ncmd = Demo.cmd\ncns = Demo.cns\nanim = Demo.air\nsound = audio/Demo.snd\npal3 = palettes/demo.act\n'),
       'Demo/Demo.cns': strToU8('[StateDef 0]\ntype = S\nmovetype = I\nphysics = S\nanim = 0\nctrl = 1\n'),
       'Demo/Demo.air': strToU8('Begin Action 0\n0,0, 0,0, 5\n'),
       'Demo/Demo.cmd': strToU8('[Command]\nname = "a"\ncommand = a\ntime = 1\n'),
       'Demo/audio/Demo.snd': sndBytes,
+      'Demo/palettes/demo.act': new Uint8Array(768),
       'chars/common.cmd': strToU8('[Command]\nname = "holdup"\ncommand = /U\n'),
     });
     const originalFetch = globalThis.fetch;
@@ -65,6 +66,9 @@ describe('AppCharacterLoader', () => {
       expect(result.character?.air.actions[0].actionNo).toBe(0);
       expect(result.character?.cmd.commands.map((command) => command.name)).toContain('a');
       expect(result.character?.sounds?.samplesByKey.get('4,2')?.bytes).toEqual(sndBytes.slice(528));
+      expect(readCharacterRuntimeMetadata(result.character!)).toEqual({
+        name: 'Metadata Fighter', authorName: 'Metadata Author', palNo: 3,
+      });
       expect(result.character?.cnsSourceFiles?.map((file) => file.path)).toEqual(expect.arrayContaining([
         'Demo/Demo.def',
         'Demo/Demo.cns',

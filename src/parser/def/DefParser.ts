@@ -43,6 +43,13 @@ export function getDefSection(document: DefDocument, name: string): DefSection |
   return document.sections.find((section) => section.name.toLowerCase() === lowerName);
 }
 
+export function getDefValue(document: DefDocument | null | undefined, sectionName: string, key: string): string | null {
+  if (!document) return null;
+  const value = getDefSection(document, sectionName)?.values.get(key.toLowerCase());
+  if (value === undefined) return null;
+  return value.trim().replace(/^"|"$/g, '');
+}
+
 export function getCharacterDefFiles(document: DefDocument): CharacterDefFiles {
   const files = getDefSection(document, 'Files');
   if (!files) {

@@ -477,8 +477,11 @@ function getStringSource(rawName: string): StringSource | null {
     case 'p2movetype': return (context) => context.opponent?.moveType ?? 'I';
     case 'p2name': return (context) => readOptionalString(context.opponent, 'name', '');
     case 'p2authorname': return (context) => readOptionalString(context.opponent, 'authorName', '');
+    case 'p1name':
     case 'name': return (context) => readOptionalString(context.player, 'name', '');
     case 'authorname': return (context) => readOptionalString(context.player, 'authorName', '');
+    case 'p3name':
+    case 'p4name': return () => '';
     default: return getRedirectStringSource(name);
   }
 }
@@ -659,6 +662,7 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'teamside': return (context) => context.teamSide ?? context.player.id;
     case 'power': return (context) => readOptionalNumber(context.player, 'power', 0);
     case 'powermax': return (context) => readPlayerPowerMax(context.player);
+    case 'palno': return (context) => context.player.palNo ?? 1;
     case 'life': return (context) => context.player.life;
     case 'lifemax': return () => 1000;
     case 'random': return (context) => Math.max(0, Math.min(999, Math.trunc(context.random ?? 500)));

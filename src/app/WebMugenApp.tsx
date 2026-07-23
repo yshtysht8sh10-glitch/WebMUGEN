@@ -3,7 +3,7 @@ import { CanvasRenderer } from '../renderer/canvas2d/CanvasRenderer';
 import { createInitialGameState } from '../core/engine/GameState';
 import type { GameState, ProjectileState, Rect } from '../core/engine/types';
 import { applyInfinitePowerAtFrameStart } from '../core/power/InfinitePower';
-import { createSampleCharacterAssets, loadAppCharacter } from './AppCharacterLoader';
+import { createSampleCharacterAssets, loadAppCharacter, readCharacterRuntimeMetadata } from './AppCharacterLoader';
 import type { CharacterSourceFile } from '../core/character/CharacterTypes';
 import type { SndDocument } from '../parser/snd/SndTypes';
 import { sndSampleKey } from '../parser/snd/SndTypes';
@@ -346,7 +346,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           : loadedCharacter.cns,
       };
       const characterPowerMax = readCnsConst(character.cns, 'data.power');
-      gameStateRef.current = createInitialGameState(characterPowerMax);
+      gameStateRef.current = createInitialGameState(characterPowerMax, readCharacterRuntimeMetadata(character));
       setCnsSourceFiles(character.cnsSourceFiles ?? []);
       setLoadedAir(character.air);
       setLoadedSprites(character.sprites);

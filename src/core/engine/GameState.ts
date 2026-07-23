@@ -3,10 +3,19 @@ import { createInitialExplodRuntimeState } from '../explod/ExplodSystem';
 import { createInitialPauseState } from '../pause/PauseSystem';
 import { DEFAULT_MAX_POWER } from '../power/PowerGauge';
 
-export function createInitialGameState(powerMax: number = DEFAULT_MAX_POWER): GameState {
+export type PlayerMetadata = {
+  name?: string;
+  authorName?: string;
+  palNo?: number;
+};
+
+export function createInitialGameState(
+  powerMax: number = DEFAULT_MAX_POWER,
+  metadata: PlayerMetadata = {},
+): GameState {
   return {
     frame: 0,
-    players: [createPlayer(1, 220, 285, 1, powerMax), createPlayer(2, 420, 285, -1, powerMax)],
+    players: [createPlayer(1, 220, 285, 1, powerMax, metadata), createPlayer(2, 420, 285, -1, powerMax, metadata)],
     projectiles: [],
     hitEvents: [],
     explods: createInitialExplodRuntimeState(),
@@ -15,10 +24,19 @@ export function createInitialGameState(powerMax: number = DEFAULT_MAX_POWER): Ga
   };
 }
 
-function createPlayer(id: 1 | 2, x: number, y: number, facing: 1 | -1, powerMax: number): PlayerState {
+function createPlayer(
+  id: 1 | 2,
+  x: number,
+  y: number,
+  facing: 1 | -1,
+  powerMax: number,
+  metadata: PlayerMetadata,
+): PlayerState {
   return {
     id,
-    palNo: 1,
+    name: metadata.name ?? '',
+    authorName: metadata.authorName ?? '',
+    palNo: metadata.palNo ?? 1,
     vars: {},
     fvars: {},
     sysVars: {},

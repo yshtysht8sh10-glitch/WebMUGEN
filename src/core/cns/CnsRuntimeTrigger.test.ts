@@ -10,6 +10,22 @@ describe('CnsRuntimeTrigger', () => {
     expect(evaluateCnsRuntimeTrigger('Ctrl = 0', { player: { ...player, ctrl: false } })).toBe(true);
   });
 
+  it('evaluates DEF metadata names and the selected palette number', () => {
+    const state = createInitialGameState(3000, {
+      name: 'Metadata Fighter', authorName: 'Metadata Author', palNo: 3,
+    });
+    const context = { player: state.players[0], opponent: state.players[1] };
+
+    expect(evaluateCnsRuntimeTrigger('Name = "Metadata Fighter"', context)).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('AuthorName = "Metadata Author"', context)).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('P1Name = "Metadata Fighter"', context)).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('P2Name = "Metadata Fighter"', context)).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('P3Name = "Metadata Fighter"', context)).toBe(false);
+    expect(evaluateCnsRuntimeTrigger('P3Name != "Metadata Fighter"', context)).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('P4Name = "Metadata Fighter"', context)).toBe(false);
+    expect(evaluateCnsRuntimeTrigger('PalNo = 3', context)).toBe(true);
+  });
+
   it('evaluates real-character StateTime and TimeMod compatibility syntax', () => {
     const player = { ...createInitialGameState().players[0], stateTime: 10 };
     expect(evaluateCnsRuntimeTrigger('StateTime = 10', { player })).toBe(true);

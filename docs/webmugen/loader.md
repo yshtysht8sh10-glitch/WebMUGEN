@@ -6,6 +6,11 @@ This document describes how WebMUGEN loads and merges character files.
 
 The loader must preserve WinMUGEN compatibility. Do not compensate for loader/runtime bugs by editing `public/chars/common1.cns`.
 
+Character DEF metadata is also carried into runtime state. `[Info] name` and `author` supply the
+matching string triggers, while the selected first resolved `palN` asset supplies `PalNo`; characters
+without an external palette use slot 1. A future character-select palette choice must update both the
+selected palette asset and this runtime number together.
+
 ## Loaded asset types
 
 A character load may involve:

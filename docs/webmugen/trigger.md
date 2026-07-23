@@ -139,6 +139,15 @@ bottom instead of silently creating an extra slot. Integer variable writes are t
 variables preserve fractional values. Redirect ownership beyond the current two-player/root-helper
 paths remains Partial.
 
+## Character metadata
+
+The production character load copies DEF `[Info] name` and `author` into both root-player runtime
+records. `Name`, `AuthorName`, and the WinMUGEN `P1Name` alias read that metadata; `P2Name` reads the
+primary opponent. In the current versus-only runtime, `P3Name` and `P4Name` implement the specified
+absent-player comparison behavior. `PalNo` reports the slot of the palette actually selected by the
+loader (the first resolved DEF palette, or 1 when no external palette is selected). Team slots and a
+character-select palette chooser remain Partial.
+
 Safe defaults are useful but should not be overclaimed.
 
 Examples:

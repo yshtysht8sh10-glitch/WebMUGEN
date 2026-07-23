@@ -7,12 +7,31 @@ import { createHttpCharacterAssetFetcher, loadCharacterFromDef, type CharacterAs
 import { sampleCharacterAir } from './sampleCharacterAir';
 import { sampleCharacterCmd } from './sampleCharacterCmd';
 import { sampleCharacterCns } from './sampleCharacterCns';
+import { getDefValue } from '../parser/def/DefParser';
+import type { DefDocument } from '../parser/def/DefTypes';
 
 export type AppCharacterLoadResult = {
   character: CharacterAssets | null;
   source: 'def' | 'sample';
   errorMessage: string | null;
 };
+
+export type CharacterRuntimeMetadata = {
+  name: string;
+  authorName: string;
+  palNo: number;
+};
+
+export function readCharacterRuntimeMetadata(character: {
+  def?: DefDocument;
+  palettes?: readonly { slot: number }[];
+}): CharacterRuntimeMetadata {
+  return {
+    name: getDefValue(character.def, 'Info', 'name') ?? '',
+    authorName: getDefValue(character.def, 'Info', 'author') ?? '',
+    palNo: character.palettes?.[0]?.slot ?? 1,
+  };
+}
 
 export async function loadAppCharacter(defPath: string): Promise<AppCharacterLoadResult> {
   try {

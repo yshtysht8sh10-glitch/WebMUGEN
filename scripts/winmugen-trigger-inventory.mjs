@@ -81,8 +81,8 @@ const PARTIAL = new Set([
   'Cos', 'DrawGame', 'E', 'Exp', 'Facing', 'Floor', 'FrontEdgeBodyDist', 'FrontEdgeDist', 'FVar',
   'GameTime', 'GetHitVar', 'HitCount', 'HitDefAttr', 'HitFall', 'HitOver', 'HitPauseTime', 'HitShakeOver',
   'HitVel X', 'HitVel Y', 'IfElse', 'InGuardDist', 'IsHelper', 'Life', 'Ln', 'Log', 'Lose', 'MatchOver',
-  'MoveContact', 'MoveGuarded', 'MoveHit', 'MoveType', 'Name', 'NumExplod', 'NumHelper', 'NumTarget', 'P2BodyDist X',
-  'P2BodyDist Y', 'P2Dist X', 'P2Dist Y', 'P2Life', 'P2MoveType', 'P2Name', 'P2StateNo', 'P2StateType',
+  'MoveContact', 'MoveGuarded', 'MoveHit', 'MoveType', 'Name', 'NumExplod', 'NumHelper', 'NumTarget', 'P1Name', 'P2BodyDist X',
+  'P2BodyDist Y', 'P2Dist X', 'P2Dist Y', 'P2Life', 'P2MoveType', 'P2Name', 'P2StateNo', 'P2StateType', 'P3Name', 'P4Name', 'PalNo',
   'Pi', 'Pos X', 'Pos Y', 'Power', 'PowerMax', 'PrevStateNo', 'ProjHit', 'ProjHitTime', 'RoundNo', 'RoundState', 'ScreenPos X',
   'ScreenPos Y', 'SelfAnimExist', 'Sin', 'StateTime', 'SysFVar', 'SysVar', 'Tan', 'TargetID', 'TargetStateNo', 'NumCommand',
   'P2AuthorName', 'P2Ctrl', 'P2Facing', 'Physics',
@@ -148,6 +148,13 @@ const MATRIX_STATUS_OVERRIDES = new Map([
   ['SysFVar', 'Partial 90%'],
   ['SysVar', 'Partial 90%'],
   ['Var', 'Partial 90%'],
+  ['AuthorName', 'Partial 90%'],
+  ['Name', 'Partial 90%'],
+  ['P1Name', 'Partial 90%'],
+  ['P2Name', 'Partial 90%'],
+  ['P3Name', 'Partial 55%'],
+  ['P4Name', 'Partial 55%'],
+  ['PalNo', 'Partial 85%'],
 ]);
 
 function syntaxFor(name) {
