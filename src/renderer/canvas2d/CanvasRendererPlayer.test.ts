@@ -205,6 +205,19 @@ describe('CanvasRenderer player sprite fallback', () => {
     expect(diagnostics).toContain('entity=p1 state=0 anim=900 stateOwner=2 animOwner=2');
     expect(diagnostics).toContain('airElementSpriteGroup=20');
   });
+
+  it('suppresses stage and HUD for AssertSpecial noBG/nobardisplay', () => {
+    const context = fakeContext(vi.fn(), vi.fn());
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+    const renderer = new CanvasRenderer(canvas);
+    const state = createInitialGameState();
+    state.players[0] = { ...state.players[0], assertSpecialFlags: ['noBG', 'nobardisplay'] };
+
+    const diagnostics = renderer.render(state).join('\n');
+
+    expect(diagnostics).toContain('flag=noBG target=stage result=hidden');
+    expect(diagnostics).toContain('flag=nobardisplay target=hud result=hidden');
+  });
 });
 
 function fakeContext(

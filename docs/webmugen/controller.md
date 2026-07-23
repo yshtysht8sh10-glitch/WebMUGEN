@@ -58,8 +58,10 @@ These mutate state identity or state flags.
 `AssertSpecial` retains all values supplied through `flag`, `flag2`, and `flag3` as case-insensitive,
 per-game-tick player flags. They survive later Controllers and ChangeState in the same CNS pass, then
 clear at the beginning of the next CNS tick unless asserted again. `noautoturn` is connected to the
-grounded stage-facing rule; render, guard, round-flow, audio, and timer consumers for the other flags
-remain Partial and can inspect the retained flag list without reparsing CNS.
+grounded stage-facing rule. `invisible`, the three guard-prohibition flags, attacker-local
+`unguardable`, `nojugglecheck`, `noBG`, and `nobardisplay` are consumed by Canvas, guard, juggle,
+stage, and HUD paths without deleting the entity or forcing a State. Round/timer/audio/shadow/noFG/
+nowalk consumers and exact hitpause persistence remain Partial.
 
 `Gravity` adds the current character's `[Movement] yaccel` to Y velocity once per Controller
 execution. It is independent from `Physics = A`, so multiple explicit Gravity Controllers and the

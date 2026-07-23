@@ -68,17 +68,23 @@ export class CanvasRenderer {
     ctx.save();
     ctx.translate(shake.x, shake.y);
     const bgPalFxFilter = resolveBgPalFxFilter(state.bgPalFx);
-    ctx.save();
-    ctx.filter = bgPalFxFilter;
-    this.drawStage(ctx);
-    ctx.restore();
+    const globalFlags = new Set(state.players.flatMap((player) => player.assertSpecialFlags ?? []).map((flag) => flag.trim().toLowerCase()));
+    if (!globalFlags.has('nobg')) {
+      ctx.save();
+      ctx.filter = bgPalFxFilter;
+      this.drawStage(ctx);
+      ctx.restore();
+    }
     if (state.envColor?.under) this.drawEnvironmentColor(ctx, state.envColor.color);
-    this.drawLifeBars(ctx, state);
-    const powerDiagnostics = this.drawPowerBars(ctx, state, diagnosticsEnabled);
-    if (roundState) this.roundStateRenderer.render(ctx, roundState, roundScore);
+    const hideBars = globalFlags.has('nobardisplay');
+    if (!hideBars) this.drawLifeBars(ctx, state);
+    const powerDiagnostics = hideBars ? [] : this.drawPowerBars(ctx, state, diagnosticsEnabled);
+    if (roundState && !hideBars) this.roundStateRenderer.render(ctx, roundState, roundScore);
     this.drawProjectiles(ctx, state.projectiles, diagnosticsEnabled);
     const explodResolution = resolveExplodRenderFrames(state, this.defaultAssets(), this.ownerAssets, this.fightFxAssets, 0, 0, diagnosticsEnabled);
     const renderDiagnostics = [
+      ...(diagnosticsEnabled && globalFlags.has('nobg') ? ['raw.assertspecial_draw flag=noBG target=stage result=hidden'] : []),
+      ...(diagnosticsEnabled && hideBars ? ['raw.assertspecial_draw flag=nobardisplay target=hud result=hidden'] : []),
       ...(diagnosticsEnabled && state.bgPalFx ? [`raw.bgpalfx_draw owner=${state.bgPalFx.ownerEntityId} remaining=${state.bgPalFx.remainingTime} color=${state.bgPalFx.color} invertall=${state.bgPalFx.invertAll ? 1 : 0} mul=(${state.bgPalFx.multiply.red},${state.bgPalFx.multiply.green},${state.bgPalFx.multiply.blue}) filter=${bgPalFxFilter} result=drawn limitation=canvas_filter_approximated`] : []),
       ...explodResolution.diagnosticLines,
     ];

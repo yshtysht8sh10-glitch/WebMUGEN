@@ -232,7 +232,8 @@ function resolveAttack(
     return { attacker: marked, target: overriddenTarget, hitEvent: null, diagnosticLines, contactApplied: true };
   }
 
-  const guardKind = selectGuardKind(target, active.guardFlag);
+  const attackerFlags = normalizedAssertSpecialFlags(attacker);
+  const guardKind = attackerFlags.has('unguardable') ? null : selectGuardKind(target, active.guardFlag);
   const guardDistance = active.guardDistance ?? 160;
   const withinGuardDistance = Math.abs(target.x - attacker.x) <= guardDistance;
   if (guardKind && target.guardIntent && withinGuardDistance) {
@@ -304,7 +305,7 @@ function resolveAttack(
   const isAirJuggle = target.stateType === 'A';
   const juggleCost = Math.max(0, attacker.juggle ?? 0);
   const juggleAlreadyConsumed = attacker.juggleConsumedTargetIds?.includes(target.id) ?? false;
-  const juggleCharge = juggleAlreadyConsumed ? 0 : juggleCost;
+  const juggleCharge = juggleAlreadyConsumed || attackerFlags.has('nojugglecheck') ? 0 : juggleCost;
   const juggleMax = target.juggleMax ?? 15;
   const juggleBefore = target.juggleRemaining ?? juggleMax;
   if (isAirJuggle && juggleCharge > juggleBefore) {
@@ -1015,9 +1016,14 @@ function applyGuardHit(
 function selectGuardKind(player: PlayerState, guardFlag: string | undefined): 'stand' | 'crouch' | 'air' | null {
   if (!guardFlag) return null;
   const flags = guardFlag.toUpperCase();
-  if (player.stateType === 'A') return flags.includes('A') ? 'air' : null;
-  if (player.stateType === 'C' || player.guardCrouchIntent) return flags.includes('L') || flags.includes('M') ? 'crouch' : null;
-  return flags.includes('H') || flags.includes('M') ? 'stand' : null;
+  const special = normalizedAssertSpecialFlags(player);
+  if (player.stateType === 'A') return !special.has('noairguard') && flags.includes('A') ? 'air' : null;
+  if (player.stateType === 'C' || player.guardCrouchIntent) return !special.has('nocrouchguard') && (flags.includes('L') || flags.includes('M')) ? 'crouch' : null;
+  return !special.has('nostandguard') && (flags.includes('H') || flags.includes('M')) ? 'stand' : null;
+}
+
+function normalizedAssertSpecialFlags(player: PlayerState): Set<string> {
+  return new Set((player.assertSpecialFlags ?? []).map((flag) => flag.trim().toLowerCase()));
 }
 
 export function createGetHitVarSnapshot(

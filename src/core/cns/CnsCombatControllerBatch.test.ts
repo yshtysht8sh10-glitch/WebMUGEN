@@ -123,4 +123,53 @@ pausetime = 4, 6
     expect(evaluateCnsRuntimeTrigger('MoveReversed', { player: result.players[0] })).toBe(true);
     expect(result.hitDiagnosticLines?.join('\n')).toContain('raw.reversal attacker=p2 reverser=p1');
   });
+
+  it('consumes AssertSpecial guard and juggle flags in live collision', () => {
+    const cns = parseCnsText(`
+[Statedef 200]
+type = S
+movetype = A
+physics = N
+anim = 200
+juggle = 9
+[State 200, flags]
+type = AssertSpecial
+trigger1 = 1
+flag = unguardable
+flag2 = nojugglecheck
+[State 200, hit]
+type = HitDef
+trigger1 = 1
+attr = S, NA
+damage = 25, 2
+guardflag = H
+[Statedef 300]
+type = A
+physics = N
+anim = 0
+[State 300, guard off]
+type = AssertSpecial
+trigger1 = 1
+flag = nostandguard
+`);
+    const initial = createInitialGameState();
+    initial.players = [
+      { ...initial.players[0], stateNo: 200, animNo: 200, moveType: 'A', x: 300 },
+      { ...initial.players[1], stateNo: 300, animNo: 0, x: 350, stateType: 'A', juggleRemaining: 0 },
+    ];
+    const activated = stepCnsStateRuntime(initial, cns, { p2Commands: new Set(['holdback']) }).state;
+    const result = resolveFallbackHits(activated, air, true);
+    expect(result.players[1].life).toBe(975);
+    expect(result.players[0].moveContact).toMatchObject({ hit: true, guarded: false });
+
+    const guardBlocked = resolveFallbackHits({
+      ...activated,
+      players: [
+        { ...activated.players[0], assertSpecialFlags: [] },
+        { ...activated.players[1], stateType: 'S', juggleRemaining: 15 },
+      ],
+    }, air, true);
+    expect(guardBlocked.players[1].life).toBe(975);
+    expect(guardBlocked.players[0].moveContact).toMatchObject({ hit: true, guarded: false });
+  });
 });
