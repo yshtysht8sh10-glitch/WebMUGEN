@@ -217,6 +217,8 @@ export type PlayerState = {
   hitPause: number;
   afterImage?: AfterImageState;
   palFx?: BgPalFxState;
+  drawAngle?: number;
+  drawScale?: { x: number; y: number };
   pauseControllerLatch?: { key: string; stateNo: number; stateTime: number };
   positionFrozen?: boolean;
   activeHitDef: ActiveHitDef | null;

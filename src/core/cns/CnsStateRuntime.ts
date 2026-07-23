@@ -72,6 +72,7 @@ export type CnsRuntimeInput = {
   onEnvironmentShake?: (event: { time: number; frequency: number; amplitude: number; phase: number }) => void;
   onForceFeedback?: (event: { ownerEntityId: number; waveform: string; time: number; amplitude: number; frequency: number }) => void;
   onBgPalFx?: (event: BgPalFxEvent) => void;
+  onAllPalFx?: (event: BgPalFxEvent) => void;
   onProjectileCreate?: (projectile: ProjectileState) => void;
   pauseState?: PauseState;
   screenWidth?: number;
@@ -295,6 +296,8 @@ function stepPlayer(
     guardIntent: commands?.has('holdback') ?? false,
     guardCrouchIntent: commands?.has('holddown') ?? false,
     positionFrozen: false,
+    drawAngle: undefined,
+    drawScale: undefined,
   };
   const trace: CnsRuntimeTrace = {
     playerId,
@@ -1068,6 +1071,8 @@ function executeController(
   if (type === 'trans') return withExtendedPlayer(player, { transparent: str(controller, 'trans') ?? str(controller, 'value') ?? '' }, 'Trans');
   if (type === 'width') return withExtendedPlayer(player, { width: { edge: num(controller, 'edge') ?? undefined, player: num(controller, 'player') ?? undefined } }, 'Width');
   if (type === 'afterimage') return afterImage(player, opponent, controller, input, commands);
+  if (type === 'palfx') return playerPalFx(player, opponent, controller, input, commands);
+  if (type === 'allpalfx') return allPalFx(player, opponent, controller, input, commands);
   if (type === 'screenbound') return screenBound(player, opponent, controller, input, commands);
   if (type === 'displaytoclipboard') return debugClipboard(player, opponent, controller, input, commands, false);
   if (type === 'appendtoclipboard') return debugClipboard(player, opponent, controller, input, commands, true);
@@ -1081,6 +1086,11 @@ function executeController(
   if (type === 'angleadd') return withExtendedPlayer(player, { angle: readAngle(player) + (num(controller, 'value') ?? 0) }, 'AngleAdd');
   if (type === 'anglemul') return withExtendedPlayer(player, { angle: readAngle(player) * (num(controller, 'value') ?? 1) }, 'AngleMul');
   if (type === 'angleset') return withExtendedPlayer(player, { angle: num(controller, 'value') ?? 0 }, 'AngleSet');
+  if (type === 'angledraw') return withPlayer({
+    ...player,
+    drawAngle: num(controller, 'angle', player, input, commands, opponent) ?? readAngle(player),
+    drawScale: pair(controller, 'scale', player, input, commands, opponent, 1, 1),
+  }, true, 'AngleDraw');
   if (type === 'hitby') return hitAttributeController(player, controller, 'allow', 'HitBy');
   if (type === 'nothitby') return hitAttributeController(player, controller, 'deny', 'NotHitBy');
   if (type === 'hitdef') return activateHitDef(player, controller, input, commands, opponent);
@@ -1264,6 +1274,52 @@ function bgPalFx(
     ownerEntityId: input.entityContext?.entityId ?? player.id,
   });
   return withPlayer(player, true, 'BGPalFX');
+}
+
+function playerPalFx(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const event = readPalFxEvent(player, opponent, controller, input, commands);
+  return withPlayer({ ...player, palFx: { ...event, remainingTime: event.duration, elapsedTime: 0 } }, true, 'PalFX');
+}
+
+function allPalFx(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  input.onAllPalFx?.(readPalFxEvent(player, opponent, controller, input, commands));
+  return withPlayer(player, true, 'AllPalFX');
+}
+
+function readPalFxEvent(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): BgPalFxEvent {
+  const sinAdd = controller.params.sinadd === undefined
+    ? { red: 0, green: 0, blue: 0, period: 0 }
+    : {
+        ...triple(controller, 'sinadd', player, input, commands, opponent, 0, 0, 0),
+        period: readTupleNumber(controller, 'sinadd', 3, player, input, commands, opponent) ?? 0,
+      };
+  return {
+    duration: Math.trunc(num(controller, 'time', player, input, commands, opponent) ?? 1),
+    color: num(controller, 'color', player, input, commands, opponent) ?? 256,
+    invertAll: (num(controller, 'invertall', player, input, commands, opponent) ?? 0) !== 0,
+    add: triple(controller, 'add', player, input, commands, opponent, 0, 0, 0),
+    multiply: triple(controller, 'mul', player, input, commands, opponent, 256, 256, 256),
+    sinAdd,
+    ownerEntityId: input.entityContext?.entityId ?? player.id,
+  };
 }
 
 function appendTargetCompositeTriggerDiagnostic(

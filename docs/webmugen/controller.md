@@ -74,6 +74,12 @@ The runtime supports six evaluated parameters, integer/floating/exponential form
 escapes. `ForceFeedback` emits a normalized owner/waveform/time/amplitude/frequency request; device
 support and vibration execution remain adapter-dependent and unsupported devices are a safe no-op.
 
+`PalFX` creates a timed player-scoped palette state using `time`, `add`, `mul`, `sinadd`,
+`invertall`, and `color`; Canvas applies the same documented filter approximation already used by
+HitDef PalFX. `AllPalFX` emits the same normalized state for both root players and the stage.
+`AngleDraw` exposes tick-scoped angle and X/Y scale to Canvas without rotating collision boxes.
+`AssertSpecial invisible` now reads the canonical tick flag list directly in the renderer.
+
 ### Motion and position
 
 Examples:

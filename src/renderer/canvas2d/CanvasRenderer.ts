@@ -109,6 +109,12 @@ export class CanvasRenderer {
         const palFxFilter = resolveBgPalFxFilter(drawable.player.palFx);
         ctx.save();
         ctx.filter = palFxFilter;
+        if (drawable.player.drawAngle !== undefined || drawable.player.drawScale) {
+          ctx.translate(drawable.player.x, drawable.player.y);
+          ctx.rotate((drawable.player.drawAngle ?? 0) * Math.PI / 180);
+          ctx.scale(drawable.player.drawScale?.x ?? 1, drawable.player.drawScale?.y ?? 1);
+          ctx.translate(-drawable.player.x, -drawable.player.y);
+        }
         const diagnostic = this.drawPlayer(ctx, drawable.player, drawable.player.id === 1 ? '#66ccff' : '#ff99aa', diagnosticsEnabled);
         ctx.restore();
         if (diagnostic) renderDiagnostics.push(diagnostic);
@@ -231,7 +237,7 @@ export class CanvasRenderer {
     const prefix = diagnosticsEnabled ? `raw.render entity=p${player.id} state=${player.stateNo} anim=${player.animNo} stateOwner=${stateOwner} animOwner=${player.id}` : '';
     if (!assets) return diagnosticsEnabled ? `${prefix} result=skip reason=animation_owner_missing playerVisible=0 rendererDrawRequested=0` : '';
 
-    const assertSpecial = ((player as PlayerState & { runtime?: { assertSpecial?: string[] } }).runtime?.assertSpecial ?? [])
+    const assertSpecial = (player.assertSpecialFlags ?? (player as PlayerState & { runtime?: { assertSpecial?: string[] } }).runtime?.assertSpecial ?? [])
       .map((flag) => flag.trim().toLowerCase());
     if (assertSpecial.includes('invisible')) {
       return diagnosticsEnabled ? `${prefix} result=skip reason=entity_invisible playerVisible=0 assertSpecialInvisible=1 rendererDrawRequested=0` : '';

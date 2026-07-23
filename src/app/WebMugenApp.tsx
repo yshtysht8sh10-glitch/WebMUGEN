@@ -432,6 +432,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
         let nextCnsTraces = cnsTraceRef.current;
         const environmentShakeEvents: EnvironmentShake[] = [];
         const bgPalFxEvents: BgPalFxEvent[] = [];
+        const allPalFxEvents: BgPalFxEvent[] = [];
 
         if (
           inputSnapshot.system.restartRound &&
@@ -489,6 +490,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             onPause: (event) => pauseEvents.push(event),
             onEnvironmentShake: (event) => environmentShakeEvents.push(event),
             onBgPalFx: (event) => bgPalFxEvents.push(event),
+            onAllPalFx: (event) => allPalFxEvents.push(event),
             onProjectileCreate: (projectile) => projectileEvents.push({
               ...projectile,
               hitBox: getProjectileHitBox(character.air, projectile.animNo) ?? projectile.hitBox,
@@ -510,6 +512,16 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             nextState = { ...nextState, projectiles: [...nextState.projectiles, ...projectileEvents] };
           }
           if (bgPalFxEvents.length > 0) nextState = applyBgPalFxEvents(nextState, bgPalFxEvents);
+          if (allPalFxEvents.length > 0) {
+            const event = allPalFxEvents[allPalFxEvents.length - 1];
+            nextState = applyBgPalFxEvents({
+              ...nextState,
+              players: nextState.players.map((player) => ({
+                ...player,
+                palFx: { ...event, remainingTime: event.duration, elapsedTime: 0 },
+              })) as GameState['players'],
+            }, [event]);
+          }
           if (pauseEvents.length > 0) {
             const pause = applyPauseControllerEvents(nextState.pause ?? createInitialPauseState(), pauseEvents);
             nextState = {
