@@ -1,6 +1,7 @@
 import type { CnsDocument } from '../../mugen/common/cnsTypes';
 import { findCnsState } from '../../mugen/common/CnsStateIndex';
 import type { HelperEntity, HelperRuntimeState, PlayerState } from '../engine/types';
+import { readCnsConst } from '../cns/CnsConstants';
 
 export type HelperSpawnRequest = {
   helperId: number;
@@ -15,6 +16,10 @@ export type HelperSpawnRequest = {
   facing: 1 | -1;
   keyCtrl: boolean;
   ownPal: boolean;
+  sizeXScale?: number;
+  sizeYScale?: number;
+  pauseMoveTime?: number;
+  superMoveTime?: number;
   spawnFrame: number;
   parent: PlayerState;
 };
@@ -56,6 +61,15 @@ export function spawnHelper(state: HelperRuntimeState, request: HelperSpawnReque
     sysVars: {},
     sysFVars: {},
     hitDiagnosticLines: [],
+    collisionWidth: {
+      groundFront: request.parent.collisionWidth?.groundFront ?? readCnsConst(cns, 'size.ground.front'),
+      groundBack: request.parent.collisionWidth?.groundBack ?? readCnsConst(cns, 'size.ground.back'),
+      airFront: request.parent.collisionWidth?.airFront ?? readCnsConst(cns, 'size.air.front'),
+      airBack: request.parent.collisionWidth?.airBack ?? readCnsConst(cns, 'size.air.back'),
+      height: request.parent.collisionWidth?.height ?? readCnsConst(cns, 'size.height'),
+      xScale: request.sizeXScale ?? 1,
+      yScale: request.sizeYScale ?? 1,
+    },
   };
   const entity: HelperEntity = {
     entityId: state.nextEntityId,
@@ -67,6 +81,8 @@ export function spawnHelper(state: HelperRuntimeState, request: HelperSpawnReque
     animationOwnerId: request.animationOwnerId,
     keyCtrl: request.keyCtrl,
     ownPal: request.ownPal,
+    pauseMoveTime: Math.max(0, Math.trunc(request.pauseMoveTime ?? 0)),
+    superMoveTime: Math.max(0, Math.trunc(request.superMoveTime ?? 0)),
     spawnFrame: request.spawnFrame,
     player,
   };

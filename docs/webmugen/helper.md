@@ -2,7 +2,7 @@
 
 Issue #58 Phase1 introduces a real Helper entity collection without replacing the existing P1/P2 adapter. A Helper is not an Explod and is not inserted into `GameState.players`.
 
-Each entry separates its unique runtime `entityId` from the MUGEN `helperId`; duplicate MUGEN IDs are valid. It records `rootEntityId`, `parentEntityId`, character/State/animation ownership, `keyctrl`, `ownpal`, spawn frame, and an independent PlayerState containing StateNo, PrevStateNo, StateTime, StateDef fields, position, velocity, Facing, Anim/AnimTime, and variable maps.
+Each entry separates its unique runtime `entityId` from the MUGEN `helperId`; duplicate MUGEN IDs are valid. It records `rootEntityId`, `parentEntityId`, character/State/animation ownership, `keyctrl`, `ownpal`, `pausemovetime`, `supermovetime`, spawn frame, and an independent PlayerState containing StateNo, PrevStateNo, StateTime, StateDef fields, position, velocity, Facing, Anim/AnimTime, Size scale, and variable maps. Helper Controller `size.xscale`/`size.yscale` are snapshotted at creation and apply to owner AIR/SFF rendering and the Helper's Size-derived collision geometry.
 
 The Phase1 frame order is:
 
@@ -17,7 +17,9 @@ Issue #81 adds Helper-as-attacker collision after the root-player clash pass. A 
 
 `NumHelper` reads the committed frame-start collection for the current root, with optional MUGEN ID filtering. `IsHelper` distinguishes a Helper evaluation context from a root player. `DestroySelf` only removes the executing Helper; it does not destroy a root player. `raw.helper` reports spawn/destroy identity, ownership, State, Anim, frame, and first-step timing. Round restart creates an empty collection and resets the runtime allocator.
 
-Helper support remains Partial. Root/parent/helper/playerid redirects resolve unique runtime entities. BindToParent/Root and registered-target BindToTarget retain evaluated position/facing state, while ParentVarSet/Add mutate the unique immediate parent's validated var/fvar store at the entity commit point. Remaining work includes exact bind/ParentVar same-pass and pause timing, complete keyctrl input rules, independent palette mutation, push/body collision, Helper-as-defender and Helper-vs-Helper combat, exact Helper/root Power ownership, and child behavior after parent removal.
+During match Pause or SuperPause, a non-owner Helper may continue its CNS, physics, animation history, and State/Anim clocks while the matching `pausemovetime` or `supermovetime` allowance remains. The active allowance is consumed once per paused game frame; normal Pause never consumes the SuperPause allowance and vice versa. The match pause owner's ordinary `movetime` remains a separate permission path.
+
+Helper support remains Partial. Root/parent/helper/playerid redirects resolve unique runtime entities. BindToParent/Root and registered-target BindToTarget retain evaluated position/facing state, while ParentVarSet/Add mutate the unique immediate parent's validated var/fvar store at the entity commit point. Remaining work includes exact bind/ParentVar same-pass pause timing, complete keyctrl input rules, independent palette mutation, Helper push/body interaction, Helper-as-defender and Helper-vs-Helper combat, exact Helper/root Power ownership, and child behavior after parent removal.
 
 ## Special State processing scope
 

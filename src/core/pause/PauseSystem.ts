@@ -1,4 +1,4 @@
-import type { GameState } from '../engine/types';
+import type { GameState, HelperEntity, HelperRuntimeState } from '../engine/types';
 
 export type PauseState = {
   pauseTime: number;
@@ -87,6 +87,22 @@ export function canEntityMoveDuringPause(state: PauseState, entityId: number): b
   return !isGamePaused(state) || state.ownerEntityId === entityId && state.moveTime > 0;
 }
 
+export function canHelperMoveDuringPause(state: PauseState, helper: HelperEntity): boolean {
+  if (canEntityMoveDuringPause(state, helper.entityId)) return true;
+  return state.superPauseTime > 0 ? (helper.superMoveTime ?? 0) > 0 : (helper.pauseMoveTime ?? 0) > 0;
+}
+
+export function stepHelperPauseMoveTimes(state: HelperRuntimeState, pause: PauseState): HelperRuntimeState {
+  if (!isGamePaused(pause)) return state;
+  const isSuperPause = pause.superPauseTime > 0;
+  return {
+    ...state,
+    entries: state.entries.map((helper) => isSuperPause
+      ? { ...helper, superMoveTime: Math.max(0, (helper.superMoveTime ?? 0) - 1) }
+      : { ...helper, pauseMoveTime: Math.max(0, (helper.pauseMoveTime ?? 0) - 1) }),
+  };
+}
+
 export function restorePausedEntityPhysics(before: GameState, after: GameState, pause: PauseState): GameState {
   const beforeHelpers = new Map(before.helpers.entries.map((helper) => [helper.entityId, helper]));
   return {
@@ -98,7 +114,7 @@ export function restorePausedEntityPhysics(before: GameState, after: GameState, 
       ...after.helpers,
       entries: after.helpers.entries.map((helper) => {
         const previous = beforeHelpers.get(helper.entityId);
-        return canEntityMoveDuringPause(pause, helper.entityId) || !previous
+        return canHelperMoveDuringPause(pause, helper) || !previous
           ? helper
           : { ...helper, player: previous.player };
       }),

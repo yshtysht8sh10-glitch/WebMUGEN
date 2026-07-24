@@ -26,6 +26,10 @@ pos = 10, -20
 postype = p1
 facing = -1
 stateno = 100
+size.xscale = 0.5
+size.yscale = 0.75
+pausemovetime = 12
+supermovetime = 34
 
 [StateDef 100]
 type = A
@@ -68,12 +72,14 @@ ctrl = 0
     expect(result.state.helpers.entries[0]).toMatchObject({
       rootEntityId: 1, parentEntityId: 1, ownerCharacterId: 1,
       stateOwnerId: 1, animationOwnerId: 1,
+      pauseMoveTime: 12, superMoveTime: 34,
     });
     expect(result.state.helpers.entries[1]).toMatchObject({
       rootEntityId: 2, parentEntityId: 2, ownerCharacterId: 2,
     });
     expect(result.state.helpers.entries[0].player).toMatchObject({
       stateNo: 100, stateTime: 0, animNo: 1000, animTime: 0,
+      collisionWidth: { xScale: 0.5, yScale: 0.75 },
     });
     expect(result.traces).toHaveLength(2);
     expect(result.state.hitDiagnosticLines?.join('\n')).toContain('firstStep=next_frame');
@@ -222,5 +228,31 @@ x = 5
     });
     expect(rootOwned.state.helpers.entries[0].player.x).toBe(100);
     expect(rootOwned.traces.find((trace) => trace.entityId === 3)?.debugLines.join('\n')).toContain('global_pause skip');
+  });
+
+  it('runs Helper CNS while its Helper pausemovetime allowance remains', () => {
+    const pauseCns = parseCnsText(`
+[StateDef 100]
+type = S
+physics = N
+[State 100, Move]
+type = PosAdd
+trigger1 = 1
+x = 5
+`);
+    const initial = createInitialGameState();
+    const helpers = spawnHelper(initial.helpers, {
+      helperId: 100, rootEntityId: 1, parentEntityId: 1, ownerCharacterId: 1,
+      stateOwnerId: 1, animationOwnerId: 1, stateNo: 100, x: 100, y: 0,
+      facing: 1, keyCtrl: false, ownPal: false, pauseMoveTime: 1,
+      spawnFrame: 0, parent: initial.players[0],
+    }, pauseCns);
+
+    const result = stepCnsStateRuntime({ ...initial, helpers }, pauseCns, {
+      pauseState: startPause(createInitialPauseState(), 2, 0, 2),
+    });
+
+    expect(result.state.helpers.entries[0].player.x).toBe(105);
+    expect(result.traces.find((trace) => trace.entityId === 3)?.executedControllers).toContain('PosAdd');
   });
 });

@@ -94,12 +94,16 @@ export class CanvasRenderer {
         priority: player.sprPriority ?? 0,
         stableId: player.id,
         player,
+        scaleX: 1,
+        scaleY: 1,
       })),
       ...state.helpers.entries.map((helper) => ({
         kind: 'player' as const,
         priority: helper.player.sprPriority ?? 0,
         stableId: helper.entityId,
         player: helper.player,
+        scaleX: helper.player.collisionWidth?.xScale ?? 1,
+        scaleY: helper.player.collisionWidth?.yScale ?? 1,
       })),
       ...getExplodsInDrawOrder(explodResolution.frames)
         .filter((frame) => !frame.entry.onTop)
@@ -112,7 +116,7 @@ export class CanvasRenderer {
     ].sort((a, b) => a.priority - b.priority || Number(a.kind === 'explod') - Number(b.kind === 'explod') || a.stableId - b.stableId);
     for (const drawable of regularDrawables) {
       if (drawable.kind === 'player') {
-        renderDiagnostics.push(...this.drawAfterImages(ctx, drawable.player, diagnosticsEnabled));
+        renderDiagnostics.push(...this.drawAfterImages(ctx, drawable.player, diagnosticsEnabled, drawable.scaleX, drawable.scaleY));
         const palFxFilter = resolveBgPalFxFilter(drawable.player.palFx);
         ctx.save();
         ctx.filter = palFxFilter;
@@ -122,7 +126,7 @@ export class CanvasRenderer {
           ctx.scale(drawable.player.drawScale?.x ?? 1, drawable.player.drawScale?.y ?? 1);
           ctx.translate(-drawable.player.x, -drawable.player.y);
         }
-        const diagnostic = this.drawPlayer(ctx, drawable.player, drawable.player.id === 1 ? '#66ccff' : '#ff99aa', diagnosticsEnabled);
+        const diagnostic = this.drawPlayer(ctx, drawable.player, drawable.player.id === 1 ? '#66ccff' : '#ff99aa', diagnosticsEnabled, drawable.scaleX, drawable.scaleY);
         ctx.restore();
         if (diagnostic) renderDiagnostics.push(diagnostic);
         if (diagnosticsEnabled && drawable.player.palFx) renderDiagnostics.push(`raw.palfx_draw entity=p${drawable.player.id} remaining=${drawable.player.palFx.remainingTime} filter=${palFxFilter} result=drawn limitation=canvas_filter_approximated`);
@@ -247,7 +251,7 @@ export class CanvasRenderer {
     }
   }
 
-  private drawPlayer(ctx: CanvasRenderingContext2D, player: PlayerState, color: string, diagnosticsEnabled: boolean): string {
+  private drawPlayer(ctx: CanvasRenderingContext2D, player: PlayerState, color: string, diagnosticsEnabled: boolean, scaleX = 1, scaleY = 1): string {
     const hasOwnerAssetMap = Object.keys(this.ownerAssets).length > 0;
     const animationOwner = player.animationOwnerId ?? player.id;
     const assets = this.ownerAssets[animationOwner] ?? (hasOwnerAssetMap ? undefined : this.defaultAssets());
@@ -298,14 +302,14 @@ export class CanvasRenderer {
         currentElement.element.flip,
         assets,
         1,
-        1,
-        1,
+        scaleX,
+        scaleY,
         false,
         diagnosticsEnabled,
       );
       ctx.restore();
 
-      if (drawn.drawn) return diagnosticsEnabled ? `${prefix} ${elementFields} airBlend=${blend.mode || 'none'} composite=${blend.compositeOperation} spriteExists=1 result=drawn playerVisible=1 rendererDrawRequested=1 ${drawn.diagnostic}${blend.limitation ? ` limitation=${blend.limitation}` : ''}` : '';
+      if (drawn.drawn) return diagnosticsEnabled ? `${prefix} ${elementFields} scale=(${scaleX},${scaleY}) airBlend=${blend.mode || 'none'} composite=${blend.compositeOperation} spriteExists=1 result=drawn playerVisible=1 rendererDrawRequested=1 ${drawn.diagnostic}${blend.limitation ? ` limitation=${blend.limitation}` : ''}` : '';
       if (assets.imageDataSpritePack || assets.spritePack) {
         return diagnosticsEnabled ? `${prefix} ${elementFields} spriteExists=0 result=skip reason=sprite_missing playerVisible=0 rendererDrawRequested=0` : '';
       }
@@ -315,7 +319,7 @@ export class CanvasRenderer {
     return diagnosticsEnabled ? `${prefix} result=fallback reason=no_character_sprite_assets playerVisible=1 rendererDrawRequested=1 rendererDrawSource=debug_fallback` : '';
   }
 
-  private drawAfterImages(ctx: CanvasRenderingContext2D, player: PlayerState, diagnosticsEnabled: boolean): string[] {
+  private drawAfterImages(ctx: CanvasRenderingContext2D, player: PlayerState, diagnosticsEnabled: boolean, scaleX = 1, scaleY = 1): string[] {
     const afterImage = player.afterImage;
     if (!afterImage?.enabled || afterImage.frames.length === 0) return [];
     const hasOwnerAssetMap = Object.keys(this.ownerAssets).length > 0;
@@ -345,8 +349,8 @@ export class CanvasRenderer {
         currentElement.element.flip,
         assets,
         1,
-        1,
-        1,
+        scaleX,
+        scaleY,
         false,
         diagnosticsEnabled,
       );

@@ -3,12 +3,14 @@ import { createInitialGameState } from '../engine/GameState';
 import { spawnHelper } from '../helper/HelperSystem';
 import {
   canPlayerMoveDuringPause,
+  canHelperMoveDuringPause,
   createInitialPauseState,
   isGamePaused,
   restorePausedEntityPhysics,
   startPause,
   startSuperPause,
   stepPauseState,
+  stepHelperPauseMoveTimes,
 } from './PauseSystem';
 
 describe('Phase57 PauseSystem', () => {
@@ -62,5 +64,23 @@ describe('Phase57 PauseSystem', () => {
     expect(rootMoves.players[0].x).toBe(before.players[0].x + 10);
     expect(rootMoves.players[1].x).toBe(before.players[1].x);
     expect(rootMoves.helpers.entries[0].player.x).toBe(100);
+  });
+
+  it('uses and consumes the Helper-specific pause and superpause move times', () => {
+    const initial = createInitialGameState();
+    const helpers = spawnHelper(initial.helpers, {
+      helperId: 10, rootEntityId: 1, parentEntityId: 1, ownerCharacterId: 1,
+      stateOwnerId: 1, animationOwnerId: 1, stateNo: 100, x: 100, y: 0,
+      facing: 1, keyCtrl: false, ownPal: false, pauseMoveTime: 2, superMoveTime: 1,
+      spawnFrame: 0, parent: initial.players[0],
+    });
+    const helper = helpers.entries[0];
+    const pause = startPause(createInitialPauseState(), 3, 0, 2);
+    const superPause = startSuperPause(createInitialPauseState(), 3, { ownerEntityId: 2 });
+
+    expect(canHelperMoveDuringPause(pause, helper)).toBe(true);
+    expect(canHelperMoveDuringPause(superPause, helper)).toBe(true);
+    expect(stepHelperPauseMoveTimes(helpers, pause).entries[0]).toMatchObject({ pauseMoveTime: 1, superMoveTime: 1 });
+    expect(stepHelperPauseMoveTimes(helpers, superPause).entries[0]).toMatchObject({ pauseMoveTime: 2, superMoveTime: 0 });
   });
 });

@@ -335,6 +335,8 @@ export type HelperEntity = {
   animationOwnerId: 1 | 2;
   keyCtrl: boolean;
   ownPal: boolean;
+  pauseMoveTime?: number;
+  superMoveTime?: number;
   spawnFrame: number;
   player: PlayerState;
 };

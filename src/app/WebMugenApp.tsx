@@ -76,9 +76,11 @@ import { synchronizeRuntimeFrame } from './RuntimeFrame';
 import {
   applyPauseControllerEvents,
   canEntityMoveDuringPause,
+  canHelperMoveDuringPause,
   createInitialPauseState,
   isGamePaused,
   restorePausedEntityPhysics,
+  stepHelperPauseMoveTimes,
   stepPauseState,
   type PauseControllerEvent,
 } from '../core/pause/PauseSystem';
@@ -619,7 +621,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             helpers: {
               ...nextState.helpers,
               entries: nextState.helpers.entries.map((helper) => (
-                !pausedThisFrame || canEntityMoveDuringPause(pauseDuringFrame, helper.entityId)
+                !pausedThisFrame || canHelperMoveDuringPause(pauseDuringFrame, helper)
                   ? { ...helper, player: { ...helper.player, afterImage: stepAfterImage(helper.player.afterImage, helper.player) } }
                   : helper
               )),
@@ -629,7 +631,11 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           if (!pausedThisFrame) nextRoundState = stepRoundState(nextRoundState, nextState);
           nextScore = updateRoundScore(nextScore, nextRoundState);
           nextFeedback = updateHitFeedback(nextFeedback, nextState);
-          nextState = { ...nextState, pause: stepPauseState(pauseDuringFrame) };
+          nextState = {
+            ...nextState,
+            helpers: stepHelperPauseMoveTimes(nextState.helpers, pauseDuringFrame),
+            pause: stepPauseState(pauseDuringFrame),
+          };
         } else {
           nextRoundState = stepRoundState(nextRoundState, nextState);
           nextScore = updateRoundScore(nextScore, nextRoundState);

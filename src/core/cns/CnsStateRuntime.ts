@@ -10,7 +10,7 @@ import { removeTarget, selectTargets } from '../hitdef/TargetState';
 import { normalizeHitAttribute } from '../hitdef/HitAttribute';
 import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerGroup, evaluatePreparedCnsRuntimeTrigger, inspectCnsRuntimeRedirect, isValidPlayerVariableIndex, readNumberExpression, resolveCnsRuntimeRedirect, stableCnsRandomValue, type CnsRuntimeTriggerContext, type PlayerVariableKind } from './CnsRuntimeTrigger';
 import type { SoundPanEvent, SoundPlayEvent, SoundStopEvent } from '../audio/SoundEvent';
-import { canEntityMoveDuringPause, type PauseControllerEvent, type PauseState } from '../pause/PauseSystem';
+import { canEntityMoveDuringPause, canHelperMoveDuringPause, type PauseControllerEvent, type PauseState } from '../pause/PauseSystem';
 import {
   normalizeExplodFacing,
   resolveExplodOrigin,
@@ -76,6 +76,7 @@ export type CnsRuntimeInput = {
   onEnvColor?: (event: { color: { red: number; green: number; blue: number }; time: number; under: boolean; ownerEntityId: number }) => void;
   onProjectileCreate?: (projectile: ProjectileState) => void;
   pauseState?: PauseState;
+  canMoveDuringPause?: boolean;
   screenWidth?: number;
   gameTime?: number;
   /** Stable 0..999 Random value for this runtime frame; injectable for replays and tests. */
@@ -227,7 +228,11 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
         opponent,
         helper.rootEntityId,
         helperCns,
-        { ...helperInput(context), constants: helperCns },
+        {
+          ...helperInput(context),
+          constants: helperCns,
+          canMoveDuringPause: input.pauseState ? canHelperMoveDuringPause(input.pauseState, helper) : true,
+        },
         commands,
         state.frame,
         helper.keyCtrl ? HELPER_COMMAND_STATE_NOS : NO_SPECIAL_STATE_NOS,
@@ -260,7 +265,7 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
   const helperDiagnostics = input.hitDiagnostics === false ? [] : [
     ...pendingSpawns.map((request, index) => {
       const entity = helpers.entries[helpers.entries.length - pendingSpawns.length + index];
-      return `raw.helper event=spawn entityId=${entity?.entityId ?? '-'} helperId=${request.helperId} root=${request.rootEntityId} parent=${request.parentEntityId} owner=${request.ownerCharacterId} state=${request.stateNo} anim=${entity?.player.animNo ?? '-'} frame=${state.frame} firstStep=next_frame`;
+      return `raw.helper event=spawn entityId=${entity?.entityId ?? '-'} helperId=${request.helperId} root=${request.rootEntityId} parent=${request.parentEntityId} owner=${request.ownerCharacterId} state=${request.stateNo} anim=${entity?.player.animNo ?? '-'} scale=(${request.sizeXScale ?? 1},${request.sizeYScale ?? 1}) pausemovetime=${request.pauseMoveTime ?? 0} supermovetime=${request.superMoveTime ?? 0} frame=${state.frame} firstStep=next_frame`;
     }),
     ...Array.from(pendingDestroys, (entityId) => `raw.helper event=destroy entityId=${entityId} frame=${state.frame} result=removed`),
   ];
@@ -361,7 +366,7 @@ function stepPlayer(
     return { ...finishTrace(appendFallPauseDiagnostic(next, runtimeFrame, 'hitpause', player.hitPause, input.hitDiagnostics !== false), trace, traceDiagnosticsEnabled), targetOperations };
   }
   const runtimeEntityId = input.entityContext?.entityId ?? player.id;
-  if (input.pauseState && (input.pauseState.resumeGuard || !canEntityMoveDuringPause(input.pauseState, runtimeEntityId))) {
+  if (input.pauseState && (input.pauseState.resumeGuard || !(input.canMoveDuringPause ?? canEntityMoveDuringPause(input.pauseState, runtimeEntityId)))) {
     if (traceDiagnosticsEnabled) trace.debugLines.push(`global_pause skip reason=${input.pauseState.resumeGuard ? 'resume_guard' : input.pauseState.kind ?? 'pause'} remaining=${Math.max(input.pauseState.pauseTime, input.pauseState.superPauseTime)} owner=p${input.pauseState.ownerEntityId ?? '-'}`);
     return { ...finishTrace(appendFallPauseDiagnostic(
       next,
@@ -1462,6 +1467,10 @@ function createHelper(
     facing,
     keyCtrl: (num(controller, 'keyctrl', player, input, commands, opponent) ?? 0) !== 0,
     ownPal: (num(controller, 'ownpal', player, input, commands, opponent) ?? 0) !== 0,
+    sizeXScale: num(controller, 'size.xscale', player, input, commands, opponent) ?? 1,
+    sizeYScale: num(controller, 'size.yscale', player, input, commands, opponent) ?? 1,
+    pauseMoveTime: num(controller, 'pausemovetime', player, input, commands, opponent) ?? 0,
+    superMoveTime: num(controller, 'supermovetime', player, input, commands, opponent) ?? 0,
     spawnFrame: input.gameTime ?? 0,
     parent: player,
   });

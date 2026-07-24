@@ -165,14 +165,16 @@ describe('CanvasRenderer player sprite fallback', () => {
     state.helpers.entries = [{
       entityId: 3, helperId: 100, rootEntityId: 1, parentEntityId: 1,
       ownerCharacterId: 1, stateOwnerId: 1, animationOwnerId: 1,
-      keyCtrl: false, ownPal: false, spawnFrame: 0,
-      player: { ...state.players[0], x: 300, animNo: 1000 },
+      keyCtrl: false, ownPal: false, pauseMoveTime: 0, superMoveTime: 0, spawnFrame: 0,
+      player: { ...state.players[0], x: 300, animNo: 1000, collisionWidth: { groundFront: 15, groundBack: 15, airFront: 12, airBack: 12, xScale: 0.5, yScale: 0.75 } },
     }];
 
     const diagnostics = renderer.render(state).join('\n');
 
     expect(drawImage).toHaveBeenCalledTimes(3);
     expect(diagnostics.match(/spriteExists=1 result=drawn/g)).toHaveLength(3);
+    expect(context.scale).toHaveBeenCalledWith(0.5, 0.75);
+    expect(diagnostics).toContain('scale=(0.5,0.75)');
   });
 
   it('renders the timed EnvColor layer and reports its ordering', () => {
