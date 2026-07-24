@@ -37,6 +37,14 @@ describe('round, team, and animation Trigger integration', () => {
     })).toBe(true);
   });
 
+  it('distinguishes the documented Simul and Turns enum values without Single fallback', () => {
+    const base = { player: players[0], opponent: players[1] };
+    expect(evaluateCnsRuntimeTrigger('TeamMode = Simul', { ...base, teamMode: 'simul', numPartner: 1 })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('TeamMode = Single', { ...base, teamMode: 'simul', numPartner: 1 })).toBe(false);
+    expect(evaluateCnsRuntimeTrigger('TeamMode = Turns', { ...base, teamMode: 'turns', numPartner: 2 })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('NumPartner = 2', { ...base, teamMode: 'turns', numPartner: 2 })).toBe(true);
+  });
+
   it('evaluates AnimElemNo at an expression-based AIR time offset', () => {
     const calls: number[] = [];
     const context = {

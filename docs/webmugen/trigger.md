@@ -195,6 +195,8 @@ Projectile contact uses the same attacker-side MoveContact result shape. This le
 
 `ProjHitTime(id)` reads root-owner Projectile contact history. A successful hit stores time 1 for the next CNS evaluation, the value remains frozen during attacker HitPause, and subsequent unpaused ticks increment it. `NumExplod(id)` counts live Explods owned by the evaluating entity and supports an evaluated optional id. Together with selective `ignorehitpause` execution, these drive bundled T-H-M-A State -2's four fire Explods after Projectile 1005 hits.
 
+The cross-trigger HitPause/Pause/SuperPause clock table, exact root/Helper ownership rules, activation/resume ordering, and diagnostics are maintained in `trigger-timing-audit.md`.
+
 `ProjContact`, `ProjHit`, and `ProjGuarded` share the same production contact history and support the
 old-style optional ID suffix, simple current-tick form, and elapsed-time comparison. Their `*Time(id)`
 forms read the same counters. Omitted or non-positive IDs select the most recent applicable history;
@@ -211,7 +213,7 @@ separate from unique entity IDs, and `ID` / `PlayerIDExist(expr)` use the unique
 Production RoundState supplies `RoundNo`, `RoundsExisted`, KO/time/draw winner data, and end reason.
 `WinKO`, `WinTime`, `WinPerfect`, `LoseKO`, and `LoseTime` are derived symmetrically from that state.
 The current production match explicitly declares `TeamMode = Single`, `MatchNo = 1`, one enemy, and
-no partner; Simul/Turns remain Partial rather than being fabricated from root players.
+no partner. The evaluator distinguishes injected `Single`, `Simul`, and `Turns` modes and consumes explicit partner/enemy counts, but production has no Simul/Turns entity model or mode selector. That product boundary remains Partial rather than fabricating team members from the two root players.
 
 `AnimElemNo(offset)` evaluates its offset expression and asks the active AIR lookup for the element at
 `animTime + offset`. Bare `AnimElemNo` still reports the current element. Redirected animation-owner

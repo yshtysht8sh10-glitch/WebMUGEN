@@ -167,6 +167,21 @@ const MATRIX_STATUS_OVERRIDES = new Map([
   ['PalNo', 'Partial 85%'],
 ]);
 
+const TIMING_AUDIT = new Map([
+  ['StateTime', ['current PlayerState stateTime at the controller pass', 'freezes in HitPause and global Pause/SuperPause unless that exact entity owns remaining movetime']],
+  ['Time', ['current PlayerState stateTime at the controller pass', 'freezes in HitPause and global Pause/SuperPause unless that exact entity owns remaining movetime']],
+  ['AnimTime', ['AIR duration minus current animation time at the controller pass', 'animation time freezes with entity physics in HitPause and global Pause/SuperPause; finite, loop and infinite AIR cases are tested']],
+  ['GameTime', ['monotonic GameState frame sampled at the controller pass', 'continues across match Pause/SuperPause; it is not an entity-local movement clock']],
+  ['HitPauseTime', ['remaining entity hit-pause counter before the following physics decrement', 'the value is readable only by selective ignorehitpause controllers while ordinary controllers are suppressed']],
+  ['MoveContact', ['owner-local elapsed contact age; activation is 1', 'freezes in owner HitPause and while entity physics is restored by global Pause/SuperPause']],
+  ['MoveHit', ['owner-local elapsed hit age; activation is 1', 'freezes in owner HitPause and while entity physics is restored by global Pause/SuperPause']],
+  ['MoveGuarded', ['owner-local elapsed guarded-contact age; activation is 1', 'freezes in owner HitPause and while entity physics is restored by global Pause/SuperPause']],
+  ['ProjContactTime', ['owner-local projectile contact history; activation is 1 and missing is -1', 'freezes with owner contact history in HitPause and global Pause/SuperPause']],
+  ['ProjHitTime', ['owner-local projectile hit history; activation is 1 and missing is -1', 'freezes with owner contact history in HitPause and global Pause/SuperPause']],
+  ['ProjGuardedTime', ['owner-local projectile guard history; activation is 1 and missing is -1', 'freezes with owner contact history in HitPause and global Pause/SuperPause']],
+  ['ProjCancelTime', ['owner-local projectile cancellation history; activation is 1 and missing is -1', 'freezes with owner contact history in HitPause and global Pause/SuperPause']],
+]);
+
 function syntaxFor(name) {
   if (name === 'Command') return 'Command = "name"';
   if (name === 'AnimElem') return 'AnimElem = element[, operator time]';
@@ -203,16 +218,16 @@ function createBaseRecord(name, version = 'WinMUGEN 2002.04.14', reference = OFF
     implementationLocation: evaluatorImplemented ? 'src/core/cns/CnsRuntimeTrigger.ts' : null,
     runtimeDataSource: audit === 'Safe fallback' ? 'fixed compatibility value' : evaluatorImplemented ? 'CnsRuntimeTriggerContext / PlayerState and connected subsystem state' : null,
     argumentSupport: evaluatorImplemented ? 'See syntax and knownLimitations; irregular/optional argument coverage is conservative.' : 'Expression is retained but no correct runtime value is produced.',
-    redirectSupport: REDIRECT_EXCEPTIONS.has(canonicalName) ? 'not redirectable by specification' : 'enemy/enemynear/target subset only; root/parent are fallbacks and helper/partner/playerid are missing',
+    redirectSupport: REDIRECT_EXCEPTIONS.has(canonicalName) ? 'not redirectable by specification' : 'enemy/enemynear/target/root/parent/helper/playerid/partner resolve through runtime entities; unsupported nested chains and missing entities produce SFalse',
     fallbackBehavior: audit === 'Safe fallback' ? 'Returns a fixed compatibility value.' : audit === 'Parser only' ? 'Unknown runtime term makes the containing trigger false.' : 'No general self fallback is intended for missing redirects.',
-    updateTiming: COMPLETE.has(name) ? 'covered for the implemented root-player path' : 'not fully verified against WinMUGEN tick ordering',
-    pauseBehavior: ['MoveContact', 'MoveHit', 'MoveGuarded', 'HitPauseTime', 'HitShakeOver', 'ProjHit'].includes(name) ? 'specific hit-pause behavior is connected; global pause edges remain audited as Partial where applicable' : 'not comprehensively verified for hitpause, Pause and SuperPause',
+    updateTiming: TIMING_AUDIT.get(name)?.[0] ?? (COMPLETE.has(name) ? 'covered for the implemented root-player path' : 'not fully verified against WinMUGEN tick ordering'),
+    pauseBehavior: TIMING_AUDIT.get(name)?.[1] ?? (['HitShakeOver', 'ProjHit'].includes(name) ? 'specific hit-pause behavior is connected; global pause edges remain audited as Partial where applicable' : 'not comprehensively verified for hitpause, Pause and SuperPause'),
     rootBehavior: evaluatorImplemented ? 'root-player path exists' : 'not implemented',
-    helperBehavior: name === 'IsHelper' || name === 'NumHelper' ? 'focused Helper coverage exists' : 'not comprehensively verified',
+    helperBehavior: TIMING_AUDIT.has(name) ? 'root and Helper entity clocks use unique runtime ownership; focused Pause owner/non-owner coverage exists' : name === 'IsHelper' || name === 'NumHelper' ? 'focused Helper coverage exists' : 'not comprehensively verified',
     targetBehavior: name.startsWith('Target') || name === 'NumTarget' ? 'two-root-player Target registry subset' : 'redirect child behavior only where the redirect resolver supports it',
-    projectileBehavior: name === 'ProjHitTime' || name === 'ProjHit'
-      ? 'root-owner Projectile hit history is connected and advances on unpaused owner ticks'
-      : name.startsWith('Proj') || name === 'NumProj' || name === 'NumProjID' ? 'projectile Trigger integration is absent or fixed fallback' : 'not applicable to direct value source; projectile-owner parity unverified',
+    projectileBehavior: name === 'ProjHitTime' || name === 'ProjContactTime' || name === 'ProjGuardedTime' || name === 'ProjCancelTime' || name === 'ProjHit' || name === 'ProjContact' || name === 'ProjGuarded'
+      ? 'root-owner Projectile contact, hit, guard and cancellation histories are connected and advance on unpaused owner ticks'
+      : name === 'NumProj' || name === 'NumProjID' ? 'counts live root-owner runtime Projectiles with optional explicit id' : 'not applicable to direct value source; Helper-owned Projectile parity remains unverified',
     testCoverage: evaluatorImplemented ? 'focused tests exist for the implemented subset; inventory audit records exact Matrix coverage' : 'inventory/Matrix coverage only',
     realCharacterUsage: [],
     matrixStatus: audit,
