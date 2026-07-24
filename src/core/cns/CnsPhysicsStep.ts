@@ -23,6 +23,10 @@ export function stepCnsPhysicsMotion(state: GameState, cns?: CnsDocument | null)
     applyCnsAirLandingState(clampedPlayers[0], clampedPlayers[1], cns),
     applyCnsAirLandingState(clampedPlayers[1], clampedPlayers[0], cns),
   ] as [PlayerState, PlayerState];
+  const recoveredPlayers = [
+    applyCommonDownRecovery(landedPlayers[0], cns, state.players[0].hitPause > 0),
+    applyCommonDownRecovery(landedPlayers[1], cns, state.players[1].hitPause > 0),
+  ] as [PlayerState, PlayerState];
   return {
     ...state,
     frame: state.frame + 1,
@@ -33,11 +37,38 @@ export function stepCnsPhysicsMotion(state: GameState, cns?: CnsDocument | null)
         player: helper.spawnFrame === state.frame ? helper.player : stepPlayerCnsPhysics(helper.player, cns),
       })),
     },
-    players: [
-      applyCommonDownRecovery(landedPlayers[0], cns, state.players[0].hitPause > 0),
-      applyCommonDownRecovery(landedPlayers[1], cns, state.players[1].hitPause > 0),
-    ],
+    players: applyTargetBindMaintenance(recoveredPlayers, state.players),
   };
+}
+
+function applyTargetBindMaintenance(
+  players: [PlayerState, PlayerState],
+  previousPlayers: [PlayerState, PlayerState],
+): [PlayerState, PlayerState] {
+  return players.map((player) => {
+    const bind = player.targetBind;
+    if (!bind || bind.remaining === 0) {
+      return bind?.remaining === 0 ? { ...player, targetBind: undefined } : player;
+    }
+
+    const owner = players.find((candidate) => candidate.id === bind.ownerId);
+    if (!owner) return { ...player, targetBind: undefined };
+
+    const previousPlayer = previousPlayers.find((candidate) => candidate.id === player.id);
+    const previousOwner = previousPlayers.find((candidate) => candidate.id === bind.ownerId);
+    const frozen = (previousPlayer?.hitPause ?? 0) > 0 || (previousOwner?.hitPause ?? 0) > 0;
+    const remaining = bind.remaining < 0 || frozen ? bind.remaining : Math.max(0, bind.remaining - 1);
+    return {
+      ...player,
+      x: owner.x + bind.offsetX * owner.facing,
+      y: owner.y + bind.offsetY,
+      vx: owner.vx,
+      vy: owner.vy,
+      // Keep the zero-duration marker through stage correction. Stage rules
+      // perform the final snap and then remove it before the next game tick.
+      targetBind: { ...bind, remaining },
+    };
+  }) as [PlayerState, PlayerState];
 }
 
 function applyCommonDownRecovery(player: PlayerState, cns: CnsDocument | null | undefined, wasHitPaused: boolean): PlayerState {

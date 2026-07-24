@@ -10,6 +10,7 @@ import { getAnimationTriggerInfo, getCurrentAnimationElement } from '../animatio
 import { createInitialGameState } from '../engine/GameState';
 import { applyFallbackHitRecovery } from '../engine/FallbackHitRecovery';
 import { resolveFallbackHits } from '../engine/FallbackHitResolver';
+import { applyFallbackStageRules } from '../engine/FallbackStageRules';
 import { createInitialRoundState, stepRoundState } from '../engine/RoundState';
 import type { GameState } from '../engine/types';
 import { loadCharacterFromDef, type CharacterAssetFetcher } from './CharacterLoader';
@@ -430,6 +431,46 @@ describe('T-H-M-A crouching and jumping Y collision regression', () => {
     expect(activated.players[0].activeHitDef, activated.players[0].hitDiagnosticLines?.join('\n')).not.toBeNull();
     expect(contacted.hitEvents, contacted.hitDiagnosticLines?.join('\n')).toHaveLength(1);
     expect(contacted.hitDiagnosticLines?.join('\n')).toContain('hitflag=MAFP');
+  });
+});
+
+describe('T-H-M-A State 3430 TargetBind regression', () => {
+  it('carries the target at AnimElem 2 with the attacker position and velocity', async () => {
+    const assets = await loadCharacterFromDef('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.def', createFileSystemFetcher());
+    const state3430 = assets.cns.states.find((state) => state.stateNo === 3430);
+    if (!state3430) throw new Error('State 3430 not found');
+    const focusedCns: CnsDocument = { metadataSections: assets.cns.metadataSections, states: [state3430] };
+    const elementTime = findActionElementStart(assets.air.actions, 3430, 2);
+    expect(elementTime).not.toBeNull();
+    const initial = createInitialGameState();
+    const state: GameState = {
+      ...initial,
+      players: [{
+        ...initial.players[0],
+        x: 400, y: 100, vx: 5, vy: -2, facing: 1,
+        stateNo: 3430, stateHeaderAppliedStateNo: 3430, stateTime: elementTime!,
+        stateType: 'A', moveType: 'A', physics: 'N', ctrl: false,
+        animNo: 3430, animTime: elementTime!,
+        targets: [{ playerId: 2, hitDefId: 0, activeHitDefId: 1 }],
+      }, {
+        ...initial.players[1],
+        x: 700, y: 0, vx: -8, vy: 7, stateNo: 5000, moveType: 'H', physics: 'N',
+      }],
+    };
+    const runtimeInput = {
+      getAnimationDuration: (animNo: number) => getMugenAnimEndTime(assets.air, animNo),
+      getAnimationElementNo: (animNo: number, animTime: number) => {
+        const element = getCurrentAnimationElement(assets.air, animNo, animTime);
+        return element ? element.elementIndex + 1 : null;
+      },
+      getAnimationTriggerInfo: (animNo: number, animTime: number) => getAnimationTriggerInfo(assets.air, animNo, animTime),
+    };
+
+    const activated = stepCnsStateRuntime(state, focusedCns, runtimeInput).state;
+    expect(activated.players[1]).toMatchObject({ x: 470, y: 10, vx: 5, vy: -2, targetBind: { remaining: 10 } });
+    const moved = applyFallbackStageRules(stepCnsPhysicsMotion(activated, focusedCns));
+    expect(moved.players[0]).toMatchObject({ x: 405, y: 98, vx: 5, vy: -2 });
+    expect(moved.players[1]).toMatchObject({ x: 475, y: 8, vx: 5, vy: -2, targetBind: { remaining: 9 } });
   });
 });
 

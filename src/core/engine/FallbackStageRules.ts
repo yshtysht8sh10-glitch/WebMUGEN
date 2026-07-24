@@ -31,6 +31,7 @@ export function applyFallbackStageRules(state: GameState): GameState {
   [nextP1, nextP2] = pushResult.players;
   nextP1 = clampToStage(nextP1);
   nextP2 = clampToStage(nextP2);
+  [nextP1, nextP2] = finalizeTargetBinds([nextP1, nextP2]);
 
   return {
     ...state,
@@ -43,6 +44,23 @@ export function applyFallbackStageRules(state: GameState): GameState {
       `raw.cross airborne=${Number(isAirborne(nextP1) || isAirborne(nextP2))} noAutoTurn=${Number(nextP1.noAutoTurn === true)},${Number(nextP2.noAutoTurn === true)} facingBefore=${beforeFacing.join(',')} facingAfter=${nextP1.facing},${nextP2.facing} autoTurn=${Number(beforeFacing[0] !== nextP1.facing || beforeFacing[1] !== nextP2.facing)}`,
     ],
   };
+}
+
+function finalizeTargetBinds(players: [PlayerState, PlayerState]): [PlayerState, PlayerState] {
+  return players.map((player) => {
+    const bind = player.targetBind;
+    if (!bind) return player;
+    const owner = players.find((candidate) => candidate.id === bind.ownerId);
+    if (!owner) return { ...player, targetBind: undefined };
+    return {
+      ...player,
+      x: owner.x + bind.offsetX * owner.facing,
+      y: owner.y + bind.offsetY,
+      vx: owner.vx,
+      vy: owner.vy,
+      targetBind: bind.remaining === 0 ? undefined : bind,
+    };
+  }) as [PlayerState, PlayerState];
 }
 
 function applyFacing(p1: PlayerState, p2: PlayerState): [PlayerState, PlayerState] {

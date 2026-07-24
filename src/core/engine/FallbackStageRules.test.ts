@@ -58,6 +58,24 @@ describe('FallbackStageRules', () => {
     expect(next.players[1].facing).toBe(1);
   });
 
+  it('reapplies TargetBind after stage clamping and push, then clears an expired bind', () => {
+    const state = createInitialGameState();
+    const next = applyFallbackStageRules({
+      ...state,
+      players: [
+        { ...state.players[0], x: 950, y: 120, vx: 4, vy: -2, facing: -1, moveType: 'A' },
+        {
+          ...state.players[1], x: 940, y: 120, vx: 99, vy: 99, moveType: 'H',
+          targetBind: { ownerId: 1, remaining: 0, offsetX: 20, offsetY: -30 },
+        },
+      ],
+    });
+
+    expect(next.players[0].x).toBe(912);
+    expect(next.players[1]).toMatchObject({ x: 892, y: 90, vx: 4, vy: -2 });
+    expect(next.players[1].targetBind).toBeUndefined();
+  });
+
   it.each([
     { label: 'P1 approaches P2', p1X: 319, p2X: 320 },
     { label: 'P2 approaches P1', p1X: 300, p2X: 301 },

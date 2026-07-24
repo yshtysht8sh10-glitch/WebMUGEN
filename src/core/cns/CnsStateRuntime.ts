@@ -104,7 +104,7 @@ export type CnsRuntimeInput = {
 export type CnsRuntimeResult = { state: GameState; traces: CnsRuntimeTrace[] };
 
 type TargetOperation = {
-  kind: 'state' | 'velSet' | 'velAdd' | 'lifeAdd' | 'powerAdd' | 'bind' | 'facing';
+  kind: 'state' | 'velSet' | 'velAdd' | 'lifeAdd' | 'powerAdd' | 'bind' | 'drop' | 'facing';
   ownerId: number;
   targetIds: number[];
   value?: number;
@@ -600,6 +600,8 @@ function applyTargetOperations(
         return { ...player, facing: (ownerFacing * ((operation.value ?? 1) < 0 ? -1 : 1)) as 1 | -1 };
       }
       if (operation.kind === 'bind') {
+        const bindTime = Math.trunc(operation.time ?? 1);
+        if (bindTime === 0 || !owner) return { ...player, targetBind: undefined };
         const ownerFacing = operation.ownerFacing ?? owner?.facing ?? 1;
         const offsetX = operation.x ?? 0;
         const offsetY = operation.y ?? 0;
@@ -607,8 +609,13 @@ function applyTargetOperations(
           ...player,
           x: (operation.ownerX ?? owner?.x ?? player.x) + offsetX * ownerFacing,
           y: (operation.ownerY ?? owner?.y ?? player.y) + offsetY,
-          targetBind: { ownerId: operation.ownerId, remaining: operation.time ?? 1, offsetX, offsetY },
+          vx: owner.vx,
+          vy: owner.vy,
+          targetBind: { ownerId: operation.ownerId, remaining: bindTime < 0 ? -1 : bindTime, offsetX, offsetY },
         };
+      }
+      if (operation.kind === 'drop' && player.targetBind?.ownerId === operation.ownerId) {
+        return { ...player, targetBind: undefined };
       }
       return player;
     }) as [PlayerState, PlayerState];
@@ -1501,7 +1508,14 @@ function executeTargetController(
   let next = { ...player, hitDiagnosticLines: input.hitDiagnostics === false ? player.hitDiagnosticLines : diagnostic };
   if (type === 'targetdrop') {
     for (const target of selected) next = removeTarget(next, target.playerId);
-    return withPlayer(next, true, name);
+    return {
+      ...withPlayer(next, true, name),
+      targetOperation: {
+        kind: 'drop',
+        ownerId: player.id,
+        targetIds: selected.map((entry) => entry.playerId),
+      },
+    };
   }
   if (selected.length === 0) return withPlayer(next, true, name);
 

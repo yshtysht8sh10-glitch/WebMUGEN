@@ -19,39 +19,62 @@
   </style>
 </head>
 <body>
-<header><h1>TargetBind</h1><p>Target / WinMUGEN CNS State Controller調査メモ</p></header>
+<header><h1>TargetBind</h1><p>WinMUGEN互換仕様・WebMUGEN実装監査（2026-07-25）</p></header>
 <main>
-<section class="warn">
-  <h2>位置づけ</h2>
-  <p>この文書はWebMUGEN実装用の初期メモであり、最終的なWinMUGEN完全仕様ではない。実機検証・既存キャラ検証・MUGEN 1.0差分調査を通じて更新する。</p>
-</section>
 <section>
   <h2>概要</h2>
-  <p>対象を自分に対して固定する。投げなどで使用。</p>
+  <p>登録済みTargetを、Controller実行者の軸を基準とする相対位置へ一定時間拘束する。主用途は投げ・掴み・壁運搬である。</p>
 </section>
 <section>
-  <h2>代表パラメータ</h2>
-  <table><thead><tr><th>パラメータ</th><th>意味・調査観点</th></tr></thead><tbody><tr><td><code>pos</code></td><td>相対位置。</td></tr>
-<tr><td><code>time</code></td><td>固定時間。</td></tr></tbody></table>
+  <h2>根拠の区分</h2>
+  <table><thead><tr><th>区分</th><th>確認内容</th></tr></thead><tbody>
+    <tr><td>Elecbyte公式</td><td><a href="https://elecbyte.com/mugendocs/sctrls.html#targetbind">TargetBind</a> は指定Targetを自軸相対に拘束する。<code>time</code> 既定値は1、<code>ID</code> 既定値は-1（全Target）、<code>pos</code> 既定値は0,0。速度副作用は明記されていない。</td></tr>
+    <tr><td>WinMUGEN公式文書ミラー</td><td><a href="https://bluesura.github.io/MUGEN/document/Official/2002.04.14/sctrls.html">2002-04-14版</a>でも同じ既定値と相対位置仕様を確認。</td></tr>
+    <tr><td>互換実装（補助根拠）</td><td><a href="https://github.com/ikemen-engine/Ikemen-GO">IKEMEN GO</a> は有効なTarget bind中、拘束元の速度を対象へ同期し、TargetDrop時にbindを解除する。これは公式文書にない挙動の補助根拠であり、WinMUGEN実機結果とは区別する。</td></tr>
+    <tr><td>WinMUGEN実機</td><td>この監査環境では実行可能な <code>mugen.exe</code> を確認できず、未検証。したがってCompatibility MatrixはPartialのままとする。</td></tr>
+  </tbody></table>
 </section>
 <section>
-  <h2>記述例</h2>
+  <h2>パラメータと時間</h2>
+  <table><thead><tr><th>項目</th><th>WebMUGENの扱い</th></tr></thead><tbody>
+    <tr><td><code>ID</code></td><td>指定時は一致するHitDef IDの登録Target、未指定時は全登録Targetを選ぶ。</td></tr>
+    <tr><td><code>pos = x,y</code></td><td>Xは拘束元Facing相対、Yはワールド軸。省略は0,0。</td></tr>
+    <tr><td><code>time</code>省略</td><td>1 tick。</td></tr>
+    <tr><td><code>time = 0</code></td><td>位置を変更せず、既存の同一所有者bindを解除。</td></tr>
+    <tr><td><code>time &gt; 0</code></td><td>指定tick数。実行tickを含み、各可動tick後に減算。</td></tr>
+    <tr><td><code>time &lt; 0</code></td><td>内部値-1へ正規化し無期限。公式文書外のため実機確認は残る。</td></tr>
+  </tbody></table>
+</section>
+<section>
+  <h2>位置・速度の更新モデル</h2>
+  <ol>
+    <li>Controller実行時に対象を <code>owner.x + pos.x * owner.facing</code>, <code>owner.y + pos.y</code> へ置き、ownerの現在のX/Yワールド速度をコピーする。</li>
+    <li>両root playerのphysics後、同じ位置拘束と速度同期を再適用する。</li>
+    <li>画面端clamp・PlayerPush後に最終補正し、描画時の1フレームずれを防ぐ。</li>
+    <li>期限切れではbind情報だけを消す。拘束前速度へ戻さず、0固定もせず、最後に同期した速度を保持する。</li>
+  </ol>
   <pre>[State 1000, Bind]
 type = TargetBind
-trigger1 = 1
-pos = 40,0</pre>
+trigger1 = Time = 0
+time = 5
+pos = 40, -20</pre>
 </section>
 <section>
-  <h2>WebMUGEN実装方針</h2>
-  <p>投げ実装時に対応する。</p>
-</section>
-<section>
-  <h2>検証TODO</h2>
+  <h2>解除・再実行・停止時間</h2>
   <ul>
-    <li>WinMUGENでの挙動確認。</li>
-    <li>MUGEN 1.0 / 1.1との差分確認。</li>
-    <li>KFM系キャラでの使用例確認。</li>
-    <li>WebMUGEN内部形式への変換ルール確定。</li>
+    <li>同じ対象への再実行は位置・速度・残り時間を新しい値で上書きする。</li>
+    <li><code>TargetDrop</code> は対象登録と、そのownerによるbindを同時に解除する。</li>
+    <li><code>TargetState</code>/<code>SelfState</code> 自体では解除しない。投げ先State遷移をまたぐ継続を許す。</li>
+    <li>どちらかの参加者がHitPause中なら有限時間を消費しない。通常Pause/SuperPauseでは既存のentity可動判定とphysics復元を利用するが、個別movetime組合せは未検証。</li>
+  </ul>
+</section>
+<section class="warn">
+  <h2>既知の制限・残作業</h2>
+  <ul>
+    <li>WinMUGEN実機で、速度同期・解除tick・負値・Pause/SuperPauseを確認する。</li>
+    <li>Helper/team/multi-player Targetと複数localcoord間のスケーリングは未対応。</li>
+    <li>実装はroot playerの共通runtimeにあり、KFM/特定State番号への特例はない。</li>
+    <li>焦点テストは静止/移動元、Facing、既定/0/有限/負時間、HitPause、TargetDrop、画面端、T-H-M-A State 3430をカバーする。</li>
   </ul>
 </section>
 </main>

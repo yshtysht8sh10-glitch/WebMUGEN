@@ -117,6 +117,12 @@ CNS pass, so a P1 `TargetState` destination executes its `Time = 0` controllers 
 tick's physics. Deferring all Target operations until after both players had executed skipped those
 controllers and let the destination inherit the previous State's velocity for one physics tick.
 
+`TargetBind` still applies immediately when its Controller executes so later same-pass logic sees the
+bound position and the target receives the owner's current world velocity. After both root-player
+physics steps, active finite or indefinite binds reapply the owner's resulting position, Facing, and
+velocity. Stage clamp/push performs a final correction before rendering. Expiry clears only the bind
+metadata, leaving the last synchronized velocity in place; `TargetDrop` clears matching bind metadata.
+
 ## Controller execution flow
 
 For each controller in a StateDef:
@@ -273,7 +279,7 @@ Do not skip directly to TypeScript changes before identifying the failing layer.
 | `common.cmd` | Visible common routing and temporary movement glue where practical. |
 | `CnsStateRuntime` | Trigger evaluation and controller execution. |
 | `CnsRuntimeTrigger` | CNS expression and trigger evaluation. |
-| `CnsPhysicsStep` | Velocity, gravity, position, ground handling. |
+| `CnsPhysicsStep` | Velocity, gravity, position, ground handling, and post-motion root TargetBind maintenance. |
 | `CanvasRenderer` | Drawing the state produced by runtime and physics. |
 | Debug Overlay | Observability for each layer. |
 

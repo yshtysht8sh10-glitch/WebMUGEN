@@ -72,6 +72,15 @@ For ordinary `Physics=A`, the physics step reads `Const(movement.yaccel)` from t
 `VelSet x = -12, y = -0.2` unchanged while moving each tick; the launch direction comes from the
 State's `P2Dist X < 0` Turn and Facing-relative VelSet, not from Physics=N.
 
+After both root players integrate motion, an active `TargetBind` reapplies its offset from the
+owner's resulting position and Facing and copies the owner's resulting X/Y world velocity. This
+prevents the owner movement and target CustomState velocity from creating a one-frame separation,
+and release retains the last copied velocity instead of restoring an older value or forcing zero.
+Stage clamp/push then performs a final bind correction. Positive durations count down on movable
+ticks, omitted `time` is one tick, zero cancels, any negative value is indefinite, and either
+participant's HitPause freezes the finite counter. Global Pause/movetime combinations and non-root
+ownership timing remain Partial.
+
 P1 Target controllers are committed before P2 CNS execution. On the Projectile-to-TargetState 280
 route, P2 therefore executes State 280's `Time = 0` VelSet before Physics=N integrates movement.
 The previous deferred TargetState ordering ran P2's old 5030 gravity first, skipped State 280's
