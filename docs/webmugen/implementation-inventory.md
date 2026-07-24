@@ -41,7 +41,7 @@ This document is a high-level inventory of WebMUGEN implementation areas. It is 
 | Hit effects | Contact envelopes feed same-frame shared Explod sparks, shared Browser Audio cues, and envshake offsets once per HitEvent. Character `S` scope is production-connected; bundled common fightfx/SND assets are absent and remain diagnosed Partial. |
 | Browser audio | Shared lazy AudioContext adapter supports user-gesture unlock, decode cache, owner/channel gain and pan, a ramped persistent 0-100 master/mute UI (default 50%), stop/cleanup, and safe diagnostics. Common SND and advanced ownership remain incomplete. |
 | Static debug | Character load, StateDef list, command routes, and coverage are visible. |
-| Runtime settings | Persistent Game time, frame interval, hit diagnostics, root-player Power Infinite, and four independent opt-in Debug/Logging sinks exist. Human/AI logs, collision boxes, and lower-left history default OFF and stop upstream work; a rolling 600-frame performance snapshot supports A-F comparisons. |
+| Runtime settings | Persistent Game time, frame interval, hit diagnostics, root-player Power Infinite, Practice Mode zero-Life recovery/timer freeze, and four independent opt-in Debug/Logging sinks exist. Human/AI logs, collision boxes, lower-left history, and Practice Mode default OFF; a rolling 600-frame performance snapshot supports A-F comparisons. |
 
 ## Documentation layer
 

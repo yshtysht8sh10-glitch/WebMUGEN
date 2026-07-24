@@ -36,6 +36,26 @@ describe('Issue #64 runtime settings persistence', () => {
   });
 });
 
+describe('Practice Mode setting', () => {
+  it('defaults missing and invalid values to OFF', () => {
+    expect(DEFAULT_RUNTIME_SETTINGS.practiceMode).toBe(false);
+    expect(normalizeRuntimeSettings({ roundTime: 20 }).practiceMode).toBe(false);
+    expect(normalizeRuntimeSettings({ practiceMode: 'true' }).practiceMode).toBe(false);
+  });
+
+  it('persists the checkbox value', () => {
+    let stored: string | null = null;
+    const storage = {
+      getItem: () => stored,
+      setItem: (_key: string, value: string) => { stored = value; },
+    };
+
+    saveRuntimeSettings({ ...DEFAULT_RUNTIME_SETTINGS, practiceMode: true }, storage);
+
+    expect(loadRuntimeSettings(storage).practiceMode).toBe(true);
+  });
+});
+
 describe('Issue #75 debug and logging settings', () => {
   it('defaults all four settings to OFF for new, legacy, and invalid data', () => {
     expect(DEFAULT_RUNTIME_SETTINGS).toMatchObject({

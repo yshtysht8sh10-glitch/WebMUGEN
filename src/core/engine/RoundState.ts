@@ -24,7 +24,7 @@ export function createInitialRoundState(timer: number = DEFAULT_ROUND_TIMER): Ro
   };
 }
 
-export function stepRoundState(round: RoundState, gameState: GameState): RoundState {
+export function stepRoundState(round: RoundState, gameState: GameState, freezeTimer: boolean = false): RoundState {
   if (round.phase === 'intro') {
     const nextFrameInPhase = round.frameInPhase + 1;
 
@@ -61,7 +61,7 @@ export function stepRoundState(round: RoundState, gameState: GameState): RoundSt
   }
 
   const nextFrameInPhase = round.frameInPhase + 1;
-  const shouldTickTimer = nextFrameInPhase % 60 === 0;
+  const shouldTickTimer = !freezeTimer && nextFrameInPhase % 60 === 0;
   const nextTimer = shouldTickTimer ? Math.max(0, round.timer - 1) : round.timer;
 
   if (nextTimer === 0) {

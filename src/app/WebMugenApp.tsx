@@ -3,6 +3,7 @@ import { CanvasRenderer } from '../renderer/canvas2d/CanvasRenderer';
 import { createInitialGameState } from '../core/engine/GameState';
 import type { GameState, ProjectileState, Rect } from '../core/engine/types';
 import { applyInfinitePowerAtFrameStart } from '../core/power/InfinitePower';
+import { applyPracticeModeRecovery } from '../core/training/PracticeMode';
 import { createSampleCharacterAssets, loadAppCharacter, readCharacterRuntimeMetadata } from './AppCharacterLoader';
 import type { CharacterSourceFile } from '../core/character/CharacterTypes';
 import type { SndDocument } from '../parser/snd/SndTypes';
@@ -628,7 +629,10 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             },
           };
 
-          if (!pausedThisFrame) nextRoundState = stepRoundState(nextRoundState, nextState);
+          if (!pausedThisFrame) {
+            nextState = applyPracticeModeRecovery(nextState, runtimeSettingsRef.current.practiceMode);
+            nextRoundState = stepRoundState(nextRoundState, nextState, runtimeSettingsRef.current.practiceMode);
+          }
           nextScore = updateRoundScore(nextScore, nextRoundState);
           nextFeedback = updateHitFeedback(nextFeedback, nextState);
           nextState = {
@@ -1403,6 +1407,15 @@ export function RuntimeSettingsPanel({
             <option value="p2">P2</option>
             <option value="both">P1 + P2</option>
           </select>
+        </label>
+        <label>
+          <input
+            aria-label="Practice Mode"
+            type="checkbox"
+            checked={settings.practiceMode}
+            onChange={(event) => onChange({ ...settings, practiceMode: event.currentTarget.checked })}
+          />
+          Practice Mode / 練習モード（体力0で全回復・時間無制限）
         </label>
         <label>
           <input

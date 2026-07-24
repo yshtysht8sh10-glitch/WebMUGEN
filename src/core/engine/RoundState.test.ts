@@ -39,6 +39,18 @@ describe('RoundState', () => {
     expect(round.phase).toBe('fight');
   });
 
+  it('keeps the timer unchanged when timer freeze is enabled', () => {
+    let round: ReturnType<typeof createInitialRoundState> = fightRound();
+    const gameState = createInitialGameState();
+
+    for (let i = 0; i < 180; i += 1) {
+      round = stepRoundState(round, gameState, true);
+    }
+
+    expect(round.timer).toBe(99);
+    expect(round.phase).toBe('fight');
+  });
+
   it('enters KO phase when P2 life reaches zero', () => {
     const gameState = createInitialGameState();
     const round = stepRoundState(fightRound(), {

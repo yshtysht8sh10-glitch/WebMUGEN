@@ -28,6 +28,8 @@ describe('WebMugenApp runtime history', () => {
     expect(settingsHtml).toContain('aria-label="AI log enabled"');
     expect(settingsHtml).toContain('aria-label="Collision boxes visible"');
     expect(settingsHtml).toContain('aria-label="State history visible"');
+    expect(settingsHtml).toContain('aria-label="Practice Mode"');
+    expect(settingsHtml).toContain('Practice Mode / 練習モード（体力0で全回復・時間無制限）');
   });
 
   it('keeps the game panel mounted while leaving hidden static content unmounted', () => {
