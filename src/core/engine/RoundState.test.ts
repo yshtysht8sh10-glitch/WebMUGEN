@@ -15,13 +15,10 @@ describe('RoundState', () => {
     expect(createInitialRoundState().phase).toBe('intro');
   });
 
-  it('transitions from intro to fight after intro frames', () => {
-    let round = createInitialRoundState();
+  it('transitions from intro to fight when neither player retains an Intro state or flag', () => {
+    const initial = createInitialRoundState();
     const gameState = createInitialGameState();
-
-    for (let i = 0; i < 90; i += 1) {
-      round = stepRoundState(round, gameState);
-    }
+    const round = stepRoundState(initial, gameState);
 
     expect(round.phase).toBe('fight');
     expect(round.frameInPhase).toBe(0);

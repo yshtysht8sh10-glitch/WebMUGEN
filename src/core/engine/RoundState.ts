@@ -11,7 +11,6 @@ export type RoundState = {
   endReason?: 'ko' | 'double_ko' | 'time_over';
 };
 
-const INTRO_FRAMES = 90;
 export const DEFAULT_ROUND_TIMER = 99;
 
 export function createInitialRoundState(timer: number = DEFAULT_ROUND_TIMER): RoundState {
@@ -27,8 +26,11 @@ export function createInitialRoundState(timer: number = DEFAULT_ROUND_TIMER): Ro
 export function stepRoundState(round: RoundState, gameState: GameState, freezeTimer: boolean = false): RoundState {
   if (round.phase === 'intro') {
     const nextFrameInPhase = round.frameInPhase + 1;
+    const introActive = gameState.players.some((player) => (
+      player.stateNo >= 190 && player.stateNo <= 199
+    ) || player.assertSpecialFlags?.some((flag) => flag.toLowerCase() === 'intro'));
 
-    if (nextFrameInPhase >= INTRO_FRAMES) {
+    if (!introActive) {
       return {
         ...round,
         phase: 'fight',

@@ -54,6 +54,12 @@ import {
   updateRoundScore,
   type RoundScore,
 } from '../core/engine/RoundScore';
+import {
+  applyRoundFlowStateEntries,
+  isMatchOver,
+  shouldStartNextRound,
+  winMugenRoundState,
+} from '../core/engine/RoundFlow';
 import { canRestartRound, restartRound } from '../core/engine/RoundRestart';
 import {
   DEFAULT_FRAME_INTERVAL_MS,
@@ -463,9 +469,11 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           p1HitPauseCommandBufferRef.current?.clear();
           p2HitPauseCommandBufferRef.current?.clear();
           audioRuntimeRef.current?.stopAll();
-        } else if (nextRoundState.phase !== 'intro') {
+        } else {
+          nextState = applyRoundFlowStateEntries(nextState, nextRoundState);
+          const fightActive = nextRoundState.phase === 'fight';
           const pauseAtFrameStart = nextState.pause ?? createInitialPauseState();
-          if (ENABLE_RUNTIME_FALLBACKS) {
+          if (ENABLE_RUNTIME_FALLBACKS && fightActive) {
             nextState = applyFallbackControls(nextState, p1Input, p2Input);
           }
 
@@ -476,8 +484,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           const runtimeEventDiagnosticLines: string[] = [];
           const cnsStartedAt = performance.now();
           const cnsResult = stepCnsStateRuntime(nextState, character.cns, {
-            p1Commands,
-            p2Commands,
+            p1Commands: fightActive ? p1Commands : new Set(),
+            p2Commands: fightActive ? p2Commands : new Set(),
             getAnimationDuration: (animNo) => getMugenAnimEndTime(character.air, animNo),
             getAnimationElementNo: (animNo, animTime) => {
               const element = getCurrentAnimationElement(character.air, animNo, animTime);
@@ -505,11 +513,11 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             }),
             pauseState: pauseAtFrameStart,
             screenWidth: canvas.width,
-            roundState: nextRoundState.phase === 'fight' ? 2 : 3,
+            roundState: winMugenRoundState(nextRoundState, isMatchOver(nextScore)),
             roundNo: nextRoundState.roundNo,
             roundsExisted: Math.max(0, nextRoundState.roundNo - 1),
             matchNo: 1,
-            matchOver: nextRoundState.phase === 'ko' || nextRoundState.phase === 'timeOver',
+            matchOver: isMatchOver(nextScore),
             roundWinner: nextRoundState.winner,
             roundEndReason: nextRoundState.endReason,
             teamMode: 'single',
@@ -574,7 +582,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           }
 
           nextState = applyFallbackStageRules(nextState);
-          if (pausedThisFrame) {
+          if (pausedThisFrame || !fightActive) {
             nextState = { ...nextState, hitEvents: [] };
           } else {
             nextState = resolveFallbackHits(
@@ -630,7 +638,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           };
 
           if (!pausedThisFrame) {
-            nextState = applyPracticeModeRecovery(nextState, runtimeSettingsRef.current.practiceMode);
+            if (fightActive) nextState = applyPracticeModeRecovery(nextState, runtimeSettingsRef.current.practiceMode);
             nextRoundState = stepRoundState(nextRoundState, nextState, runtimeSettingsRef.current.practiceMode);
           }
           nextScore = updateRoundScore(nextScore, nextRoundState);
@@ -640,10 +648,18 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             helpers: stepHelperPauseMoveTimes(nextState.helpers, pauseDuringFrame),
             pause: stepPauseState(pauseDuringFrame),
           };
-        } else {
-          nextRoundState = stepRoundState(nextRoundState, nextState);
-          nextScore = updateRoundScore(nextScore, nextRoundState);
-          nextFeedback = updateHitFeedback(nextFeedback, nextState);
+          if (shouldStartNextRound(nextRoundState, nextScore)) {
+            const restarted = restartRound(nextRoundState.roundNo, runtimeSettingsRef.current.roundTime, characterPowerMax);
+            nextState = synchronizeRuntimeFrame(restarted.gameState, frameNoRef.current);
+            nextRoundState = restarted.roundState;
+            nextFeedback = restarted.hitFeedbackState;
+            nextCnsTraces = [];
+            p1CommandBufferRef.current.clear();
+            p2CommandBufferRef.current.clear();
+            p1HitPauseCommandBufferRef.current?.clear();
+            p2HitPauseCommandBufferRef.current?.clear();
+            audioRuntimeRef.current?.stopAll();
+          }
         }
         for (const event of environmentShakeEvents) nextFeedback = startEnvironmentShake(nextFeedback, event);
 

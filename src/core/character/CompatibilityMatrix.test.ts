@@ -8,7 +8,7 @@ describe('WinMUGEN compatibility Matrix', () => {
       cwd: process.cwd(),
       encoding: 'utf8',
     });
-    expect(output).toContain('450 rows validated');
+    expect(output).toContain('464 rows validated');
 
     const markdown = readFileSync('docs/webmugen/winmugen-compatibility-matrix.md', 'utf8');
     expect(markdown).toContain('- Complete: 101');
