@@ -1,3 +1,5 @@
+import type { GameState } from '../engine/types';
+
 export type PauseState = {
   pauseTime: number;
   superPauseTime: number;
@@ -83,6 +85,25 @@ export function canPlayerMoveDuringPause(state: PauseState): boolean {
 
 export function canEntityMoveDuringPause(state: PauseState, entityId: number): boolean {
   return !isGamePaused(state) || state.ownerEntityId === entityId && state.moveTime > 0;
+}
+
+export function restorePausedEntityPhysics(before: GameState, after: GameState, pause: PauseState): GameState {
+  const beforeHelpers = new Map(before.helpers.entries.map((helper) => [helper.entityId, helper]));
+  return {
+    ...after,
+    players: after.players.map((player, index) => canEntityMoveDuringPause(pause, player.id)
+      ? player
+      : before.players[index]) as GameState['players'],
+    helpers: {
+      ...after.helpers,
+      entries: after.helpers.entries.map((helper) => {
+        const previous = beforeHelpers.get(helper.entityId);
+        return canEntityMoveDuringPause(pause, helper.entityId) || !previous
+          ? helper
+          : { ...helper, player: previous.player };
+      }),
+    },
+  };
 }
 
 export function applyPauseControllerEvents(state: PauseState, events: readonly PauseControllerEvent[]): PauseState {

@@ -3,6 +3,7 @@ import { parseCnsText } from '../../parser/cns/CnsParser';
 import { createInitialGameState } from '../engine/GameState';
 import { restartRound } from '../engine/RoundRestart';
 import { spawnHelper } from '../helper/HelperSystem';
+import { createInitialPauseState, startPause } from '../pause/PauseSystem';
 import { stepCnsPhysicsMotion } from './CnsPhysicsStep';
 import { stepCnsStateRuntime } from './CnsStateRuntime';
 import { evaluateCnsRuntimeTrigger } from './CnsRuntimeTrigger';
@@ -190,5 +191,36 @@ value = 200
     expect(withKeyCtrl.player).toMatchObject({ stateNo: 200, vars: { 0: 1, 1: 200 } });
     expect(result.traces.find((trace) => trace.entityId === withoutKeyCtrl.entityId)?.executedControllers).toEqual(['VarSet']);
     expect(result.traces.find((trace) => trace.entityId === withKeyCtrl.entityId)?.executedControllers).toEqual(['VarAdd', 'ChangeState', 'VarSet']);
+  });
+
+  it('uses the Helper runtime entity id for Pause movetime ownership', () => {
+    const pauseCns = parseCnsText(`
+[StateDef 100]
+type = S
+physics = N
+[State 100, Move]
+type = PosAdd
+trigger1 = 1
+x = 5
+`);
+    const initial = createInitialGameState();
+    const helpers = spawnHelper(initial.helpers, {
+      helperId: 100, rootEntityId: 1, parentEntityId: 1, ownerCharacterId: 1,
+      stateOwnerId: 1, animationOwnerId: 1, stateNo: 100, x: 100, y: 0,
+      facing: 1, keyCtrl: false, ownPal: false, spawnFrame: 0, parent: initial.players[0],
+    }, pauseCns);
+    const state = { ...initial, helpers };
+
+    const helperOwned = stepCnsStateRuntime(state, pauseCns, {
+      pauseState: startPause(createInitialPauseState(), 2, 1, 3),
+    });
+    expect(helperOwned.state.helpers.entries[0].player.x).toBe(105);
+    expect(helperOwned.traces.find((trace) => trace.entityId === 3)?.executedControllers).toContain('PosAdd');
+
+    const rootOwned = stepCnsStateRuntime(state, pauseCns, {
+      pauseState: startPause(createInitialPauseState(), 2, 1, 1),
+    });
+    expect(rootOwned.state.helpers.entries[0].player.x).toBe(100);
+    expect(rootOwned.traces.find((trace) => trace.entityId === 3)?.debugLines.join('\n')).toContain('global_pause skip');
   });
 });

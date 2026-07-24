@@ -78,6 +78,7 @@ import {
   canEntityMoveDuringPause,
   createInitialPauseState,
   isGamePaused,
+  restorePausedEntityPhysics,
   stepPauseState,
   type PauseControllerEvent,
 } from '../core/pause/PauseSystem';
@@ -560,20 +561,13 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           const pauseDuringFrame = nextState.pause ?? createInitialPauseState();
           const pausedThisFrame = isGamePaused(pauseDuringFrame);
           const beforePhysicsState = nextState;
-          const beforePhysicsPlayers = nextState.players;
           if (ENABLE_RUNTIME_FALLBACKS) {
             nextState = stepFallbackMotion(nextState);
           } else {
             nextState = stepCnsPhysicsMotion(nextState, character.cns);
           }
           if (pausedThisFrame) {
-            nextState = {
-              ...nextState,
-              players: [
-                canEntityMoveDuringPause(pauseDuringFrame, 1) ? nextState.players[0] : beforePhysicsPlayers[0],
-                canEntityMoveDuringPause(pauseDuringFrame, 2) ? nextState.players[1] : beforePhysicsPlayers[1],
-              ],
-            };
+            nextState = restorePausedEntityPhysics(beforePhysicsState, nextState, pauseDuringFrame);
           }
 
           nextState = applyFallbackStageRules(nextState);

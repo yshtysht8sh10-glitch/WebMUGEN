@@ -360,7 +360,8 @@ function stepPlayer(
     if (traceDiagnosticsEnabled) trace.debugLines.push(`hitpause selective remaining=${player.hitPause} states=${pausedStates.map((state) => state.stateNo).join(',')} controllers=${trace.executedControllers.length}`);
     return { ...finishTrace(appendFallPauseDiagnostic(next, runtimeFrame, 'hitpause', player.hitPause, input.hitDiagnostics !== false), trace, traceDiagnosticsEnabled), targetOperations };
   }
-  if (input.pauseState && (input.pauseState.resumeGuard || !canEntityMoveDuringPause(input.pauseState, player.id))) {
+  const runtimeEntityId = input.entityContext?.entityId ?? player.id;
+  if (input.pauseState && (input.pauseState.resumeGuard || !canEntityMoveDuringPause(input.pauseState, runtimeEntityId))) {
     if (traceDiagnosticsEnabled) trace.debugLines.push(`global_pause skip reason=${input.pauseState.resumeGuard ? 'resume_guard' : input.pauseState.kind ?? 'pause'} remaining=${Math.max(input.pauseState.pauseTime, input.pauseState.superPauseTime)} owner=p${input.pauseState.ownerEntityId ?? '-'}`);
     return { ...finishTrace(appendFallPauseDiagnostic(
       next,
