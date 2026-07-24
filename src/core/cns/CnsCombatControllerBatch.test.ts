@@ -84,6 +84,40 @@ forceair = 1
     expect(result.hitDiagnosticLines?.join('\n')).toContain('raw.hit_override attacker=p1 target=p2');
   });
 
+  it('accepts WinMUGEN Any-class AA/AP filters without treating throws as attacks', () => {
+    const defender = {
+      ...createInitialGameState().players[1],
+      hitOverrides: [{ slot: 0, attr: 'SA, AA, AP', stateNo: 902, remaining: 8, forceAir: false, stateOwnerId: 2 as const }],
+    };
+    const attacker = {
+      ...createInitialGameState().players[0],
+      stateNo: 200,
+      animNo: 200,
+      moveType: 'A' as const,
+      x: 300,
+      activeHitDef: {
+        diagnosticId: 92,
+        attr: { stateType: 'S', attackTypes: ['NA'] },
+        damage: 80,
+        guardDamage: 0,
+        pauseTime: { attacker: 0, defender: 0 },
+        groundVelocity: { x: 0, y: 0 },
+        airVelocity: { x: 0, y: 0 },
+      },
+    };
+    const accepted = resolveFallbackHits({
+      ...createInitialGameState(),
+      players: [attacker, { ...defender, x: 350 }],
+    }, air, true);
+    expect(accepted.players[1]).toMatchObject({ stateNo: 902, life: 1000 });
+
+    const throwContact = resolveFallbackHits({
+      ...createInitialGameState(),
+      players: [{ ...attacker, activeHitDef: { ...attacker.activeHitDef!, attr: { stateType: 'S', attackTypes: ['NT'] } } }, { ...defender, x: 350 }],
+    }, air, true);
+    expect(throwContact.players[1]).toMatchObject({ stateNo: 5000, life: 920 });
+  });
+
   it('resolves ReversalDef as an attack-vs-attack event with MoveReversed and custom states', () => {
     const cns = parseCnsText(`
 [Statedef 200]
