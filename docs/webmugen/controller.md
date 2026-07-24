@@ -157,7 +157,7 @@ Issue #58 Phase1 connects `Helper` and `DestroySelf` to an independent runtime e
 
 `AttackDist` mutates the current ActiveHitDef's live guard distance; it never forces the opponent into a guard State. `HitOverride` retains eight timed, replaceable attribute slots and intercepts matching accepted contact before normal damage/reaction, entering the configured self-owned State and optionally forcing air StateType. `ReversalDef` is a separate attack-vs-attack path: both Clsn1 sets must intersect, `reversal.attr` must match the incoming HitDef, then p1/p2 State and pausetime are applied, the incoming HitDef is consumed, a Target is registered, and `MoveReversed` becomes observable. Spark/sound, Helper/projectile, and rare priority behavior remain Partial.
 
-HitDef `p1stateno` enters an attacker-owned State. `p2stateno` enters a target-owned State by default; only explicit `p2getp1state = 1` borrows the attacker document. `forcestand` changes the target StateType without changing ownership. Missing owner documents or State numbers remain safe and produce `raw.custom_state` diagnostics instead of falling back to a different character's CNS.
+HitDef `p1stateno` enters an attacker-owned State. When `p2stateno` is present, omitted `p2getp1state` follows the WinMUGEN default of 1 and borrows the attacker document; explicit `p2getp1state = 0` keeps the target's own document. `forcestand` changes the target StateType without changing ownership. Missing owner documents or State numbers remain safe and produce `raw.custom_state` diagnostics instead of falling back to a different character's CNS. Bundled T-H-M-A State 700 verifies that a defender without a local State 711 still executes the attacker's State 711 header.
 
 ### Visual/audio effects
 

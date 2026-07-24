@@ -83,8 +83,11 @@ against a standing target without modifying the character assets.
 Bundled T-H-M-A State 700 uses `hitflag = M-`, `p1stateno = 701`, and `p2stateno = 711`.
 The production-loader/AIR regression forces only the original HitDef trigger, finds a real Clsn
 contact, verifies that `-` accepts the neutral target, and confirms entry into both custom throw
-States. Focused synthetic coverage also verifies that `-` rejects an already-hit target and `+`
-requires one.
+States. It also removes State 711 from the defender-owned test document and verifies that omitted
+`p2getp1state` uses its WinMUGEN default of 1: the defender records the attacker as State owner and
+executes the attacker's State 711 header (`A/H/N`, Anim 5012). Focused synthetic coverage verifies
+the omitted default, explicit `p2getp1state = 0` and `1`, and that `-` rejects an already-hit target
+while `+` requires one.
 
 Focused engine tests from Issues #3-#22 remain the behavioral evidence for multihit/chain persistence, Target mutation, custom-State ownership, guard/down/recovery, juggle, KO, power, cornerpush, snap, effects, and diagnostics. This harness proves those layers accept multiple real WinMUGEN data layouts and are not tied to KFM State numbers.
 

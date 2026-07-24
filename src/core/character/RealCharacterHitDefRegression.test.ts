@@ -375,7 +375,33 @@ describe('T-H-M-A State 700 throw regression', () => {
 
     expect(contacted, contacted?.hitDiagnosticLines?.join('\n')).not.toBeNull();
     expect(contacted!.players[0].stateNo).toBe(701);
-    expect(contacted!.players[1].stateNo).toBe(711);
+    expect(contacted!.players[1]).toMatchObject({ stateNo: 711, stateOwnerId: 1 });
+
+    const defenderCns: CnsDocument = {
+      ...assets.cns,
+      states: assets.cns.states.filter((state) => state.stateNo !== 711),
+    };
+    let resumed = contacted!;
+    while (resumed.players[1].hitPause > 0) resumed = stepCnsPhysicsMotion(resumed, forcedCns);
+    const entered = stepCnsStateRuntime(resumed, forcedCns, {
+      getCnsDocumentForPlayer: (ownerId) => ownerId === 1 ? forcedCns : defenderCns,
+      getAnimationDuration: (animNo) => getMugenAnimEndTime(assets.air, animNo),
+      getAnimationElementNo: (animNo, animTime) => {
+        const current = getCurrentAnimationElement(assets.air, animNo, animTime);
+        return current ? current.elementIndex + 1 : null;
+      },
+      getAnimationTriggerInfo: (animNo, animTime) => getAnimationTriggerInfo(assets.air, animNo, animTime),
+    });
+    expect(entered.traces[1].stateFound).toBe(true);
+    expect(entered.state.players[1], entered.traces[1].debugLines.join('\n')).toMatchObject({
+      stateNo: 711,
+      stateOwnerId: 1,
+      stateType: 'A',
+      moveType: 'H',
+      physics: 'N',
+      ctrl: false,
+      animNo: 5012,
+    });
   });
 });
 

@@ -417,13 +417,17 @@ physics = S
     expect(result.hitDiagnosticLines?.join('\n')).toContain('reason=equal_non_hit_miss');
   });
 
-  it('applies p1stateno and p2stateno with explicit custom-state ownership', () => {
+  it('applies p1stateno and p2stateno with the WinMUGEN default and explicit custom-state ownership', () => {
     const p1Only = resolveConfiguredHit({ p1StateNo: 300, pauseTime: [0, 0] });
     expect(p1Only.players[0]).toMatchObject({ stateNo: 300, stateOwnerId: 1 });
     expect(p1Only.players[1]).toMatchObject({ stateNo: 5000, stateOwnerId: 2 });
 
     const selfOwned = resolveConfiguredHit({ p2StateNo: 700, p2GetP1State: false, pauseTime: [0, 0] });
     expect(selfOwned.players[1]).toMatchObject({ stateNo: 700, stateOwnerId: 2 });
+
+    const defaultBorrowed = resolveConfiguredHit({ p2StateNo: 700, pauseTime: [0, 0] });
+    expect(defaultBorrowed.players[1]).toMatchObject({ stateNo: 700, stateOwnerId: 1 });
+    expect(defaultBorrowed.hitDiagnosticLines?.join('\n')).toContain('p2stateno=700 p2Owner=1 p2getp1state=1');
 
     const borrowed = resolveConfiguredHit({ p2StateNo: 700, p2GetP1State: true, pauseTime: [0, 0] });
     expect(borrowed.players[1]).toMatchObject({ stateNo: 700, stateOwnerId: 1 });

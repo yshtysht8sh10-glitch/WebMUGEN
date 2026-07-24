@@ -650,9 +650,11 @@ function applyAttackerRequestedState(attacker: PlayerState, hitDef: NonNullable<
 function applyTargetRequestedState(target: PlayerState, hitDef: NonNullable<PlayerState['activeHitDef']>, attackerId: number): PlayerState {
   const selfOwnerId = target.selfStateOwnerId ?? target.id;
   const stateNo = hitDef.p2StateNo ?? target.stateNo;
+  // WinMUGEN defaults p2getp1state to 1 whenever p2stateno is present.
+  const getsP1State = hitDef.p2StateNo !== undefined && hitDef.p2GetP1State !== false;
   const stateOwnerId = hitDef.p2StateNo === undefined
     ? selfOwnerId
-    : hitDef.p2GetP1State ? attackerId : selfOwnerId;
+    : getsP1State ? attackerId : selfOwnerId;
   return {
     ...target,
     stateNo,
@@ -670,9 +672,10 @@ function formatRequestedStateDiagnostics(
   targetAfter: PlayerState,
 ): string[] {
   if (hitDef.p1StateNo === undefined && hitDef.p2StateNo === undefined && !hitDef.forceStand) return [];
+  const getsP1State = hitDef.p2StateNo !== undefined && hitDef.p2GetP1State !== false;
   return [
     `raw.custom_state attacker=p${attackerBefore.id} target=p${targetBefore.id}`,
-    `  p1stateno=${hitDef.p1StateNo ?? '-'} p1Owner=${attackerAfter.stateOwnerId ?? attackerAfter.id} p2stateno=${hitDef.p2StateNo ?? '-'} p2Owner=${targetAfter.stateOwnerId ?? targetAfter.id} p2getp1state=${hitDef.p2GetP1State ? 1 : 0} forcestand=${hitDef.forceStand ? 1 : 0} result=applied`,
+    `  p1stateno=${hitDef.p1StateNo ?? '-'} p1Owner=${attackerAfter.stateOwnerId ?? attackerAfter.id} p2stateno=${hitDef.p2StateNo ?? '-'} p2Owner=${targetAfter.stateOwnerId ?? targetAfter.id} p2getp1state=${getsP1State ? 1 : 0} forcestand=${hitDef.forceStand ? 1 : 0} result=applied`,
   ];
 }
 
