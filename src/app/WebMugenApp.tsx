@@ -1171,6 +1171,7 @@ const INPUT_ACTIONS = [
   { key: 'x', label: 'x' },
   { key: 'y', label: 'y' },
   { key: 'z', label: 'z' },
+  { key: 'start', label: 'Start' },
 ] as const;
 
 type InputAction = typeof INPUT_ACTIONS[number]['key'];
@@ -3018,6 +3019,7 @@ function formatMugenPressedKeys(pressedKeys: ReadonlySet<string>, player: Player
   if (pressedKeys.has(mapping.a)) buttons.push('A');
   if (pressedKeys.has(mapping.b)) buttons.push('B');
   if (pressedKeys.has(mapping.c)) buttons.push('C');
+  if (pressedKeys.has(mapping.start)) buttons.push('START');
   if (pressedKeys.has(mapping.left)) buttons.push('←');
   if (pressedKeys.has(mapping.right)) buttons.push('→');
   if (pressedKeys.has(mapping.up)) buttons.push('↑');

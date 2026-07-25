@@ -134,3 +134,31 @@ describe('real T-H-M-A proximity attack routing', () => {
     expect(result.traces[0].executedControllers).toContain('ChangeState');
   });
 });
+
+describe('real T-H-M-A Start command routing', () => {
+  it('resolves the MUGEN s button and enters Taunt State 195', () => {
+    const input = { left: false, right: false, up: false, down: false, attack: false, buttons: ['s'] };
+    const buffer = new InputBuffer(10);
+    buffer.push(input, 1);
+    const resolved = resolveCommands(commands, input, buffer, 1);
+    const stateMinusOne = commandStates.states.find((state) => state.stateNo === -1)!;
+    const tauntControllers = stateMinusOne.controllers.filter((controller) => (
+      controller.type.toLowerCase() === 'changestate' && Number(controller.params.value) === 195
+    ));
+    const initial = createInitialGameState();
+    const result = stepCnsStateRuntime(initial, {
+      states: [
+        { ...stateMinusOne, controllers: tauntControllers },
+        { stateNo: 0, stateType: 'S', moveType: 'I', physics: 'S', ctrl: true, initialAnim: 0, controllers: [] },
+        { stateNo: 195, stateType: 'S', moveType: 'I', physics: 'S', ctrl: false, initialAnim: 195, controllers: [] },
+      ],
+      metadataSections: commandStates.metadataSections,
+    }, {
+      p1Commands: resolved.activeCommandNames,
+      p2Commands: new Set(),
+    });
+
+    expect(hasCommand(resolved, 'start')).toBe(true);
+    expect(result.state.players[0]).toMatchObject({ stateNo: 195, animNo: 195, ctrl: false });
+  });
+});

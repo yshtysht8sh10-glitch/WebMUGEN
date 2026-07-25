@@ -47,6 +47,16 @@ describe('BrowserInput', () => {
     expect(input.buttons).toEqual(['a', 'x']);
   });
 
+  it('maps configurable keyboard and gamepad Start inputs to the MUGEN s button', () => {
+    expect(keysToP1Input(new Set(['Enter'])).buttons).toEqual(['s']);
+    expect(keysToP2Input(new Set(['NumpadEnter'])).buttons).toEqual(['s']);
+
+    const input = new BrowserInput(createFakeWindow(), {
+      getGamepads: () => [createGamepad({ pressedButtons: [9] })],
+    });
+    expect(keysToP1Input(input.getPressedKeys()).buttons).toEqual(['s']);
+  });
+
   it('does not capture or prevent keyboard controls on form fields', () => {
     const listeners = new Map<string, EventListener[]>();
     const fakeWindow = {

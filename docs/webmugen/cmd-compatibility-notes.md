@@ -13,7 +13,7 @@ Follow `docs/webmugen/development-policy.md`: common movement routing belongs in
 
 | Feature | Matrix status | Current note | Remaining risk |
 |---|---|---|---|
-| Single button commands | Complete | Basic support. | Full command priority and buffering still need broader tests. |
+| Single button commands | Complete | Browser Input Config exposes keyboard/gamepad mappings for `a,b,c,x,y,z` and Start; Start is emitted as the WinMUGEN `s` token and production T-H-M-A coverage resolves `name = "start"` into Taunt State 195. | Full command priority and buffering still need broader tests. |
 | Hold direction `/D` | Complete | Used for crouch route. | Complex combined syntax needs audit. |
 | Hold direction `/F` | Complete | Used for walk-forward route. | Direction depends on facing/context assumptions. |
 | Hold direction `/B` | Complete | Used for walk-back route. | Direction depends on facing/context assumptions. |

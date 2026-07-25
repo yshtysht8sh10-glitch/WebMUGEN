@@ -533,7 +533,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 
 | Feature | Status | Notes |
 |---|---|---|
-| Single button commands | Complete | Basic support. |
+| Single button commands | Complete | Browser Input Config maps keyboard/gamepad `a,b,c,x,y,z` plus Start; Start emits the WinMUGEN `s` token, and focused production T-H-M-A coverage resolves `name = "start"` into Taunt State 195. |
 | Hold direction `/D` | Complete | Basic support. |
 | Hold direction `/F` | Complete | Basic support. |
 | Hold direction `/B` | Complete | Basic support. |

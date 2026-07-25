@@ -14,6 +14,7 @@ export type PlayerKeyboardMapping = {
   x: string;
   y: string;
   z: string;
+  start: string;
 };
 
 export type PlayerGamepadMapping = {
@@ -23,6 +24,7 @@ export type PlayerGamepadMapping = {
   x: number;
   y: number;
   z: number;
+  start: number;
 };
 
 export type PlayerInputMapping = {
@@ -48,8 +50,9 @@ export const DEFAULT_INPUT_CONFIG: InputConfig = {
         x: 'KeyQ',
         y: 'KeyW',
         z: 'KeyE',
+        start: 'Enter',
       },
-      gamepad: { x: 0, y: 1, z: 4, a: 2, b: 3, c: 5 },
+      gamepad: { x: 0, y: 1, z: 4, a: 2, b: 3, c: 5, start: 9 },
     },
     {
       keyboard: {
@@ -63,8 +66,9 @@ export const DEFAULT_INPUT_CONFIG: InputConfig = {
         x: 'KeyU',
         y: 'KeyO',
         z: 'KeyP',
+        start: 'NumpadEnter',
       },
-      gamepad: { x: 0, y: 1, z: 4, a: 2, b: 3, c: 5 },
+      gamepad: { x: 0, y: 1, z: 4, a: 2, b: 3, c: 5, start: 9 },
     },
   ],
 };
@@ -144,7 +148,9 @@ const GAMEPAD_AXIS_THRESHOLD = 0.45;
 const GAMEPAD_BUTTON_THRESHOLD = 0.5;
 
 function keysToButtons(keys: ReadonlySet<string>, mapping: PlayerKeyboardMapping): string[] {
-  return (['a', 'b', 'c', 'x', 'y', 'z'] as const).filter((button) => keys.has(mapping[button]));
+  const buttons: string[] = (['a', 'b', 'c', 'x', 'y', 'z'] as const).filter((button) => keys.has(mapping[button]));
+  if (keys.has(mapping.start)) buttons.push('s');
+  return buttons;
 }
 
 function addGamepadKeys(keys: Set<string>, gamepads: readonly (Gamepad | null)[], config: InputConfig): void {
@@ -169,7 +175,7 @@ function addGamepadKeys(keys: Set<string>, gamepads: readonly (Gamepad | null)[]
       keys.add(mapping.keyboard.down);
     }
 
-    for (const button of ['a', 'b', 'c', 'x', 'y', 'z'] as const) {
+    for (const button of ['a', 'b', 'c', 'x', 'y', 'z', 'start'] as const) {
       if (isGamepadButtonPressed(gamepad, mapping.gamepad[button])) {
         keys.add(mapping.keyboard[button]);
       }
@@ -209,5 +215,7 @@ function shouldPreventDefault(code: string): boolean {
     code === 'KeyO' ||
     code === 'KeyP' ||
     code === 'KeyR'
+    || code === 'Enter'
+    || code === 'NumpadEnter'
   );
 }
