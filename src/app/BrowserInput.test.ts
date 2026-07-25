@@ -138,6 +138,23 @@ describe('BrowserInput', () => {
     expect(keysToP1Input(input.getPressedKeys(config), config).buttons).toEqual(['a']);
   });
 
+  it('maps configurable gamepad D-pad buttons', () => {
+    const config: InputConfig = {
+      players: [
+        {
+          keyboard: DEFAULT_INPUT_CONFIG.players[0].keyboard,
+          gamepad: { ...DEFAULT_INPUT_CONFIG.players[0].gamepad, left: 7 },
+        },
+        DEFAULT_INPUT_CONFIG.players[1],
+      ],
+    };
+    const input = new BrowserInput(createFakeWindow(), {
+      getGamepads: () => [createGamepad({ pressedButtons: [7] })],
+    });
+
+    expect(keysToP1Input(input.getPressedKeys(config), config).left).toBe(true);
+  });
+
   it('maps the second gamepad to P2 keyboard-equivalent input', () => {
     const input = new BrowserInput(createFakeWindow(), {
       getGamepads: () => [

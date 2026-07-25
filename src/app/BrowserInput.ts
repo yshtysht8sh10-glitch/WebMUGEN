@@ -18,6 +18,10 @@ export type PlayerKeyboardMapping = {
 };
 
 export type PlayerGamepadMapping = {
+  left: number;
+  right: number;
+  up: number;
+  down: number;
   a: number;
   b: number;
   c: number;
@@ -52,7 +56,7 @@ export const DEFAULT_INPUT_CONFIG: InputConfig = {
         z: 'KeyE',
         start: 'Enter',
       },
-      gamepad: { x: 0, y: 1, z: 4, a: 2, b: 3, c: 5, start: 9 },
+      gamepad: { left: 14, right: 15, up: 12, down: 13, x: 0, y: 1, z: 4, a: 2, b: 3, c: 5, start: 9 },
     },
     {
       keyboard: {
@@ -68,7 +72,7 @@ export const DEFAULT_INPUT_CONFIG: InputConfig = {
         z: 'KeyP',
         start: 'NumpadEnter',
       },
-      gamepad: { x: 0, y: 1, z: 4, a: 2, b: 3, c: 5, start: 9 },
+      gamepad: { left: 14, right: 15, up: 12, down: 13, x: 0, y: 1, z: 4, a: 2, b: 3, c: 5, start: 9 },
     },
   ],
 };
@@ -162,16 +166,16 @@ function addGamepadKeys(keys: Set<string>, gamepads: readonly (Gamepad | null)[]
       continue;
     }
 
-    if ((gamepad.axes[0] ?? 0) <= -GAMEPAD_AXIS_THRESHOLD || isGamepadButtonPressed(gamepad, 14)) {
+    if ((gamepad.axes[0] ?? 0) <= -GAMEPAD_AXIS_THRESHOLD || isGamepadButtonPressed(gamepad, mapping.gamepad.left)) {
       keys.add(mapping.keyboard.left);
     }
-    if ((gamepad.axes[0] ?? 0) >= GAMEPAD_AXIS_THRESHOLD || isGamepadButtonPressed(gamepad, 15)) {
+    if ((gamepad.axes[0] ?? 0) >= GAMEPAD_AXIS_THRESHOLD || isGamepadButtonPressed(gamepad, mapping.gamepad.right)) {
       keys.add(mapping.keyboard.right);
     }
-    if ((gamepad.axes[1] ?? 0) <= -GAMEPAD_AXIS_THRESHOLD || isGamepadButtonPressed(gamepad, 12)) {
+    if ((gamepad.axes[1] ?? 0) <= -GAMEPAD_AXIS_THRESHOLD || isGamepadButtonPressed(gamepad, mapping.gamepad.up)) {
       keys.add(mapping.keyboard.up);
     }
-    if ((gamepad.axes[1] ?? 0) >= GAMEPAD_AXIS_THRESHOLD || isGamepadButtonPressed(gamepad, 13)) {
+    if ((gamepad.axes[1] ?? 0) >= GAMEPAD_AXIS_THRESHOLD || isGamepadButtonPressed(gamepad, mapping.gamepad.down)) {
       keys.add(mapping.keyboard.down);
     }
 
