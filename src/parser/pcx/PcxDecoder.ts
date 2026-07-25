@@ -108,7 +108,44 @@ export function tryReadVgaPalette(bytes: Uint8Array): Uint8Array | null {
     return null;
   }
 
+  try {
+    const header = parsePcxHeader(bytes);
+    validateSupportedPcxHeader(header, bytes);
+    const requiredDecodedBytes = header.bytesPerLine * header.height;
+    if (!hasCompleteRleImage(
+      bytes.subarray(PCX_HEADER_SIZE, paletteMarkerOffset),
+      requiredDecodedBytes,
+    )) {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+
   return bytes.slice(bytes.length - VGA_PALETTE_SIZE);
+}
+
+function hasCompleteRleImage(data: Uint8Array, requiredDecodedBytes: number): boolean {
+  let decodedBytes = 0;
+
+  for (let i = 0; i < data.length; i += 1) {
+    const value = data[i];
+    if ((value & 0xc0) === 0xc0) {
+      i += 1;
+      if (i >= data.length) {
+        return false;
+      }
+      decodedBytes += value & 0x3f;
+    } else {
+      decodedBytes += 1;
+    }
+
+    if (decodedBytes >= requiredDecodedBytes) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function validateSupportedPcxHeader(header: PcxHeader, bytes: Uint8Array): void {
