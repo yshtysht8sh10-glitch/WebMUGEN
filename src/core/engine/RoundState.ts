@@ -33,7 +33,8 @@ export function stepRoundState(round: RoundState, gameState: GameState, freezeTi
       player.stateNo >= 190 && player.stateNo <= 199
     ) || player.assertSpecialFlags?.some((flag) => flag.toLowerCase() === 'intro'));
 
-    if (!introActive && round.introPresentationFrame === null) {
+    const presentationFrame = round.introPresentationFrame;
+    if (!introActive && presentationFrame === null) {
       return {
         ...round,
         frameInPhase: nextFrameInPhase,
@@ -41,8 +42,8 @@ export function stepRoundState(round: RoundState, gameState: GameState, freezeTi
       };
     }
 
-    if (!introActive) {
-      const nextPresentationFrame = round.introPresentationFrame + 1;
+    if (!introActive && presentationFrame !== null) {
+      const nextPresentationFrame = presentationFrame + 1;
       if (nextPresentationFrame >= ROUND_INTRO_PRESENTATION_FRAMES) {
         return {
           ...round,

@@ -4,9 +4,10 @@ import {
   createInitialRoundState,
   formatRoundState,
   stepRoundState,
+  type RoundState,
 } from './RoundState';
 
-function fightRound() {
+function fightRound(): RoundState {
   return { ...createInitialRoundState(), phase: 'fight' as const, frameInPhase: 0 };
 }
 
