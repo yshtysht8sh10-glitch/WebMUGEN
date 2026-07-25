@@ -648,7 +648,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             helpers: stepHelperPauseMoveTimes(nextState.helpers, pauseDuringFrame),
             pause: stepPauseState(pauseDuringFrame),
           };
-          if (shouldStartNextRound(nextRoundState, nextScore)) {
+          if (shouldStartNextRound(nextRoundState, nextScore, nextState)) {
             const restarted = restartRound(nextRoundState.roundNo, runtimeSettingsRef.current.roundTime, characterPowerMax);
             nextState = synchronizeRuntimeFrame(restarted.gameState, frameNoRef.current);
             nextRoundState = restarted.roundState;

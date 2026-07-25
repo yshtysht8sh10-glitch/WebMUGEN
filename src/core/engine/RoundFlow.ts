@@ -11,6 +11,10 @@ export function applyRoundFlowStateEntries(state: GameState, round: RoundState):
   if (round.phase === 'intro') return enterPlayers(state, [ROUND_INITIALIZE_STATE, ROUND_INITIALIZE_STATE]);
   if (round.phase === 'fight') return finishRoundInitialization(state);
   if ((round.phase === 'ko' || round.phase === 'timeOver') && round.winner !== null) {
+    if (round.phase === 'ko') {
+      if (round.winner === 'draw') return enterPlayers(state, [null, null]);
+      return enterPlayers(state, round.winner === 1 ? [180, null] : [null, 180]);
+    }
     if (round.winner === 'draw') return enterPlayers(state, [175, 175]);
     return enterPlayers(state, round.winner === 1 ? [180, 170] : [170, 180]);
   }
@@ -27,16 +31,17 @@ export function isMatchOver(score: RoundScore): boolean {
   return score.p1Wins >= ROUNDS_TO_WIN || score.p2Wins >= ROUNDS_TO_WIN;
 }
 
-export function shouldStartNextRound(round: RoundState, score: RoundScore): boolean {
+export function shouldStartNextRound(round: RoundState, score: RoundScore, state?: GameState): boolean {
   return (round.phase === 'ko' || round.phase === 'timeOver')
     && round.frameInPhase >= ROUND_RESULT_FRAMES
-    && !isMatchOver(score);
+    && !isMatchOver(score)
+    && !state?.players.some((player) => player.assertSpecialFlags?.some((flag) => flag.toLowerCase() === 'roundnotover'));
 }
 
-function enterPlayers(state: GameState, stateNos: readonly [number, number]): GameState {
+function enterPlayers(state: GameState, stateNos: readonly [number | null, number | null]): GameState {
   return {
     ...state,
-    players: state.players.map((player, index) => isInEntryFamily(player.stateNo, stateNos[index])
+    players: state.players.map((player, index) => stateNos[index] === null || isInEntryFamily(player.stateNo, stateNos[index])
       ? player
       : enterRoundState(player, stateNos[index])) as GameState['players'],
     projectiles: [],
@@ -73,7 +78,7 @@ function enterRoundState(player: PlayerState, stateNo: number): PlayerState {
     stateTime: 0,
     stateHeaderAppliedStateNo: undefined,
     animTime: 0,
-    ctrl: false,
+    ctrl: stateNo === 0,
     moveType: 'I',
     hitPause: 0,
     activeHitDef: null,

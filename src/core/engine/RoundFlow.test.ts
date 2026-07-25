@@ -31,21 +31,25 @@ describe('Issue #93 WinMUGEN Round Flow coordinator', () => {
       ...createInitialRoundState(), phase: 'fight', roundNo: 2, frameInPhase: 0,
     });
     expect(fight.players.map((player) => player.stateNo)).toEqual([0, 0]);
-    expect(fight.players.every((player) => player.ctrl === false && player.stateTime === 0)).toBe(true);
+    expect(fight.players.every((player) => player.ctrl === true && player.stateTime === 0)).toBe(true);
   });
 
-  it('enters winner State 180, loser State 170, and draw State 175 symmetrically', () => {
+  it('keeps KO losers down while time-over still uses State 170/175', () => {
     const initial = createInitialGameState();
-    const p1Win = applyRoundFlowStateEntries(initial, {
+    const koState = {
+      ...initial,
+      players: [initial.players[0], { ...initial.players[1], life: 0, stateNo: 5150, animNo: 5150 }] as typeof initial.players,
+    };
+    const p1Win = applyRoundFlowStateEntries(koState, {
       ...createInitialRoundState(), phase: 'ko', winner: 1, endReason: 'ko', frameInPhase: 0,
     });
-    expect(p1Win.players.map((player) => player.stateNo)).toEqual([180, 170]);
+    expect(p1Win.players.map((player) => player.stateNo)).toEqual([180, 5150]);
     const p2Win = applyRoundFlowStateEntries(initial, {
       ...createInitialRoundState(), phase: 'timeOver', winner: 2, endReason: 'time_over', frameInPhase: 0,
     });
     expect(p2Win.players.map((player) => player.stateNo)).toEqual([170, 180]);
     const draw = applyRoundFlowStateEntries(initial, {
-      ...createInitialRoundState(), phase: 'ko', winner: 'draw', endReason: 'double_ko', frameInPhase: 0,
+      ...createInitialRoundState(), phase: 'timeOver', winner: 'draw', endReason: 'time_over', frameInPhase: 0,
     });
     expect(draw.players.map((player) => player.stateNo)).toEqual([175, 175]);
   });
@@ -67,10 +71,16 @@ describe('Issue #93 WinMUGEN Round Flow coordinator', () => {
 
   it('advances after the result presentation unless either player has won the match', () => {
     const round = { ...createInitialRoundState(), phase: 'ko' as const, winner: 1 as const, frameInPhase: ROUND_RESULT_FRAMES };
-    expect(shouldStartNextRound(round, { ...createInitialRoundScore(), p1Wins: 1 })).toBe(true);
+    const state = createInitialGameState();
+    expect(shouldStartNextRound(round, { ...createInitialRoundScore(), p1Wins: 1 }, state)).toBe(true);
+    const heldVictory = {
+      ...state,
+      players: [{ ...state.players[0], assertSpecialFlags: ['roundnotover'] }, state.players[1]] as typeof state.players,
+    };
+    expect(shouldStartNextRound(round, { ...createInitialRoundScore(), p1Wins: 1 }, heldVictory)).toBe(false);
     const matchScore = { ...createInitialRoundScore(), p1Wins: 2 };
     expect(isMatchOver(matchScore)).toBe(true);
-    expect(shouldStartNextRound(round, matchScore)).toBe(false);
+    expect(shouldStartNextRound(round, matchScore, state)).toBe(false);
     expect(winMugenRoundState({ ...round, frameInPhase: 0 })).toBe(3);
     expect(winMugenRoundState({ ...round, frameInPhase: 1 })).toBe(4);
   });

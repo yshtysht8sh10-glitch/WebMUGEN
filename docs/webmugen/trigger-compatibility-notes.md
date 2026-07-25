@@ -89,7 +89,9 @@ The numeric evaluator enforces WinMUGEN-style bottom propagation for invalid mat
 non-finite arithmetic. `Log` takes the documented two arguments (`base`, `value`), `Cond` skips its
 unused branch, and `IfElse` evaluates both branches while ignoring bottom from the unselected result.
 `Random` uses the shared deterministic runtime hash when no injectable test/replay value is supplied;
-its range is 0..999, while exact Elecbyte PRNG seed/sequence parity remains intentionally Partial.
+its range is 0..999. The same numeric evaluator now reaches expression-valued StateDef headers after
+external HitOverride entry, covering T-H-M-A State 902's `902+(Random%3)*3`; exact Elecbyte PRNG
+seed/sequence parity remains intentionally Partial.
 
 ## Test expectations
 

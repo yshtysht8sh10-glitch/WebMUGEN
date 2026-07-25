@@ -384,7 +384,7 @@ function stepPlayer(
 
   const stateDefBeforeNegative = findState(cns, next.stateNo);
   if (stateDefBeforeNegative) {
-    next = applyStateHeader(next, stateDefBeforeNegative);
+    next = applyStateHeader(next, opponent, stateDefBeforeNegative, input, commands);
     next = forceHitStunControl(next, `statedef:${stateDefBeforeNegative.stateNo}`, input.hitDiagnostics !== false);
   }
   if (debugEnabled) {
@@ -433,7 +433,7 @@ function stepPlayer(
   if (debugEnabled) appendDebug(trace, `enter current S${stateDef.stateNo} state=${next.stateNo}`);
   if (debugEnabled) appendDebug(trace, formatStateDefOverview(stateDef));
   if (stateDef !== stateDefBeforeNegative) {
-    next = applyStateHeader(next, stateDef);
+    next = applyStateHeader(next, opponent, stateDef, input, commands);
     next = forceHitStunControl(next, `statedef:${stateDef.stateNo}`, input.hitDiagnostics !== false);
   }
   next = appendGetHitFrameDiagnostic(next, opponent, stateDef, input, commands, runtimeFrame, input.hitDiagnostics !== false);
@@ -721,9 +721,20 @@ function inferDefaultCtrl(stateNo: number, currentCtrl: boolean): boolean {
   return currentCtrl;
 }
 
-function applyStateHeader(player: PlayerState, stateDef: CnsStateDefinition): PlayerState {
+function applyStateHeader(
+  player: PlayerState,
+  opponent: PlayerState,
+  stateDef: CnsStateDefinition,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): PlayerState {
   const applyEntryFields = player.stateHeaderAppliedStateNo !== stateDef.stateNo;
-  const animNo = applyEntryFields ? stateDef.initialAnim ?? player.animNo : player.animNo;
+  const expressionAnimNo = applyEntryFields && stateDef.initialAnimExpression
+    ? cnsValueToNumber(stateDef.initialAnimExpression, player, input, commands, opponent)
+    : null;
+  const animNo = applyEntryFields
+    ? stateDef.initialAnim ?? expressionAnimNo ?? player.animNo
+    : player.animNo;
   const applyEntryVelocity = applyEntryFields && stateDef.velocitySet !== undefined;
   return {
     ...player,

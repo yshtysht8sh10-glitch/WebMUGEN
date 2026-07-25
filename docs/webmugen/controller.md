@@ -60,8 +60,9 @@ per-game-tick player flags. They survive later Controllers and ChangeState in th
 clear at the beginning of the next CNS tick unless asserted again. `noautoturn` is connected to the
 grounded stage-facing rule. `invisible`, the three guard-prohibition flags, attacker-local
 `unguardable`, `nojugglecheck`, `noBG`, and `nobardisplay` are consumed by Canvas, guard, juggle,
-stage, and HUD paths without deleting the entity or forcing a State. Round/timer/audio/shadow/noFG/
-nowalk consumers and exact hitpause persistence remain Partial.
+stage, and HUD paths without deleting the entity or forcing a State. `intro` synchronizes character
+intros, and `roundnotover` delays the automatic next-round restart while a victory State asserts it.
+Timer/audio/shadow/noFG/nowalk consumers and exact hitpause persistence remain Partial.
 
 `Gravity` adds the current character's `[Movement] yaccel` to Y velocity once per Controller
 execution. It is independent from `Physics = A`, so multiple explicit Gravity Controllers and the

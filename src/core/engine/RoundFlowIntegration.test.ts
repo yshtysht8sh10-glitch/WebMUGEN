@@ -12,7 +12,19 @@ type = S
 movetype = I
 physics = S
 anim = 0
-ctrl = 1
+
+[StateDef -1]
+[State -1, Crouch]
+type = ChangeState
+triggerall = command = "holddown"
+trigger1 = ctrl
+value = 10
+
+[StateDef 10]
+type = C
+physics = C
+anim = 10
+ctrl = 0
 
 [StateDef 170]
 type = S
@@ -110,17 +122,22 @@ describe('Issue #93 production CNS Round Flow integration', () => {
     expect(round.phase).toBe('fight');
     state = applyRoundFlowStateEntries(state, round);
     expect(state.players.map((player) => player.stateNo)).toEqual([0, 0]);
+    expect(state.players.every((player) => player.ctrl)).toBe(true);
+    state = stepCnsStateRuntime(state, cns, {
+      p1Commands: new Set(['holddown']), p2Commands: new Set(), roundState: 2, roundNo: 2,
+    }).state;
+    expect(state.players[0]).toMatchObject({ stateNo: 10, ctrl: false });
   });
 
-  it('applies the selected Win/Lose StateDef headers on the next result CNS pass', () => {
-    const round = { ...createInitialRoundState(), phase: 'ko' as const, winner: 1 as const, endReason: 'ko' as const };
+  it('applies the selected Win/Time-over-Lose StateDef headers on the next result CNS pass', () => {
+    const round = { ...createInitialRoundState(), phase: 'timeOver' as const, winner: 1 as const, endReason: 'time_over' as const };
     const entered = applyRoundFlowStateEntries(createInitialGameState(), round);
     const stepped = stepCnsStateRuntime(entered, cns, { roundState: 3 }).state;
     expect(stepped.players[0]).toMatchObject({ stateNo: 180, animNo: 180, ctrl: false });
     expect(stepped.players[1]).toMatchObject({ stateNo: 170, animNo: 170, ctrl: false });
   });
 
-  it('dispatches the defeated player to Lose State 170 after production KO detection', () => {
+  it('keeps the defeated player in lying-dead State 5150 after production KO detection', () => {
     const initial = createInitialGameState();
     const defeated = {
       ...initial,
@@ -138,6 +155,6 @@ describe('Issue #93 production CNS Round Flow integration', () => {
     }).state;
 
     expect(stepped.players[0]).toMatchObject({ stateNo: 180, animNo: 180, ctrl: false });
-    expect(stepped.players[1]).toMatchObject({ stateNo: 170, animNo: 170, ctrl: false, life: 0 });
+    expect(stepped.players[1]).toMatchObject({ stateNo: 5150, animNo: 5150, ctrl: false, life: 0 });
   });
 });

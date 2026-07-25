@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import { parseAirText } from '../../parser/air/AirParser';
+import { getMugenAnimEndTime } from '../animation/AnimationDuration';
 import { stepCnsStateRuntime } from '../cns/CnsStateRuntime';
 import { createInitialGameState } from '../engine/GameState';
 import { resolveFallbackHits } from '../engine/FallbackHitResolver';
@@ -69,6 +70,16 @@ describe('Issue #92 T-H-M-A blocking regression', () => {
         });
         const blocked = resolveFallbackHits(activated, collisionAir, true);
         expect(blocked.players[defenderId - 1]).toMatchObject({ stateNo: 902, life: 1000 });
+        const entered = stepCnsStateRuntime(blocked, assets.cns, {
+          p1Commands: new Set(),
+          p2Commands: new Set(),
+          random: 998,
+          getAnimationDuration: (animNo) => getMugenAnimEndTime(assets.air, animNo),
+          getCnsDocumentForPlayer: (id) => id === defenderId ? assets.cns : emptyCns,
+        }).state;
+        expect(entered.players[defenderId - 1]).toMatchObject({
+          stateNo: 902, animNo: 908, animTime: 0, stateHeaderAppliedStateNo: 902,
+        });
         expect(blocked.hitDiagnosticLines?.join('\n')).toContain(`raw.hit_override attacker=p${attackerId} target=p${defenderId}`);
       });
     }

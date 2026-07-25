@@ -57,6 +57,10 @@ describe('Issue #93 bundled character Round Flow', () => {
       expect(state.players.every((player) => player.stateNo < 190 || player.stateNo > 199)).toBe(true);
 
       const resultRound = { ...round, phase: 'ko' as const, winner: 1 as const, endReason: 'ko' as const, frameInPhase: 0 };
+      state = {
+        ...state,
+        players: [state.players[0], { ...state.players[1], life: 0, stateNo: 5150, animNo: 5150, ctrl: false }] as typeof state.players,
+      };
       state = applyRoundFlowStateEntries(state, resultRound);
       state = stepCnsStateRuntime(state, assets.cns, {
         p1Commands: new Set(), p2Commands: new Set(), roundState: winMugenRoundState(resultRound),
@@ -65,7 +69,7 @@ describe('Issue #93 bundled character Round Flow', () => {
       }).state;
       expect(state.players[0].stateNo).toBeGreaterThanOrEqual(180);
       expect(state.players[0].stateNo).toBeLessThanOrEqual(189);
-      expect(state.players[1].stateNo).toBe(170);
+      expect(state.players[1].stateNo).toBe(5150);
       if (defPath.includes('T-H-M-A')) {
         for (let frame = 1; frame <= 2 && state.players[0].stateNo === 180; frame += 1) {
           state = stepCnsPhysicsMotion(state, assets.cns);
