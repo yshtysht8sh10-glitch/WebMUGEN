@@ -32,6 +32,14 @@ physics = N
 anim = 180
 ctrl = 0
 
+[StateDef 5900]
+type = S
+ctrl = 0
+[State 5900, First-round PreIntro]
+type = ChangeState
+trigger1 = RoundNo = 1
+value = 190
+
 [StateDef 190]
 type = S
 physics = N
@@ -67,6 +75,7 @@ describe('Issue #93 production CNS Round Flow integration', () => {
     let state = createInitialGameState();
     let round = createInitialRoundState();
     state = applyRoundFlowStateEntries(state, round);
+    expect(state.players.map((player) => player.stateNo)).toEqual([5900, 5900]);
 
     let observedP1Waiting = false;
     for (let frame = 0; frame < 12 && round.phase === 'intro'; frame += 1) {
@@ -83,6 +92,19 @@ describe('Issue #93 production CNS Round Flow integration', () => {
 
     expect(observedP1Waiting).toBe(true);
     expect(round.phase).toBe('fight');
+    expect(state.players.map((player) => player.stateNo)).toEqual([0, 0]);
+  });
+
+  it('runs later-round State 5900 initialization and enters State 0 when it has no Intro route', () => {
+    let state = createInitialGameState();
+    let round = { ...createInitialRoundState(), roundNo: 2 };
+    state = applyRoundFlowStateEntries(state, round);
+    state = stepCnsStateRuntime(state, cns, {
+      p1Commands: new Set(), p2Commands: new Set(), roundState: winMugenRoundState(round), roundNo: 2,
+    }).state;
+    round = stepRoundState(round, state);
+    expect(round.phase).toBe('fight');
+    state = applyRoundFlowStateEntries(state, round);
     expect(state.players.map((player) => player.stateNo)).toEqual([0, 0]);
   });
 

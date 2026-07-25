@@ -5,19 +5,33 @@ import { createInitialRoundState } from './RoundState';
 import {
   applyRoundFlowStateEntries,
   isMatchOver,
+  ROUND_INITIALIZE_STATE,
   ROUND_RESULT_FRAMES,
   shouldStartNextRound,
   winMugenRoundState,
 } from './RoundFlow';
 
 describe('Issue #93 WinMUGEN Round Flow coordinator', () => {
-  it('enters PreIntro State 190 for both players and exposes RoundState 0 then 1', () => {
+  it('enters Initialize State 5900 for both players and exposes RoundState 0 then 1', () => {
     const round = createInitialRoundState();
     const entered = applyRoundFlowStateEntries(createInitialGameState(), round);
-    expect(entered.players.map((player) => player.stateNo)).toEqual([190, 190]);
+    expect(entered.players.map((player) => player.stateNo)).toEqual([ROUND_INITIALIZE_STATE, ROUND_INITIALIZE_STATE]);
     expect(entered.players.every((player) => player.ctrl === false && player.stateTime === 0)).toBe(true);
     expect(winMugenRoundState(round)).toBe(0);
     expect(winMugenRoundState({ ...round, frameInPhase: 1 })).toBe(1);
+  });
+
+  it('finishes a later-round Initialize State at State 0 when no Intro route is selected', () => {
+    const initial = createInitialGameState();
+    const initialized = {
+      ...initial,
+      players: initial.players.map((player) => ({ ...player, stateNo: ROUND_INITIALIZE_STATE })) as typeof initial.players,
+    };
+    const fight = applyRoundFlowStateEntries(initialized, {
+      ...createInitialRoundState(), phase: 'fight', roundNo: 2, frameInPhase: 0,
+    });
+    expect(fight.players.map((player) => player.stateNo)).toEqual([0, 0]);
+    expect(fight.players.every((player) => player.ctrl === false && player.stateTime === 0)).toBe(true);
   });
 
   it('enters winner State 180, loser State 170, and draw State 175 symmetrically', () => {
@@ -57,6 +71,7 @@ describe('Issue #93 WinMUGEN Round Flow coordinator', () => {
     const matchScore = { ...createInitialRoundScore(), p1Wins: 2 };
     expect(isMatchOver(matchScore)).toBe(true);
     expect(shouldStartNextRound(round, matchScore)).toBe(false);
-    expect(winMugenRoundState(round, true)).toBe(4);
+    expect(winMugenRoundState({ ...round, frameInPhase: 0 })).toBe(3);
+    expect(winMugenRoundState({ ...round, frameInPhase: 1 })).toBe(4);
   });
 });

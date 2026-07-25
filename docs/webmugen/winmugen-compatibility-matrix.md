@@ -104,8 +104,8 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | 187 | Win state family extension | Partial 80% | Implemented: optional character-owned win substates are executable after State 180 dispatch. Missing: bundled usage evidence. Evidence: generic State runtime. |
 | 188 | Win state family extension | Partial 80% | Implemented: optional character-owned win substates are executable after State 180 dispatch. Missing: bundled usage evidence. Evidence: generic State runtime. |
 | 189 | Win state family extension | Partial 80% | Implemented: optional character-owned win substates are executable after State 180 dispatch. Missing: bundled usage evidence. Evidence: generic State runtime. |
-| 190 | PreIntro state | Partial 95% | Implemented: Issue #93 enters both roots into self-owned State 190 at RoundState 0 and lets character/common CNS dispatch the intro. Missing: executable WinMUGEN frame comparison. Evidence: focused production CNS integration. |
-| 191 | Intro state | Partial 95% | Implemented: character State 191 runs at RoundState 1; Fight waits for both roots to leave the 190-199 family and clear `AssertSpecial intro`. Missing: visual/manual comparison. Evidence: unequal-length P1/P2 synchronization test and bundled KFM/T-H-M-A usage. |
+| 190 | PreIntro state | Partial 95% | Implemented: Issue #93 reaches self-owned State 190 through the standard State 5900 initializer and lets character/common CNS dispatch the intro. Missing: executable WinMUGEN frame comparison. Evidence: focused production CNS integration. |
+| 191 | Intro state | Partial 95% | Implemented: bundled T-H-M-A reaches custom State 191 with `PrevStateNo = 190`, Anim 191, and control disabled from the production-loaded `5900 -> 190 -> 191` path; Fight waits for both roots to clear the intro family/flag. Missing: visual/manual comparison. Evidence: unequal-length P1/P2 synchronization and real-character first-pass tests. |
 | 192 | Intro state | Partial 90% | Implemented: character-owned intro substates execute normally and hold synchronization while active. Missing: bundled usage evidence for this exact state. Evidence: Issue #93 family integration. |
 | 193 | Intro state | Partial 90% | Implemented: character-owned intro substates execute normally and hold synchronization while active. Missing: bundled usage evidence for this exact state. Evidence: Issue #93 family integration. |
 | 194 | Intro state | Partial 90% | Implemented: character-owned intro substates execute normally and hold synchronization while active. Missing: bundled usage evidence for this exact state. Evidence: Issue #93 family integration. |
@@ -137,6 +137,7 @@ The detailed policy lives in `docs/webmugen/testing-policy.md`.
 | 5200 | Airborne fall-recovery state | Complete | Issue #62 corrects the prior dead-state label and verifies GetHitVar(yaccel), falling animation continuity, and the near-ground route into 5201. |
 | 5201 | Ground-assisted fall-recovery state | Complete | Issue #62 verifies recovery Anim/velocity/position, one-tick NotHitBy immunity, and continued airborne recovery physics. |
 | 5210 | Airborne fall-recovery state | Complete | Issue #62 corrects the prior dead-state label and verifies Time-0 PosFreeze, recovery steering/gravity, timed immunity/control, and State 52 landing. |
+| 5900 | Round initialization state | Partial 95% | Implemented: every round enters self-owned State 5900 before presentation; round-one bundled T-H-M-A executes VarRangeSet and the standard 190/191 route, while later rounds without an Intro route enter State 0 at Fight. Missing: executable WinMUGEN frame comparison and team-mode initialization. Evidence: focused production CNS and bundled-character integration tests. |
 
 ## StateDef Header Fields
 

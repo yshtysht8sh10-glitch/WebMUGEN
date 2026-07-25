@@ -4,10 +4,12 @@ import type { GameState, PlayerState } from './types';
 
 export const ROUND_RESULT_FRAMES = 180;
 export const ROUNDS_TO_WIN = 2;
+export const ROUND_INITIALIZE_STATE = 5900;
 
 export function applyRoundFlowStateEntries(state: GameState, round: RoundState): GameState {
   if (round.frameInPhase !== 0) return state;
-  if (round.phase === 'intro') return enterPlayers(state, [190, 190]);
+  if (round.phase === 'intro') return enterPlayers(state, [ROUND_INITIALIZE_STATE, ROUND_INITIALIZE_STATE]);
+  if (round.phase === 'fight') return finishRoundInitialization(state);
   if ((round.phase === 'ko' || round.phase === 'timeOver') && round.winner !== null) {
     if (round.winner === 'draw') return enterPlayers(state, [175, 175]);
     return enterPlayers(state, round.winner === 1 ? [180, 170] : [170, 180]);
@@ -15,11 +17,10 @@ export function applyRoundFlowStateEntries(state: GameState, round: RoundState):
   return state;
 }
 
-export function winMugenRoundState(round: RoundState, matchOver: boolean = false): 0 | 1 | 2 | 3 | 4 {
-  if (matchOver) return 4;
+export function winMugenRoundState(round: RoundState): 0 | 1 | 2 | 3 | 4 {
   if (round.phase === 'intro') return round.frameInPhase === 0 ? 0 : 1;
   if (round.phase === 'fight') return 2;
-  return 3;
+  return round.frameInPhase === 0 ? 3 : 4;
 }
 
 export function isMatchOver(score: RoundScore): boolean {
@@ -44,9 +45,23 @@ function enterPlayers(state: GameState, stateNos: readonly [number, number]): Ga
 }
 
 function isInEntryFamily(current: number, entry: number): boolean {
+  if (entry === ROUND_INITIALIZE_STATE) {
+    return current === ROUND_INITIALIZE_STATE || (current >= 190 && current <= 199);
+  }
   if (entry === 190) return current >= 190 && current <= 199;
   if (entry === 180) return current >= 180 && current <= 189;
   return current >= 170 && current <= 179;
+}
+
+function finishRoundInitialization(state: GameState): GameState {
+  const players = state.players.map((player) => (
+    player.stateNo === ROUND_INITIALIZE_STATE || (player.stateNo >= 190 && player.stateNo <= 199)
+      ? enterRoundState(player, 0)
+      : player
+  )) as GameState['players'];
+  return players.every((player, index) => player === state.players[index])
+    ? state
+    : { ...state, players };
 }
 
 function enterRoundState(player: PlayerState, stateNo: number): PlayerState {

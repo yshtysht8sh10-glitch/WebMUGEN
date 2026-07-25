@@ -513,7 +513,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             }),
             pauseState: pauseAtFrameStart,
             screenWidth: canvas.width,
-            roundState: winMugenRoundState(nextRoundState, isMatchOver(nextScore)),
+            roundState: winMugenRoundState(nextRoundState),
             roundNo: nextRoundState.roundNo,
             roundsExisted: Math.max(0, nextRoundState.roundNo - 1),
             matchNo: 1,
