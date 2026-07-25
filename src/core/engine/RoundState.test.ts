@@ -15,13 +15,23 @@ describe('RoundState', () => {
     expect(createInitialRoundState().phase).toBe('intro');
   });
 
-  it('transitions from intro to fight when neither player retains an Intro state or flag', () => {
-    const initial = createInitialRoundState();
+  it('presents ROUND then FIGHT after both character Intros finish', () => {
+    let round = createInitialRoundState();
     const gameState = createInitialGameState();
-    const round = stepRoundState(initial, gameState);
 
+    round = stepRoundState(round, gameState);
+    expect(round).toMatchObject({ phase: 'intro', introPresentationFrame: 0 });
+
+    for (let frame = 0; frame < 44; frame += 1) round = stepRoundState(round, gameState);
+    expect(round).toMatchObject({ phase: 'intro', introPresentationFrame: 44 });
+
+    round = stepRoundState(round, gameState);
+    expect(round).toMatchObject({ phase: 'intro', introPresentationFrame: 45 });
+
+    for (let frame = 0; frame < 45; frame += 1) round = stepRoundState(round, gameState);
     expect(round.phase).toBe('fight');
     expect(round.frameInPhase).toBe(0);
+    expect(round.introPresentationFrame).toBeNull();
   });
 
   it('counts timer every 60 fight frames', () => {

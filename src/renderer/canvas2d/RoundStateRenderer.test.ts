@@ -42,7 +42,24 @@ describe('RoundStateRenderer', () => {
     expect(calls).toContain('P2 WINS 1');
   });
 
-  it('renders FIGHT during late intro', () => {
+  it('does not cover the character Intro with ROUND or FIGHT presentation', () => {
+    const calls: string[] = [];
+    const ctx = {
+      save: () => calls.push('save'),
+      restore: () => calls.push('restore'),
+      fillRect: () => calls.push('fillRect'),
+      fillText: (text: string) => calls.push(text),
+      set fillStyle(_value: string) {},
+      set font(_value: string) {},
+    } as unknown as CanvasRenderingContext2D;
+
+    new RoundStateRenderer().render(ctx, createInitialRoundState());
+
+    expect(calls.filter((text) => text === 'ROUND 1')).toHaveLength(1);
+    expect(calls).not.toContain('FIGHT!');
+  });
+
+  it('renders ROUND then FIGHT after the character Intro', () => {
     const calls: string[] = [];
     const ctx = {
       save: () => calls.push('save'),
@@ -55,7 +72,14 @@ describe('RoundStateRenderer', () => {
 
     new RoundStateRenderer().render(ctx, {
       ...createInitialRoundState(),
-      frameInPhase: 45,
+      introPresentationFrame: 0,
+    });
+    expect(calls.filter((text) => text === 'ROUND 1')).toHaveLength(2);
+
+    calls.length = 0;
+    new RoundStateRenderer().render(ctx, {
+      ...createInitialRoundState(),
+      introPresentationFrame: 45,
     });
 
     expect(calls).toContain('FIGHT!');

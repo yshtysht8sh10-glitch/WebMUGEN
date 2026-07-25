@@ -7,11 +7,13 @@ export type RoundState = {
   roundNo: number;
   timer: number;
   frameInPhase: number;
+  introPresentationFrame: number | null;
   winner: 1 | 2 | 'draw' | null;
   endReason?: 'ko' | 'double_ko' | 'time_over';
 };
 
 export const DEFAULT_ROUND_TIMER = 99;
+export const ROUND_INTRO_PRESENTATION_FRAMES = 90;
 
 export function createInitialRoundState(timer: number = DEFAULT_ROUND_TIMER): RoundState {
   return {
@@ -19,6 +21,7 @@ export function createInitialRoundState(timer: number = DEFAULT_ROUND_TIMER): Ro
     roundNo: 1,
     timer,
     frameInPhase: 0,
+    introPresentationFrame: null,
     winner: null,
   };
 }
@@ -30,17 +33,35 @@ export function stepRoundState(round: RoundState, gameState: GameState, freezeTi
       player.stateNo >= 190 && player.stateNo <= 199
     ) || player.assertSpecialFlags?.some((flag) => flag.toLowerCase() === 'intro'));
 
-    if (!introActive) {
+    if (!introActive && round.introPresentationFrame === null) {
       return {
         ...round,
-        phase: 'fight',
-        frameInPhase: 0,
+        frameInPhase: nextFrameInPhase,
+        introPresentationFrame: 0,
+      };
+    }
+
+    if (!introActive) {
+      const nextPresentationFrame = round.introPresentationFrame + 1;
+      if (nextPresentationFrame >= ROUND_INTRO_PRESENTATION_FRAMES) {
+        return {
+          ...round,
+          phase: 'fight',
+          frameInPhase: 0,
+          introPresentationFrame: null,
+        };
+      }
+      return {
+        ...round,
+        frameInPhase: nextFrameInPhase,
+        introPresentationFrame: nextPresentationFrame,
       };
     }
 
     return {
       ...round,
       frameInPhase: nextFrameInPhase,
+      introPresentationFrame: null,
     };
   }
 

@@ -78,7 +78,7 @@ describe('Issue #93 production CNS Round Flow integration', () => {
     expect(state.players.map((player) => player.stateNo)).toEqual([5900, 5900]);
 
     let observedP1Waiting = false;
-    for (let frame = 0; frame < 12 && round.phase === 'intro'; frame += 1) {
+    for (let frame = 0; frame < 120 && round.phase === 'intro'; frame += 1) {
       state = stepCnsStateRuntime(state, cns, {
         p1Commands: new Set(), p2Commands: new Set(), roundState: winMugenRoundState(round),
       }).state;
@@ -103,6 +103,10 @@ describe('Issue #93 production CNS Round Flow integration', () => {
       p1Commands: new Set(), p2Commands: new Set(), roundState: winMugenRoundState(round), roundNo: 2,
     }).state;
     round = stepRoundState(round, state);
+    expect(round).toMatchObject({ phase: 'intro', introPresentationFrame: 0 });
+    for (let frame = 0; frame < 90 && round.phase === 'intro'; frame += 1) {
+      round = stepRoundState(round, state);
+    }
     expect(round.phase).toBe('fight');
     state = applyRoundFlowStateEntries(state, round);
     expect(state.players.map((player) => player.stateNo)).toEqual([0, 0]);
@@ -114,5 +118,26 @@ describe('Issue #93 production CNS Round Flow integration', () => {
     const stepped = stepCnsStateRuntime(entered, cns, { roundState: 3 }).state;
     expect(stepped.players[0]).toMatchObject({ stateNo: 180, animNo: 180, ctrl: false });
     expect(stepped.players[1]).toMatchObject({ stateNo: 170, animNo: 170, ctrl: false });
+  });
+
+  it('dispatches the defeated player to Lose State 170 after production KO detection', () => {
+    const initial = createInitialGameState();
+    const defeated = {
+      ...initial,
+      players: [
+        initial.players[0],
+        { ...initial.players[1], life: 0, stateNo: 5150, animNo: 5150, ctrl: false },
+      ] as typeof initial.players,
+    };
+    const koRound = stepRoundState({ ...createInitialRoundState(), phase: 'fight' }, defeated);
+    expect(koRound).toMatchObject({ phase: 'ko', winner: 1, frameInPhase: 0 });
+
+    const entered = applyRoundFlowStateEntries(defeated, koRound);
+    const stepped = stepCnsStateRuntime(entered, cns, {
+      roundState: winMugenRoundState(koRound), roundWinner: 1, roundEndReason: 'ko',
+    }).state;
+
+    expect(stepped.players[0]).toMatchObject({ stateNo: 180, animNo: 180, ctrl: false });
+    expect(stepped.players[1]).toMatchObject({ stateNo: 170, animNo: 170, ctrl: false, life: 0 });
   });
 });

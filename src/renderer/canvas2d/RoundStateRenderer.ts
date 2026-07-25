@@ -57,13 +57,15 @@ export class RoundStateRenderer {
   }
 
   private drawIntro(ctx: CanvasRenderingContext2D, round: RoundState): void {
+    if (round.introPresentationFrame === null) return;
+
     ctx.fillStyle = 'rgba(0, 0, 0, 0.52)';
     ctx.fillRect(330, 186, 300, 92);
 
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 32px monospace';
 
-    if (round.frameInPhase < 45) {
+    if (round.introPresentationFrame < 45) {
       ctx.fillText(`ROUND ${round.roundNo}`, 402, 238);
       return;
     }
