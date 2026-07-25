@@ -53,6 +53,30 @@ function createPalette(): Uint8Array {
   return palette;
 }
 
+function createPaletteLessPcxWithFalseMarker(): Uint8Array {
+  const width = 32;
+  const height = 32;
+  const header = new Uint8Array(128);
+  const view = new DataView(header.buffer);
+
+  header[0] = 0x0a;
+  header[1] = 5;
+  header[2] = 1;
+  header[3] = 8;
+  view.setUint16(8, width - 1, true);
+  view.setUint16(10, height - 1, true);
+  header[65] = 1;
+  view.setUint16(66, width, true);
+  view.setUint16(68, 1, true);
+
+  const imageData = new Uint8Array(width * height).fill(1);
+  const result = new Uint8Array(header.length + imageData.length);
+  result.set(header);
+  result.set(imageData, header.length);
+  result[result.length - 1 - 256 * 3] = 0x0c;
+  return result;
+}
+
 describe('PcxDecoder', () => {
   it('decodes PCX RLE stream', () => {
     expect(Array.from(decodeRle(new Uint8Array([0xc3, 7, 8])))).toEqual([7, 7, 7, 8]);
@@ -77,6 +101,16 @@ describe('PcxDecoder', () => {
 
     expect(palette).toBeDefined();
     expect(palette?.length).toBe(768);
+  });
+
+  it('does not mistake an image-data byte for an embedded VGA palette marker', () => {
+    const pcx = createPaletteLessPcxWithFalseMarker();
+
+    expect(tryReadVgaPalette(pcx)).toBeNull();
+
+    const image = decodePcx(pcx, { externalPalette: createPalette() });
+    expect(image.indexedPixels).toHaveLength(32 * 32);
+    expect(image.indexedPixels[255]).toBe(0x0c);
   });
 
   it('decodes indexed pixels and RGBA pixels', () => {

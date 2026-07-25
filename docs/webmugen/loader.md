@@ -85,6 +85,8 @@ The SFF v1 converter resolves palette ownership before indexed PCX pixels become
 
 SFF subfile order is significant. A `samePalette` sprite inherits the previous effective palette in subfile sequence, including a preceding sprite-specific PCX palette. Linked sprites share the source pixel data but keep the linked node's palette context, so a linked node can inherit the previous effective palette instead of blindly sharing the source node's palette identity.
 
+An embedded PCX VGA palette is accepted only when the RLE image data before its terminal marker decodes the complete declared image. This avoids treating an incidental `0x0c` byte at the marker-shaped offset of a shared-palette SFF subfile as a palette, which previously truncated bundled T-H-M-A sprite `5203,2` and hid the second element of bounce Action 5170.
+
 The resulting `ImageDataSpritePack` stores palette metadata and a palette cache key for each sprite. Normal player rendering, AIR Preview, and Explod rendering all consume the same baked RGBA data. Canvas bitmap caching is scoped by loaded asset identity, sprite group/index, baked palette key, and the Explod `ownpal` isolation flag. Identical group/index values from different owners or palette chains therefore cannot reuse one stale canvas. SFF v2 is rejected explicitly by the v1 parser; native SFF v2 decoding and dynamic palette effects remain unsupported rather than being interpreted as v1 data.
 
 ## Why `common.cmd` exists
