@@ -70,4 +70,12 @@ abspan = -40
       { ownerId: 2, scope: 'character', absolutePan: true, pan: -40 },
     ]);
   });
+
+  it('treats WinMUGEN volume zero as unity gain', () => {
+    const events: SoundPlayEvent[] = [];
+    const cns = parseCnsText('[StateDef 0]\n[State 0, Sound]\ntype=PlaySnd\ntrigger1=1\nvalue=S900,0\nvolume=0');
+    stepCnsStateRuntime(createInitialGameState(), cns, { onSoundPlay: (event) => events.push(event) });
+    expect(events).toHaveLength(2);
+    expect(events.every((event) => event.volume === 100)).toBe(true);
+  });
 });

@@ -8,6 +8,8 @@ import {
   ROUND_INITIALIZE_STATE,
   ROUND_RESULT_FRAMES,
   shouldStartNextRound,
+  shouldStartNextMatch,
+  skipRoundIntro,
   winMugenRoundState,
 } from './RoundFlow';
 
@@ -54,6 +56,24 @@ describe('Issue #93 WinMUGEN Round Flow coordinator', () => {
     expect(draw.players.map((player) => player.stateNo)).toEqual([175, 175]);
   });
 
+  it('waits for an airborne KO winner to land before entering the victory state', () => {
+    const initial = createInitialGameState();
+    const round = { ...createInitialRoundState(), phase: 'ko' as const, winner: 1 as const, endReason: 'ko' as const };
+    const airborne = { ...initial, players: [{ ...initial.players[0], stateType: 'A' as const, y: -40 }, { ...initial.players[1], life: 0, stateNo: 5150 }] as typeof initial.players };
+    expect(applyRoundFlowStateEntries(airborne, round).players[0].stateNo).toBe(0);
+    const landed = { ...airborne, players: [{ ...airborne.players[0], stateType: 'S' as const, y: 0 }, airborne.players[1]] as typeof initial.players };
+    expect(applyRoundFlowStateEntries(landed, round).players[0].stateNo).toBe(180);
+  });
+
+  it('skips character intro states after initialization while retaining presentation flow', () => {
+    const initial = createInitialGameState();
+    const intro = { ...initial, players: initial.players.map((player) => ({ ...player, stateNo: 191, ctrl: false })) as typeof initial.players };
+    const round = { ...createInitialRoundState(), frameInPhase: 1 };
+    const skipped = skipRoundIntro(intro, round);
+    expect(skipped.players.map((player) => player.stateNo)).toEqual([0, 0]);
+    expect(skipped.players.every((player) => player.ctrl)).toBe(true);
+  });
+
   it('does not restart a character-owned intro or result substate while the round clock is paused at frame zero', () => {
     const initial = createInitialGameState();
     const intro = applyRoundFlowStateEntries({
@@ -70,7 +90,7 @@ describe('Issue #93 WinMUGEN Round Flow coordinator', () => {
   });
 
   it('advances after the result presentation unless either player has won the match', () => {
-    const round = { ...createInitialRoundState(), phase: 'ko' as const, winner: 1 as const, frameInPhase: ROUND_RESULT_FRAMES };
+    const round = { ...createInitialRoundState(), phase: 'ko' as const, winner: 1 as const, frameInPhase: ROUND_RESULT_FRAMES, resultStateEntered: true };
     const state = createInitialGameState();
     expect(shouldStartNextRound(round, { ...createInitialRoundScore(), p1Wins: 1 }, state)).toBe(true);
     const heldVictory = {
@@ -81,6 +101,7 @@ describe('Issue #93 WinMUGEN Round Flow coordinator', () => {
     const matchScore = { ...createInitialRoundScore(), p1Wins: 2 };
     expect(isMatchOver(matchScore)).toBe(true);
     expect(shouldStartNextRound(round, matchScore, state)).toBe(false);
+    expect(shouldStartNextMatch(round, matchScore, state)).toBe(true);
     expect(winMugenRoundState({ ...round, frameInPhase: 0 })).toBe(3);
     expect(winMugenRoundState({ ...round, frameInPhase: 1 })).toBe(4);
   });

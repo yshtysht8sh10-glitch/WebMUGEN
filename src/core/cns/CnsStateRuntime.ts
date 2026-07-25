@@ -648,7 +648,7 @@ function readAirJuggle(cns: CnsDocument): number {
   return value !== null && Number.isFinite(value) && value >= 0 ? value : 15;
 }
 
-function enterState(
+export function enterCnsState(
   player: PlayerState,
   opponent: PlayerState,
   stateNo: number,
@@ -706,6 +706,8 @@ function enterState(
     ? entered
     : appendPowerDiagnostic(entered, `raw.power entity=p${player.id} source=statedef state=${stateNo} before=${player.power} delta=${stateDef.powerAdd} after=${entered.power} max=${entered.powerMax}`);
 }
+
+const enterState = enterCnsState;
 
 function faceToward(player: PlayerState, opponent: PlayerState): PlayerState['facing'] {
   return player.x <= opponent.x ? 1 : -1;
@@ -1882,7 +1884,7 @@ function playSound(
     group: Math.trunc(group),
     index: Math.trunc(index),
     channel: num(controller, 'channel', player, input, commands, opponent),
-    volume: num(controller, 'volume', player, input, commands, opponent) ?? 100,
+    volume: normalizePlaySndVolume(num(controller, 'volume', player, input, commands, opponent)),
     volumeScale: num(controller, 'volumescale', player, input, commands, opponent) ?? 100,
     pan: absolutePan ?? (relativePan ?? 0) * player.facing,
     absolutePan: absolutePan !== null,
@@ -1890,6 +1892,12 @@ function playSound(
     loop: (num(controller, 'loop', player, input, commands, opponent) ?? 0) !== 0,
   });
   return withPlayer(player, true, 'PlaySnd');
+}
+
+function normalizePlaySndVolume(value: number | null): number {
+  if (value === null || value === 0) return 100;
+  if (value > 0) return Math.min(100, value);
+  return Math.max(0, 100 + value / 100);
 }
 
 function pauseController(

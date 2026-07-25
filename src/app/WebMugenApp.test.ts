@@ -8,6 +8,7 @@ import { DEFAULT_RUNTIME_SETTINGS } from './RuntimeSettings';
 import type { ImageDataSpritePack } from '../core/sprite/ImageDataSpriteTypes';
 import { parseCnsText } from '../parser/cns/CnsParser';
 import { createInitialGameState } from '../core/engine/GameState';
+import { UiLanguageProvider } from './UiLanguage';
 
 describe('WebMugenApp runtime history', () => {
   it('offers discovered public characters in the character picker', () => {
@@ -19,7 +20,7 @@ describe('WebMugenApp runtime history', () => {
     const html = renderToStaticMarkup(createElement(WebMugenApp, { initialPage: 'play' }));
 
     expect(html).not.toContain('aria-label="stage debug overlay"');
-    expect(html).toContain('Human log is OFF in Settings.');
+    expect(html).toContain('Human log is disabled in Settings.');
     const settingsHtml = renderToStaticMarkup(createElement(RuntimeSettingsPanel, {
       settings: DEFAULT_RUNTIME_SETTINGS,
       onChange: () => undefined,
@@ -29,7 +30,7 @@ describe('WebMugenApp runtime history', () => {
     expect(settingsHtml).toContain('aria-label="Collision boxes visible"');
     expect(settingsHtml).toContain('aria-label="State history visible"');
     expect(settingsHtml).toContain('aria-label="Practice Mode"');
-    expect(settingsHtml).toContain('Practice Mode / 練習モード（体力0で全回復・時間無制限）');
+    expect(settingsHtml).toContain('Practice mode (recover at 0 life, unlimited time)');
   });
 
   it('keeps the game panel mounted while leaving hidden static content unmounted', () => {
@@ -41,7 +42,7 @@ describe('WebMugenApp runtime history', () => {
     expect(html).toContain('<canvas');
     expect(html).toContain('Static Info / Character Files');
     expect(html).not.toContain('<h2>Character Files</h2>');
-    expect(html).toContain('キャラクターを読み込んでいます');
+    expect(html).toContain('Loading character');
   });
 
   it('renders the user gesture and explicit no-audio start controls without tab navigation', () => {
@@ -54,11 +55,25 @@ describe('WebMugenApp runtime history', () => {
       state: 'audio-unavailable', onUserGesture, onContinueWithoutAudio,
     }));
 
-    expect(waiting).toContain('クリックまたはキー入力で開始');
-    expect(unavailable).toContain('音声を再試行');
-    expect(unavailable).toContain('音声なしで開始');
+    expect(waiting).toContain('Click or press a key to start');
+    expect(unavailable).toContain('Retry audio');
+    expect(unavailable).toContain('Continue without audio');
     expect(waiting).not.toContain('Runtime');
     expect(waiting).not.toContain('Settings');
+  });
+
+  it('renders one language at a time and exposes the stage language toggle', () => {
+    const english = renderToStaticMarkup(createElement(WebMugenApp));
+    const japanese = renderToStaticMarkup(createElement(UiLanguageProvider, { language: 'ja' },
+      createElement(AudioStartOverlay, {
+        state: 'waiting-for-user', onUserGesture: () => undefined, onContinueWithoutAudio: () => undefined,
+      }),
+    ));
+    expect(english).toContain('aria-label="Switch display language to Japanese"');
+    expect(english).toContain('Game / Runtime');
+    expect(english).not.toContain('ゲーム・実行状況');
+    expect(japanese).toContain('クリックまたはキー入力で開始');
+    expect(japanese).not.toContain('Click or press a key to start');
   });
 
   it('mounts static content on demand while retaining one game canvas across repeated page renders', () => {

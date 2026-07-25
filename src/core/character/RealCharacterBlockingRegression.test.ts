@@ -2,7 +2,9 @@ import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import { parseAirText } from '../../parser/air/AirParser';
 import { getMugenAnimEndTime } from '../animation/AnimationDuration';
-import { stepCnsStateRuntime } from '../cns/CnsStateRuntime';
+import { enterCnsState, stepCnsStateRuntime } from '../cns/CnsStateRuntime';
+import { stepCnsPhysicsMotion } from '../cns/CnsPhysicsStep';
+import type { SoundPlayEvent } from '../audio/SoundEvent';
 import { createInitialGameState } from '../engine/GameState';
 import { resolveFallbackHits } from '../engine/FallbackHitResolver';
 import type { ActiveHitDef, GameState, PlayerState } from '../engine/types';
@@ -68,8 +70,11 @@ describe('Issue #92 T-H-M-A blocking regression', () => {
         expect(activated.players[defenderId - 1].hitOverrides?.[0]).toMatchObject({
           attr: 'SA,AA,AP', stateNo: 902, remaining: 8,
         });
-        const blocked = resolveFallbackHits(activated, collisionAir, true);
-        expect(blocked.players[defenderId - 1]).toMatchObject({ stateNo: 902, life: 1000 });
+        const blocked = resolveFallbackHits(activated, collisionAir, true, undefined,
+          (player, opponent, stateNo) => enterCnsState(player, opponent, stateNo, assets.cns, { random: 998 }));
+        expect(blocked.players[defenderId - 1]).toMatchObject({
+          stateNo: 902, animNo: 908, animTime: 0, stateHeaderAppliedStateNo: 902, life: 1000,
+        });
         const entered = stepCnsStateRuntime(blocked, assets.cns, {
           p1Commands: new Set(),
           p2Commands: new Set(),
@@ -80,6 +85,17 @@ describe('Issue #92 T-H-M-A blocking regression', () => {
         expect(entered.players[defenderId - 1]).toMatchObject({
           stateNo: 902, animNo: 908, animTime: 0, stateHeaderAppliedStateNo: 902,
         });
+        const events: SoundPlayEvent[] = [];
+        const advanced = stepCnsPhysicsMotion(entered, assets.cns);
+        stepCnsStateRuntime(advanced, assets.cns, {
+          p1Commands: new Set(), p2Commands: new Set(), random: 998,
+          getCnsDocumentForPlayer: (id) => id === defenderId ? assets.cns : emptyCns,
+          onSoundPlay: (event) => events.push(event),
+        });
+        expect(events).toContainEqual(expect.objectContaining({
+          ownerId: defenderId, scope: 'character', group: 900, index: 0, volume: 100,
+        }));
+        expect(assets.sounds?.samplesByKey.has('900,0')).toBe(true);
         expect(blocked.hitDiagnosticLines?.join('\n')).toContain(`raw.hit_override attacker=p${attackerId} target=p${defenderId}`);
       });
     }

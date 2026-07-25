@@ -43,6 +43,20 @@ canvas {
   position: relative;
 }
 
+.language-toggle {
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid #94a3b8;
+  border-radius: 6px;
+  color: #f8fafc;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 7px 11px;
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  z-index: 30;
+}
+
 .audio-start-overlay {
   align-items: center;
   background: rgba(2, 6, 23, 0.9);

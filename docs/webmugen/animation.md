@@ -51,7 +51,7 @@ StateDef `anim` is not reapplied on later ticks in the same State. A `ChangeAnim
 
 State entries created outside the ordinary ChangeState controller path still apply expression-valued
 StateDef animation headers on the following CNS entry pass. In particular, T-H-M-A HitOverride
-State 902 evaluates `902+(Random%3)*3` to Anim 902, 905, or 908 instead of retaining the pre-block Anim.
+State 902 evaluates `902+(Random%3)*3` to Anim 902, 905, or 908 in the HitOverride contact frame instead of retaining or drawing the pre-block Anim for one extra frame.
 
 ## Trigger interaction
 

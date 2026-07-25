@@ -32,6 +32,7 @@ export function resolveFallbackHits(
   airDocument?: AirDocument | null,
   diagnosticsEnabled = true,
   animationSnapshot?: GameState,
+  enterOverrideState?: (player: PlayerState, opponent: PlayerState, stateNo: number) => PlayerState,
 ): GameState {
   if (!airDocument) {
     return state;
@@ -74,11 +75,11 @@ export function resolveFallbackHits(
 
   const originalP1 = p1;
   const originalP2 = p2;
-  const p1Result = resolveAttack(originalP1, originalP2, p1Attack, p2Body, airDocument, diagnosticsEnabled, priority.p1);
+  const p1Result = resolveAttack(originalP1, originalP2, p1Attack, p2Body, airDocument, diagnosticsEnabled, priority.p1, enterOverrideState);
   hitDiagnosticLines.push(...p1Result.diagnosticLines);
   if (p1Result.hitEvent) hitEvents.push(p1Result.hitEvent);
 
-  const p2Result = resolveAttack(originalP2, originalP1, p2Attack, p1Body, airDocument, diagnosticsEnabled, priority.p2);
+  const p2Result = resolveAttack(originalP2, originalP1, p2Attack, p1Body, airDocument, diagnosticsEnabled, priority.p2, enterOverrideState);
   hitDiagnosticLines.push(...p2Result.diagnosticLines);
   if (p2Result.hitEvent) hitEvents.push(p2Result.hitEvent);
 
@@ -99,6 +100,8 @@ export function resolveFallbackHits(
       getPlayerBodyBoxes(collisionTarget, airDocument),
       airDocument,
       diagnosticsEnabled,
+      undefined,
+      enterOverrideState,
     );
     hitDiagnosticLines.push(...result.diagnosticLines);
     if (result.hitEvent || result.contactApplied) {
@@ -129,6 +132,7 @@ function resolveAttack(
   airDocument: AirDocument,
   diagnosticsEnabled: boolean,
   priorityDecision: PriorityDecision = { allowed: true, reason: 'no_clash', own: 4, opponent: 4, ownType: 'Hit', opponentType: 'Hit' },
+  enterOverrideState?: (player: PlayerState, opponent: PlayerState, stateNo: number) => PlayerState,
 ): { attacker: PlayerState; target: PlayerState; hitEvent: HitEvent | null; diagnosticLines: string[]; contactApplied?: boolean } {
   const diagnosticLines: string[] = [];
   if (attacker.moveType !== 'A' || attacker.hitPause > 0) {
@@ -214,7 +218,7 @@ function resolveAttack(
     const marked = activeHitDefId === null
       ? attacker
       : recordMoveContact(markAttackerHit(attacker, activeHitDefId, target.id, active.hitId, active.pauseTime.attacker), activeHitDefId, 'hit');
-    const overriddenTarget: PlayerState = {
+    let overriddenTarget: PlayerState = {
       ...target,
       prevStateNo: target.stateNo,
       stateNo: override.stateNo,
@@ -227,6 +231,7 @@ function resolveAttack(
       selfStateOwnerId: target.selfStateOwnerId ?? target.id,
       hitPause: active.pauseTime.defender,
     };
+    if (enterOverrideState) overriddenTarget = enterOverrideState(overriddenTarget, attacker, override.stateNo);
     if (diagnosticsEnabled) diagnosticLines.push(
       `raw.hit_override attacker=p${attacker.id} target=p${target.id}`,
       `  activeHitDefId=${activeHitDefId ?? 'none'} slot=${override.slot} attr=${override.attr} state=${override.stateNo} forceair=${override.forceAir ? 1 : 0} remaining=${override.remaining} result=accepted damage=0`,

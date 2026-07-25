@@ -73,6 +73,21 @@ describe('RoundState', () => {
     expect(round.winner).toBe(1);
   });
 
+  it('does not consume result presentation time before the victory state begins', () => {
+    const gameState = createInitialGameState();
+    const waiting = { ...fightRound(), phase: 'ko' as const, winner: 1 as const, endReason: 'ko' as const, frameInPhase: 0 };
+    const next = stepRoundState(waiting, {
+      ...gameState,
+      players: [{ ...gameState.players[0], stateType: 'A' as const }, { ...gameState.players[1], life: 0, stateNo: 5150 }] as typeof gameState.players,
+    });
+    expect(next).toMatchObject({ frameInPhase: 0, resultStateEntered: false });
+    const entered = stepRoundState(next, {
+      ...gameState,
+      players: [{ ...gameState.players[0], stateNo: 180 }, { ...gameState.players[1], life: 0, stateNo: 5150 }] as typeof gameState.players,
+    });
+    expect(entered).toMatchObject({ frameInPhase: 1, resultStateEntered: true });
+  });
+
   it('detects draw KO', () => {
     const gameState = createInitialGameState();
     const round = stepRoundState(fightRound(), {

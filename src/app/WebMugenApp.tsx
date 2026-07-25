@@ -57,7 +57,9 @@ import {
 import {
   applyRoundFlowStateEntries,
   isMatchOver,
+  shouldStartNextMatch,
   shouldStartNextRound,
+  skipRoundIntro,
   winMugenRoundState,
 } from '../core/engine/RoundFlow';
 import { canRestartRound, restartRound } from '../core/engine/RoundRestart';
@@ -76,6 +78,7 @@ import { readCnsConst } from '../core/cns/CnsConstants';
 import { analyzeCnsCoverage } from '../core/cns/CnsCoverageDiagnostics';
 import type { CnsCoverageDiagnostics } from '../core/cns/CnsCoverageDiagnostics';
 import {
+  enterCnsState,
   stepCnsStateRuntime,
   type CnsRuntimeTrace,
 } from '../core/cns/CnsStateRuntime';
@@ -125,6 +128,7 @@ import {
 } from './RuntimeLogIndex';
 import { RuntimePerformanceMetrics } from './RuntimePerformanceMetrics';
 import { CHARACTER_PATH_OPTIONS as DISCOVERED_CHARACTER_PATH_OPTIONS } from 'virtual:webmugen-character-manifest';
+import { loadUiLanguage, saveUiLanguage, UiLanguageProvider, useUiLanguage } from './UiLanguage';
 
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/T-H-M-A.zip';
 const ENABLE_RUNTIME_FALLBACKS = false;
@@ -167,6 +171,7 @@ const EMPTY_STATIC_DEBUG_INFO: StaticDebugInfo = {
 };
 
 export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } = {}) {
+  const [uiLanguage, setUiLanguage] = useState(loadUiLanguage);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
   const gameStateRef = useRef<GameState>(createInitialGameState());
@@ -470,6 +475,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           p2HitPauseCommandBufferRef.current?.clear();
           audioRuntimeRef.current?.stopAll();
         } else {
+          if (pressedKeys.size > 0) nextState = skipRoundIntro(nextState, nextRoundState);
           nextState = applyRoundFlowStateEntries(nextState, nextRoundState);
           const fightActive = nextRoundState.phase === 'fight';
           const pauseAtFrameStart = nextState.pause ?? createInitialPauseState();
@@ -590,6 +596,9 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
               character.air,
               aiLogEnabled && runtimeSettingsRef.current.hitDiagnostics,
               beforePhysicsState,
+              (player, opponent, stateNo) => enterCnsState(player, opponent, stateNo, character.cns, {
+                gameTime: nextState.frame,
+              }, player.id === 1 ? p1Commands : p2Commands),
             );
             const projectileResult = resolveProjectileHits(
               nextState.players,
@@ -648,10 +657,12 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             helpers: stepHelperPauseMoveTimes(nextState.helpers, pauseDuringFrame),
             pause: stepPauseState(pauseDuringFrame),
           };
-          if (shouldStartNextRound(nextRoundState, nextScore, nextState)) {
-            const restarted = restartRound(nextRoundState.roundNo, runtimeSettingsRef.current.roundTime, characterPowerMax);
+          const startNextMatch = shouldStartNextMatch(nextRoundState, nextScore, nextState);
+          if (startNextMatch || shouldStartNextRound(nextRoundState, nextScore, nextState)) {
+            const restarted = restartRound(startNextMatch ? 0 : nextRoundState.roundNo, runtimeSettingsRef.current.roundTime, characterPowerMax);
             nextState = synchronizeRuntimeFrame(restarted.gameState, frameNoRef.current);
             nextRoundState = restarted.roundState;
+            if (startNextMatch) nextScore = createInitialRoundScore();
             nextFeedback = restarted.hitFeedbackState;
             nextCnsTraces = [];
             p1CommandBufferRef.current.clear();
@@ -991,10 +1002,11 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
   };
 
   return (
-    <div className="app-shell">
+    <UiLanguageProvider language={uiLanguage}>
+    <div className="app-shell" lang={uiLanguage}>
       <header className="app-header">
         <h1>WebMUGEN</h1>
-        <p>CharacterLoader app integration prototype</p>
+        <p>{uiLanguage === 'ja' ? 'キャラクターローダー統合版' : 'Character loader integration'}</p>
       </header>
 
       <AppPageTabs activePage={activePage} onChange={setActivePage} />
@@ -1005,6 +1017,18 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
       >
         <section className="stage-panel">
             <div className="stage-viewport">
+              <button
+                className="language-toggle"
+                type="button"
+                aria-label={uiLanguage === 'ja' ? '表示言語を英語に切り替え' : 'Switch display language to Japanese'}
+                onClick={() => {
+                  const next = uiLanguage === 'ja' ? 'en' : 'ja';
+                  setUiLanguage(next);
+                  saveUiLanguage(next);
+                }}
+              >
+                {uiLanguage === 'ja' ? 'English' : '日本語'}
+              </button>
               <canvas
                 ref={canvasRef}
                 width={960}
@@ -1052,7 +1076,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
                 onOpenCnsSource={openCnsSource}
               />
             )}
-            {activeDebugTab === 'runtime-human' && !runtimeSettings.humanLogEnabled && <p>Human log is OFF in Settings.</p>}
+            {activeDebugTab === 'runtime-human' && !runtimeSettings.humanLogEnabled && <p>{uiLanguage === 'ja' ? '人間向けログは設定で無効になっています。' : 'Human log is disabled in Settings.'}</p>}
             {activeDebugTab === 'runtime-ai' && runtimeSettings.aiLogEnabled && (
               <AiRuntimePanel
                 visibleRuntimeHistory={visibleAiHistory}
@@ -1060,7 +1084,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
                 onShowLatest={showLatestRuntimeHistory}
               />
             )}
-            {activeDebugTab === 'runtime-ai' && !runtimeSettings.aiLogEnabled && <p>AI log is OFF in Settings.</p>}
+            {activeDebugTab === 'runtime-ai' && !runtimeSettings.aiLogEnabled && <p>{uiLanguage === 'ja' ? 'AI向けログは設定で無効になっています。' : 'AI log is disabled in Settings.'}</p>}
             {activeDebugTab === 'manual' && <ManualPanel />}
             {activeDebugTab === 'settings' && (
               <SettingsPanel
@@ -1108,6 +1132,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
         ) : null}
       </section>
     </div>
+    </UiLanguageProvider>
   );
 }
 
@@ -1120,11 +1145,12 @@ export function AudioStartOverlay({
   onUserGesture: (gestureType: AudioStartGateGesture) => void;
   onContinueWithoutAudio: () => void;
 }) {
+  const { text } = useUiLanguage();
   if (state === 'loading') {
-    return <div className="audio-start-overlay" role="status">キャラクターを読み込んでいます…</div>;
+    return <div className="audio-start-overlay" role="status">{text('Loading character…', 'キャラクターを読み込んでいます…')}</div>;
   }
   if (state === 'unlocking-audio') {
-    return <div className="audio-start-overlay" role="status">音声を開始しています…</div>;
+    return <div className="audio-start-overlay" role="status">{text('Starting audio…', '音声を開始しています…')}</div>;
   }
   if (state === 'waiting-for-user') {
     return (
@@ -1136,14 +1162,14 @@ export function AudioStartOverlay({
           onKeyDown={() => onUserGesture('keydown')}
           type="button"
         >
-          クリックまたはキー入力で開始
+          {text('Click or press a key to start', 'クリックまたはキー入力で開始')}
         </button>
       </div>
     );
   }
   return (
     <div className="audio-start-overlay" role="alert">
-      <p>音声を開始できませんでした。再試行するか、音声なしで開始してください。</p>
+      <p>{text('Audio could not be started. Retry or continue without audio.', '音声を開始できませんでした。再試行するか、音声なしで開始してください。')}</p>
       <div className="audio-start-actions">
         <button
           autoFocus
@@ -1152,9 +1178,9 @@ export function AudioStartOverlay({
           onKeyDown={() => onUserGesture('keydown')}
           type="button"
         >
-          音声を再試行
+          {text('Retry audio', '音声を再試行')}
         </button>
-        <button onClick={onContinueWithoutAudio} type="button">音声なしで開始</button>
+        <button onClick={onContinueWithoutAudio} type="button">{text('Continue without audio', '音声なしで開始')}</button>
       </div>
     </div>
   );
@@ -1211,6 +1237,7 @@ function SettingsPanel({
   onAudioMutedChange: (muted: boolean) => void;
   onAudioMasterVolumeChange: (volume: number) => void;
 }) {
+  const { text } = useUiLanguage();
   return (
     <div className="settings-stack">
       <CharacterConfigPanel characterPath={characterPath} onChange={onCharacterPathChange} />
@@ -1228,17 +1255,17 @@ function SettingsPanel({
         onMasterVolumeChange={onAudioMasterVolumeChange}
       />
       <section className="settings-section">
-        <h2>Control Summary</h2>
+        <h2>{text('Control Summary', '操作一覧')}</h2>
         <div className="control-help-grid">
           <div>
-            <h3>Keyboard</h3>
+            <h3>{text('Keyboard', 'キーボード')}</h3>
             <p>P1: {formatKeyboardMapping(inputConfig.players[0])}</p>
             <p>P2: {formatKeyboardMapping(inputConfig.players[1])}</p>
           </div>
           <div>
-            <h3>Controller</h3>
-            <p>1st gamepad = P1, 2nd gamepad = P2</p>
-            <p>D-pad / left stick move</p>
+            <h3>{text('Controller', 'コントローラー')}</h3>
+            <p>{text('1st gamepad = P1, 2nd gamepad = P2', '1台目のゲームパッド = P1、2台目 = P2')}</p>
+            <p>{text('Move with the D-pad or left stick', '方向パッドまたは左スティックで移動')}</p>
             <p>P1: {formatGamepadMapping(inputConfig.players[0])}</p>
             <p>P2: {formatGamepadMapping(inputConfig.players[1])}</p>
           </div>
@@ -1275,21 +1302,22 @@ export function AudioSettingsPanel({
   onMutedChange: (muted: boolean) => void;
   onMasterVolumeChange: (volume: number) => void;
 }) {
+  const { text } = useUiLanguage();
   return (
-    <section className="settings-section" aria-label="audio settings">
-      <h2>Audio</h2>
-      <p>AudioContext: {status}</p>
+    <section className="settings-section" aria-label={text('audio settings', '音声設定')}>
+      <h2>{text('Audio', '音声')}</h2>
+      <p>{text('Audio status', '音声状態')}: {text(status, status === 'locked' ? '未開始' : status === 'unlocked' ? '開始済み' : '非対応')}</p>
       <div className="runtime-settings-grid">
-        <button type="button" onClick={onUnlock}>Unlock Audio</button>
-        <button type="button" onClick={onTest} disabled={status !== 'unlocked'}>Test loaded SND sample</button>
-        <button type="button" onClick={onStopTest}>Stop test SND sample</button>
-        <button type="button" onClick={onPanTest}>Pan test SND left</button>
+        <button type="button" onClick={onUnlock}>{text('Start audio', '音声を開始')}</button>
+        <button type="button" onClick={onTest} disabled={status !== 'unlocked'}>{text('Play test sound', 'テスト音を再生')}</button>
+        <button type="button" onClick={onStopTest}>{text('Stop test sound', 'テスト音を停止')}</button>
+        <button type="button" onClick={onPanTest}>{text('Move test sound left', 'テスト音を左へ移動')}</button>
         <label>
           <input aria-label="Mute all audio" type="checkbox" checked={muted} onChange={(event) => onMutedChange(event.currentTarget.checked)} />
-          Mute
+          {text('Mute', 'ミュート')}
         </label>
         <label>
-          Master volume: {masterVolume}%
+          {text('Master volume', '全体音量')}: {masterVolume}%
           <input
             aria-label="Master volume"
             type="range"
@@ -1320,6 +1348,7 @@ function CharacterConfigPanel({
   characterPath: string;
   onChange: (path: string) => void;
 }) {
+  const { text } = useUiLanguage();
   const [draft, setDraft] = useState(characterPath);
 
   useEffect(() => {
@@ -1328,8 +1357,8 @@ function CharacterConfigPanel({
 
   return (
     <section className="settings-section">
-      <h2>Character</h2>
-      <p>Place character files under <code>public/chars/</code>, then select or enter the DEF/ZIP path here.</p>
+      <h2>{text('Character', 'キャラクター')}</h2>
+      <p>{text('Place character files under public/chars/, then select or enter the DEF/ZIP path here.', 'キャラクターファイルを public/chars/ に置き、DEFまたはZIPのパスを選択・入力してください。')}</p>
       <div className="character-picker">
         <select value={characterPath} onChange={(event) => onChange(event.currentTarget.value)}>
           {CHARACTER_PATH_OPTIONS.map((path) => (
@@ -1352,7 +1381,7 @@ function CharacterConfigPanel({
             <option key={path} value={path} />
           ))}
         </datalist>
-        <button type="button" onClick={() => onChange(draft)}>Load</button>
+        <button type="button" onClick={() => onChange(draft)}>{text('Load', '読み込み')}</button>
       </div>
     </section>
   );
@@ -1365,12 +1394,13 @@ function InputConfigPanel({
   config: InputConfig;
   onChange: (config: InputConfig) => void;
 }) {
+  const { text } = useUiLanguage();
   return (
     <section className="input-config-panel">
       <div className="input-config-header">
-        <h2>Input Config</h2>
+        <h2>{text('Input Config', '入力設定')}</h2>
         <button type="button" onClick={() => onChange(cloneInputConfig(DEFAULT_INPUT_CONFIG))}>
-          Reset
+          {text('Reset', '初期化')}
         </button>
       </div>
       <LiveInputMonitor />
@@ -1395,12 +1425,13 @@ export function RuntimeSettingsPanel({
   settings: RuntimeSettings;
   onChange: (settings: RuntimeSettings) => void;
 }) {
+  const { text } = useUiLanguage();
   return (
     <section className="settings-section">
-      <h2>Runtime</h2>
+      <h2>{text('Runtime', '実行設定')}</h2>
       <div className="runtime-settings-grid">
         <label>
-          Game time
+          {text('Game time', 'ラウンド時間')}
           <input
             min={0}
             max={999}
@@ -1410,7 +1441,7 @@ export function RuntimeSettingsPanel({
           />
         </label>
         <label>
-          Power Infinite
+          {text('Infinite power', 'パワー無限')}
           <select
             aria-label="Power Infinite"
             value={settings.infinitePower}
@@ -1432,7 +1463,7 @@ export function RuntimeSettingsPanel({
             checked={settings.practiceMode}
             onChange={(event) => onChange({ ...settings, practiceMode: event.currentTarget.checked })}
           />
-          Practice Mode / 練習モード（体力0で全回復・時間無制限）
+          {text('Practice mode (recover at 0 life, unlimited time)', '練習モード（体力0で全回復・時間無制限）')}
         </label>
         <label>
           <input
@@ -1441,10 +1472,10 @@ export function RuntimeSettingsPanel({
             disabled={!settings.aiLogEnabled}
             onChange={(event) => onChange({ ...settings, hitDiagnostics: event.currentTarget.checked })}
           />
-          AI hit lifecycle details
+          {text('AI hit lifecycle details', 'AI向けヒット処理詳細')}
         </label>
         <label>
-          Frame ms
+          {text('Frame duration (ms)', 'フレーム間隔（ms）')}
           <input
             min={1}
             max={1000}
@@ -1455,10 +1486,10 @@ export function RuntimeSettingsPanel({
           />
         </label>
         <button type="button" onClick={() => onChange(DEFAULT_RUNTIME_SETTINGS)}>
-          MUGEN default
+          {text('MUGEN defaults', 'MUGEN既定値')}
         </button>
       </div>
-      <h3>Debug / Logging</h3>
+      <h3>{text('Debug / Logging', 'デバッグ・ログ')}</h3>
       <div className="runtime-settings-grid">
         <label>
           <input
@@ -1467,8 +1498,8 @@ export function RuntimeSettingsPanel({
             checked={settings.humanLogEnabled}
             onChange={(event) => onChange({ ...settings, humanLogEnabled: event.currentTarget.checked })}
           />
-          Human log
-          <small>Records detailed diagnostics for reading on screen. May increase load.</small>
+          {text('Human log', '人間向けログ')}
+          <small>{text('Records detailed diagnostics for reading on screen. May increase load.', '画面で読むための詳細診断を記録します。負荷が増える場合があります。')}</small>
         </label>
         <label>
           <input
@@ -1477,8 +1508,8 @@ export function RuntimeSettingsPanel({
             checked={settings.aiLogEnabled}
             onChange={(event) => onChange({ ...settings, aiLogEnabled: event.currentTarget.checked })}
           />
-          AI log
-          <small>Records detailed AI_RUNTIME frame dumps. May increase load.</small>
+          {text('AI log', 'AI向けログ')}
+          <small>{text('Records detailed AI_RUNTIME frame dumps. May increase load.', '詳細なAI_RUNTIMEフレーム情報を記録します。負荷が増える場合があります。')}</small>
         </label>
         <label>
           <input
@@ -1487,8 +1518,8 @@ export function RuntimeSettingsPanel({
             checked={settings.collisionBoxesVisible}
             onChange={(event) => onChange({ ...settings, collisionBoxesVisible: event.currentTarget.checked })}
           />
-          Collision boxes
-          <small>Draws Clsn1, Clsn2, Push, and projectile debug rectangles.</small>
+          {text('Collision boxes', '当たり判定枠')}
+          <small>{text('Draws Clsn1, Clsn2, Push, and projectile debug rectangles.', 'Clsn1、Clsn2、Push、Projectileのデバッグ枠を描画します。')}</small>
         </label>
         <label>
           <input
@@ -1497,8 +1528,8 @@ export function RuntimeSettingsPanel({
             checked={settings.stateHistoryVisible}
             onChange={(event) => onChange({ ...settings, stateHistoryVisible: event.currentTarget.checked })}
           />
-          State history
-          <small>Shows the lightweight state/input/damage history at the lower left.</small>
+          {text('State history', 'ステート履歴')}
+          <small>{text('Shows lightweight state, input, and damage history at the lower left.', '左下に軽量なステート・入力・ダメージ履歴を表示します。')}</small>
         </label>
       </div>
     </section>
@@ -1516,6 +1547,7 @@ type LiveInputMonitorState = {
 };
 
 function LiveInputMonitor() {
+  const { text } = useUiLanguage();
   const [snapshot, setSnapshot] = useState<LiveInputMonitorState>({ keys: [], gamepads: [] });
 
   useEffect(() => {
@@ -1547,11 +1579,11 @@ function LiveInputMonitor() {
   }, []);
 
   return (
-    <section className="live-input-monitor" aria-label="live input monitor">
-      <h3>Live Input Monitor</h3>
+    <section className="live-input-monitor" aria-label={text('live input monitor', '入力モニター')}>
+      <h3>{text('Live Input Monitor', '入力モニター')}</h3>
       <div className="live-input-grid">
         <div>
-          <h4>Keyboard</h4>
+          <h4>{text('Keyboard', 'キーボード')}</h4>
           <div className="live-input-pills">
             {snapshot.keys.length === 0 ? <span className="live-input-empty">-</span> : snapshot.keys.map((key) => (
               <span className="live-input-pill" key={key}>{key}</span>
@@ -1559,15 +1591,15 @@ function LiveInputMonitor() {
           </div>
         </div>
         <div>
-          <h4>Controller</h4>
+          <h4>{text('Controller', 'コントローラー')}</h4>
           {snapshot.gamepads.length === 0 ? (
-            <div className="live-input-empty">not connected</div>
+            <div className="live-input-empty">{text('not connected', '未接続')}</div>
           ) : snapshot.gamepads.map((gamepad) => (
             <div className="live-gamepad-row" key={gamepad.index}>
               <strong>Pad {gamepad.index + 1}</strong>
               <span title={gamepad.id}>{gamepad.id || 'unknown'}</span>
-              <span>buttons: {gamepad.buttons.length === 0 ? '-' : gamepad.buttons.join(', ')}</span>
-              <span>axes: {gamepad.axes.length === 0 ? '-' : gamepad.axes.map((axis) => `${axis.index}:${axis.value.toFixed(2)}`).join(', ')}</span>
+              <span>{text('buttons', 'ボタン')}: {gamepad.buttons.length === 0 ? '-' : gamepad.buttons.join(', ')}</span>
+              <span>{text('axes', '軸')}: {gamepad.axes.length === 0 ? '-' : gamepad.axes.map((axis) => `${axis.index}:${axis.value.toFixed(2)}`).join(', ')}</span>
             </div>
           ))}
         </div>
@@ -1601,13 +1633,16 @@ function PlayerInputConfig({
   playerIndex: number;
   onChange: (player: PlayerInputMapping) => void;
 }) {
+  const { text } = useUiLanguage();
+  const japaneseActionLabels: Partial<Record<InputAction, string>> = { left: '左', right: '右', up: '上', down: '下', start: 'スタート' };
+  const actionLabel = (key: InputAction, fallback: string) => japaneseActionLabels[key] ?? fallback;
   return (
     <section className="input-config-card">
       <h3>P{playerIndex + 1}</h3>
       <div className="input-config-rows">
         {INPUT_ACTIONS.map((action) => (
           <div className="input-config-row" key={action.key}>
-            <span>{action.label}</span>
+            <span>{text(action.label, actionLabel(action.key, action.label))}</span>
             <KeyCaptureButton
               value={player.keyboard[action.key]}
               onChange={(code) => onChange({
@@ -1616,7 +1651,7 @@ function PlayerInputConfig({
               })}
             />
             <label>
-              Pad
+              {text('Pad', 'パッド')}
               <input
                 min={0}
                 max={31}
@@ -1640,6 +1675,7 @@ function PlayerInputConfig({
 
 function KeyCaptureButton({ value, onChange }: { value: string; onChange: (code: string) => void }) {
   const [capturing, setCapturing] = useState(false);
+  const { text } = useUiLanguage();
   return (
     <button
       className={capturing ? 'capture active' : 'capture'}
@@ -1658,7 +1694,7 @@ function KeyCaptureButton({ value, onChange }: { value: string; onChange: (code:
       }}
       type="button"
     >
-      {capturing ? 'Press key...' : formatKeyCode(value)}
+      {capturing ? text('Press key…', 'キーを押してください…') : formatKeyCode(value)}
     </button>
   );
 }
@@ -1798,32 +1834,34 @@ function formatGamepadMapping(player: PlayerInputMapping): string {
 }
 
 function AppPageTabs({ activePage, onChange }: { activePage: AppPage; onChange: (page: AppPage) => void }) {
+  const { text } = useUiLanguage();
   return (
-    <nav className="page-tabs" aria-label="main page tabs">
+    <nav className="page-tabs" aria-label={text('main page tabs', 'メイン画面タブ')}>
       <button className={activePage === 'play' ? 'active' : ''} onClick={() => onChange('play')} type="button">
-        Game / Runtime
+        {text('Game / Runtime', 'ゲーム・実行状況')}
       </button>
       <button className={activePage === 'static-files' ? 'active' : ''} onClick={() => onChange('static-files')} type="button">
-        Static Info / Character Files
+        {text('Static Info / Character Files', '静的情報・キャラクターファイル')}
       </button>
     </nav>
   );
 }
 
 function DebugTabsV2({ activeTab, onChange }: { activeTab: DebugTab; onChange: (tab: DebugTab) => void }) {
+  const { text } = useUiLanguage();
   return (
     <nav className="debug-tabs" aria-label="debug tabs">
       <button className={activeTab === 'runtime-human' ? 'active' : ''} onClick={() => onChange('runtime-human')} type="button">
-        Human Runtime
+        {text('Human Runtime', '人間向け実行ログ')}
       </button>
       <button className={activeTab === 'runtime-ai' ? 'active' : ''} onClick={() => onChange('runtime-ai')} type="button">
-        AI Runtime
+        {text('AI Runtime', 'AI向け実行ログ')}
       </button>
       <button className={activeTab === 'manual' ? 'active' : ''} onClick={() => onChange('manual')} type="button">
-        Manual
+        {text('Manual', '操作説明')}
       </button>
       <button className={activeTab === 'settings' ? 'active' : ''} onClick={() => onChange('settings')} type="button">
-        Settings
+        {text('Settings', '設定')}
       </button>
     </nav>
   );
@@ -1878,6 +1916,7 @@ function CopyToolbarV2({
   onCopy: (label: string, text: string) => void;
   onClearLogs: () => void;
 }) {
+  const { text } = useUiLanguage();
   if (activeTab !== 'runtime-human' && activeTab !== 'runtime-ai') return null;
   const visibleHumanLines = selectedReadableEntry?.lines ?? ['selected frame=-'];
   const allHumanLinesRef = {
@@ -1896,7 +1935,7 @@ function CopyToolbarV2({
         {activeTab === 'runtime-human' ? (
           <>
             <button type="button" onClick={() => onCopy('選択中フレームの人間用ログ', formatReadableRuntimeEntryCopy(selectedReadableEntry))}>
-              選択中フレームをコピー
+              {text('Copy selected frame', '選択中フレームをコピー')}
             </button>
             <button
               type="button"
@@ -1905,21 +1944,21 @@ function CopyToolbarV2({
                 entryStore: readableEntryStoreRef.current,
               }))}
             >
-              全人間用ログをコピー
+              {text('Copy all human logs', '全人間用ログをコピー')}
             </button>
           </>
         ) : (
           <>
             <button type="button" onClick={() => onCopy('表示中のAI用ログ', visibleAiLines.join('\n'))}>
-              表示中AIログをコピー
+              {text('Copy visible AI log', '表示中AIログをコピー')}
             </button>
             <button type="button" onClick={() => onCopy('全AI用ログ', allAiLinesRef.current.join('\n'))}>
-              全AIログをコピー
+              {text('Copy all AI logs', '全AIログをコピー')}
             </button>
           </>
         )}
         <button type="button" className="danger" onClick={onClearLogs}>
-          ログをクリア
+          {text('Clear logs', 'ログをクリア')}
         </button>
       </div>
       {copyStatus && <span className="copy-status">{copyStatus}</span>}
@@ -2019,20 +2058,21 @@ function StaticDebugPanel({
   showCharacterFiles: boolean;
   onToggleCharacterFiles: () => void;
 }) {
+  const { text } = useUiLanguage();
   return (
     <div className="debug-grid">
       <DebugBlock title="Character / DEF" lines={[loadMessage, ...staticDebugInfo.characterRows]} />
-      <DebugBlock title="CMD Commands" lines={staticDebugInfo.commandRows} />
-      <DebugBlock title="CNS Coverage" lines={coverageDebugLines} />
+      <DebugBlock title={text('CMD Commands', 'CMDコマンド')} lines={staticDebugInfo.commandRows} />
+      <DebugBlock title={text('CNS Coverage', 'CNS対応状況')} lines={coverageDebugLines} />
       <section className="debug-block character-source-toggle-panel">
         <div className="collapsible-debug-header">
-          <h2>Character Files</h2>
-          <button type="button" onClick={onToggleCharacterFiles}>{showCharacterFiles ? 'Hide' : 'Show'}</button>
+          <h2>{text('Character Files', 'キャラクターファイル')}</h2>
+          <button type="button" onClick={onToggleCharacterFiles}>{showCharacterFiles ? text('Hide', '隠す') : text('Show', '表示')}</button>
         </div>
         {showCharacterFiles ? (
           <CharacterSourceFilesViewer files={sourceFiles} selection={selectedSource} onSelect={onOpenSource} scrollPositionsRef={sourceScrollPositionsRef} air={air} sprites={sprites} />
         ) : (
-          <p className="debug-note">Character Files is hidden to keep the debug UI light. Use Show or a StateDef link in the runtime log.</p>
+          <p className="debug-note">{text('Character Files is hidden to keep the debug UI light. Use Show or a StateDef link in the runtime log.', 'デバッグ画面を軽く保つため、キャラクターファイルを非表示にしています。「表示」または実行ログ内のStateDefリンクを使ってください。')}</p>
         )}
       </section>
       <StateDefListPanel rows={staticDebugInfo.stateRows} />
@@ -2041,10 +2081,11 @@ function StaticDebugPanel({
 }
 
 function StateDefListPanel({ rows }: { rows: StateDebugRow[] }) {
+  const { text } = useUiLanguage();
   return (
     <section className="debug-block statedef-list">
-      <h2>StateDef 一覧</h2>
-      <div className="statedef-count">loaded StateDefs: {rows.length}</div>
+      <h2>{text('StateDef List', 'StateDef一覧')}</h2>
+      <div className="statedef-count">{text('loaded StateDefs', '読み込み済みStateDef')}: {rows.length}</div>
       <div className="statedef-scroll">
         {rows.length === 0 ? (
           <div className="statedef-empty">states=-</div>
@@ -2081,6 +2122,7 @@ const RuntimeFrameIndexList = memo(function RuntimeFrameIndexList({
   onSelectFrame: (entry: RuntimeLogIndexEntry) => void;
 }) {
   const listRef = useRef<HTMLDivElement | null>(null);
+  const { text } = useUiLanguage();
 
   useEffect(() => {
     if (!autoScroll) return;
@@ -2092,9 +2134,9 @@ const RuntimeFrameIndexList = memo(function RuntimeFrameIndexList({
   return (
     <>
       <div className="runtime-frame-index-controls">
-        <span>{autoScroll ? '最新ログへ自動追従' : '手動スクロール'}</span>
+        <span>{autoScroll ? text('Following latest log', '最新ログへ自動追従') : text('Manual scrolling', '手動スクロール')}</span>
         <button type="button" onClick={onToggleAutoScroll}>
-          {autoScroll ? '手動に切替' : '自動追従に切替'}
+          {autoScroll ? text('Switch to manual', '手動に切替') : text('Follow latest', '自動追従に切替')}
         </button>
       </div>
       <div className="runtime-frame-index" ref={listRef}>
@@ -2109,7 +2151,7 @@ const RuntimeFrameIndexList = memo(function RuntimeFrameIndexList({
           </div>
         ) : null}
         {entries.length === 0 ? (
-          <div className="history-empty">ログが生成されると、ここにフレーム索引が追加されます。</div>
+          <div className="history-empty">{text('Frames appear here when logs are generated.', 'ログが生成されると、ここにフレーム索引が追加されます。')}</div>
         ) : entries.map((entry) => (
           <button
             type="button"
@@ -2175,12 +2217,13 @@ function HumanRuntimePanel({
   onShowLatest: () => void;
   onOpenCnsSource: (selection: CnsSourceSelection) => void;
 }) {
+  const { text } = useUiLanguage();
   return (
     <section className="runtime-history-panel">
       <div className="runtime-human-grid">
         <section>
-          <h2>Runtime Frame Index</h2>
-          <p className="debug-note">Only frames with retained detail logs are listed. Multiple StateNo values in one frame appear as separate rows.</p>
+          <h2>{text('Runtime Frame Index', '実行フレーム一覧')}</h2>
+          <p className="debug-note">{text('Only frames with retained detail logs are listed. Multiple StateNo values in one frame appear as separate rows.', '詳細ログが残っているフレームだけを表示します。同じフレームに複数のStateNoがある場合は別の行になります。')}</p>
           <RuntimeFrameIndexList
             entries={indexEntries}
             selectedKey={selectedEntry?.key ?? null}
@@ -2191,17 +2234,17 @@ function HumanRuntimePanel({
         </section>
         <section>
           <div className="collapsible-debug-header">
-            <h2>Human Detail Log</h2>
-            <button type="button" onClick={onToggleHumanDetail}>{showHumanDetail ? 'Hide' : 'Show'}</button>
+            <h2>{text('Human Detail Log', '人間向け詳細ログ')}</h2>
+            <button type="button" onClick={onToggleHumanDetail}>{showHumanDetail ? text('Hide', '隠す') : text('Show', '表示')}</button>
           </div>
-          <p className="debug-note">Selecting a row loads only that one detail entry. New logs do not replace the current selection.</p>
-          <button type="button" className="history-latest-button" onClick={onShowLatest}>Show Latest Frame</button>
+          <p className="debug-note">{text('Selecting a row loads only that detail entry. New logs do not replace the current selection.', '行を選ぶと、その詳細だけを表示します。新しいログが現在の選択を置き換えることはありません。')}</p>
+          <button type="button" className="history-latest-button" onClick={onShowLatest}>{text('Show Latest Frame', '最新フレームを表示')}</button>
           {!showHumanDetail ? (
-            <div className="history-empty">Detail log is hidden. Select a frame or show the latest frame to open it.</div>
+            <div className="history-empty">{text('Detail log is hidden. Select a frame or show the latest frame to open it.', '詳細ログは非表示です。フレームを選ぶか、最新フレームを表示してください。')}</div>
           ) : selectedEntry ? (
             <>
               <div className="history-selected-frame">
-                selected frame={selectedEntry.frameNo} P1 state={selectedEntry.p1StateNo} P2 state={selectedEntry.p2StateNo}
+                {text('selected frame', '選択中フレーム')}={selectedEntry.frameNo} P1 state={selectedEntry.p1StateNo} P2 state={selectedEntry.p2StateNo}
               </div>
               <div className="human-detail-grid">
                 <section className="human-detail-player" aria-label="P1 detail log">
@@ -2215,7 +2258,7 @@ function HumanRuntimePanel({
               </div>
             </>
           ) : (
-            <div className="history-empty">Select a frame on the left.</div>
+            <div className="history-empty">{text('Select a frame on the left.', '左側でフレームを選択してください。')}</div>
           )}
         </section>
       </div>
@@ -2232,11 +2275,12 @@ function AiRuntimePanel({
   historyWindow: RuntimeHistoryWindow;
   onShowLatest: () => void;
 }) {
+  const { text } = useUiLanguage();
   return (
     <section className="runtime-history-panel">
-      <h2>AI用 詳細ログ</h2>
+      <h2>{text('AI Detail Log', 'AI向け詳細ログ')}</h2>
       <p className="debug-note">
-        入力、Command、State、Controller、Physics、成立情報を解析用に蓄積します。Timeだけの変化では増えません。
+        {text('Stores input, command, state, controller, physics, and result details for analysis. Time-only changes are omitted.', '入力、コマンド、ステート、コントローラー、物理、成立情報を解析用に蓄積します。時間だけの変化は省略します。')}
       </p>
       <HistoryWindowStatus visible={visibleRuntimeHistory} window={historyWindow} onShowLatest={onShowLatest} />
       <pre className="debug-pre history-pre codex-history-pre">{visibleRuntimeHistory.lines.join('\n')}</pre>
@@ -2329,20 +2373,21 @@ function HistoryWindowStatus({
   window: RuntimeHistoryWindow;
   onShowLatest: () => void;
 }) {
+  const { text } = useUiLanguage();
   const modeLabel = window.mode === 'latest'
-    ? '最新'
-    : `フレーム ${window.targetFrame} 周辺`;
+    ? text('latest', '最新')
+    : text(`around frame ${window.targetFrame}`, `フレーム ${window.targetFrame} 周辺`);
   const targetStatus = window.mode === 'aroundFrame' && !visible.targetFound
-    ? ' / 対象フレームは保持範囲外です'
+    ? text(' / target frame is outside the retained range', ' / 対象フレームは保持範囲外です')
     : '';
 
   return (
     <div className="history-window-status">
-      <span>表示: {modeLabel}</span>
-      <span>範囲: {visible.rangeLabel}</span>
-      <span>件数: {visible.visibleEntries}/{visible.totalEntries}{targetStatus}</span>
+      <span>{text('View', '表示')}: {modeLabel}</span>
+      <span>{text('Range', '範囲')}: {visible.rangeLabel}</span>
+      <span>{text('Entries', '件数')}: {visible.visibleEntries}/{visible.totalEntries}{targetStatus}</span>
       {window.mode !== 'latest' ? (
-        <button type="button" onClick={onShowLatest}>最新へ戻る</button>
+        <button type="button" onClick={onShowLatest}>{text('Return to latest', '最新へ戻る')}</button>
       ) : null}
     </div>
   );
@@ -2506,6 +2551,7 @@ function CharacterSourceFilesViewer({
   air?: AirDocument | null;
   sprites?: ImageDataSpritePack | null;
 }) {
+  const { text } = useUiLanguage();
   const localScrollPositionsRef = useRef<Record<string, number>>({});
   const effectiveScrollPositionsRef = scrollPositionsRef ?? localScrollPositionsRef;
   const codeRef = useRef<HTMLDivElement | null>(null);
@@ -2562,8 +2608,8 @@ function CharacterSourceFilesViewer({
   if (files.length === 0) {
     return (
       <section className="cns-source-viewer character-source-viewer">
-        <h2>Character Files</h2>
-        <p className="debug-note">No text source files are loaded.</p>
+        <h2>{text('Character Files', 'キャラクターファイル')}</h2>
+        <p className="debug-note">{text('No text source files are loaded.', 'テキスト形式のソースファイルは読み込まれていません。')}</p>
       </section>
     );
   }
@@ -2571,8 +2617,8 @@ function CharacterSourceFilesViewer({
   if (!selectedFile) {
     return (
       <section className="cns-source-viewer character-source-viewer">
-        <h2>Character Files</h2>
-        <p className="debug-note">Source not found: {effectiveSelection?.path}:{effectiveSelection?.line}</p>
+        <h2>{text('Character Files', 'キャラクターファイル')}</h2>
+        <p className="debug-note">{text('Source not found', 'ソースが見つかりません')}: {effectiveSelection?.path}:{effectiveSelection?.line}</p>
       </section>
     );
   }
@@ -2580,7 +2626,7 @@ function CharacterSourceFilesViewer({
   const lines = selectedFile.text.split(/\r?\n/);
   return (
     <section className="cns-source-viewer character-source-viewer">
-      <h2>Character Files</h2>
+      <h2>{text('Character Files', 'キャラクターファイル')}</h2>
       <div className="character-source-layout">
         <div className="character-source-file-list" aria-label="loaded character files">
           {files.map((file) => (
@@ -2598,7 +2644,7 @@ function CharacterSourceFilesViewer({
         </div>
         <div className="character-source-detail">
           <div className="character-source-summary">
-            <h3>Summary</h3>
+            <h3>{text('Summary', '概要')}</h3>
             {sourceOutline.length === 0 ? (
               <div className="character-source-summary-empty">outline=-</div>
             ) : (
@@ -2729,6 +2775,7 @@ function AirAnimationPreview({
   air: AirDocument | null;
   sprites: ImageDataSpritePack | null;
 }) {
+  const { text } = useUiLanguage();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const spriteCanvasCacheRef = useRef<Map<string, HTMLCanvasElement>>(new Map());
   const [playing, setPlaying] = useState(true);
@@ -2756,9 +2803,9 @@ function AirAnimationPreview({
   return (
     <div className="air-preview">
       <div className="air-preview-header">
-        <strong>AIR Preview</strong>
+        <strong>{text('AIR Preview', 'AIRプレビュー')}</strong>
         <button type="button" onClick={() => setPlaying((value) => !value)}>
-          {playing ? 'Pause' : 'Play'}
+          {playing ? text('Pause', '一時停止') : text('Play', '再生')}
         </button>
       </div>
       <canvas ref={canvasRef} width={220} height={160} />
@@ -2766,11 +2813,11 @@ function AirAnimationPreview({
         {action ? (
           <>
             <span>Action {action.actionNo}</span>
-            <span>frame {action.elements.length === 0 ? '-' : frameIndex + 1}/{action.elements.length}</span>
-            <span>{element ? `sprite ${element.groupNo},${element.imageNo} time=${element.duration}` : 'sprite=-'}</span>
+            <span>{text('frame', 'フレーム')} {action.elements.length === 0 ? '-' : frameIndex + 1}/{action.elements.length}</span>
+            <span>{element ? `${text('sprite', 'スプライト')} ${element.groupNo},${element.imageNo} time=${element.duration}` : `${text('sprite', 'スプライト')}=-`}</span>
           </>
         ) : (
-          <span>Action not selected</span>
+          <span>{text('Action not selected', 'アクション未選択')}</span>
         )}
       </div>
     </div>
@@ -3053,10 +3100,12 @@ function IdeasPanel() {
 }
 
 function ManualPanel() {
+  const { text } = useUiLanguage();
   return (
     <section className="settings-section">
-      <h2>Manual</h2>
-      <p>System: R restarts the round after KO or TIME OVER.</p>
+      <h2>{text('Manual', '操作説明')}</h2>
+      <p>{text('The character intro can be skipped with any configured game key. A new match starts automatically after either player wins two rounds.', 'キャラクターのイントロは設定済みのゲームキーでスキップできます。どちらかが2ラウンド先取すると、自動で次の試合を開始します。')}</p>
+      <p>{text('System: R restarts the current round after KO or time over.', 'システム操作：KOまたは時間切れ後にRで現在のラウンドを再開始します。')}</p>
     </section>
   );
 }

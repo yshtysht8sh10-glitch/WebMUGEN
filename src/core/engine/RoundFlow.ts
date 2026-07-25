@@ -7,12 +7,14 @@ export const ROUNDS_TO_WIN = 2;
 export const ROUND_INITIALIZE_STATE = 5900;
 
 export function applyRoundFlowStateEntries(state: GameState, round: RoundState): GameState {
-  if (round.frameInPhase !== 0) return state;
-  if (round.phase === 'intro') return enterPlayers(state, [ROUND_INITIALIZE_STATE, ROUND_INITIALIZE_STATE]);
-  if (round.phase === 'fight') return finishRoundInitialization(state);
+  if (round.phase === 'intro' && round.frameInPhase === 0) return enterPlayers(state, [ROUND_INITIALIZE_STATE, ROUND_INITIALIZE_STATE]);
+  if (round.phase === 'fight' && round.frameInPhase === 0) return finishRoundInitialization(state);
+  if (round.resultStateEntered) return state;
   if ((round.phase === 'ko' || round.phase === 'timeOver') && round.winner !== null) {
     if (round.phase === 'ko') {
       if (round.winner === 'draw') return enterPlayers(state, [null, null]);
+      const winner = state.players[round.winner - 1];
+      if (winner.stateType === 'A') return state;
       return enterPlayers(state, round.winner === 1 ? [180, null] : [null, 180]);
     }
     if (round.winner === 'draw') return enterPlayers(state, [175, 175]);
@@ -33,9 +35,23 @@ export function isMatchOver(score: RoundScore): boolean {
 
 export function shouldStartNextRound(round: RoundState, score: RoundScore, state?: GameState): boolean {
   return (round.phase === 'ko' || round.phase === 'timeOver')
+    && round.resultStateEntered
     && round.frameInPhase >= ROUND_RESULT_FRAMES
     && !isMatchOver(score)
     && !state?.players.some((player) => player.assertSpecialFlags?.some((flag) => flag.toLowerCase() === 'roundnotover'));
+}
+
+export function shouldStartNextMatch(round: RoundState, score: RoundScore, state?: GameState): boolean {
+  return (round.phase === 'ko' || round.phase === 'timeOver')
+    && round.resultStateEntered
+    && round.frameInPhase >= ROUND_RESULT_FRAMES
+    && isMatchOver(score)
+    && !state?.players.some((player) => player.assertSpecialFlags?.some((flag) => flag.toLowerCase() === 'roundnotover'));
+}
+
+export function skipRoundIntro(state: GameState, round: RoundState): GameState {
+  if (round.phase !== 'intro' || round.frameInPhase === 0) return state;
+  return finishRoundInitialization(state);
 }
 
 function enterPlayers(state: GameState, stateNos: readonly [number | null, number | null]): GameState {

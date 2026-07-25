@@ -10,6 +10,7 @@ export type RoundState = {
   introPresentationFrame: number | null;
   winner: 1 | 2 | 'draw' | null;
   endReason?: 'ko' | 'double_ko' | 'time_over';
+  resultStateEntered: boolean;
 };
 
 export const DEFAULT_ROUND_TIMER = 99;
@@ -23,6 +24,7 @@ export function createInitialRoundState(timer: number = DEFAULT_ROUND_TIMER): Ro
     frameInPhase: 0,
     introPresentationFrame: null,
     winner: null,
+    resultStateEntered: false,
   };
 }
 
@@ -67,9 +69,11 @@ export function stepRoundState(round: RoundState, gameState: GameState, freezeTi
   }
 
   if (round.phase === 'ko' || round.phase === 'timeOver') {
+    const resultStateEntered = round.resultStateEntered || hasEnteredResultState(round, gameState);
     return {
       ...round,
-      frameInPhase: round.frameInPhase + 1,
+      resultStateEntered,
+      frameInPhase: resultStateEntered ? round.frameInPhase + 1 : round.frameInPhase,
     };
   }
 
@@ -81,6 +85,7 @@ export function stepRoundState(round: RoundState, gameState: GameState, freezeTi
       frameInPhase: 0,
       winner: koWinner,
       endReason: koWinner === 'draw' ? 'double_ko' : 'ko',
+      resultStateEntered: false,
     };
   }
 
@@ -96,6 +101,7 @@ export function stepRoundState(round: RoundState, gameState: GameState, freezeTi
       frameInPhase: 0,
       winner: getTimeOverWinner(gameState),
       endReason: 'time_over',
+      resultStateEntered: false,
     };
   }
 
@@ -104,6 +110,22 @@ export function stepRoundState(round: RoundState, gameState: GameState, freezeTi
     timer: nextTimer,
     frameInPhase: nextFrameInPhase,
   };
+}
+
+function hasEnteredResultState(round: RoundState, gameState: GameState): boolean {
+  const [p1, p2] = gameState.players;
+  if (round.phase === 'ko') {
+    if (round.winner === 'draw') return p1.stateNo === 5150 && p2.stateNo === 5150;
+    const winner = round.winner === 1 ? p1 : p2;
+    return winner.stateNo >= 180 && winner.stateNo <= 189;
+  }
+  if (round.phase === 'timeOver') {
+    if (round.winner === 'draw') return [p1, p2].every((player) => player.stateNo >= 175 && player.stateNo <= 179);
+    const winner = round.winner === 1 ? p1 : p2;
+    const loser = round.winner === 1 ? p2 : p1;
+    return winner.stateNo >= 180 && winner.stateNo <= 189 && loser.stateNo >= 170 && loser.stateNo <= 179;
+  }
+  return false;
 }
 
 function getKoWinner(gameState: GameState): 1 | 2 | 'draw' | null {
