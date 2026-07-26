@@ -16,9 +16,14 @@ export type RoundRuntimeState = {
   hitFeedbackState: HitFeedbackState;
 };
 
-export function restartRound(currentRoundNo: number, timer?: number, powerMax: number = DEFAULT_MAX_POWER): RoundRuntimeState {
+export function restartRound(
+  currentRoundNo: number,
+  timer?: number,
+  powerMax: number = DEFAULT_MAX_POWER,
+  playerStartX?: readonly [number, number],
+): RoundRuntimeState {
   return {
-    gameState: createInitialGameState(powerMax),
+    gameState: createInitialGameState(powerMax, {}, playerStartX),
     roundState: {
       ...createInitialRoundState(timer),
       roundNo: currentRoundNo + 1,

@@ -79,7 +79,7 @@ export class CanvasRenderer {
     const hideBars = globalFlags.has('nobardisplay');
     if (!hideBars) this.drawLifeBars(ctx, state);
     const powerDiagnostics = hideBars ? [] : this.drawPowerBars(ctx, state, diagnosticsEnabled);
-    if (roundState && !hideBars) this.roundStateRenderer.render(ctx, roundState, roundScore);
+    if (roundState && !hideBars) this.roundStateRenderer.render(ctx, roundState, roundScore, this.canvas.width);
     this.drawProjectiles(ctx, state.projectiles, diagnosticsEnabled);
     const explodResolution = resolveExplodRenderFrames(state, this.defaultAssets(), this.ownerAssets, this.fightFxAssets, 0, 0, diagnosticsEnabled);
     const renderDiagnostics = [
@@ -193,15 +193,16 @@ export class CanvasRenderer {
 
   private drawLifeBars(ctx: CanvasRenderingContext2D, state: GameState): void {
     const [p1, p2] = state.players;
+    const offsetX = (this.canvas.width - 640) / 2;
     ctx.fillStyle = '#111827';
-    ctx.fillRect(20, 18, 260, 16);
-    ctx.fillRect(360, 18, 260, 16);
+    ctx.fillRect(20 + offsetX, 18, 260, 16);
+    ctx.fillRect(360 + offsetX, 18, 260, 16);
     ctx.fillStyle = '#22c55e';
-    ctx.fillRect(20, 18, 260 * (p1.life / 1000), 16);
-    ctx.fillRect(620 - 260 * (p2.life / 1000), 18, 260 * (p2.life / 1000), 16);
+    ctx.fillRect(20 + offsetX, 18, 260 * (p1.life / 1000), 16);
+    ctx.fillRect(620 + offsetX - 260 * (p2.life / 1000), 18, 260 * (p2.life / 1000), 16);
     ctx.strokeStyle = '#fff';
-    ctx.strokeRect(20, 18, 260, 16);
-    ctx.strokeRect(360, 18, 260, 16);
+    ctx.strokeRect(20 + offsetX, 18, 260, 16);
+    ctx.strokeRect(360 + offsetX, 18, 260, 16);
   }
 
   private drawProjectiles(ctx: CanvasRenderingContext2D, projectiles: ProjectileState[], diagnosticsEnabled: boolean): void {
@@ -365,20 +366,21 @@ export class CanvasRenderer {
     const [p1, p2] = state.players;
     const p1Ratio = getPlayerPowerRatio(p1);
     const p2Ratio = getPlayerPowerRatio(p2);
+    const offsetX = (this.canvas.width - 640) / 2;
     ctx.fillStyle = '#111827';
-    ctx.fillRect(20, 342, 260, 8);
-    ctx.fillRect(360, 342, 260, 8);
+    ctx.fillRect(20 + offsetX, 342, 260, 8);
+    ctx.fillRect(360 + offsetX, 342, 260, 8);
     ctx.fillStyle = '#38bdf8';
-    ctx.fillRect(20, 342, 260 * p1Ratio, 8);
-    ctx.fillRect(620 - 260 * p2Ratio, 342, 260 * p2Ratio, 8);
+    ctx.fillRect(20 + offsetX, 342, 260 * p1Ratio, 8);
+    ctx.fillRect(620 + offsetX - 260 * p2Ratio, 342, 260 * p2Ratio, 8);
     ctx.strokeStyle = '#fff';
-    ctx.strokeRect(20, 342, 260, 8);
-    ctx.strokeRect(360, 342, 260, 8);
+    ctx.strokeRect(20 + offsetX, 342, 260, 8);
+    ctx.strokeRect(360 + offsetX, 342, 260, 8);
 
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 15px sans-serif';
-    if (p1.infinitePower) ctx.fillText('∞', 284, 350);
-    if (p2.infinitePower) ctx.fillText('∞', 344, 350);
+    if (p1.infinitePower) ctx.fillText('∞', 284 + offsetX, 350);
+    if (p2.infinitePower) ctx.fillText('∞', 344 + offsetX, 350);
 
     const p1Power = p1.power ?? 0;
     const p2Power = p2.power ?? 0;

@@ -22,11 +22,11 @@ describe('RoundStateRenderer', () => {
   });
 
   it('renders score HUD', () => {
-    const calls: string[] = [];
+    const calls: Array<string | [number, number, number, number]> = [];
     const ctx = {
       save: () => calls.push('save'),
       restore: () => calls.push('restore'),
-      fillRect: () => calls.push('fillRect'),
+      fillRect: (x: number, y: number, width: number, height: number) => calls.push([x, y, width, height]),
       fillText: (text: string) => calls.push(text),
       set fillStyle(_value: string) {},
       set font(_value: string) {},
@@ -36,10 +36,12 @@ describe('RoundStateRenderer', () => {
       ...createInitialRoundScore(),
       p1Wins: 2,
       p2Wins: 1,
-    });
+    }, 960);
 
     expect(calls).toContain('P1 WINS 2');
     expect(calls).toContain('P2 WINS 1');
+    expect(calls).toContainEqual([180, 38, 120, 20]);
+    expect(calls).toContainEqual([660, 38, 120, 20]);
   });
 
   it('renders FIGHT during late intro', () => {

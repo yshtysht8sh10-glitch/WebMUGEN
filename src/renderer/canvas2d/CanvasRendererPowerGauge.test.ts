@@ -42,4 +42,20 @@ describe('Issue #52 Canvas power gauge', () => {
     expect(fillText).toHaveBeenCalledWith('∞', 344, 350);
     expect(diagnostics).toContain('raw.power_hud p1=9000/9000 width=260 p2=9000/9000 width=260 infinite=both');
   });
+
+  it('centers both gauges symmetrically in the 960px app canvas', () => {
+    const fillRect = vi.fn();
+    const context = {
+      clearRect: vi.fn(), save: vi.fn(), restore: vi.fn(), translate: vi.fn(), fillRect, strokeRect: vi.fn(),
+      beginPath: vi.fn(), arc: vi.fn(), ellipse: vi.fn(), fill: vi.fn(), fillText: vi.fn(), scale: vi.fn(), drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D;
+    const canvas = { width: 960, height: 540, getContext: () => context } as unknown as HTMLCanvasElement;
+
+    new CanvasRenderer(canvas).render(createInitialGameState());
+
+    expect(fillRect).toHaveBeenCalledWith(180, 18, 260, 16);
+    expect(fillRect).toHaveBeenCalledWith(520, 18, 260, 16);
+    expect(fillRect).toHaveBeenCalledWith(180, 342, 260, 8);
+    expect(fillRect).toHaveBeenCalledWith(520, 342, 260, 8);
+  });
 });

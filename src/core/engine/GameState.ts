@@ -12,10 +12,14 @@ export type PlayerMetadata = {
 export function createInitialGameState(
   powerMax: number = DEFAULT_MAX_POWER,
   metadata: PlayerMetadata = {},
+  playerStartX: readonly [number, number] = [220, 420],
 ): GameState {
   return {
     frame: 0,
-    players: [createPlayer(1, 220, 285, 1, powerMax, metadata), createPlayer(2, 420, 285, -1, powerMax, metadata)],
+    players: [
+      createPlayer(1, playerStartX[0], 285, 1, powerMax, metadata),
+      createPlayer(2, playerStartX[1], 285, -1, powerMax, metadata),
+    ],
     projectiles: [],
     hitEvents: [],
     explods: createInitialExplodRuntimeState(),

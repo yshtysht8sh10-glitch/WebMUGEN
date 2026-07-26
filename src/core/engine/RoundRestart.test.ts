@@ -33,4 +33,10 @@ describe('RoundRestart', () => {
       [0, 9000],
     ]);
   });
+
+  it('preserves app-specific symmetric start positions across rounds', () => {
+    const restarted = restartRound(1, undefined, undefined, [380, 580]);
+
+    expect(restarted.gameState.players.map((player) => player.x)).toEqual([380, 580]);
+  });
 });
