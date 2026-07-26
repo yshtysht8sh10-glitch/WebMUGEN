@@ -4564,7 +4564,7 @@ pausemovetime = 9999999
 
 [State 3430, PlaySnd];•ÇŒƒ“Ë
 type = PlaySnd
-trigger1 = animelem = 3
+trigger1 = animelem = 3 && time < 10
 value = s252, 0
 ;-------------
 
