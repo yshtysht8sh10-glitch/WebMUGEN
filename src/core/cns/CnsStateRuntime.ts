@@ -494,7 +494,7 @@ function executeStateControllers(
   const debugLines: string[] = [];
   const targetOperations: TargetOperation[] = [];
 
-  for (const controller of stateDef.controllers) {
+  for (const [controllerIndex, controller] of stateDef.controllers.entries()) {
     if (controllerFilter && !controllerFilter(controller)) continue;
     const type = controller.type.toLowerCase();
     const triggerPlayer = negativeStateEntry && type !== 'changestate' && next.stateNo !== negativeStateEntry.stateNo
@@ -514,6 +514,11 @@ function executeStateControllers(
       pushDebug(debugLines, executedControllers, `pipe before S${stateDef.stateNo} ${controller.type} v=${num(controller, 'value') ?? '?'} state=${next.stateNo} run=${run ? 1 : 0}`);
     }
     if (!run) continue;
+
+    const persistenceKey = controllerPersistenceKey(stateDef, controller, controllerIndex);
+    if (readControllerPersistence(controller) === 0 && (next.controllerPersistence?.[persistenceKey] ?? 0) > 0) {
+      continue;
+    }
 
     const hitStunBlock = getHitStunControllerBlock(next, stateDef, controller, input, commands, opponent);
     if (hitStunBlock) {
@@ -538,6 +543,15 @@ function executeStateControllers(
     const beforeStateNo = next.stateNo;
     const result = executeController(next, opponent, controller, cns, input, commands);
     next = result.player;
+    if (result.executed && readControllerPersistence(controller) === 0) {
+      next = {
+        ...next,
+        controllerPersistence: {
+          ...(next.controllerPersistence ?? {}),
+          [persistenceKey]: 1,
+        },
+      };
+    }
     if (result.targetOperation) targetOperations.push(result.targetOperation);
     next = forceHitStunControl(next, `controller:${stateDef.stateNo}:${controller.type}:${controller.sourceLine ?? '-'}`, input.hitDiagnostics !== false);
     if (debugEnabled && debugLine) {
@@ -666,6 +680,7 @@ function enterState(
   const animNo = stateDef.initialAnim ?? expressionAnimNo ?? inferredAnimNo;
   const startsExplicitAnimation = stateDef.initialAnim !== undefined || expressionAnimNo !== null;
   const powered = player as ExtendedPlayerState;
+  const controllerPersistence = resetControllerPersistenceForState(player.controllerPersistence, stateNo);
   const powerAdded = addPlayerPower(player, stateDef.powerAdd ?? 0);
   const preserveHitDef = stateDef.hitDefPersist === true;
   const preservedMoveContact = preserveMoveContact(player, stateDef.moveHitPersist === true, stateDef.hitCountPersist === true);
@@ -684,6 +699,7 @@ function enterState(
     stateNo,
     stateHeaderAppliedStateNo: stateNo,
     stateTime: 0,
+    controllerPersistence,
     animNo,
     animTime: startsExplicitAnimation || player.animNo !== animNo ? 0 : player.animTime,
     vx: stateDef.velocitySet ? stateDef.velocitySet.x * player.facing : player.vx,
@@ -705,6 +721,31 @@ function enterState(
   return stateDef.powerAdd === undefined || input?.hitDiagnostics === false
     ? entered
     : appendPowerDiagnostic(entered, `raw.power entity=p${player.id} source=statedef state=${stateNo} before=${player.power} delta=${stateDef.powerAdd} after=${entered.power} max=${entered.powerMax}`);
+}
+
+function readControllerPersistence(controller: CnsStateController): number {
+  const value = controller.params.persistent;
+  if (value === undefined || Array.isArray(value)) return 1;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) ? parsed : 1;
+}
+
+function controllerPersistenceKey(
+  stateDef: CnsStateDefinition,
+  controller: CnsStateController,
+  controllerIndex: number,
+): string {
+  return `${stateDef.stateNo}:${controller.sourceFile ?? ''}:${controller.sourceLine ?? controllerIndex}:${controllerIndex}`;
+}
+
+function resetControllerPersistenceForState(
+  persistence: PlayerState['controllerPersistence'],
+  stateNo: number,
+): PlayerState['controllerPersistence'] {
+  if (!persistence) return undefined;
+  const prefix = `${stateNo}:`;
+  const retained = Object.fromEntries(Object.entries(persistence).filter(([key]) => !key.startsWith(prefix)));
+  return Object.keys(retained).length > 0 ? retained : undefined;
 }
 
 function faceToward(player: PlayerState, opponent: PlayerState): PlayerState['facing'] {

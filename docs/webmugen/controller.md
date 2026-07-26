@@ -1,6 +1,6 @@
 # State Controller Executor
 
-Updated: 2026-07-09
+Updated: 2026-07-26
 
 This document describes how State Controllers are executed. For per-controller status, see `state-controller-compatibility-notes.md` and the compatibility matrix.
 
@@ -36,6 +36,16 @@ The runtime trace should distinguish:
 - controller trigger passed;
 - controller executed;
 - controller changed state/velocity/animation/etc.
+
+## Common controller parameters
+
+`persistent = 0` allows a Controller to execute only once during one stay in its StateDef, even if
+its Trigger remains true on later ticks. The execution latch is cleared when that StateDef is entered
+again. This is required by the bundled T-H-M-A juggle display: its `VarAdd` must add each attack's
+configured cost once instead of adding it on every frame while the target remains in `HitFall`.
+
+Omitted `persistent` retains the default value 1 and executes whenever the Trigger passes.
+The `persistent = N` cadence for values greater than 1 remains Partial.
 
 ## Controller categories
 

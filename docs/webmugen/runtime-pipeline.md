@@ -1,6 +1,6 @@
 # Runtime Pipeline
 
-Updated: 2026-07-06
+Updated: 2026-07-26
 
 This document describes the WebMUGEN frame pipeline. It is the first document to read when a character does not move, does not enter a state, or visually appears wrong even though the input is recognized.
 
@@ -144,6 +144,12 @@ record executed controller and debug trace
 ```
 
 A controller can be present and still not execute. The Debug Overlay should make the difference clear.
+
+After its Trigger passes, a Controller also passes the common persistency gate. `persistent = 0`
+records the first successful execution and suppresses later executions until that positive StateDef
+is entered again. This prevents sustained Triggers from repeatedly applying one-shot variable
+changes such as T-H-M-A's displayed juggle cost. Omitted/default 1 remains unrestricted;
+the `persistent = N` cadence for values greater than 1 remains Partial.
 
 ## State entry flow
 
