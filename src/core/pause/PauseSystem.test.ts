@@ -3,6 +3,7 @@ import { createInitialGameState } from '../engine/GameState';
 import { spawnHelper } from '../helper/HelperSystem';
 import {
   canPlayerMoveDuringPause,
+  canEntityMoveDuringPause,
   canHelperMoveDuringPause,
   createInitialPauseState,
   isGamePaused,
@@ -23,6 +24,20 @@ describe('Phase57 PauseSystem', () => {
 
     const twice = stepPauseState(once);
     expect(isGamePaused(twice)).toBe(false);
+  });
+
+  it('counts the activation frame in time and lets only the owner use equal movetime', () => {
+    let pause = startPause(createInitialPauseState(), 12, 12, 1);
+    let ownerActiveFrames = 0;
+    let opponentActiveFrames = 0;
+    for (let frame = 0; frame < 12; frame += 1) {
+      if (canEntityMoveDuringPause(pause, 1)) ownerActiveFrames += 1;
+      if (canEntityMoveDuringPause(pause, 2)) opponentActiveFrames += 1;
+      pause = stepPauseState(pause);
+    }
+    expect(ownerActiveFrames).toBe(12);
+    expect(opponentActiveFrames).toBe(0);
+    expect(isGamePaused(pause)).toBe(false);
   });
 
   it('starts super pause with darken and movetime', () => {

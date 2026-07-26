@@ -9,6 +9,7 @@ import {
   ROUND_RESULT_FRAMES,
   shouldStartNextRound,
   shouldStartNextMatch,
+  requestRoundResultSkip,
   skipRoundIntro,
   winMugenRoundState,
 } from './RoundFlow';
@@ -56,13 +57,15 @@ describe('Issue #93 WinMUGEN Round Flow coordinator', () => {
     expect(draw.players.map((player) => player.stateNo)).toEqual([175, 175]);
   });
 
-  it('waits for an airborne KO winner to land before entering the victory state', () => {
+  it('locks KO winner control and waits for State 0 before entering the victory state', () => {
     const initial = createInitialGameState();
     const round = { ...createInitialRoundState(), phase: 'ko' as const, winner: 1 as const, endReason: 'ko' as const };
-    const airborne = { ...initial, players: [{ ...initial.players[0], stateType: 'A' as const, y: -40 }, { ...initial.players[1], life: 0, stateNo: 5150 }] as typeof initial.players };
-    expect(applyRoundFlowStateEntries(airborne, round).players[0].stateNo).toBe(0);
-    const landed = { ...airborne, players: [{ ...airborne.players[0], stateType: 'S' as const, y: 0 }, airborne.players[1]] as typeof initial.players };
-    expect(applyRoundFlowStateEntries(landed, round).players[0].stateNo).toBe(180);
+    const airborne = { ...initial, players: [{ ...initial.players[0], stateNo: 50, stateType: 'A' as const, y: -40, ctrl: true }, { ...initial.players[1], life: 0, stateNo: 5150 }] as typeof initial.players };
+    expect(applyRoundFlowStateEntries(airborne, round).players[0]).toMatchObject({ stateNo: 50, ctrl: false });
+    const landing = { ...airborne, players: [{ ...airborne.players[0], stateNo: 52, stateType: 'S' as const, y: 0, ctrl: true }, airborne.players[1]] as typeof initial.players };
+    expect(applyRoundFlowStateEntries(landing, round).players[0]).toMatchObject({ stateNo: 52, ctrl: false });
+    const neutral = { ...landing, players: [{ ...landing.players[0], stateNo: 0 }, landing.players[1]] as typeof initial.players };
+    expect(applyRoundFlowStateEntries(neutral, round).players[0]).toMatchObject({ stateNo: 180, ctrl: false });
   });
 
   it('skips character intro states after initialization while retaining presentation flow', () => {
@@ -104,5 +107,14 @@ describe('Issue #93 WinMUGEN Round Flow coordinator', () => {
     expect(shouldStartNextMatch(round, matchScore, state)).toBe(true);
     expect(winMugenRoundState({ ...round, frameInPhase: 0 })).toBe(3);
     expect(winMugenRoundState({ ...round, frameInPhase: 1 })).toBe(4);
+  });
+
+  it('lets a new result-phase input skip victory presentation and roundnotover', () => {
+    const round = { ...createInitialRoundState(), phase: 'ko' as const, winner: 1 as const, resultStateEntered: true, frameInPhase: 12 };
+    const skipped = requestRoundResultSkip(round);
+    const state = createInitialGameState();
+    const heldVictory = { ...state, players: [{ ...state.players[0], assertSpecialFlags: ['roundnotover'] }, state.players[1]] as typeof state.players };
+    expect(skipped).toMatchObject({ frameInPhase: ROUND_RESULT_FRAMES, resultSkipRequested: true });
+    expect(shouldStartNextRound(skipped, { ...createInitialRoundScore(), p1Wins: 1 }, heldVictory)).toBe(true);
   });
 });

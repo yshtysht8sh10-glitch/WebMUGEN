@@ -70,6 +70,9 @@ describe('WebMugenApp runtime history', () => {
       }),
     ));
     expect(english).toContain('aria-label="Switch display language to Japanese"');
+    const headerEnd = english.indexOf('</header>');
+    expect(english.indexOf('class="language-toggle"')).toBeLessThan(headerEnd);
+    expect(english.slice(english.indexOf('class="stage-viewport"'), english.indexOf('</section>', english.indexOf('class="stage-viewport"')))).not.toContain('language-toggle');
     expect(english).toContain('Game / Runtime');
     expect(english).not.toContain('ゲーム・実行状況');
     expect(japanese).toContain('クリックまたはキー入力で開始');

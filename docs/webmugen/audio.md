@@ -27,7 +27,7 @@ The Settings Audio panel exposes current status, an explicit unlock action, a ke
 
 The audio graph is `individual Sound gain -> channel StereoPanner when supported -> shared master GainNode -> AudioContext destination`. A 100% master leaves CNS `PlaySnd volume` ratios unchanged, 50% halves the final graph output, and 0% silences without stopping sources or deleting channel state. Mute drives the same master node to zero and restores the stored slider value when released. Master changes use a 15 ms linear ramp and therefore affect already-playing one-shot and loop voices without recreating them. Settings changed before AudioContext unlock are retained and applied when the lazy adapter is created.
 
-For WinMUGEN `PlaySnd`, an explicit legacy `volume = 0` is unity gain rather than silence. This is regression-tested through bundled T-H-M-A State 902: its Time=1 `S900,0` event resolves the real character sample at normalized volume 100. Positive percentage-style values remain accepted for existing WebMUGEN data; exact legacy negative attenuation curves remain Partial.
+For WinMUGEN `PlaySnd`, an explicit legacy `volume = 0` is unity gain rather than silence. This is regression-tested through bundled T-H-M-A State 902: HitOverride runs its Time=0 Pause/PosFreeze pass on contact, advances to Time=1, and resolves `S900,0` at normalized volume 100 on the first owner-active Pause frame. Positive percentage-style values remain accepted for existing WebMUGEN data; exact legacy negative attenuation curves remain Partial.
 
 ## Diagnostics
 

@@ -14,7 +14,7 @@ export function applyRoundFlowStateEntries(state: GameState, round: RoundState):
     if (round.phase === 'ko') {
       if (round.winner === 'draw') return enterPlayers(state, [null, null]);
       const winner = state.players[round.winner - 1];
-      if (winner.stateType === 'A') return state;
+      if (winner.stateNo !== 0) return lockWinnerControl(state, round.winner);
       return enterPlayers(state, round.winner === 1 ? [180, null] : [null, 180]);
     }
     if (round.winner === 'draw') return enterPlayers(state, [175, 175]);
@@ -38,7 +38,7 @@ export function shouldStartNextRound(round: RoundState, score: RoundScore, state
     && round.resultStateEntered
     && round.frameInPhase >= ROUND_RESULT_FRAMES
     && !isMatchOver(score)
-    && !state?.players.some((player) => player.assertSpecialFlags?.some((flag) => flag.toLowerCase() === 'roundnotover'));
+    && (round.resultSkipRequested || !hasRoundNoOver(state));
 }
 
 export function shouldStartNextMatch(round: RoundState, score: RoundScore, state?: GameState): boolean {
@@ -46,12 +46,30 @@ export function shouldStartNextMatch(round: RoundState, score: RoundScore, state
     && round.resultStateEntered
     && round.frameInPhase >= ROUND_RESULT_FRAMES
     && isMatchOver(score)
-    && !state?.players.some((player) => player.assertSpecialFlags?.some((flag) => flag.toLowerCase() === 'roundnotover'));
+    && (round.resultSkipRequested || !hasRoundNoOver(state));
+}
+
+export function requestRoundResultSkip(round: RoundState): RoundState {
+  if ((round.phase !== 'ko' && round.phase !== 'timeOver') || !round.resultStateEntered) return round;
+  return { ...round, frameInPhase: Math.max(round.frameInPhase, ROUND_RESULT_FRAMES), resultSkipRequested: true };
 }
 
 export function skipRoundIntro(state: GameState, round: RoundState): GameState {
   if (round.phase !== 'intro' || round.frameInPhase === 0) return state;
   return finishRoundInitialization(state);
+}
+
+function hasRoundNoOver(state?: GameState): boolean {
+  return state?.players.some((player) => player.assertSpecialFlags?.some((flag) => flag.toLowerCase() === 'roundnotover')) === true;
+}
+
+function lockWinnerControl(state: GameState, winnerId: 1 | 2): GameState {
+  const index = winnerId - 1;
+  if (!state.players[index].ctrl) return state;
+  return {
+    ...state,
+    players: state.players.map((player, playerIndex) => playerIndex === index ? { ...player, ctrl: false } : player) as GameState['players'],
+  };
 }
 
 function enterPlayers(state: GameState, stateNos: readonly [number | null, number | null]): GameState {

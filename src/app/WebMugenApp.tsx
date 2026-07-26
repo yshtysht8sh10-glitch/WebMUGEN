@@ -57,6 +57,7 @@ import {
 import {
   applyRoundFlowStateEntries,
   isMatchOver,
+  requestRoundResultSkip,
   shouldStartNextMatch,
   shouldStartNextRound,
   skipRoundIntro,
@@ -78,7 +79,8 @@ import { readCnsConst } from '../core/cns/CnsConstants';
 import { analyzeCnsCoverage } from '../core/cns/CnsCoverageDiagnostics';
 import type { CnsCoverageDiagnostics } from '../core/cns/CnsCoverageDiagnostics';
 import {
-  enterCnsState,
+  advanceExternalCnsStateEntryFrame,
+  enterCnsStateAndRunTimeZero,
   stepCnsStateRuntime,
   type CnsRuntimeTrace,
 } from '../core/cns/CnsStateRuntime';
@@ -185,6 +187,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
   const p1HitPauseCommandBufferRef = useRef<HitPauseCommandBuffer | null>(null);
   const p2HitPauseCommandBufferRef = useRef<HitPauseCommandBuffer | null>(null);
   const restartPressedRef = useRef(false);
+  const presentationSkipInputHeldRef = useRef(false);
   const inputRef = useRef<BrowserInput | null>(null);
   const inputConfigRef = useRef<InputConfig>(loadInputConfig());
   const runtimeSettingsRef = useRef<RuntimeSettings>(loadRuntimeSettings());
@@ -411,6 +414,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
         const input = inputRef.current;
         const config = inputConfigRef.current;
         const pressedKeys = input?.getPressedKeys(config) ?? new Set<string>();
+        const presentationSkipPressed = pressedKeys.size > 0 && !presentationSkipInputHeldRef.current;
         const inputSnapshot = createInputDebugSnapshot(pressedKeys);
         const p1Input = keysToP1Input(pressedKeys, config);
         const p2Input = keysToP2Input(pressedKeys, config);
@@ -475,7 +479,10 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           p2HitPauseCommandBufferRef.current?.clear();
           audioRuntimeRef.current?.stopAll();
         } else {
-          if (pressedKeys.size > 0) nextState = skipRoundIntro(nextState, nextRoundState);
+          if (presentationSkipPressed) {
+            nextState = skipRoundIntro(nextState, nextRoundState);
+            nextRoundState = requestRoundResultSkip(nextRoundState);
+          }
           nextState = applyRoundFlowStateEntries(nextState, nextRoundState);
           const fightActive = nextRoundState.phase === 'fight';
           const pauseAtFrameStart = nextState.pause ?? createInitialPauseState();
@@ -575,8 +582,15 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           nextReadableHistoryState = cnsResult.state;
           nextCnsTraces = cnsResult.traces;
 
-          const pauseDuringFrame = nextState.pause ?? createInitialPauseState();
-          const pausedThisFrame = isGamePaused(pauseDuringFrame);
+          const processedPauseEventCount = pauseEvents.length;
+          const processedSoundEventCount = soundEvents.length;
+          const processedExplodEventCount = explodRuntimeEvents.length;
+          const processedBgPalFxEventCount = bgPalFxEvents.length;
+          const processedAllPalFxEventCount = allPalFxEvents.length;
+          const processedEnvColorEventCount = envColorEvents.length;
+          const processedProjectileEventCount = projectileEvents.length;
+          let pauseDuringFrame = nextState.pause ?? createInitialPauseState();
+          let pausedThisFrame = isGamePaused(pauseDuringFrame);
           const beforePhysicsState = nextState;
           if (ENABLE_RUNTIME_FALLBACKS) {
             nextState = stepFallbackMotion(nextState);
@@ -596,10 +610,88 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
               character.air,
               aiLogEnabled && runtimeSettingsRef.current.hitDiagnostics,
               beforePhysicsState,
-              (player, opponent, stateNo) => enterCnsState(player, opponent, stateNo, character.cns, {
-                gameTime: nextState.frame,
-              }, player.id === 1 ? p1Commands : p2Commands),
+              (player, opponent, stateNo) => advanceExternalCnsStateEntryFrame(enterCnsStateAndRunTimeZero(
+                player,
+                opponent,
+                stateNo,
+                character.cns,
+                {
+                  gameTime: nextState.frame,
+                  getAnimationDuration: (animNo) => getMugenAnimEndTime(character.air, animNo),
+                  getAnimationElementNo: (animNo, animTime) => {
+                    const element = getCurrentAnimationElement(character.air, animNo, animTime);
+                    return element ? element.elementIndex + 1 : null;
+                  },
+                  getAnimationTriggerInfo: (animNo, animTime) => getAnimationTriggerInfo(character.air, animNo, animTime),
+                  hitDiagnostics: aiLogEnabled && runtimeSettingsRef.current.hitDiagnostics,
+                  onSoundPlay: (event) => soundEvents.push(event),
+                  onSoundStop: (event) => soundEvents.push(event),
+                  onSoundPan: (event) => soundEvents.push(event),
+                  onExplodCreate: (event) => explodRuntimeEvents.push(event),
+                  onExplodModify: (event) => explodRuntimeEvents.push(event),
+                  onExplodRemove: (event) => explodRuntimeEvents.push(event),
+                  onExplodBindTime: (event) => explodRuntimeEvents.push(event),
+                  onPause: (event) => pauseEvents.push(event),
+                  onEnvironmentShake: (event) => environmentShakeEvents.push(event),
+                  onBgPalFx: (event) => bgPalFxEvents.push(event),
+                  onAllPalFx: (event) => allPalFxEvents.push(event),
+                  onEnvColor: (event) => envColorEvents.push(event),
+                  onForceFeedback: (event) => { void playForceFeedback(event); },
+                  onProjectileCreate: (projectile) => projectileEvents.push({
+                    ...projectile,
+                    hitBox: getProjectileHitBox(character.air, projectile.animNo) ?? projectile.hitBox,
+                  }),
+                  pauseState: pauseDuringFrame,
+                  screenWidth: canvas.width,
+                  roundState: winMugenRoundState(nextRoundState),
+                  roundNo: nextRoundState.roundNo,
+                  matchOver: isMatchOver(nextScore),
+                  roundWinner: nextRoundState.winner,
+                  roundEndReason: nextRoundState.endReason,
+                  teamMode: 'single',
+                },
+                player.id === 1 ? p1Commands : p2Commands,
+              )),
             );
+            const deferredPauseEvents = pauseEvents.slice(processedPauseEventCount);
+            if (deferredPauseEvents.length > 0) {
+              pauseDuringFrame = applyPauseControllerEvents(pauseDuringFrame, deferredPauseEvents);
+              pausedThisFrame = isGamePaused(pauseDuringFrame);
+              nextState = {
+                ...nextState,
+                pause: pauseDuringFrame,
+                hitDiagnosticLines: [
+                  ...(nextState.hitDiagnosticLines ?? []),
+                  ...deferredPauseEvents.map((event) => `raw.global_pause event=start kind=${event.type} owner=p${event.ownerEntityId} time=${event.time} movetime=${event.moveTime} darken=${event.darken ? 1 : 0} soundPolicy=continues phase=post_collision`),
+                ],
+              };
+            }
+            const deferredBgPalFxEvents = bgPalFxEvents.slice(processedBgPalFxEventCount);
+            if (deferredBgPalFxEvents.length > 0) nextState = applyBgPalFxEvents(nextState, deferredBgPalFxEvents);
+            const deferredAllPalFxEvents = allPalFxEvents.slice(processedAllPalFxEventCount);
+            if (deferredAllPalFxEvents.length > 0) {
+              const event = deferredAllPalFxEvents[deferredAllPalFxEvents.length - 1];
+              nextState = applyBgPalFxEvents({
+                ...nextState,
+                players: nextState.players.map((player) => ({
+                  ...player,
+                  palFx: { ...event, remainingTime: event.duration, elapsedTime: 0 },
+                })) as GameState['players'],
+              }, [event]);
+            }
+            const deferredEnvColorEvents = envColorEvents.slice(processedEnvColorEventCount);
+            if (deferredEnvColorEvents.length > 0) {
+              const event = deferredEnvColorEvents[deferredEnvColorEvents.length - 1];
+              nextState = { ...nextState, envColor: { ...event, remainingTime: event.time } };
+            }
+            const deferredExplodEvents = explodRuntimeEvents.slice(processedExplodEventCount);
+            if (deferredExplodEvents.length > 0) nextState = applyExplodControllerEvents(nextState, deferredExplodEvents);
+            const deferredProjectileEvents = projectileEvents.slice(processedProjectileEventCount);
+            if (deferredProjectileEvents.length > 0) nextState = { ...nextState, projectiles: [...nextState.projectiles, ...deferredProjectileEvents] };
+            const deferredSoundEvents = soundEvents.slice(processedSoundEventCount);
+            if (deferredSoundEvents.length > 0) {
+              runtimeEventDiagnosticLines.push(...processSoundRuntimeEvents(deferredSoundEvents, character.sounds, null, audioRuntimeRef.current, aiLogEnabled));
+            }
             const projectileResult = resolveProjectileHits(
               nextState.players,
               stepProjectiles(nextState.projectiles).projectiles,
@@ -675,6 +767,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
         for (const event of environmentShakeEvents) nextFeedback = startEnvironmentShake(nextFeedback, event);
 
         restartPressedRef.current = inputSnapshot.system.restartRound;
+        presentationSkipInputHeldRef.current = pressedKeys.size > 0;
 
         const simulationFinishedAt = performance.now();
         const explodRenderDiagnosticLines = rendererRef.current?.render(nextState, nextFeedback, nextRoundState, nextScore, {
@@ -1005,8 +1098,22 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
     <UiLanguageProvider language={uiLanguage}>
     <div className="app-shell" lang={uiLanguage}>
       <header className="app-header">
-        <h1>WebMUGEN</h1>
-        <p>{uiLanguage === 'ja' ? 'キャラクターローダー統合版' : 'Character loader integration'}</p>
+        <div>
+          <h1>WebMUGEN</h1>
+          <p>{uiLanguage === 'ja' ? 'キャラクターローダー統合版' : 'Character loader integration'}</p>
+        </div>
+        <button
+          className="language-toggle"
+          type="button"
+          aria-label={uiLanguage === 'ja' ? '表示言語を英語に切り替え' : 'Switch display language to Japanese'}
+          onClick={() => {
+            const next = uiLanguage === 'ja' ? 'en' : 'ja';
+            setUiLanguage(next);
+            saveUiLanguage(next);
+          }}
+        >
+          {uiLanguage === 'ja' ? 'English' : '日本語'}
+        </button>
       </header>
 
       <AppPageTabs activePage={activePage} onChange={setActivePage} />
@@ -1017,18 +1124,6 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
       >
         <section className="stage-panel">
             <div className="stage-viewport">
-              <button
-                className="language-toggle"
-                type="button"
-                aria-label={uiLanguage === 'ja' ? '表示言語を英語に切り替え' : 'Switch display language to Japanese'}
-                onClick={() => {
-                  const next = uiLanguage === 'ja' ? 'en' : 'ja';
-                  setUiLanguage(next);
-                  saveUiLanguage(next);
-                }}
-              >
-                {uiLanguage === 'ja' ? 'English' : '日本語'}
-              </button>
               <canvas
                 ref={canvasRef}
                 width={960}

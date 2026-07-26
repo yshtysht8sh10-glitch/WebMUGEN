@@ -709,6 +709,43 @@ export function enterCnsState(
 
 const enterState = enterCnsState;
 
+export function enterCnsStateAndRunTimeZero(
+  player: PlayerState,
+  opponent: PlayerState,
+  stateNo: number,
+  cns: CnsDocument,
+  input: CnsRuntimeInput = {},
+  commands?: ReadonlySet<string>,
+): PlayerState {
+  const entered = enterCnsState(player, opponent, stateNo, cns, input, commands);
+  const stateDef = findState(cns, entered.stateNo);
+  if (!stateDef) return entered;
+  return executeStateControllers(
+    entered,
+    opponent,
+    stateDef,
+    cns,
+    input,
+    commands,
+    false,
+    false,
+    undefined,
+    input.gameTime ?? 0,
+  ).player;
+}
+
+export function advanceExternalCnsStateEntryFrame(player: PlayerState): PlayerState {
+  if (player.hitPause > 0) return player;
+  return {
+    ...player,
+    stateTime: player.stateTime + 1,
+    animTime: player.animTime + 1,
+    // Collision runs after the regular physics phase. Preserve the contact
+    // position and stored velocity, then make the next CNS pass observe Time 1.
+    positionFrozen: false,
+  };
+}
+
 function faceToward(player: PlayerState, opponent: PlayerState): PlayerState['facing'] {
   return player.x <= opponent.x ? 1 : -1;
 }

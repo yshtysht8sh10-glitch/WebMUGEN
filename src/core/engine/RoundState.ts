@@ -11,6 +11,7 @@ export type RoundState = {
   winner: 1 | 2 | 'draw' | null;
   endReason?: 'ko' | 'double_ko' | 'time_over';
   resultStateEntered: boolean;
+  resultSkipRequested: boolean;
 };
 
 export const DEFAULT_ROUND_TIMER = 99;
@@ -25,6 +26,7 @@ export function createInitialRoundState(timer: number = DEFAULT_ROUND_TIMER): Ro
     introPresentationFrame: null,
     winner: null,
     resultStateEntered: false,
+    resultSkipRequested: false,
   };
 }
 
@@ -86,6 +88,7 @@ export function stepRoundState(round: RoundState, gameState: GameState, freezeTi
       winner: koWinner,
       endReason: koWinner === 'draw' ? 'double_ko' : 'ko',
       resultStateEntered: false,
+      resultSkipRequested: false,
     };
   }
 
@@ -102,6 +105,7 @@ export function stepRoundState(round: RoundState, gameState: GameState, freezeTi
       winner: getTimeOverWinner(gameState),
       endReason: 'time_over',
       resultStateEntered: false,
+      resultSkipRequested: false,
     };
   }
 

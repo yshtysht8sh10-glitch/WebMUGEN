@@ -2,9 +2,9 @@ import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import { parseAirText } from '../../parser/air/AirParser';
 import { getMugenAnimEndTime } from '../animation/AnimationDuration';
-import { enterCnsState, stepCnsStateRuntime } from '../cns/CnsStateRuntime';
-import { stepCnsPhysicsMotion } from '../cns/CnsPhysicsStep';
+import { advanceExternalCnsStateEntryFrame, enterCnsStateAndRunTimeZero, stepCnsStateRuntime } from '../cns/CnsStateRuntime';
 import type { SoundPlayEvent } from '../audio/SoundEvent';
+import { applyPauseControllerEvents, createInitialPauseState, stepPauseState, type PauseControllerEvent } from '../pause/PauseSystem';
 import { createInitialGameState } from '../engine/GameState';
 import { resolveFallbackHits } from '../engine/FallbackHitResolver';
 import type { ActiveHitDef, GameState, PlayerState } from '../engine/types';
@@ -48,6 +48,7 @@ describe('Issue #92 T-H-M-A blocking regression', () => {
           stateType: 'S',
           moveType: 'I',
           ctrl: true,
+          vx: 3,
         };
         const attacker: PlayerState = {
           ...initial.players[attackerId - 1],
@@ -70,28 +71,43 @@ describe('Issue #92 T-H-M-A blocking regression', () => {
         expect(activated.players[defenderId - 1].hitOverrides?.[0]).toMatchObject({
           attr: 'SA,AA,AP', stateNo: 902, remaining: 8,
         });
+        const pauseEvents: PauseControllerEvent[] = [];
+        const contactSounds: SoundPlayEvent[] = [];
         const blocked = resolveFallbackHits(activated, collisionAir, true, undefined,
-          (player, opponent, stateNo) => enterCnsState(player, opponent, stateNo, assets.cns, { random: 998 }));
+          (player, opponent, stateNo) => advanceExternalCnsStateEntryFrame(enterCnsStateAndRunTimeZero(
+            player,
+            opponent,
+            stateNo,
+            assets.cns,
+            {
+              random: 998,
+              getAnimationDuration: (animNo) => getMugenAnimEndTime(assets.air, animNo),
+              onPause: (event) => pauseEvents.push(event),
+              onSoundPlay: (event) => contactSounds.push(event),
+            },
+          )));
         expect(blocked.players[defenderId - 1]).toMatchObject({
-          stateNo: 902, animNo: 908, animTime: 0, stateHeaderAppliedStateNo: 902, life: 1000,
+          stateNo: 902, animNo: 908, animTime: 1, stateTime: 1, stateHeaderAppliedStateNo: 902, life: 1000,
         });
-        const entered = stepCnsStateRuntime(blocked, assets.cns, {
+        expect(pauseEvents).toContainEqual(expect.objectContaining({
+          type: 'pause', ownerEntityId: defenderId, time: 12, moveTime: 12,
+        }));
+        expect(contactSounds).toEqual([]);
+        expect(blocked.players[defenderId - 1].x).toBe(defender.x);
+        expect(blocked.players[defenderId - 1].y).toBe(defender.y);
+        expect(blocked.players[defenderId - 1].vx).toBe(3);
+        const events: SoundPlayEvent[] = [];
+        const pause = applyPauseControllerEvents(createInitialPauseState(), pauseEvents);
+        const sounded = stepCnsStateRuntime(blocked, assets.cns, {
           p1Commands: new Set(),
           p2Commands: new Set(),
           random: 998,
           getAnimationDuration: (animNo) => getMugenAnimEndTime(assets.air, animNo),
           getCnsDocumentForPlayer: (id) => id === defenderId ? assets.cns : emptyCns,
-        }).state;
-        expect(entered.players[defenderId - 1]).toMatchObject({
-          stateNo: 902, animNo: 908, animTime: 0, stateHeaderAppliedStateNo: 902,
-        });
-        const events: SoundPlayEvent[] = [];
-        const advanced = stepCnsPhysicsMotion(entered, assets.cns);
-        stepCnsStateRuntime(advanced, assets.cns, {
-          p1Commands: new Set(), p2Commands: new Set(), random: 998,
-          getCnsDocumentForPlayer: (id) => id === defenderId ? assets.cns : emptyCns,
+          pauseState: stepPauseState(pause),
           onSoundPlay: (event) => events.push(event),
-        });
+        }).state;
+        expect(sounded.players[defenderId - 1]).toMatchObject({ stateNo: 902, stateTime: 1 });
         expect(events).toContainEqual(expect.objectContaining({
           ownerId: defenderId, scope: 'character', group: 900, index: 0, volume: 100,
         }));
