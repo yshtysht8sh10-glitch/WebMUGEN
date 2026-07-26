@@ -1,6 +1,6 @@
 # Runtime Pipeline
 
-Updated: 2026-07-06
+Updated: 2026-07-26
 
 This document describes the WebMUGEN frame pipeline. It is the first document to read when a character does not move, does not enter a state, or visually appears wrong even though the input is recognized.
 
@@ -147,6 +147,12 @@ record executed controller and debug trace
 
 A controller can be present and still not execute. The Debug Overlay should make the difference clear.
 
+After its Trigger passes, a Controller also passes the common persistency gate. `persistent = 0`
+records the first successful execution and suppresses later executions until that positive StateDef
+is entered again. This prevents sustained Triggers from repeatedly applying one-shot variable
+changes such as T-H-M-A's displayed juggle cost. Omitted/default 1 remains unrestricted;
+the `persistent = N` cadence for values greater than 1 remains Partial.
+
 ## State entry flow
 
 State entry should happen through centralized logic such as `enterState`.
@@ -245,12 +251,14 @@ Debug shows state=20, vel x != 0, anim=20
 
 A state transition alone is not enough for visible walking. If the overlay says `state=20` but `vel=(0,0)` and `anim=0`, the route entered the state but movement/animation logic did not run.
 
-At the start of each CNS tick, the current StateDef's baseline header values are applied before
-State -3/-2/-1 are scanned. A positive State controller that enters a new State does not restart the
-negative-State scan in the same tick. On the next tick, the entered StateDef's `ctrl` is therefore
-visible to State -1 before command routing; a preceding `ChangeState ctrl = 1` cannot leak past an
-explicit target StateDef `ctrl = 0`. State -2 `CtrlSet` still runs after that baseline and remains
-visible to State -1 in the same tick.
+StateDef `ctrl` is applied on State entry. A `ChangeState ctrl` value is applied to the transition
+input first, then an explicit destination StateDef `ctrl` wins during the same entry. If the
+destination omits `ctrl`, the ChangeState value is inherited. This prevents T-H-M-A State 6000
+`ChangeState ctrl = 1` from leaking past State 60001 `ctrl = 0` into the following State -1 scan.
+Later `CtrlSet` mutations persist while that State remains active, so a positive-State `CtrlSet` can
+enable a State -1 command route on the following tick. A positive State controller that enters a new
+State does not restart the negative-State scan in the same tick. State -2 `CtrlSet` runs before
+State -1 and remains visible to State -1 in that same tick.
 
 ## Debugging checklist
 

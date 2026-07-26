@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { parseCnsText } from '../../parser/cns/CnsParser';
 import { parseSndV1 } from '../../parser/snd/SndParser';
 import { findSndSample } from '../../parser/snd/SndTypes';
+import { getAnimationTriggerInfo } from '../animation/AnimationPlayer';
+import { stepCnsPhysicsMotion } from '../cns/CnsPhysicsStep';
 import { stepCnsStateRuntime } from '../cns/CnsStateRuntime';
 import { createInitialGameState } from '../engine/GameState';
 import type { SoundPlayEvent } from '../audio/SoundEvent';
@@ -45,6 +47,39 @@ describe('real character PlaySnd integration', () => {
     const event = events.find((item) => item.ownerId === 1 && item.group === 40 && item.index === 0);
     expect(event).toMatchObject({ scope: 'character', group: 40, index: 0 });
     expect(findSndSample(assets.sounds!, event!.group, event!.index)?.format).toBe('wave');
+  });
+
+  it('fires the bundled T-H-M-A State 3430 wall-impact sound only once before exit', async () => {
+    const defPath = 'public/chars/T-H-M-A/T-H-M-A/T-H-M-A.def';
+    const assets = await loadCharacterFromDef(defPath, createThmaFileSystemFetcher(defPath));
+    const initial = createInitialGameState();
+    const events: SoundPlayEvent[] = [];
+    let state = {
+      ...initial,
+      players: [
+        {
+          ...initial.players[0],
+          stateNo: 3430,
+          stateTime: 0,
+          animNo: 3430,
+          animTime: 0,
+          moveType: 'A' as const,
+          physics: 'N' as const,
+          ctrl: false,
+        },
+        initial.players[1],
+      ] as typeof initial.players,
+    };
+
+    for (let frame = 0; frame < 30; frame += 1) {
+      const runtime = stepCnsStateRuntime(state, assets.cns, {
+        onSoundPlay: (event) => events.push(event),
+        getAnimationTriggerInfo: (animNo, animTime) => getAnimationTriggerInfo(assets.air, animNo, animTime),
+      });
+      state = stepCnsPhysicsMotion(runtime.state, assets.cns);
+    }
+
+    expect(events.filter((event) => event.ownerId === 1 && event.group === 252 && event.index === 0)).toHaveLength(1);
   });
 });
 

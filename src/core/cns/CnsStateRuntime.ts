@@ -494,7 +494,7 @@ function executeStateControllers(
   const debugLines: string[] = [];
   const targetOperations: TargetOperation[] = [];
 
-  for (const controller of stateDef.controllers) {
+  for (const [controllerIndex, controller] of stateDef.controllers.entries()) {
     if (controllerFilter && !controllerFilter(controller)) continue;
     const type = controller.type.toLowerCase();
     const triggerPlayer = negativeStateEntry && type !== 'changestate' && next.stateNo !== negativeStateEntry.stateNo
@@ -514,6 +514,11 @@ function executeStateControllers(
       pushDebug(debugLines, executedControllers, `pipe before S${stateDef.stateNo} ${controller.type} v=${num(controller, 'value') ?? '?'} state=${next.stateNo} run=${run ? 1 : 0}`);
     }
     if (!run) continue;
+
+    const persistenceKey = controllerPersistenceKey(stateDef, controller, controllerIndex);
+    if (readControllerPersistence(controller) === 0 && (next.controllerPersistence?.[persistenceKey] ?? 0) > 0) {
+      continue;
+    }
 
     const hitStunBlock = getHitStunControllerBlock(next, stateDef, controller, input, commands, opponent);
     if (hitStunBlock) {
@@ -538,6 +543,15 @@ function executeStateControllers(
     const beforeStateNo = next.stateNo;
     const result = executeController(next, opponent, controller, cns, input, commands);
     next = result.player;
+    if (result.executed && readControllerPersistence(controller) === 0) {
+      next = {
+        ...next,
+        controllerPersistence: {
+          ...(next.controllerPersistence ?? {}),
+          [persistenceKey]: 1,
+        },
+      };
+    }
     if (result.targetOperation) targetOperations.push(result.targetOperation);
     next = forceHitStunControl(next, `controller:${stateDef.stateNo}:${controller.type}:${controller.sourceLine ?? '-'}`, input.hitDiagnostics !== false);
     if (debugEnabled && debugLine) {
@@ -666,6 +680,7 @@ export function enterCnsState(
   const animNo = stateDef.initialAnim ?? expressionAnimNo ?? inferredAnimNo;
   const startsExplicitAnimation = stateDef.initialAnim !== undefined || expressionAnimNo !== null;
   const powered = player as ExtendedPlayerState;
+  const controllerPersistence = resetControllerPersistenceForState(player.controllerPersistence, stateNo);
   const powerAdded = addPlayerPower(player, stateDef.powerAdd ?? 0);
   const preserveHitDef = stateDef.hitDefPersist === true;
   const preservedMoveContact = preserveMoveContact(player, stateDef.moveHitPersist === true, stateDef.hitCountPersist === true);
@@ -684,6 +699,7 @@ export function enterCnsState(
     stateNo,
     stateHeaderAppliedStateNo: stateNo,
     stateTime: 0,
+    controllerPersistence,
     animNo,
     animTime: startsExplicitAnimation || player.animNo !== animNo ? 0 : player.animTime,
     vx: stateDef.velocitySet ? stateDef.velocitySet.x * player.facing : player.vx,
@@ -746,6 +762,31 @@ export function advanceExternalCnsStateEntryFrame(player: PlayerState): PlayerSt
   };
 }
 
+function readControllerPersistence(controller: CnsStateController): number {
+  const value = controller.params.persistent;
+  if (value === undefined || Array.isArray(value)) return 1;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) ? parsed : 1;
+}
+
+function controllerPersistenceKey(
+  stateDef: CnsStateDefinition,
+  controller: CnsStateController,
+  controllerIndex: number,
+): string {
+  return `${stateDef.stateNo}:${controller.sourceFile ?? ''}:${controller.sourceLine ?? controllerIndex}:${controllerIndex}`;
+}
+
+function resetControllerPersistenceForState(
+  persistence: PlayerState['controllerPersistence'],
+  stateNo: number,
+): PlayerState['controllerPersistence'] {
+  if (!persistence) return undefined;
+  const prefix = `${stateNo}:`;
+  const retained = Object.fromEntries(Object.entries(persistence).filter(([key]) => !key.startsWith(prefix)));
+  return Object.keys(retained).length > 0 ? retained : undefined;
+}
+
 function faceToward(player: PlayerState, opponent: PlayerState): PlayerState['facing'] {
   return player.x <= opponent.x ? 1 : -1;
 }
@@ -781,7 +822,7 @@ function applyStateHeader(
     stateType: toStateType(stateDef.stateType ?? null) ?? player.stateType,
     moveType: toMoveType(stateDef.moveType ?? null) ?? player.moveType,
     physics: toPhysics(stateDef.physics ?? null) ?? player.physics,
-    ctrl: stateDef.ctrl ?? player.ctrl,
+    ctrl: applyEntryFields ? stateDef.ctrl ?? player.ctrl : player.ctrl,
     juggle: stateDef.juggle ?? player.juggle,
     animNo,
     animTime: player.animTime,
@@ -1231,9 +1272,9 @@ function executeController(
   if (type === 'changestate') {
     const value = num(controller, 'value', player, input, commands, opponent);
     if (value === null) return withPlayer(player, false, 'ChangeState');
-    const entered = enterState(player, opponent, value, cns, input, commands);
     const ctrl = num(controller, 'ctrl', player, input, commands, opponent);
-    return withPlayer(ctrl === null ? entered : { ...entered, ctrl: ctrl !== 0 }, true, 'ChangeState');
+    const transitionSource = ctrl === null ? player : { ...player, ctrl: ctrl !== 0 };
+    return withPlayer(enterState(transitionSource, opponent, value, cns, input, commands), true, 'ChangeState');
   }
 
   const noOpName = RECOGNIZED_NO_OP_CONTROLLERS.get(type);
@@ -2555,7 +2596,7 @@ function evaluateHitDefSnapshot(
           },
         },
     hitOnce: boolValue('hitonce') ?? normalizedAttr?.attackTypes.some((value) => value.endsWith('T')) ?? false,
-    pauseTime: { attacker: Math.max(0, pause[0] ?? 4), defender: Math.max(0, pause[1] ?? 8) },
+    pauseTime: { attacker: Math.max(0, pause[0] ?? 0), defender: Math.max(0, pause[1] ?? 0) },
     groundVelocity: { x: groundVelocity[0] ?? -3.5, y: groundVelocity[1] ?? 0 },
     airVelocity: { x: airVelocity[0] ?? -2.5, y: airVelocity[1] ?? -5.5 },
     downVelocity: { x: downVelocity[0] ?? airVelocity[0] ?? -2.5, y: downVelocity[1] ?? airVelocity[1] ?? -5.5 },

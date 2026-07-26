@@ -1,6 +1,6 @@
 # State Controller Executor
 
-Updated: 2026-07-09
+Updated: 2026-07-26
 
 This document describes how State Controllers are executed. For per-controller status, see `state-controller-compatibility-notes.md` and the compatibility matrix.
 
@@ -37,6 +37,16 @@ The runtime trace should distinguish:
 - controller executed;
 - controller changed state/velocity/animation/etc.
 
+## Common controller parameters
+
+`persistent = 0` allows a Controller to execute only once during one stay in its StateDef, even if
+its Trigger remains true on later ticks. The execution latch is cleared when that StateDef is entered
+again. This is required by the bundled T-H-M-A juggle display: its `VarAdd` must add each attack's
+configured cost once instead of adding it on every frame while the target remains in `HitFall`.
+
+Omitted `persistent` retains the default value 1 and executes whenever the Trigger passes.
+The `persistent = N` cadence for values greater than 1 remains Partial.
+
 ## Controller categories
 
 ### Basic state mutation
@@ -54,6 +64,12 @@ These mutate state identity or state flags.
 `PowerAdd` and `PowerSet` mutate the current player's durable Power through the shared 0..powerMax clamp. StateDef `poweradd`, TargetPowerAdd, and HitDef getpower/givepower use that same path so a character limit such as 9000 is not silently reduced to 3000. Each controller mutation emits a `raw.power` diagnostic. Helper ownership remains Partial.
 
 `ChangeState` preserves the current State owner. `SelfState` resolves the player's `selfStateOwnerId`, enters that owner's CNS document, and clears borrowed ownership. In an ordinary StateDef, a successfully executed ChangeState or SelfState terminates that StateDef's remaining controller list; the entered State may then execute on the same frame. Negative common command states retain their existing entry-snapshot scan semantics. Helper/animation ownership remains Partial.
+
+`ChangeState ctrl` updates the transition input before the destination StateDef is entered. An
+explicit destination `ctrl` header overrides it in the same frame; when the destination omits
+`ctrl`, the controller value is inherited. T-H-M-A State 6000 -> 60001 is the focused regression:
+the source requests `ctrl = 1`, but destination `ctrl = 0` is final and State -1 cannot route the
+next held direction into State 20 or 11.
 
 `AssertSpecial` retains all values supplied through `flag`, `flag2`, and `flag3` as case-insensitive,
 per-game-tick player flags. They survive later Controllers and ChangeState in the same CNS pass, then
@@ -236,7 +252,7 @@ Issue #66 verifies lifecycle ordering with the bundled T-H-M-A 3405/3415 data. A
 
 Successful non-KO contact also registers a Target entry with player id, HitDef id, and ActiveHitDef generation. Entries persist independently of State transitions, support multiple targets, and are removed for KO/destroyed players or round restart. Connected Target controllers select these entries by optional HitDef `id` and apply changes to the registered player.
 
-HitDef `pausetime` is applied as separate attacker/defender counters. Positive counters skip CNS controller execution and freeze physics/timers while input buffering continues; zero resumes without an extra frame. Guarded contact uses `guard.pausetime` when present. This hit pause is independent of the Partial SuperPause controller.
+HitDef `pausetime` is applied as separate attacker/defender counters. In accordance with Elecbyte's WinMUGEN HitDef specification, omission defaults both counters to `0,0`; an omitted `guard.pausetime` inherits the normal `pausetime` pair. Positive counters skip CNS controller execution and freeze physics/timers while input buffering continues; zero resumes without an extra frame. This hit pause is independent of the Partial SuperPause controller.
 
 During the selected hit time, the runtime keeps `ctrl = false`, blocks control-enabling `CtrlSet`, blocks early recovery to State 0/52, and ignores State -1 input ChangeState routes. Internal common get-hit transitions such as State 5000 to 5001 remain available. Hit-stun elapsed time is stored independently from `stateTime` so internal get-hit State changes do not shorten the configured duration. When that time expires in a borrowed `TargetState`, fallback recovery retires the hit-stun timer without forcing State 0; the attacker's CustomState remains responsible for `ChangeState` and the eventual `SelfState` return.
 

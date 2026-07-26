@@ -92,6 +92,11 @@ State entry should handle:
 - entry-only effects such as `poweradd`;
 - facing changes such as `facep2`.
 
+For `ChangeState ctrl`, the controller value is applied before destination entry. An explicit
+destination StateDef `ctrl` therefore determines the final same-frame value; omission inherits the
+controller value. Focused T-H-M-A State 6000 -> 60001 coverage verifies that `ctrl = 1` followed by
+the destination header's `ctrl = 0` cannot expose walk or crouch input on the next State -1 scan.
+
 Power is durable player state. A loaded character starts each round at `power = 0`; `[Data] power` supplies `powerMax` (default 3000), not the initial gauge value. StateDef `poweradd`, PowerAdd/PowerSet, TargetPowerAdd, and explicit HitDef getpower/givepower all use the same 0..powerMax clamp. State transitions preserve both values, while round restart resets only the current value. Helper/root power ownership remains Partial until the Helper entity model is connected.
 
 If a field is applied on every frame instead of on state entry, compatibility bugs become subtle and hard to diagnose.
@@ -173,7 +178,7 @@ Issue #64 adds an explicitly non-compatibility Power Infinite runtime setting. S
 
 Practice Mode is also an explicitly non-compatibility runtime setting. When enabled, a root player whose Life reaches zero is restored to the current full gauge value immediately before RoundState evaluates KO at the end of that unpaused frame, and the round timer does not decrement. The existing hit reaction, State, animation, velocity, and get-hit snapshot remain intact so the character follows its normal data-driven recovery route; only the KO handoff and time limit are prevented. The setting defaults to OFF and is persisted with the other runtime settings. It does not reopen a round that had already entered the KO phase before the setting was enabled.
 
-Issue #65 routes `target(ID)` through the accepted-HitDef Target registry rather than treating its argument as StateNo/runtime entity id or falling back to self. The T-H-M-A 1015 -> 1016 path is covered with `PrevStateNo`, accepted `MoveHit`, redirected target `MoveType=H`, repeated-trigger AND aggregation, terminal ChangeState, and controller `ctrl=1`; miss, guard, missing-id, and wrong-previous-State cases remain out of the route.
+Issue #65 routes `target(ID)` through the accepted-HitDef Target registry rather than treating its argument as StateNo/runtime entity id or falling back to self. The T-H-M-A 1015 -> 1016 path is covered with `PrevStateNo`, accepted `MoveHit`, redirected target `MoveType=H`, repeated-trigger AND aggregation, and terminal ChangeState. Its controller requests `ctrl=1`, then the explicit State 1016 header supplies the final `ctrl=0`; miss, guard, missing-id, and wrong-previous-State cases remain out of the route.
 
 Issue #66's State extraction found that 3405 owns two transitions to 3415: `AnimTime=0` plus redirected enemy hitcount 0..17, or `Time=1` plus hitcount >=18. State 3415 itself has no transition to 3405; its two terminal routes require `StateType=S/A` AND `Time=10` and go to 102/6140. Therefore any observed 3415 -> 3405 is a negative-State CMD/AI re-entry, not a 3415 current-State controller.
 

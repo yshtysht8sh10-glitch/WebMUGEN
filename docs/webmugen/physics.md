@@ -121,7 +121,7 @@ Issue #62 keeps KO and fall recovery as separate common-state routes. State 5150
 
 State 5110 get-up scheduling uses an independent counter loaded from the defender's `[Data] liedown.time`. It freezes during hitpause/Pause, does not depend on StateTime or `down.hittime`, and never schedules 5120 at zero Life. `raw.down_clock` exposes elapsed/duration/remaining and the advance/frozen/getup/ko_hold result.
 
-HitDef `pausetime = p1, p2` initializes separate attacker and defender counters. While a counter is positive, CNS controllers, position, velocity integration, StateTime, and AnimTime are frozen; the physics step decrements the counter once per game frame. A counter of zero resumes normally without an extra frozen frame. Input buffering remains active outside this per-player freeze. Match-level Pause/SuperPause is separate: it freezes non-moving players and round/hit stepping, permits only the controller owner for `movetime`, and uses a resume guard before normal CNS execution restarts.
+HitDef `pausetime = p1, p2` initializes separate attacker and defender counters. WinMUGEN defaults an omitted pair to `0,0`; `guard.pausetime` inherits that normal pair when omitted. While a counter is positive, CNS controllers, position, velocity integration, StateTime, and AnimTime are frozen; the physics step decrements the counter once per game frame. A counter of zero resumes normally without an extra frozen frame. Input buffering remains active outside this per-player freeze. Match-level Pause/SuperPause is separate: it freezes non-moving players and round/hit stepping, permits only the controller owner for `movetime`, and uses a resume guard before normal CNS execution restarts.
 
 ## Movement debugging
 

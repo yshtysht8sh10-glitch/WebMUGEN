@@ -62,7 +62,7 @@ describe('Issue #65 target(ID) redirect and composite trigger', () => {
     })).toBe(false);
   });
 
-  it('routes 1015 to 1016 only when all three trigger1 records pass and applies ctrl=1', () => {
+  it('routes 1015 to 1016 only when all three trigger1 records pass and applies destination ctrl=0', () => {
     const state = createInitialGameState();
     state.players = [{
       ...state.players[0],
@@ -76,7 +76,7 @@ describe('Issue #65 target(ID) redirect and composite trigger', () => {
 
     const result = stepCnsStateRuntime(state, routeCns, { gameTime: 55 });
 
-    expect(result.state.players[0], result.state.players[0].hitDiagnosticLines?.join('\n')).toMatchObject({ stateNo: 1016, prevStateNo: 1015, ctrl: true });
+    expect(result.state.players[0], result.state.players[0].hitDiagnosticLines?.join('\n')).toMatchObject({ stateNo: 1016, prevStateNo: 1015, ctrl: false });
     expect(result.traces[0].executedControllers).toContain('ChangeState');
     expect(result.state.players[0].hitDiagnosticLines?.join('\n')).toContain('targetRedirectRequestedId=1015 targetRedirectResolvedEntityId=2 targetRedirectFound=1');
     expect(result.state.players[0].hitDiagnosticLines?.join('\n')).toContain('triggerGroup aggregateResult=1 ChangeState=eligible targetState=1016');
@@ -132,6 +132,6 @@ value = 1016
 
     const result = stepCnsStateRuntime(state, cns, { gameTime: 99, getAnimationDuration: () => 100 });
 
-    expect(result.state.players[0], result.state.players[0].hitDiagnosticLines?.join('\n')).toMatchObject({ stateNo: 1016, prevStateNo: 1015, ctrl: true });
+    expect(result.state.players[0], result.state.players[0].hitDiagnosticLines?.join('\n')).toMatchObject({ stateNo: 1016, prevStateNo: 1015, ctrl: false });
   });
 });

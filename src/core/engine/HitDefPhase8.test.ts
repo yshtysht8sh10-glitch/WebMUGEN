@@ -28,6 +28,19 @@ describe('HitDef Phase8', () => {
     expect(result.player.activeHitDef?.airVelocity.y).toBe(-5.5);
   });
 
+  it('defaults an omitted HitDef pausetime to WinMUGEN 0,0', () => {
+    const player = createInitialGameState().players[0];
+    const controller: CnsStateController = {
+      type: 'HitDef',
+      triggers: [],
+      params: {},
+    };
+
+    const result = executeController(player, controller);
+
+    expect(result.player.activeHitDef?.pauseTime).toEqual({ attacker: 0, defender: 0 });
+  });
+
   it('uses active HitDef when attack hits', () => {
     const state = createInitialGameState();
     const p1 = {

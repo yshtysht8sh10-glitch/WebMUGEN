@@ -109,6 +109,9 @@ describe('AppCharacterLoader', () => {
       expect(result.character?.sounds?.samples.some((sample) => sample.format === 'wave')).toBe(true);
       expect(result.character?.cns.states.flatMap((state) => state.controllers).some((controller) => controller.type.toLowerCase() === 'explod')).toBe(true);
       expect(result.character?.cns.states.flatMap((state) => state.controllers).some((controller) => controller.type.toLowerCase() === 'playsnd')).toBe(true);
+      const wallImpactSound = result.character?.cns.states.find((state) => state.stateNo === 3430)?.controllers.find((controller) =>
+        controller.type.toLowerCase() === 'playsnd');
+      expect(wallImpactSound?.triggers.map((trigger) => trigger.expression)).toContain('animelem = 3 && time < 10');
       expect(result.character?.air.actions.find((action) => action.actionNo === 3301)?.elements[0]).toMatchObject({
         groupNo: 999,
         imageNo: 6,

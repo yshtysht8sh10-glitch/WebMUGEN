@@ -306,7 +306,7 @@ function executeProjectile(
 
 function readHitDef(controller: CnsStateController): ActiveHitDef {
   const damage = readNumberPair(controller.params.damage, 30, 0);
-  const pauseTime = readNumberPair(controller.params.pausetime, 8, 8);
+  const pauseTime = readNumberPair(controller.params.pausetime, 0, 0);
   const groundVelocity = readNumberPair(controller.params['ground.velocity'], -3.5, 0);
   const airVelocity = readNumberPair(controller.params['air.velocity'], -2.5, -5.5);
 

@@ -2,7 +2,7 @@ import type { RoundScore } from '../../core/engine/RoundScore';
 import type { RoundState } from '../../core/engine/RoundState';
 
 export class RoundStateRenderer {
-  render(ctx: CanvasRenderingContext2D, round: RoundState, score?: RoundScore): void {
+  render(ctx: CanvasRenderingContext2D, round: RoundState, score?: RoundScore, viewportWidth = 640): void {
     ctx.save();
 
     ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
@@ -16,7 +16,7 @@ export class RoundStateRenderer {
     ctx.fillText(`ROUND ${round.roundNo}`, 444, 62);
 
     if (score) {
-      this.drawScore(ctx, score);
+      this.drawScore(ctx, score, viewportWidth);
     }
 
     if (round.phase === 'intro') {
@@ -41,15 +41,16 @@ export class RoundStateRenderer {
     ctx.restore();
   }
 
-  private drawScore(ctx: CanvasRenderingContext2D, score: RoundScore): void {
+  private drawScore(ctx: CanvasRenderingContext2D, score: RoundScore, viewportWidth: number): void {
+    const offsetX = (viewportWidth - 640) / 2;
     ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-    ctx.fillRect(20, 38, 120, 20);
-    ctx.fillRect(500, 38, 120, 20);
+    ctx.fillRect(20 + offsetX, 38, 120, 20);
+    ctx.fillRect(500 + offsetX, 38, 120, 20);
 
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 12px monospace';
-    ctx.fillText(`P1 WINS ${score.p1Wins}`, 30, 53);
-    ctx.fillText(`P2 WINS ${score.p2Wins}`, 510, 53);
+    ctx.fillText(`P1 WINS ${score.p1Wins}`, 30 + offsetX, 53);
+    ctx.fillText(`P2 WINS ${score.p2Wins}`, 510 + offsetX, 53);
 
     if (score.draws > 0) {
       ctx.fillText(`DRAW ${score.draws}`, 448, 82);

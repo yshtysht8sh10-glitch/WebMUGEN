@@ -134,6 +134,7 @@ import { loadUiLanguage, saveUiLanguage, UiLanguageProvider, useUiLanguage } fro
 
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/T-H-M-A.zip';
 const ENABLE_RUNTIME_FALLBACKS = false;
+const APP_PLAYER_START_X = [380, 580] as const;
 const READABLE_STATE_STATUS_ALWAYS_SHOW_TYPES = new Set(['changestate', 'changeanim']);
 const READABLE_STATE_STATUS_EXTRA_CONTROLLER_LIMIT = 10;
 const INPUT_CONFIG_STORAGE_KEY = 'webmugen.inputConfig.v1';
@@ -176,7 +177,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
   const [uiLanguage, setUiLanguage] = useState(loadUiLanguage);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
-  const gameStateRef = useRef<GameState>(createInitialGameState());
+  const gameStateRef = useRef<GameState>(createInitialGameState(undefined, {}, APP_PLAYER_START_X));
   const hitFeedbackRef = useRef<HitFeedbackState>(createInitialHitFeedbackState());
   const roundStateRef = useRef<RoundState>(createInitialRoundState());
   const roundScoreRef = useRef<RoundScore>(createInitialRoundScore());
@@ -317,7 +318,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
 
       setRuntimeStartState('loading');
 
-      gameStateRef.current = createInitialGameState();
+      gameStateRef.current = createInitialGameState(undefined, {}, APP_PLAYER_START_X);
       hitFeedbackRef.current = createInitialHitFeedbackState();
       roundStateRef.current = createInitialRoundState(runtimeSettingsRef.current.roundTime);
       roundScoreRef.current = createInitialRoundScore();
@@ -365,7 +366,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           : loadedCharacter.cns,
       };
       const characterPowerMax = readCnsConst(character.cns, 'data.power');
-      gameStateRef.current = createInitialGameState(characterPowerMax, readCharacterRuntimeMetadata(character));
+      gameStateRef.current = createInitialGameState(characterPowerMax, readCharacterRuntimeMetadata(character), APP_PLAYER_START_X);
       setCnsSourceFiles(character.cnsSourceFiles ?? []);
       setLoadedAir(character.air);
       setLoadedSprites(character.sprites);
@@ -460,7 +461,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           !restartPressedRef.current &&
           canRestartRound(nextRoundState)
         ) {
-          const restarted = restartRound(nextRoundState.roundNo, runtimeSettingsRef.current.roundTime, characterPowerMax);
+          const restarted = restartRound(nextRoundState.roundNo, runtimeSettingsRef.current.roundTime, characterPowerMax, APP_PLAYER_START_X);
           const synchronizedRestartState = synchronizeRuntimeFrame(restarted.gameState, frameNoRef.current);
           nextState = applyInfinitePowerAtFrameStart({
             ...synchronizedRestartState,

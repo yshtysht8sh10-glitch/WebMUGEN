@@ -50,6 +50,6 @@ Rejections use `sound_asset_missing`, `sample_not_found`, `common_sound_unavaila
 
 ## Remaining work
 
-PlaySnd remains Partial because common/fight SND is not loaded, generic controller `persistent = 0 / N` semantics are not implemented, exact WinMUGEN pan/volume edge ranges and `lowpriority` are not audited, and Helper/Projectile asset ownership is not connected. StopSnd owner/channel stopping is connected; SndPan is tracked by Issue #40.
+PlaySnd remains Partial because common/fight SND is not loaded, generic controller `persistent = N` cadence for values greater than 1 is not implemented, exact WinMUGEN pan/volume edge ranges and `lowpriority` are not audited, and Helper/Projectile asset ownership is not connected. `persistent = 0` one-shot execution is connected generically. StopSnd owner/channel stopping is connected; SndPan is tracked by Issue #40.
 
 The Issue #44 WebMUGEN master slider is a separate user output multiplier after PlaySnd gain, channel handling, and pan. Its first-run 50% default, mute, and persistence do not reinterpret `volume`/`volumescale`; 100% preserves the controller's existing output ratio exactly.
