@@ -15,6 +15,12 @@ import { createInitialRoundState, stepRoundState } from '../engine/RoundState';
 import type { GameState } from '../engine/types';
 import { loadCharacterFromDef, type CharacterAssetFetcher } from './CharacterLoader';
 import { HitPauseCommandBuffer } from '../../input/HitPauseCommandBuffer';
+import type { ExplodCreateEvent } from '../explod/ExplodSystem';
+import { applyExplodCreateEvents } from '../explod/ExplodSystem';
+import type { SoundPlayEvent } from '../audio/SoundEvent';
+import { findSndSample } from '../../parser/snd/SndTypes';
+import { resolveExplodRenderFrames } from '../../renderer/canvas2d/ExplodRender';
+import type { EnvironmentShake } from '../engine/HitFeedback';
 
 declare const process: { env: Record<string, string | undefined>; platform: string };
 
@@ -366,6 +372,7 @@ describe('T-H-M-A State 700 throw regression', () => {
       ],
     }, forcedCns, { hitDiagnostics: true }).state;
     expect(activated.players[0].activeHitDef?.hitFlag).toBe('M-');
+    expect(activated.players[0].activeHitDef?.pauseTime).toEqual({ attacker: 0, defender: 0 });
 
     const attack = findActionCollisionElement(assets.air.actions, 700, 'attack');
     const body = findCollisionElement(assets.air.actions, 'body');
@@ -376,6 +383,7 @@ describe('T-H-M-A State 700 throw regression', () => {
     expect(contacted, contacted?.hitDiagnosticLines?.join('\n')).not.toBeNull();
     expect(contacted!.players[0].stateNo).toBe(701);
     expect(contacted!.players[1]).toMatchObject({ stateNo: 711, stateOwnerId: 1 });
+    expect(contacted!.players.map((player) => player.hitPause)).toEqual([0, 0]);
 
     const defenderCns: CnsDocument = {
       ...assets.cns,
@@ -383,7 +391,7 @@ describe('T-H-M-A State 700 throw regression', () => {
     };
     let resumed = contacted!;
     while (resumed.players[1].hitPause > 0) resumed = stepCnsPhysicsMotion(resumed, forcedCns);
-    const entered = stepCnsStateRuntime(resumed, forcedCns, {
+    const routeInput = {
       getCnsDocumentForPlayer: (ownerId) => ownerId === 1 ? forcedCns : defenderCns,
       getAnimationDuration: (animNo) => getMugenAnimEndTime(assets.air, animNo),
       getAnimationElementNo: (animNo, animTime) => {
@@ -391,7 +399,8 @@ describe('T-H-M-A State 700 throw regression', () => {
         return current ? current.elementIndex + 1 : null;
       },
       getAnimationTriggerInfo: (animNo, animTime) => getAnimationTriggerInfo(assets.air, animNo, animTime),
-    });
+    };
+    const entered = stepCnsStateRuntime(resumed, forcedCns, routeInput);
     expect(entered.traces[1].stateFound).toBe(true);
     expect(entered.state.players[1], entered.traces[1].debugLines.join('\n')).toMatchObject({
       stateNo: 711,
@@ -402,6 +411,34 @@ describe('T-H-M-A State 700 throw regression', () => {
       ctrl: false,
       animNo: 5012,
     });
+
+    const soundEvents: SoundPlayEvent[] = [];
+    const explodEvents: ExplodCreateEvent[] = [];
+    const shakeEvents: EnvironmentShake[] = [];
+    let route = entered.state;
+    for (let frame = 0; frame < 120 && shakeEvents.length === 0; frame += 1) {
+      const runtime = stepCnsStateRuntime(route, forcedCns, {
+        ...routeInput,
+        onSoundPlay: (event) => soundEvents.push(event),
+        onExplodCreate: (event) => explodEvents.push(event),
+        onEnvironmentShake: (event) => shakeEvents.push(event),
+      });
+      const moved = applyFallbackStageRules(stepCnsPhysicsMotion(runtime.state, forcedCns));
+      const hitResolved = resolveFallbackHits(moved, assets.air, true, runtime.state);
+      route = applyFallbackHitRecovery(hitResolved, true);
+    }
+    expect(soundEvents).toHaveLength(1);
+    expect(soundEvents[0]).toMatchObject({ type: 'play', ownerId: 1, scope: 'character', group: 700, index: 2 });
+    expect(findSndSample(assets.sounds!, 700, 2)).not.toBeNull();
+    expect(explodEvents.filter((event) => event.type === 'create' && [17000, 17001].includes(event.request.animNo))).toHaveLength(2);
+    const effectEvents = explodEvents.filter((event): event is Extract<ExplodCreateEvent, { type: 'create' }> => (
+      event.type === 'create' && [17000, 17001].includes(event.request.animNo)
+    ));
+    const effectState = applyExplodCreateEvents(route, effectEvents, () => 0.5);
+    const rendered = resolveExplodRenderFrames(effectState, {}, { 1: { airDocument: assets.air } });
+    expect(rendered.frames.map((frame) => frame.entry.animNo)).toContain(17000);
+    expect(shakeEvents).toHaveLength(1);
+    expect(shakeEvents[0]).toEqual({ time: 20, frequency: 90, amplitude: 10, phase: 90 });
   });
 });
 

@@ -1364,6 +1364,31 @@ p2sprpriority = 3
     expect(afterHit.players[0].activeHitDef).toEqual(hitDef);
   });
 
+  it('defaults an omitted HitDef pausetime to WinMUGEN 0,0', () => {
+    const cns = parseCnsText(`
+[Statedef 200]
+type = S
+movetype = A
+physics = S
+
+[State 200, Hit]
+type = HitDef
+trigger1 = 1
+attr = S, NA
+damage = 10
+`);
+    const initial = createInitialGameState();
+    const activated = stepCnsStateRuntime({
+      ...initial,
+      players: [{ ...initial.players[0], stateNo: 200, moveType: 'A' }, initial.players[1]],
+    }, cns).state;
+
+    expect(activated.players[0].activeHitDef).toMatchObject({
+      pauseTime: { attacker: 0, defender: 0 },
+    });
+    expect(activated.players[0].activeHitDef?.guardPauseTime).toBeUndefined();
+  });
+
   it('diagnoses invalid evaluated HitDef parameters without discarding their names', () => {
     const cns = parseCnsText(`
 [Statedef 200]
