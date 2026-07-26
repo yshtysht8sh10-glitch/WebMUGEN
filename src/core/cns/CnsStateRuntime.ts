@@ -772,7 +772,7 @@ function applyStateHeader(player: PlayerState, stateDef: CnsStateDefinition): Pl
     stateType: toStateType(stateDef.stateType ?? null) ?? player.stateType,
     moveType: toMoveType(stateDef.moveType ?? null) ?? player.moveType,
     physics: toPhysics(stateDef.physics ?? null) ?? player.physics,
-    ctrl: stateDef.ctrl ?? player.ctrl,
+    ctrl: applyEntryFields ? stateDef.ctrl ?? player.ctrl : player.ctrl,
     juggle: stateDef.juggle ?? player.juggle,
     animNo,
     animTime: player.animTime,
@@ -1222,9 +1222,9 @@ function executeController(
   if (type === 'changestate') {
     const value = num(controller, 'value', player, input, commands, opponent);
     if (value === null) return withPlayer(player, false, 'ChangeState');
-    const entered = enterState(player, opponent, value, cns, input, commands);
     const ctrl = num(controller, 'ctrl', player, input, commands, opponent);
-    return withPlayer(ctrl === null ? entered : { ...entered, ctrl: ctrl !== 0 }, true, 'ChangeState');
+    const transitionSource = ctrl === null ? player : { ...player, ctrl: ctrl !== 0 };
+    return withPlayer(enterState(transitionSource, opponent, value, cns, input, commands), true, 'ChangeState');
   }
 
   const noOpName = RECOGNIZED_NO_OP_CONTROLLERS.get(type);

@@ -867,48 +867,123 @@ anim = 20
     expect(result.traces[0].executedControllers).toEqual(['VarSet', 'VarAdd', 'ChangeState']);
   });
 
-  it('applies the entered StateDef ctrl before the next tick State -1 scan', () => {
+  it.each([
+    ['walk', 'holdfwd', 20],
+    ['crouch', 'holddown', 11],
+  ])('lets the destination StateDef ctrl override ChangeState ctrl before the next tick %s route', (_name, command, destination) => {
     const cns = parseCnsText(`
 [Statedef -1]
-[State -1, Walk]
+[State -1, Input route]
 type = ChangeState
-triggerall = command = "holdfwd"
+triggerall = command = "${command}"
 trigger1 = ctrl
-value = 20
+value = ${destination}
 
-[Statedef 6001]
+[Statedef 6000]
 type = S
 ctrl = 0
 
-[State 6001, EnterMovement]
+[State 6000, EnterMovement]
 type = ChangeState
 trigger1 = time = 0
-value = 60011
+value = 60001
 ctrl = 1
 
-[Statedef 60011]
+[Statedef 60001]
 type = S
 ctrl = 0
 
-[Statedef 20]
+[Statedef ${destination}]
 type = S
 ctrl = 1
 `);
     const initial = createInitialGameState();
     const entered = stepCnsStateRuntime({
       ...initial,
-      players: [{ ...initial.players[0], stateNo: 6001, stateTime: 0 }, initial.players[1]],
+      players: [{ ...initial.players[0], stateNo: 6000, stateTime: 0 }, initial.players[1]],
     }, cns);
 
-    expect(entered.state.players[0]).toMatchObject({ stateNo: 60011, ctrl: true });
+    expect(entered.state.players[0]).toMatchObject({ stateNo: 60001, ctrl: false });
 
     const nextTick = stepCnsStateRuntime(entered.state, cns, {
-      p1Commands: new Set(['holdfwd']),
+      p1Commands: new Set([command]),
       p2Commands: new Set(),
     });
 
-    expect(nextTick.state.players[0]).toMatchObject({ stateNo: 60011, ctrl: false });
+    expect(nextTick.state.players[0]).toMatchObject({ stateNo: 60001, ctrl: false });
     expect(nextTick.traces[0].executedControllers).not.toContain('ChangeState');
+  });
+
+  it('keeps ChangeState ctrl when the destination StateDef omits ctrl', () => {
+    const cns = parseCnsText(`
+[Statedef 6100]
+type = S
+ctrl = 0
+
+[State 6100, EnterControlledState]
+type = ChangeState
+trigger1 = time = 0
+value = 6101
+ctrl = 1
+
+[Statedef 6101]
+type = S
+`);
+    const initial = createInitialGameState();
+    const entered = stepCnsStateRuntime({
+      ...initial,
+      players: [{ ...initial.players[0], stateNo: 6100, stateTime: 0, ctrl: false }, initial.players[1]],
+    }, cns);
+
+    expect(entered.state.players[0]).toMatchObject({ stateNo: 6101, ctrl: true });
+  });
+
+  it('preserves a current-State CtrlSet for the next tick State -1 scan', () => {
+    const cns = parseCnsText(`
+[Statedef -1]
+[State -1, Followup]
+type = ChangeState
+triggerall = command = "b"
+trigger1 = stateno = 630
+trigger1 = ctrl
+value = 640
+
+[Statedef 630]
+type = A
+movetype = A
+physics = A
+ctrl = 0
+
+[State 630, EnableControl]
+type = CtrlSet
+trigger1 = Time >= 20
+value = 1
+
+[Statedef 640]
+type = A
+movetype = A
+physics = A
+ctrl = 0
+`);
+    const initial = createInitialGameState();
+    const enabled = stepCnsStateRuntime({
+      ...initial,
+      players: [{ ...initial.players[0], stateNo: 630, stateTime: 20, ctrl: false }, initial.players[1]],
+    }, cns);
+
+    expect(enabled.state.players[0]).toMatchObject({ stateNo: 630, ctrl: true });
+    expect(enabled.traces[0].executedControllers).toEqual(['CtrlSet']);
+
+    const followup = stepCnsStateRuntime({
+      ...enabled.state,
+      players: [{ ...enabled.state.players[0], stateTime: 21 }, enabled.state.players[1]],
+    }, cns, {
+      p1Commands: new Set(['b']),
+      p2Commands: new Set(),
+    });
+
+    expect(followup.state.players[0]).toMatchObject({ stateNo: 640, ctrl: false });
+    expect(followup.traces[0].executedControllers).toContain('ChangeState');
   });
 
   it('lets State -2 CtrlSet enable a following State -1 route in the same tick', () => {

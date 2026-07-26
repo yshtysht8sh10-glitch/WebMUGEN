@@ -65,6 +65,12 @@ These mutate state identity or state flags.
 
 `ChangeState` preserves the current State owner. `SelfState` resolves the player's `selfStateOwnerId`, enters that owner's CNS document, and clears borrowed ownership. In an ordinary StateDef, a successfully executed ChangeState or SelfState terminates that StateDef's remaining controller list; the entered State may then execute on the same frame. Negative common command states retain their existing entry-snapshot scan semantics. Helper/animation ownership remains Partial.
 
+`ChangeState ctrl` updates the transition input before the destination StateDef is entered. An
+explicit destination `ctrl` header overrides it in the same frame; when the destination omits
+`ctrl`, the controller value is inherited. T-H-M-A State 6000 -> 60001 is the focused regression:
+the source requests `ctrl = 1`, but destination `ctrl = 0` is final and State -1 cannot route the
+next held direction into State 20 or 11.
+
 `AssertSpecial` retains all values supplied through `flag`, `flag2`, and `flag3` as case-insensitive,
 per-game-tick player flags. They survive later Controllers and ChangeState in the same CNS pass, then
 clear at the beginning of the next CNS tick unless asserted again. `noautoturn` is connected to the
