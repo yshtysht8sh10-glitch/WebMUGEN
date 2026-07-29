@@ -60,12 +60,14 @@ describe('Issue #75 debug and logging settings', () => {
   it('defaults all four settings to OFF for new, legacy, and invalid data', () => {
     expect(DEFAULT_RUNTIME_SETTINGS).toMatchObject({
       humanLogEnabled: false,
+      humanLogCaptureMode: 'trigger-changes',
       aiLogEnabled: false,
       collisionBoxesVisible: false,
       stateHistoryVisible: false,
     });
     expect(normalizeRuntimeSettings({ roundTime: 20 })).toMatchObject({
       humanLogEnabled: false,
+      humanLogCaptureMode: 'trigger-changes',
       aiLogEnabled: false,
       collisionBoxesVisible: false,
       stateHistoryVisible: false,
@@ -81,6 +83,16 @@ describe('Issue #75 debug and logging settings', () => {
       collisionBoxesVisible: false,
       stateHistoryVisible: false,
     });
+  });
+
+  it.each(['all-frames', 'trigger-changes', 'controller-activated'] as const)('persists human log mode %s', (humanLogCaptureMode) => {
+    let stored: string | null = null;
+    const storage = {
+      getItem: () => stored,
+      setItem: (_key: string, value: string) => { stored = value; },
+    };
+    saveRuntimeSettings({ ...DEFAULT_RUNTIME_SETTINGS, humanLogCaptureMode }, storage);
+    expect(loadRuntimeSettings(storage).humanLogCaptureMode).toBe(humanLogCaptureMode);
   });
 
   it('persists the four settings independently', () => {

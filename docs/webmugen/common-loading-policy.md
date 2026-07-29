@@ -45,6 +45,8 @@ The corrected model is stricter:
 
 The merge priority is `character CNS/CMD -> DEF stcommon -> common1.cns -> common.cmd`. `common.cmd` may define routing States such as `-1` and `-2` when they do not replace a State body in `common1.cns`; it must not duplicate positive common StateDefs such as State 40.
 
+`/chars/common.cmd` is the only WebMUGEN common CMD path. There is no separate `common1.cmd`: the similarly named `common1.cns` is the WinMUGEN-compatible common State-body asset, while `common.cmd` is WebMUGEN's visible common command/routing layer.
+
 ## Common CMD Routing Policy
 
 Common movement routes are command routes, not state-body replacements.

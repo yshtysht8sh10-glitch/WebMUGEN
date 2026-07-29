@@ -4,6 +4,8 @@ import type { InfinitePowerMode } from '../core/power/InfinitePower';
 export const DEFAULT_FRAME_INTERVAL_MS = 1000 / 60;
 export const RUNTIME_SETTINGS_STORAGE_KEY = 'webmugen.runtimeSettings.v1';
 
+export type HumanLogCaptureMode = 'all-frames' | 'trigger-changes' | 'controller-activated';
+
 export type RuntimeSettings = {
   roundTime: number;
   frameIntervalMs: number;
@@ -11,6 +13,7 @@ export type RuntimeSettings = {
   infinitePower: InfinitePowerMode;
   practiceMode: boolean;
   humanLogEnabled: boolean;
+  humanLogCaptureMode: HumanLogCaptureMode;
   aiLogEnabled: boolean;
   collisionBoxesVisible: boolean;
   stateHistoryVisible: boolean;
@@ -23,6 +26,7 @@ export const DEFAULT_RUNTIME_SETTINGS: RuntimeSettings = {
   infinitePower: 'off',
   practiceMode: false,
   humanLogEnabled: false,
+  humanLogCaptureMode: 'trigger-changes',
   aiLogEnabled: false,
   collisionBoxesVisible: false,
   stateHistoryVisible: false,
@@ -59,10 +63,15 @@ export function normalizeRuntimeSettings(value: unknown): RuntimeSettings {
     infinitePower: normalizeInfinitePowerMode(source.infinitePower),
     practiceMode: normalizeBoolean(source.practiceMode),
     humanLogEnabled: normalizeBoolean(source.humanLogEnabled),
+    humanLogCaptureMode: normalizeHumanLogCaptureMode(source.humanLogCaptureMode),
     aiLogEnabled: normalizeBoolean(source.aiLogEnabled),
     collisionBoxesVisible: normalizeBoolean(source.collisionBoxesVisible),
     stateHistoryVisible: normalizeBoolean(source.stateHistoryVisible),
   };
+}
+
+function normalizeHumanLogCaptureMode(value: unknown): HumanLogCaptureMode {
+  return value === 'all-frames' || value === 'controller-activated' ? value : 'trigger-changes';
 }
 
 function normalizeBoolean(value: unknown): boolean {

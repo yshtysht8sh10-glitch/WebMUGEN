@@ -12,6 +12,15 @@ export type RuntimeLogIndexEntry = {
   p1AnimNo: number;
   p2StateNo: number;
   p2AnimNo: number;
+  helpers: RuntimeLogHelperEntry[];
+};
+
+export type RuntimeLogHelperEntry = {
+  entityId: number;
+  helperId: number;
+  rootEntityId: 1 | 2;
+  stateNo: number;
+  animNo: number;
 };
 
 export type ReadableRuntimeEntry = {
@@ -22,6 +31,13 @@ export type ReadableRuntimeEntry = {
   p2StateNo: number;
   lines: string[];
   p2Lines: string[];
+  helperLogs?: ReadableRuntimeEntityLog[];
+};
+
+export type ReadableRuntimeEntityLog = {
+  key: string;
+  label: string;
+  lines: string[];
 };
 
 export function createRuntimeLogIndexEntry({
@@ -45,6 +61,13 @@ export function createRuntimeLogIndexEntry({
     p1AnimNo: p1?.animNo ?? -1,
     p2StateNo: p2?.stateNo ?? -1,
     p2AnimNo: p2?.animNo ?? -1,
+    helpers: state.helpers.entries.map((helper) => ({
+      entityId: helper.entityId,
+      helperId: helper.helperId,
+      rootEntityId: helper.rootEntityId,
+      stateNo: helper.player.stateNo,
+      animNo: helper.player.animNo,
+    })),
   };
 }
 
@@ -104,7 +127,9 @@ export function getLatestReadableRuntimeEntry({
 }
 
 export function formatReadableRuntimeEntryCopy(entry: ReadableRuntimeEntry | null): string {
-  return entry ? [...entry.lines, ...entry.p2Lines].join('\n') : 'selected frame=-';
+  return entry
+    ? [...entry.lines, ...entry.p2Lines, ...(entry.helperLogs ?? []).flatMap((helper) => helper.lines)].join('\n')
+    : 'selected frame=-';
 }
 
 export function formatAllReadableRuntimeEntriesCopy({

@@ -1,13 +1,14 @@
-import { memo, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode } from 'react';
 import { CanvasRenderer } from '../renderer/canvas2d/CanvasRenderer';
 import { createInitialGameState } from '../core/engine/GameState';
-import type { GameState, ProjectileState, Rect } from '../core/engine/types';
+import type { GameState, PlayerState, ProjectileState, Rect } from '../core/engine/types';
 import { applyInfinitePowerAtFrameStart } from '../core/power/InfinitePower';
 import { applyPracticeModeRecovery } from '../core/training/PracticeMode';
-import { createSampleCharacterAssets, loadAppCharacter, readCharacterRuntimeMetadata } from './AppCharacterLoader';
+import { createSampleCharacterAssets, loadAppCharacter, readCharacterRuntimeMetadata, saveCharacterSourceFile } from './AppCharacterLoader';
 import type { CharacterSourceFile } from '../core/character/CharacterTypes';
-import type { SndDocument } from '../parser/snd/SndTypes';
+import type { SndDocument, SndSample } from '../parser/snd/SndTypes';
 import { sndSampleKey } from '../parser/snd/SndTypes';
+import { parseSndV1 } from '../parser/snd/SndParser';
 import { BrowserAudioRuntime, formatAudioRuntimeDiagnostic, type AudioRuntimeDiagnostic } from '../core/audio/BrowserAudioRuntime';
 import { createAudioStartGate, type AudioStartGate, type AudioStartGateGesture, type RuntimeStartState } from './AudioStartGate';
 import type { SoundRuntimeEvent } from '../core/audio/SoundEvent';
@@ -15,8 +16,11 @@ import { processSoundRuntimeEvents } from '../core/audio/SoundRuntimeBridge';
 import { adjustMasterVolumeFromKey, loadAudioSettings, normalizeAudioSettings, saveAudioSettings, type AudioSettings } from './AudioSettings';
 import { applyExplodControllerEvents, removeExplodsOnOwnerHit, stepExplodRuntime, type ExplodControllerEvent } from '../core/explod/ExplodSystem';
 import type { AirAction, AirDocument, AirElement } from '../parser/air/AirTypes';
-import type { ImageDataSpritePack } from '../core/sprite/ImageDataSpriteTypes';
+import type { ImageDataSprite, ImageDataSpritePack } from '../core/sprite/ImageDataSpriteTypes';
 import { spriteKey } from '../core/sprite/SpritePackLoader';
+import type { SpriteKey } from '../core/sprite/SpriteTypes';
+import { convertSffV1ToImageDataSpritePack } from '../core/sprite/SffSpritePackConverter';
+import { tokenizeCharacterSourceLine } from './CharacterSyntaxHighlighter';
 import {
   BrowserInput,
   DEFAULT_INPUT_CONFIG,
@@ -63,7 +67,15 @@ import {
   skipRoundIntro,
   winMugenRoundState,
 } from '../core/engine/RoundFlow';
-import { canRestartRound, restartRound } from '../core/engine/RoundRestart';
+import { canRestartRound, restartCurrentRound, restartRound } from '../core/engine/RoundRestart';
+import {
+  applyWinMugenStateActions,
+  isEditableHotkeyTarget,
+  isWinMugenStateAction,
+  isWinMugenSystemKey,
+  resolveWinMugenHotkey,
+  type WinMugenHotkeyAction,
+} from './WinMugenHotkeys';
 import {
   DEFAULT_FRAME_INTERVAL_MS,
   DEFAULT_RUNTIME_SETTINGS,
@@ -82,6 +94,7 @@ import {
   advanceExternalCnsStateEntryFrame,
   enterCnsStateAndRunTimeZero,
   stepCnsStateRuntime,
+  type CnsExecutedControllerRef,
   type CnsRuntimeTrace,
 } from '../core/cns/CnsStateRuntime';
 import { synchronizeRuntimeFrame } from './RuntimeFrame';
@@ -135,8 +148,6 @@ import { loadUiLanguage, saveUiLanguage, UiLanguageProvider, useUiLanguage } fro
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/T-H-M-A.zip';
 const ENABLE_RUNTIME_FALLBACKS = false;
 const APP_PLAYER_START_X = [380, 580] as const;
-const READABLE_STATE_STATUS_ALWAYS_SHOW_TYPES = new Set(['changestate', 'changeanim']);
-const READABLE_STATE_STATUS_EXTRA_CONTROLLER_LIMIT = 10;
 const INPUT_CONFIG_STORAGE_KEY = 'webmugen.inputConfig.v1';
 const CHARACTER_PATH_STORAGE_KEY = 'webmugen.characterPath.v1';
 export const CHARACTER_PATH_OPTIONS = uniqueCharacterPathOptions([
@@ -145,12 +156,12 @@ export const CHARACTER_PATH_OPTIONS = uniqueCharacterPathOptions([
 ]);
 const RUNTIME_HISTORY_RENDER_THROTTLE_MS = 250;
 const STATE_HISTORY_RENDER_THROTTLE_MS = 200;
-const HUMAN_LOG_CAPTURE_INTERVAL_MS = 100;
 
-type AppPage = 'play' | 'static-files';
-type DebugTab = 'runtime-human' | 'runtime-ai' | 'manual' | 'settings';
+type AppPage = 'play' | 'static-files' | 'settings';
+type DebugTab = 'runtime-human' | 'runtime-ai' | 'manual';
 type RuntimeLogTab = 'human' | 'ai';
 type CnsSourceSelection = { path: string; line: number } | null;
+type CharacterSyntaxTheme = 'vscode-dark-2026' | 'mps-classic' | 'monochrome';
 
 type StaticDebugInfo = {
   characterRows: string[];
@@ -173,7 +184,7 @@ const EMPTY_STATIC_DEBUG_INFO: StaticDebugInfo = {
   commandRows: ['commands=-'],
 };
 
-export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } = {}) {
+export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage }) {
   const [uiLanguage, setUiLanguage] = useState(loadUiLanguage);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
@@ -189,6 +200,10 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
   const p2HitPauseCommandBufferRef = useRef<HitPauseCommandBuffer | null>(null);
   const restartPressedRef = useRef(false);
   const presentationSkipInputHeldRef = useRef(false);
+  const pendingWinMugenHotkeysRef = useRef<WinMugenHotkeyAction[]>([]);
+  const winMugenPausedRef = useRef(false);
+  const winMugenHudVisibleRef = useRef(true);
+  const winMugenFastForwardRef = useRef(false);
   const inputRef = useRef<BrowserInput | null>(null);
   const inputConfigRef = useRef<InputConfig>(loadInputConfig());
   const runtimeSettingsRef = useRef<RuntimeSettings>(loadRuntimeSettings());
@@ -229,8 +244,6 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
   const [runtimeHistoryVersion, setRuntimeHistoryVersion] = useState(0);
   const [runtimeLogIndexEntries, setRuntimeLogIndexEntries] = useState<RuntimeLogIndexEntry[]>([]);
   const [selectedReadableEntry, setSelectedReadableEntry] = useState<ReadableRuntimeEntry | null>(null);
-  const [showHumanDetail, setShowHumanDetail] = useState(false);
-  const [showCharacterFiles, setShowCharacterFiles] = useState(false);
   const [runtimeFrameIndexAutoScroll, setRuntimeFrameIndexAutoScroll] = useState(true);
   const [stateTransitionLogLines, setStateTransitionLogLines] = useState<string[]>(['StateNoが変化すると、ここに遷移だけが残ります。']);
   const [stageDebugLines, setStageDebugLines] = useState<string[]>(['State: -']);
@@ -250,7 +263,21 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
   const [loadedAir, setLoadedAir] = useState<AirDocument | null>(null);
   const [loadedSprites, setLoadedSprites] = useState<ImageDataSpritePack | null>(null);
   const [selectedCnsSource, setSelectedCnsSource] = useState<CnsSourceSelection>(null);
+  const [characterReloadVersion, setCharacterReloadVersion] = useState(0);
   const cnsSourceScrollPositionsRef = useRef<Record<string, number>>({});
+
+  useEffect(() => {
+    const handleWinMugenHotkey = (event: KeyboardEvent) => {
+      if (isEditableHotkeyTarget(event.target)) return;
+      const action = resolveWinMugenHotkey(event);
+      if (!action) return;
+      event.preventDefault();
+      event.stopPropagation();
+      pendingWinMugenHotkeysRef.current.push(action);
+    };
+    window.addEventListener('keydown', handleWinMugenHotkey);
+    return () => window.removeEventListener('keydown', handleWinMugenHotkey);
+  }, []);
 
   const clearRuntimeHistoryRenderTimer = () => {
     if (runtimeHistoryRenderTimerRef.current === null) return;
@@ -340,8 +367,6 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
       invalidateRuntimeHistoryViews();
       setRuntimeLogIndexEntries([]);
       setSelectedReadableEntry(null);
-      setShowHumanDetail(false);
-      setShowCharacterFiles(false);
       p1CommandBufferRef.current.clear();
       p2CommandBufferRef.current.clear();
       p1HitPauseCommandBufferRef.current?.clear();
@@ -397,7 +422,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
         p2HitPauseCommandBufferRef.current = new HitPauseCommandBuffer(character.cmd);
 
         const tick = (timestamp: number) => {
-        const frameIntervalMs = runtimeSettingsRef.current.frameIntervalMs;
+        const frameIntervalMs = winMugenFastForwardRef.current ? 1 : runtimeSettingsRef.current.frameIntervalMs;
         const lastTickTime = lastFrameTickTimeRef.current;
         if (lastTickTime !== null && timestamp - lastTickTime < frameIntervalMs) {
           frameId = requestAnimationFrame(tick);
@@ -411,11 +436,51 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
         let cnsMs = 0;
         let logSerializationMs = 0;
         let debugUiUpdateMs = 0;
+        const winMugenHotkeys = pendingWinMugenHotkeysRef.current.splice(0);
+        let frameStepRequested = false;
+        let reloadMatchRequested = false;
+        for (const action of winMugenHotkeys) {
+          if (action === 'toggle-pause') winMugenPausedRef.current = !winMugenPausedRef.current;
+          else if (action === 'frame-step') frameStepRequested = winMugenPausedRef.current;
+          else if (action === 'toggle-hud') winMugenHudVisibleRef.current = !winMugenHudVisibleRef.current;
+          else if (action === 'toggle-fast-forward') winMugenFastForwardRef.current = !winMugenFastForwardRef.current;
+          else if (action === 'toggle-collision-boxes') {
+            setRuntimeSettings({
+              ...runtimeSettingsRef.current,
+              collisionBoxesVisible: !runtimeSettingsRef.current.collisionBoxesVisible,
+            });
+          } else if (action === 'toggle-debug-display') {
+            setRuntimeSettings({
+              ...runtimeSettingsRef.current,
+              stateHistoryVisible: !runtimeSettingsRef.current.stateHistoryVisible,
+            });
+          } else if (action === 'clear-debug') clearRuntimeLogs();
+          else if (action === 'screenshot') captureCanvasScreenshot(canvas);
+          else if (action === 'reload-match') reloadMatchRequested = true;
+        }
+        if (reloadMatchRequested) {
+          winMugenPausedRef.current = false;
+          setCharacterReloadVersion((version) => version + 1);
+          return;
+        }
+        const deferredSimulationHotkeys = winMugenHotkeys.filter((action) => isWinMugenStateAction(action) || action === 'restart-round');
+        if (winMugenPausedRef.current && !frameStepRequested) {
+          pendingWinMugenHotkeysRef.current.unshift(...deferredSimulationHotkeys);
+          rendererRef.current?.render(gameStateRef.current, hitFeedbackRef.current, roundStateRef.current, roundScoreRef.current, {
+            collisionBoxesVisible: runtimeSettingsRef.current.collisionBoxesVisible,
+            diagnosticsEnabled: runtimeSettingsRef.current.aiLogEnabled,
+            hudVisible: winMugenHudVisibleRef.current,
+          });
+          frameId = requestAnimationFrame(tick);
+          return;
+        }
+
         frameNoRef.current += 1;
         const input = inputRef.current;
         const config = inputConfigRef.current;
         const pressedKeys = input?.getPressedKeys(config) ?? new Set<string>();
-        const presentationSkipPressed = pressedKeys.size > 0 && !presentationSkipInputHeldRef.current;
+        const presentationKeys = new Set([...pressedKeys].filter((key) => !isWinMugenSystemKey(key)));
+        const presentationSkipPressed = presentationKeys.size > 0 && !presentationSkipInputHeldRef.current;
         const inputSnapshot = createInputDebugSnapshot(pressedKeys);
         const p1Input = keysToP1Input(pressedKeys, config);
         const p2Input = keysToP2Input(pressedKeys, config);
@@ -456,12 +521,23 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
         const allPalFxEvents: BgPalFxEvent[] = [];
         const envColorEvents: Array<{ color: { red: number; green: number; blue: number }; time: number; under: boolean; ownerEntityId: number }> = [];
 
+        const hotkeyStateResult = applyWinMugenStateActions(
+          nextState,
+          nextRoundState,
+          winMugenHotkeys.filter(isWinMugenStateAction),
+          runtimeSettingsRef.current.roundTime,
+        );
+        nextState = hotkeyStateResult.state;
+        nextRoundState = hotkeyStateResult.roundState;
+
         if (
-          inputSnapshot.system.restartRound &&
-          !restartPressedRef.current &&
-          canRestartRound(nextRoundState)
+          winMugenHotkeys.includes('restart-round') || (
+            inputSnapshot.system.restartRound &&
+            !restartPressedRef.current &&
+            canRestartRound(nextRoundState)
+          )
         ) {
-          const restarted = restartRound(nextRoundState.roundNo, runtimeSettingsRef.current.roundTime, characterPowerMax, APP_PLAYER_START_X);
+          const restarted = restartCurrentRound(nextRoundState.roundNo, runtimeSettingsRef.current.roundTime, characterPowerMax, APP_PLAYER_START_X);
           const synchronizedRestartState = synchronizeRuntimeFrame(restarted.gameState, frameNoRef.current);
           nextState = applyInfinitePowerAtFrameStart({
             ...synchronizedRestartState,
@@ -768,12 +844,13 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
         for (const event of environmentShakeEvents) nextFeedback = startEnvironmentShake(nextFeedback, event);
 
         restartPressedRef.current = inputSnapshot.system.restartRound;
-        presentationSkipInputHeldRef.current = pressedKeys.size > 0;
+        presentationSkipInputHeldRef.current = presentationKeys.size > 0;
 
         const simulationFinishedAt = performance.now();
         const explodRenderDiagnosticLines = rendererRef.current?.render(nextState, nextFeedback, nextRoundState, nextScore, {
           collisionBoxesVisible: runtimeSettingsRef.current.collisionBoxesVisible,
           diagnosticsEnabled: aiLogEnabled,
+          hudVisible: winMugenHudVisibleRef.current,
         }) ?? [];
         if (explodRenderDiagnosticLines.length > 0) {
           nextState = { ...nextState, hitDiagnosticLines: [...(nextState.hitDiagnosticLines ?? []), ...explodRenderDiagnosticLines] };
@@ -803,16 +880,13 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           });
         }
 
-        const humanStateChanged = nextCnsTraces.some((trace) => trace.stateNo !== trace.afterStateNo);
-        const captureHumanLogThisFrame = humanLogEnabled && (
-          humanStateChanged
-          || timestamp - lastHumanLogCaptureTimeRef.current >= HUMAN_LOG_CAPTURE_INTERVAL_MS
-        );
+        const humanLogCaptureMode = runtimeSettingsRef.current.humanLogCaptureMode;
+        const captureHumanLogThisFrame = humanLogEnabled && shouldEvaluateHumanLogFrame(humanLogCaptureMode, nextCnsTraces);
         if (captureHumanLogThisFrame) lastHumanLogCaptureTimeRef.current = timestamp;
         const formatDetailedDiagnostics = aiLogEnabled || captureHumanLogThisFrame;
         const nextRoundDebugLine = formatDetailedDiagnostics ? formatRoundState(nextRoundState) : '';
         const nextScoreDebugLine = formatDetailedDiagnostics ? formatRoundScore(nextScore) : '';
-        const nextCnsDebugLines = formatDetailedDiagnostics ? formatCnsRuntimeDebugOverlay(nextCnsTraces) : [];
+        const nextCnsDebugLines = captureHumanLogThisFrame ? formatCnsRuntimeDebugOverlay(nextCnsTraces) : [];
         const nextPhysicsDebugLines = formatDetailedDiagnostics ? formatPhysicsDebugOverlay(nextState) : [];
         if (captureHumanLogThisFrame) {
           const debugUiStartedAt = performance.now();
@@ -831,7 +905,6 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           physicsLines: nextPhysicsDebugLines,
           roundLine: nextRoundDebugLine,
           scoreLine: nextScoreDebugLine,
-          cnsLines: nextCnsDebugLines,
           traces: nextCnsTraces,
           hitDiagnosticLines: nextState.hitDiagnosticLines ?? [],
           pressedKeys,
@@ -853,6 +926,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           indexStoreRef: readableIndexStoreRef,
           nextEntryIdRef: nextRuntimeLogEntryIdRef,
           lastSignatureRef: lastReadableRuntimeSignatureRef,
+          captureMode: humanLogCaptureMode,
           setIndexEntries: setRuntimeLogIndexEntries,
         }) : 0;
         if (humanLogEnabled) appendStateTransitionLogIfNeeded({
@@ -928,7 +1002,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
       inputRef.current?.dispose();
       inputRef.current = null;
     };
-  }, [characterPath]);
+  }, [characterPath, characterReloadVersion]);
 
   const liveDebugLines = [
     ...inputDebugLines,
@@ -968,14 +1042,24 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
   const openCnsSource = (selection: CnsSourceSelection) => {
     setSelectedCnsSource(selection);
     if (selection) {
-      setShowCharacterFiles(true);
       setActivePage('static-files');
     }
   };
 
+  const openAnimationSource = (animNo: number) => {
+    openCnsSource(findAirActionSourceSelection(cnsSourceFiles, animNo));
+  };
+
+  const handleSaveCharacterSource = async (file: CharacterSourceFile, sourceText: string) => {
+    await saveCharacterSourceFile(file, sourceText);
+    setCnsSourceFiles((files) => files.map((candidate) => candidate.path === file.path
+      ? { ...candidate, text: sourceText }
+      : candidate));
+    setCharacterReloadVersion((version) => version + 1);
+  };
+
   const handleSelectRuntimeFrame = (entry: RuntimeLogIndexEntry) => {
     setSelectedReadableEntry(getReadableRuntimeEntry(readableEntryStoreRef.current, entry.frameNo, entry.p1StateNo));
-    setShowHumanDetail(true);
   };
 
   const showLatestRuntimeHistory = () => {
@@ -983,7 +1067,6 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
       indexStore: readableIndexStoreRef.current,
       entryStore: readableEntryStoreRef.current,
     }));
-    setShowHumanDetail(true);
     setAiHistoryWindow({ mode: 'latest' });
   };
 
@@ -1000,13 +1083,15 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
     nextRuntimeLogEntryIdRef.current = 1;
     setRuntimeLogIndexEntries([]);
     setSelectedReadableEntry(null);
-    setShowHumanDetail(false);
     setStateTransitionLogLines(['history cleared']);
     invalidateRuntimeHistoryViews();
   };
 
   const setRuntimeSettings = (nextSettings: RuntimeSettings) => {
     const normalized = normalizeRuntimeSettings(nextSettings);
+    if (normalized.humanLogCaptureMode !== runtimeSettingsRef.current.humanLogCaptureMode) {
+      lastReadableRuntimeSignatureRef.current = '';
+    }
     performanceMetricsRef.current.clear();
     lastPerformancePublishTimeRef.current = 0;
     if (!normalized.aiLogEnabled) {
@@ -1021,7 +1106,6 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
       lastReadableRuntimeSignatureRef.current = '';
       setRuntimeLogIndexEntries([]);
       setSelectedReadableEntry(null);
-      setShowHumanDetail(false);
       lastHumanLogCaptureTimeRef.current = 0;
     }
     if (!normalized.stateHistoryVisible) {
@@ -1161,15 +1245,16 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
           <section className="debug-panel">
             {activeDebugTab === 'runtime-human' && runtimeSettings.humanLogEnabled && (
               <HumanRuntimePanel
+                captureMode={runtimeSettings.humanLogCaptureMode}
                 indexEntries={runtimeLogIndexEntries}
                 selectedEntry={selectedReadableEntry}
                 onSelectFrame={handleSelectRuntimeFrame}
-                showHumanDetail={showHumanDetail}
-                onToggleHumanDetail={() => setShowHumanDetail((visible) => !visible)}
                 autoScrollIndex={runtimeFrameIndexAutoScroll}
                 onToggleAutoScrollIndex={() => setRuntimeFrameIndexAutoScroll((enabled) => !enabled)}
                 onShowLatest={showLatestRuntimeHistory}
                 onOpenCnsSource={openCnsSource}
+                onOpenAnimationSource={openAnimationSource}
+                onCaptureModeChange={(humanLogCaptureMode) => setRuntimeSettings({ ...runtimeSettings, humanLogCaptureMode })}
               />
             )}
             {activeDebugTab === 'runtime-human' && !runtimeSettings.humanLogEnabled && <p>{uiLanguage === 'ja' ? '人間向けログは設定で無効になっています。' : 'Human log is disabled in Settings.'}</p>}
@@ -1182,26 +1267,6 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
             )}
             {activeDebugTab === 'runtime-ai' && !runtimeSettings.aiLogEnabled && <p>{uiLanguage === 'ja' ? 'AI向けログは設定で無効になっています。' : 'AI log is disabled in Settings.'}</p>}
             {activeDebugTab === 'manual' && <ManualPanel />}
-            {activeDebugTab === 'settings' && (
-              <SettingsPanel
-                characterPath={characterPath}
-                inputConfig={inputConfig}
-                runtimeSettings={runtimeSettings}
-                onCharacterPathChange={setCharacterPath}
-                onInputConfigChange={setInputConfig}
-                onRuntimeSettingsChange={setRuntimeSettings}
-                audioStatus={audioStatus}
-                audioMuted={audioMuted}
-                audioMasterVolume={audioMasterVolume}
-                audioDiagnostic={audioDiagnostic}
-                onUnlockAudio={unlockAudio}
-                onTestAudio={testLoadedAudio}
-                onStopTestAudio={stopTestAudio}
-                onPanTestAudio={panTestAudio}
-                onAudioMutedChange={setAudioMute}
-                onAudioMasterVolumeChange={setAudioVolume}
-              />
-            )}
           </section>
       </section>
 
@@ -1212,17 +1277,41 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage } 
         {activePage === 'static-files' ? (
           <section className="debug-panel page-debug-panel">
             <StaticDebugPanel
-              loadMessage={loadMessage}
-              staticDebugInfo={staticDebugInfo}
-              coverageDebugLines={coverageDebugLines}
               sourceFiles={cnsSourceFiles}
               selectedSource={selectedCnsSource}
               onOpenSource={openCnsSource}
+              onSaveSource={handleSaveCharacterSource}
               sourceScrollPositionsRef={cnsSourceScrollPositionsRef}
               air={loadedAir}
               sprites={loadedSprites}
-              showCharacterFiles={showCharacterFiles}
-              onToggleCharacterFiles={() => setShowCharacterFiles((visible) => !visible)}
+            />
+          </section>
+        ) : null}
+      </section>
+
+      <section
+        className={`top-panel ${activePage === 'settings' ? 'active' : 'hidden'}`}
+        aria-hidden={activePage !== 'settings'}
+      >
+        {activePage === 'settings' ? (
+          <section className="debug-panel page-debug-panel settings-page-panel">
+            <SettingsPanel
+              characterPath={characterPath}
+              inputConfig={inputConfig}
+              runtimeSettings={runtimeSettings}
+              onCharacterPathChange={setCharacterPath}
+              onInputConfigChange={setInputConfig}
+              onRuntimeSettingsChange={setRuntimeSettings}
+              audioStatus={audioStatus}
+              audioMuted={audioMuted}
+              audioMasterVolume={audioMasterVolume}
+              audioDiagnostic={audioDiagnostic}
+              onUnlockAudio={unlockAudio}
+              onTestAudio={testLoadedAudio}
+              onStopTestAudio={stopTestAudio}
+              onPanTestAudio={panTestAudio}
+              onAudioMutedChange={setAudioMute}
+              onAudioMasterVolumeChange={setAudioVolume}
             />
           </section>
         ) : null}
@@ -1333,7 +1422,6 @@ function SettingsPanel({
   onAudioMutedChange: (muted: boolean) => void;
   onAudioMasterVolumeChange: (volume: number) => void;
 }) {
-  const { text } = useUiLanguage();
   return (
     <div className="settings-stack">
       <CharacterConfigPanel characterPath={characterPath} onChange={onCharacterPathChange} />
@@ -1350,23 +1438,6 @@ function SettingsPanel({
         onMutedChange={onAudioMutedChange}
         onMasterVolumeChange={onAudioMasterVolumeChange}
       />
-      <section className="settings-section">
-        <h2>{text('Control Summary', '操作一覧')}</h2>
-        <div className="control-help-grid">
-          <div>
-            <h3>{text('Keyboard', 'キーボード')}</h3>
-            <p>P1: {formatKeyboardMapping(inputConfig.players[0])}</p>
-            <p>P2: {formatKeyboardMapping(inputConfig.players[1])}</p>
-          </div>
-          <div>
-            <h3>{text('Controller', 'コントローラー')}</h3>
-            <p>{text('1st gamepad = P1, 2nd gamepad = P2', '1台目のゲームパッド = P1、2台目 = P2')}</p>
-            <p>{text('Move with the D-pad or left stick', '方向パッドまたは左スティックで移動')}</p>
-            <p>P1: {formatGamepadMapping(inputConfig.players[0])}</p>
-            <p>P2: {formatGamepadMapping(inputConfig.players[1])}</p>
-          </div>
-        </div>
-      </section>
       <InputConfigPanel
         config={inputConfig}
         onChange={onInputConfigChange}
@@ -1400,20 +1471,29 @@ export function AudioSettingsPanel({
 }) {
   const { text } = useUiLanguage();
   return (
-    <section className="settings-section" aria-label={text('audio settings', '音声設定')}>
-      <h2>{text('Audio', '音声')}</h2>
-      <p>{text('Audio status', '音声状態')}: {text(status, status === 'locked' ? '未開始' : status === 'unlocked' ? '開始済み' : '非対応')}</p>
-      <div className="runtime-settings-grid">
-        <button type="button" onClick={onUnlock}>{text('Start audio', '音声を開始')}</button>
-        <button type="button" onClick={onTest} disabled={status !== 'unlocked'}>{text('Play test sound', 'テスト音を再生')}</button>
-        <button type="button" onClick={onStopTest}>{text('Stop test sound', 'テスト音を停止')}</button>
-        <button type="button" onClick={onPanTest}>{text('Move test sound left', 'テスト音を左へ移動')}</button>
-        <label>
-          <input aria-label="Mute all audio" type="checkbox" checked={muted} onChange={(event) => onMutedChange(event.currentTarget.checked)} />
-          {text('Mute', 'ミュート')}
-        </label>
-        <label>
-          {text('Master volume', '全体音量')}: {masterVolume}%
+    <section className="settings-section audio-settings-section" aria-label={text('audio settings', '音声設定')}>
+      <div className="settings-section-header">
+        <div>
+          <h2>{text('Audio', '音声設定')}</h2>
+          <p>{text('Control playback, volume, and test output.', '再生状態、音量、テスト出力をまとめて調整します。')}</p>
+        </div>
+        <span className={`audio-status-badge ${status}`}>{text('Audio status', '音声状態')}: {text(status, status === 'locked' ? '未開始' : status === 'unlocked' ? '開始済み' : '非対応')}</span>
+      </div>
+      <div className="settings-card-grid audio-settings-grid">
+        <section className="settings-card audio-control-card">
+          <h3>{text('Playback test', '再生テスト')}</h3>
+          <div className="settings-action-grid">
+            <button className="settings-primary-button" type="button" onClick={onUnlock}>{text('Start audio', '音声を開始')}</button>
+            <button type="button" onClick={onTest} disabled={status !== 'unlocked'}>{text('Play test sound', 'テスト音を再生')}</button>
+            <button type="button" onClick={onStopTest}>{text('Stop', '停止')}</button>
+            <button type="button" onClick={onPanTest}>{text('Pan left', '左へ移動')}</button>
+          </div>
+        </section>
+        <section className="settings-card audio-volume-card">
+          <div className="audio-volume-header">
+            <h3>{text('Master volume', '全体音量')}</h3>
+            <strong>{masterVolume}%</strong>
+          </div>
           <input
             aria-label="Master volume"
             type="range"
@@ -1430,9 +1510,13 @@ export function AudioSettingsPanel({
               onMasterVolumeChange(next);
             }}
           />
-        </label>
+          <label className="settings-inline-option audio-mute-option">
+            <input aria-label="Mute all audio" type="checkbox" checked={muted} onChange={(event) => onMutedChange(event.currentTarget.checked)} />
+            {text('Mute all audio', 'すべてミュート')}
+          </label>
+        </section>
       </div>
-      <p>{diagnostic}</p>
+      <p className="settings-diagnostic">{diagnostic}</p>
     </section>
   );
 }
@@ -1500,6 +1584,7 @@ function InputConfigPanel({
         </button>
       </div>
       <LiveInputMonitor />
+      <ControlSummaryCard config={config} />
       <div className="input-config-grid">
         {config.players.map((player, playerIndex) => (
           <PlayerInputConfig
@@ -1523,109 +1608,85 @@ export function RuntimeSettingsPanel({
 }) {
   const { text } = useUiLanguage();
   return (
-    <section className="settings-section">
-      <h2>{text('Runtime', '実行設定')}</h2>
-      <div className="runtime-settings-grid">
-        <label>
-          {text('Game time', 'ラウンド時間')}
-          <input
-            min={0}
-            max={999}
-            type="number"
-            value={settings.roundTime}
-            onChange={(event) => onChange({ ...settings, roundTime: Number(event.currentTarget.value) })}
-          />
-        </label>
-        <label>
-          {text('Infinite power', 'パワー無限')}
-          <select
-            aria-label="Power Infinite"
-            value={settings.infinitePower}
-            onChange={(event) => onChange({
-              ...settings,
-              infinitePower: event.currentTarget.value as RuntimeSettings['infinitePower'],
-            })}
-          >
-            <option value="off">OFF</option>
-            <option value="p1">P1</option>
-            <option value="p2">P2</option>
-            <option value="both">P1 + P2</option>
-          </select>
-        </label>
-        <label>
-          <input
-            aria-label="Practice Mode"
-            type="checkbox"
-            checked={settings.practiceMode}
-            onChange={(event) => onChange({ ...settings, practiceMode: event.currentTarget.checked })}
-          />
-          {text('Practice mode (recover at 0 life, unlimited time)', '練習モード（体力0で全回復・時間無制限）')}
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={settings.hitDiagnostics}
-            disabled={!settings.aiLogEnabled}
-            onChange={(event) => onChange({ ...settings, hitDiagnostics: event.currentTarget.checked })}
-          />
-          {text('AI hit lifecycle details', 'AI向けヒット処理詳細')}
-        </label>
-        <label>
-          {text('Frame duration (ms)', 'フレーム間隔（ms）')}
-          <input
-            min={1}
-            max={1000}
-            step={1}
-            type="number"
-            value={Math.round(settings.frameIntervalMs)}
-            onChange={(event) => onChange({ ...settings, frameIntervalMs: Number(event.currentTarget.value) })}
-          />
-        </label>
-        <button type="button" onClick={() => onChange(DEFAULT_RUNTIME_SETTINGS)}>
+    <section className="settings-section runtime-settings-section">
+      <div className="settings-section-header">
+        <div>
+          <h2>{text('Runtime', '実行設定')}</h2>
+          <p>{text('Adjust match behavior and choose only the diagnostics you need.', '対戦の動作と、必要な診断表示だけをまとめて設定します。')}</p>
+        </div>
+        <button className="settings-secondary-button" type="button" onClick={() => onChange(DEFAULT_RUNTIME_SETTINGS)}>
           {text('MUGEN defaults', 'MUGEN既定値')}
         </button>
       </div>
-      <h3>{text('Debug / Logging', 'デバッグ・ログ')}</h3>
-      <div className="runtime-settings-grid">
-        <label>
-          <input
-            aria-label="Human log enabled"
-            type="checkbox"
-            checked={settings.humanLogEnabled}
-            onChange={(event) => onChange({ ...settings, humanLogEnabled: event.currentTarget.checked })}
-          />
-          {text('Human log', '人間向けログ')}
-          <small>{text('Records detailed diagnostics for reading on screen. May increase load.', '画面で読むための詳細診断を記録します。負荷が増える場合があります。')}</small>
+
+      <div className="settings-card-grid runtime-core-settings">
+        <section className="settings-card">
+          <h3>{text('Match behavior', '対戦動作')}</h3>
+          <div className="settings-field-grid">
+            <label className="settings-field">
+              <span>{text('Game time', 'ラウンド時間')}</span>
+              <input min={0} max={999} type="number" value={settings.roundTime} onChange={(event) => onChange({ ...settings, roundTime: Number(event.currentTarget.value) })} />
+            </label>
+            <label className="settings-field">
+              <span>{text('Infinite power', 'パワー無限')}</span>
+              <select aria-label="Power Infinite" value={settings.infinitePower} onChange={(event) => onChange({ ...settings, infinitePower: event.currentTarget.value as RuntimeSettings['infinitePower'] })}>
+                <option value="off">OFF</option>
+                <option value="p1">P1</option>
+                <option value="p2">P2</option>
+                <option value="both">P1 + P2</option>
+              </select>
+            </label>
+            <label className="settings-field">
+              <span>{text('Frame duration (ms)', 'フレーム間隔（ms）')}</span>
+              <input min={1} max={1000} step={1} type="number" value={Math.round(settings.frameIntervalMs)} onChange={(event) => onChange({ ...settings, frameIntervalMs: Number(event.currentTarget.value) })} />
+            </label>
+          </div>
+        </section>
+        <label className="settings-card settings-toggle-card">
+          <input aria-label="Practice Mode" type="checkbox" checked={settings.practiceMode} onChange={(event) => onChange({ ...settings, practiceMode: event.currentTarget.checked })} />
+          <span>
+            <strong>{text('Practice mode', '練習モード')}</strong>
+            <small>{text('Recover at 0 life and remove the round time limit.', '体力0で全回復し、ラウンド時間を無制限にします。')}</small>
+          </span>
         </label>
-        <label>
-          <input
-            aria-label="AI log enabled"
-            type="checkbox"
-            checked={settings.aiLogEnabled}
-            onChange={(event) => onChange({ ...settings, aiLogEnabled: event.currentTarget.checked })}
-          />
-          {text('AI log', 'AI向けログ')}
-          <small>{text('Records detailed AI_RUNTIME frame dumps. May increase load.', '詳細なAI_RUNTIMEフレーム情報を記録します。負荷が増える場合があります。')}</small>
+      </div>
+
+      <div className="settings-subsection-header">
+        <h3>{text('Debug / Logging', 'デバッグ・ログ')}</h3>
+        <p>{text('Enable only the information needed for the current investigation.', '現在の調査に必要な情報だけを有効にしてください。')}</p>
+      </div>
+      <div className="settings-card-grid diagnostics-settings-grid">
+        <section className="settings-card settings-toggle-card-with-control">
+          <label className="settings-toggle-row">
+            <input aria-label="Human log enabled" type="checkbox" checked={settings.humanLogEnabled} onChange={(event) => onChange({ ...settings, humanLogEnabled: event.currentTarget.checked })} />
+            <span><strong>{text('Human log', '人間向けログ')}</strong><small>{text('Detailed diagnostics for reading on screen.', '画面で読むための詳細診断を記録します。')}</small></span>
+          </label>
+          <label className="settings-field compact">
+            <span>{text('Retention', '保持条件')}</span>
+            <select aria-label="Human log capture mode" disabled={!settings.humanLogEnabled} value={settings.humanLogCaptureMode} onChange={(event) => onChange({ ...settings, humanLogCaptureMode: event.currentTarget.value as RuntimeSettings['humanLogCaptureMode'] })}>
+              <option value="all-frames">{text('Every frame', '全フレーム')}</option>
+              <option value="trigger-changes">{text('When trigger ON/OFF changes', 'トリガーのON/OFFに変化があったとき')}</option>
+              <option value="controller-activated">{text('When a state controller activates', 'ステコンが作動したとき')}</option>
+            </select>
+          </label>
+        </section>
+        <section className="settings-card settings-toggle-card-with-control">
+          <label className="settings-toggle-row">
+            <input aria-label="AI log enabled" type="checkbox" checked={settings.aiLogEnabled} onChange={(event) => onChange({ ...settings, aiLogEnabled: event.currentTarget.checked })} />
+            <span><strong>{text('AI log', 'AI向けログ')}</strong><small>{text('Compact event snapshots for diagnosis and copying.', '診断・コピー用にイベント発生時の要点を記録します。')}</small></span>
+          </label>
+          <label className="settings-inline-option">
+            <input type="checkbox" checked={settings.hitDiagnostics} disabled={!settings.aiLogEnabled} onChange={(event) => onChange({ ...settings, hitDiagnostics: event.currentTarget.checked })} />
+            {text('Include hit lifecycle details', 'ヒット処理詳細を含める')}
+          </label>
+        </section>
+        <label className="settings-card settings-toggle-card">
+          <input aria-label="Collision boxes visible" type="checkbox" checked={settings.collisionBoxesVisible} onChange={(event) => onChange({ ...settings, collisionBoxesVisible: event.currentTarget.checked })} />
+          <span><strong>{text('Collision boxes', '当たり判定枠')}</strong><small>{text('Draw Clsn1, Clsn2, Push, and projectile rectangles.', 'Clsn1、Clsn2、Push、Projectileの枠を描画します。')}</small></span>
         </label>
-        <label>
-          <input
-            aria-label="Collision boxes visible"
-            type="checkbox"
-            checked={settings.collisionBoxesVisible}
-            onChange={(event) => onChange({ ...settings, collisionBoxesVisible: event.currentTarget.checked })}
-          />
-          {text('Collision boxes', '当たり判定枠')}
-          <small>{text('Draws Clsn1, Clsn2, Push, and projectile debug rectangles.', 'Clsn1、Clsn2、Push、Projectileのデバッグ枠を描画します。')}</small>
-        </label>
-        <label>
-          <input
-            aria-label="State history visible"
-            type="checkbox"
-            checked={settings.stateHistoryVisible}
-            onChange={(event) => onChange({ ...settings, stateHistoryVisible: event.currentTarget.checked })}
-          />
-          {text('State history', 'ステート履歴')}
-          <small>{text('Shows lightweight state, input, and damage history at the lower left.', '左下に軽量なステート・入力・ダメージ履歴を表示します。')}</small>
+        <label className="settings-card settings-toggle-card">
+          <input aria-label="State history visible" type="checkbox" checked={settings.stateHistoryVisible} onChange={(event) => onChange({ ...settings, stateHistoryVisible: event.currentTarget.checked })} />
+          <span><strong>{text('State history', 'ステート履歴')}</strong><small>{text('Show lightweight state, input, and damage history.', '軽量なステート・入力・ダメージ履歴を表示します。')}</small></span>
         </label>
       </div>
     </section>
@@ -1937,7 +1998,10 @@ function AppPageTabs({ activePage, onChange }: { activePage: AppPage; onChange: 
         {text('Game / Runtime', 'ゲーム・実行状況')}
       </button>
       <button className={activePage === 'static-files' ? 'active' : ''} onClick={() => onChange('static-files')} type="button">
-        {text('Static Info / Character Files', '静的情報・キャラクターファイル')}
+        {text('Character Files', 'キャラクターファイル')}
+      </button>
+      <button className={activePage === 'settings' ? 'active' : ''} onClick={() => onChange('settings')} type="button">
+        {text('Settings', '設定')}
       </button>
     </nav>
   );
@@ -1955,9 +2019,6 @@ function DebugTabsV2({ activeTab, onChange }: { activeTab: DebugTab; onChange: (
       </button>
       <button className={activeTab === 'manual' ? 'active' : ''} onClick={() => onChange('manual')} type="button">
         {text('Manual', '操作説明')}
-      </button>
-      <button className={activeTab === 'settings' ? 'active' : ''} onClick={() => onChange('settings')} type="button">
-        {text('Settings', '設定')}
       </button>
     </nav>
   );
@@ -2130,49 +2191,55 @@ function CopyToolbar({
 }
 
 function StaticDebugPanel({
-  loadMessage,
-  staticDebugInfo,
-  coverageDebugLines,
   sourceFiles,
   selectedSource,
   onOpenSource,
+  onSaveSource,
   sourceScrollPositionsRef,
   air,
   sprites,
-  showCharacterFiles,
-  onToggleCharacterFiles,
 }: {
-  loadMessage: string;
-  staticDebugInfo: StaticDebugInfo;
-  coverageDebugLines: string[];
   sourceFiles: CharacterSourceFile[];
   selectedSource: CnsSourceSelection;
   onOpenSource: (selection: CnsSourceSelection) => void;
+  onSaveSource: (file: CharacterSourceFile, sourceText: string) => Promise<void>;
   sourceScrollPositionsRef: MutableRefObject<Record<string, number>>;
   air: AirDocument | null;
   sprites: ImageDataSpritePack | null;
-  showCharacterFiles: boolean;
-  onToggleCharacterFiles: () => void;
 }) {
+  return (
+    <CharacterSourceFilesViewer
+      files={sourceFiles}
+      selection={selectedSource}
+      onSelect={onOpenSource}
+      onSave={onSaveSource}
+      scrollPositionsRef={sourceScrollPositionsRef}
+      air={air}
+      sprites={sprites}
+    />
+  );
+}
+
+function ControlSummaryCard({ config }: { config: InputConfig }) {
   const { text } = useUiLanguage();
   return (
-    <div className="debug-grid">
-      <DebugBlock title="Character / DEF" lines={[loadMessage, ...staticDebugInfo.characterRows]} />
-      <DebugBlock title={text('CMD Commands', 'CMDコマンド')} lines={staticDebugInfo.commandRows} />
-      <DebugBlock title={text('CNS Coverage', 'CNS対応状況')} lines={coverageDebugLines} />
-      <section className="debug-block character-source-toggle-panel">
-        <div className="collapsible-debug-header">
-          <h2>{text('Character Files', 'キャラクターファイル')}</h2>
-          <button type="button" onClick={onToggleCharacterFiles}>{showCharacterFiles ? text('Hide', '隠す') : text('Show', '表示')}</button>
+    <section className="input-config-card control-summary-card">
+      <h3>{text('Control Summary', '操作一覧')}</h3>
+      <div className="control-help-grid">
+        <div>
+          <h4>{text('Keyboard', 'キーボード')}</h4>
+          <p>P1: {formatKeyboardMapping(config.players[0])}</p>
+          <p>P2: {formatKeyboardMapping(config.players[1])}</p>
         </div>
-        {showCharacterFiles ? (
-          <CharacterSourceFilesViewer files={sourceFiles} selection={selectedSource} onSelect={onOpenSource} scrollPositionsRef={sourceScrollPositionsRef} air={air} sprites={sprites} />
-        ) : (
-          <p className="debug-note">{text('Character Files is hidden to keep the debug UI light. Use Show or a StateDef link in the runtime log.', 'デバッグ画面を軽く保つため、キャラクターファイルを非表示にしています。「表示」または実行ログ内のStateDefリンクを使ってください。')}</p>
-        )}
-      </section>
-      <StateDefListPanel rows={staticDebugInfo.stateRows} />
-    </div>
+        <div>
+          <h4>{text('Controller', 'コントローラー')}</h4>
+          <p>{text('1st gamepad = P1, 2nd gamepad = P2', '1台目のゲームパッド = P1、2台目 = P2')}</p>
+          <p>{text('Move with the D-pad or left stick', '方向パッドまたは左スティックで移動')}</p>
+          <p>P1: {formatGamepadMapping(config.players[0])}</p>
+          <p>P2: {formatGamepadMapping(config.players[1])}</p>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -2204,21 +2271,28 @@ function StateDefListPanel({ rows }: { rows: StateDebugRow[] }) {
   );
 }
 
-const RuntimeFrameIndexList = memo(function RuntimeFrameIndexList({
+export const RuntimeFrameIndexList = memo(function RuntimeFrameIndexList({
   entries,
   selectedKey,
   autoScroll,
   onToggleAutoScroll,
   onSelectFrame,
+  showAnimNos,
 }: {
   entries: RuntimeLogIndexEntry[];
   selectedKey: string | null;
   autoScroll: boolean;
   onToggleAutoScroll: () => void;
   onSelectFrame: (entry: RuntimeLogIndexEntry) => void;
+  showAnimNos: boolean;
 }) {
   const listRef = useRef<HTMLDivElement | null>(null);
   const { text } = useUiLanguage();
+  const helperColumns = useMemo(() => {
+    const latestEntry = entries[entries.length - 1];
+    return [...(latestEntry?.helpers ?? [])].sort((left, right) => left.entityId - right.entityId);
+  }, [entries]);
+  const gridTemplateColumns = createRuntimeFrameIndexGridTemplate(showAnimNos, helperColumns.length);
 
   useEffect(() => {
     if (!autoScroll) return;
@@ -2229,44 +2303,94 @@ const RuntimeFrameIndexList = memo(function RuntimeFrameIndexList({
 
   return (
     <>
-      <div className="runtime-frame-index-controls">
-        <span>{autoScroll ? text('Following latest log', '最新ログへ自動追従') : text('Manual scrolling', '手動スクロール')}</span>
-        <button type="button" onClick={onToggleAutoScroll}>
-          {autoScroll ? text('Switch to manual', '手動に切替') : text('Follow latest', '自動追従に切替')}
-        </button>
-      </div>
+      <label className="runtime-frame-index-controls">
+        <input checked={autoScroll} onChange={onToggleAutoScroll} type="checkbox" />
+        {text('Automatically follow latest log', '最新ログへ自動追従')}
+      </label>
       <div className="runtime-frame-index" ref={listRef}>
         {entries.length > 0 ? (
-          <div className="runtime-frame-index-header">
+          <div className="runtime-frame-index-header" style={{ gridTemplateColumns }}>
             <span>時</span>
             <span>f</span>
-            <span>S</span>
-            <span>A</span>
-            <span>S2</span>
-            <span>A2</span>
+            <span>State</span>
+            {showAnimNos ? <span>Anim</span> : null}
+            <span>State2</span>
+            {showAnimNos ? <span>Anim2</span> : null}
+            {helperColumns.flatMap((helper) => [
+              <span className="runtime-helper-column-header" key={`${helper.entityId}-state`} title={`H${helper.helperId} #${helper.entityId} / P${helper.rootEntityId}`}>
+                H{helper.helperId}<small>State</small>
+              </span>,
+              ...(showAnimNos ? [
+                <span className="runtime-helper-column-header" key={`${helper.entityId}-anim`} title={`H${helper.helperId} #${helper.entityId} / P${helper.rootEntityId}`}>
+                  H{helper.helperId}<small>Anim</small>
+                </span>,
+              ] : []),
+            ])}
           </div>
         ) : null}
         {entries.length === 0 ? (
           <div className="history-empty">{text('Frames appear here when logs are generated.', 'ログが生成されると、ここにフレーム索引が追加されます。')}</div>
         ) : entries.map((entry) => (
-          <button
-            type="button"
-            className={`runtime-frame-index-row ${entry.key === selectedKey ? 'selected' : ''}`}
-            key={entry.id}
-            onClick={() => onSelectFrame(entry)}
-          >
-            <span>{entry.timestamp}</span>
-            <span>{entry.frameNo}</span>
-            <span className="runtime-index-state">{entry.p1StateNo}</span>
-            <span className="runtime-index-anim">{entry.p1AnimNo}</span>
-            <span className="runtime-index-state secondary">{entry.p2StateNo}</span>
-            <span className="runtime-index-anim secondary">{entry.p2AnimNo}</span>
-          </button>
+          <div className="runtime-frame-index-entry" key={entry.id}>
+            <div
+              aria-label={`${entry.timestamp} frame ${entry.frameNo}`}
+              className={`runtime-frame-index-row ${entry.key === selectedKey ? 'selected' : ''}`}
+              onClick={() => onSelectFrame(entry)}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                onSelectFrame(entry);
+              }}
+              role="button"
+              style={{ gridTemplateColumns }}
+              tabIndex={0}
+            >
+              <span>{entry.timestamp}</span>
+              <span>{entry.frameNo}</span>
+              <span className="runtime-index-state">{entry.p1StateNo}</span>
+              {showAnimNos ? <RuntimeAnimationValue animNo={entry.p1AnimNo} /> : null}
+              <span className="runtime-index-state secondary">{entry.p2StateNo}</span>
+              {showAnimNos ? <RuntimeAnimationValue animNo={entry.p2AnimNo} className="secondary" /> : null}
+              {helperColumns.flatMap((column) => {
+                const helper = entry.helpers.find((candidate) => candidate.entityId === column.entityId);
+                return [
+                  <span className={`runtime-index-state helper ${helper ? '' : 'empty'}`} key={`${column.entityId}-state`}>{helper?.stateNo ?? '-'}</span>,
+                  ...(showAnimNos ? [
+                    helper
+                      ? <RuntimeAnimationValue animNo={helper.animNo} className="helper" key={`${column.entityId}-anim`} />
+                      : <span className="runtime-index-anim helper empty" key={`${column.entityId}-anim`}>-</span>,
+                  ] : []),
+                ];
+              })}
+            </div>
+          </div>
         ))}
       </div>
     </>
   );
 });
+
+function RuntimeAnimationValue({
+  animNo,
+  className = '',
+}: {
+  animNo: number;
+  className?: string;
+}) {
+  return (
+    <span className={`runtime-index-anim ${className}`.trim()}>
+      {animNo}
+    </span>
+  );
+}
+
+export function createRuntimeFrameIndexGridTemplate(showAnimNos: boolean, helperCount: number): string {
+  const rootColumns = showAnimNos
+    ? ['62px', '52px', '58px', '58px', '58px', '58px']
+    : ['62px', '52px', '72px', '72px'];
+  const helperColumns = Array.from({ length: Math.max(0, helperCount) }, () => showAnimNos ? ['82px', '82px'] : ['82px']).flat();
+  return [...rootColumns, ...helperColumns].join(' ');
+}
 
 function createSelectedReadableRuntimeHistory(entry: ReadableRuntimeEntry | null): VisibleRuntimeHistory {
   return {
@@ -2292,66 +2416,160 @@ function createEmptyVisibleRuntimeHistory(): VisibleRuntimeHistory {
   };
 }
 
-function HumanRuntimePanel({
+export function HumanRuntimePanel({
+  captureMode,
   indexEntries,
   selectedEntry,
   onSelectFrame,
-  showHumanDetail,
-  onToggleHumanDetail,
   autoScrollIndex,
   onToggleAutoScrollIndex,
   onShowLatest,
   onOpenCnsSource,
+  onOpenAnimationSource,
+  onCaptureModeChange,
 }: {
+  captureMode: RuntimeSettings['humanLogCaptureMode'];
   indexEntries: RuntimeLogIndexEntry[];
   selectedEntry: ReadableRuntimeEntry | null;
   onSelectFrame: (entry: RuntimeLogIndexEntry) => void;
-  showHumanDetail: boolean;
-  onToggleHumanDetail: () => void;
   autoScrollIndex: boolean;
   onToggleAutoScrollIndex: () => void;
   onShowLatest: () => void;
   onOpenCnsSource: (selection: CnsSourceSelection) => void;
+  onOpenAnimationSource?: (animNo: number) => void;
+  onCaptureModeChange: (mode: RuntimeSettings['humanLogCaptureMode']) => void;
 }) {
   const { text } = useUiLanguage();
+  const [showAnimNos, setShowAnimNos] = useState(true);
+  const [indexWidth, setIndexWidth] = useState(400);
+  const [resizingMain, setResizingMain] = useState(false);
+  const [activeEntityKey, setActiveEntityKey] = useState('p1');
+  const mainGridRef = useRef<HTMLDivElement | null>(null);
+  const helperLogs = selectedEntry?.helperLogs ?? [];
+  const selectedIndexEntry = indexEntries.find((entry) => entry.key === selectedEntry?.key) ?? null;
+  const helperOptions = new Map(helperLogs.map((helper) => [helper.key, { key: helper.key, label: helper.label }]));
+  for (const helper of selectedIndexEntry?.helpers ?? []) {
+    const key = `helper-${helper.entityId}`;
+    if (!helperOptions.has(key)) helperOptions.set(key, { key, label: `H${helper.helperId}` });
+  }
+  const entityOptions = [
+    { key: 'p1', label: 'P1', lines: selectedEntry?.lines ?? [], stateNo: selectedEntry?.p1StateNo, opponentLabel: 'P2', opponentStateNo: selectedEntry?.p2StateNo },
+    { key: 'p2', label: 'P2', lines: selectedEntry?.p2Lines ?? [], stateNo: selectedEntry?.p2StateNo, opponentLabel: 'P1', opponentStateNo: selectedEntry?.p1StateNo },
+    ...Array.from(helperOptions.values()).map((option) => ({
+      ...option,
+      lines: helperLogs.find((helper) => helper.key === option.key)?.lines ?? [],
+      stateNo: selectedIndexEntry?.helpers.find((helper) => `helper-${helper.entityId}` === option.key)?.stateNo,
+      opponentLabel: selectedIndexEntry?.helpers.find((helper) => `helper-${helper.entityId}` === option.key)?.rootEntityId === 2 ? 'P1' : 'P2',
+      opponentStateNo: selectedIndexEntry?.helpers.find((helper) => `helper-${helper.entityId}` === option.key)?.rootEntityId === 2
+        ? selectedEntry?.p1StateNo
+        : selectedEntry?.p2StateNo,
+    })),
+  ];
+  const activeEntity = entityOptions.find((entity) => entity.key === activeEntityKey) ?? entityOptions[0];
+
   return (
     <section className="runtime-history-panel">
-      <div className="runtime-human-grid">
+      <div
+        className="runtime-human-grid"
+        ref={mainGridRef}
+        style={{ '--runtime-index-width': `${indexWidth}px` } as CSSProperties}
+      >
         <section>
           <h2>{text('Runtime Frame Index', '実行フレーム一覧')}</h2>
           <p className="debug-note">{text('Only frames with retained detail logs are listed. Multiple StateNo values in one frame appear as separate rows.', '詳細ログが残っているフレームだけを表示します。同じフレームに複数のStateNoがある場合は別の行になります。')}</p>
+          <label className="runtime-frame-capture-mode">
+            {text('Retain logs', 'ログ保持')}
+            <select value={captureMode} onChange={(event) => onCaptureModeChange(event.currentTarget.value as RuntimeSettings['humanLogCaptureMode'])}>
+              <option value="all-frames">{text('Every frame', '全フレーム')}</option>
+              <option value="trigger-changes">{text('Trigger ON/OFF changes', 'トリガーのON/OFFに変化があったとき')}</option>
+              <option value="controller-activated">{text('State controller activated', 'ステコンが作動したとき')}</option>
+            </select>
+          </label>
+          <label className="runtime-frame-anim-toggle">
+            <input checked={showAnimNos} onChange={(event) => setShowAnimNos(event.currentTarget.checked)} type="checkbox" />
+            {text('Show animation numbers', 'アニメ番号を表示')}
+          </label>
           <RuntimeFrameIndexList
             entries={indexEntries}
             selectedKey={selectedEntry?.key ?? null}
             autoScroll={autoScrollIndex}
             onToggleAutoScroll={onToggleAutoScrollIndex}
             onSelectFrame={onSelectFrame}
+            showAnimNos={showAnimNos}
           />
         </section>
+        <div
+          aria-label={text('Resize runtime frame list and detail log', '実行フレーム一覧と詳細ログの幅を変更')}
+          aria-orientation="vertical"
+          className={`runtime-splitter ${resizingMain ? 'dragging' : ''}`}
+          onPointerDown={(event) => {
+            const splitter = event.currentTarget;
+            const resize = (clientX: number) => {
+              if (!mainGridRef.current) return;
+              const bounds = mainGridRef.current.getBoundingClientRect();
+              setIndexWidth(Math.max(280, Math.min(clientX - bounds.left, bounds.width - 430)));
+            };
+            const handleMove = (moveEvent: PointerEvent) => resize(moveEvent.clientX);
+            const handleUp = () => {
+              document.removeEventListener('pointermove', handleMove);
+              document.removeEventListener('pointerup', handleUp);
+              setResizingMain(false);
+            };
+            splitter.setPointerCapture(event.pointerId);
+            setResizingMain(true);
+            document.addEventListener('pointermove', handleMove);
+            document.addEventListener('pointerup', handleUp, { once: true });
+          }}
+          role="separator"
+          tabIndex={0}
+        />
         <section>
-          <div className="collapsible-debug-header">
-            <h2>{text('Human Detail Log', '人間向け詳細ログ')}</h2>
-            <button type="button" onClick={onToggleHumanDetail}>{showHumanDetail ? text('Hide', '隠す') : text('Show', '表示')}</button>
-          </div>
+          <h2>{text('Human Detail Log', '人間向け詳細ログ')}</h2>
           <p className="debug-note">{text('Selecting a row loads only that detail entry. New logs do not replace the current selection.', '行を選ぶと、その詳細だけを表示します。新しいログが現在の選択を置き換えることはありません。')}</p>
           <button type="button" className="history-latest-button" onClick={onShowLatest}>{text('Show Latest Frame', '最新フレームを表示')}</button>
-          {!showHumanDetail ? (
-            <div className="history-empty">{text('Detail log is hidden. Select a frame or show the latest frame to open it.', '詳細ログは非表示です。フレームを選ぶか、最新フレームを表示してください。')}</div>
-          ) : selectedEntry ? (
+          {selectedEntry ? (
             <>
               <div className="history-selected-frame">
-                {text('selected frame', '選択中フレーム')}={selectedEntry.frameNo} P1 state={selectedEntry.p1StateNo} P2 state={selectedEntry.p2StateNo}
+                <span>{selectedIndexEntry?.timestamp ?? '--:--:--'}</span>
+                <strong>f={selectedEntry.frameNo}</strong>
               </div>
-              <div className="human-detail-grid">
-                <section className="human-detail-player" aria-label="P1 detail log">
-                  <h3>P1</h3>
-                  <ReadableRuntimeHistoryMarkup lines={selectedEntry.lines} onOpenCnsSource={onOpenCnsSource} />
-                </section>
-                <section className="human-detail-player" aria-label="P2 detail log">
-                  <h3>P2</h3>
-                  <ReadableRuntimeHistoryMarkup lines={selectedEntry.p2Lines} onOpenCnsSource={onOpenCnsSource} />
-                </section>
+              <div className="human-detail-entity-tabs" aria-label={text('Detail log entities', '詳細ログの表示対象')} role="tablist">
+                {entityOptions.map((entity) => (
+                  <button
+                    aria-controls={`human-detail-${entity.key}`}
+                    aria-selected={activeEntity.key === entity.key}
+                    className={activeEntity.key === entity.key ? 'active' : ''}
+                    key={entity.key}
+                    onClick={() => setActiveEntityKey(entity.key)}
+                    role="tab"
+                    type="button"
+                  >
+                    {entity.label}
+                  </button>
+                ))}
               </div>
+              <section
+                aria-label={`${activeEntity.label} detail log`}
+                className="human-detail-player"
+                id={`human-detail-${activeEntity.key}`}
+                role="tabpanel"
+              >
+                {activeEntity.lines.length > 0 ? (
+                  <>
+                    <div className="human-detail-state-summary">
+                      <strong>state={activeEntity.stateNo ?? '-'}</strong>
+                      <span>{activeEntity.opponentLabel} state={activeEntity.opponentStateNo ?? '-'}</span>
+                    </div>
+                    <ReadableRuntimeHistoryMarkup
+                      lines={activeEntity.lines.filter((line) => !line.trim().startsWith('----'))}
+                      onOpenAnimationSource={onOpenAnimationSource}
+                      onOpenCnsSource={onOpenCnsSource}
+                    />
+                  </>
+                ) : (
+                  <div className="history-empty">{text('No retained detail is available for this entity in the selected frame.', '選択中フレームには、この対象の詳細ログがありません。')}</div>
+                )}
+              </section>
             </>
           ) : (
             <div className="history-empty">{text('Select a frame on the left.', '左側でフレームを選択してください。')}</div>
@@ -2447,15 +2665,102 @@ function ReadableRuntimePanel({
 function ReadableRuntimeHistoryMarkup({
   lines,
   onOpenCnsSource,
+  onOpenAnimationSource,
 }: {
   lines: string[];
   onOpenCnsSource: (selection: CnsSourceSelection) => void;
+  onOpenAnimationSource?: (animNo: number) => void;
 }) {
+  const stateDefSelection = parseStateDefSourceSelection(lines);
+  const rendered: ReactNode[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (line.trim().startsWith('StateDef ')) {
+      const parameterLines: string[] = [];
+      while (index + 1 < lines.length && /^STATEDEF_PARAM\s+`/.test(lines[index + 1].trim())) {
+        parameterLines.push(lines[index + 1]);
+        index += 1;
+      }
+      rendered.push(<ReadableStateDefBlock key={`${index}-${line}`} line={line.trim()} onOpenCnsSource={onOpenCnsSource} parameterLines={parameterLines} />);
+      continue;
+    }
+    if (/^\s*\*\*.+\*\*\s+\|\s+/.test(line)) {
+      const triggerLines: string[] = [];
+      const parameterLines: string[] = [];
+      while (index + 1 < lines.length && /^\s*(?:(?:OK|NG)\s+`|PARAM\s+`)/.test(lines[index + 1])) {
+        if (/^\s*PARAM\s+`/.test(lines[index + 1])) parameterLines.push(lines[index + 1]);
+        else triggerLines.push(lines[index + 1]);
+        index += 1;
+      }
+      rendered.push(<ReadableControllerBlock headerLine={line} key={`${index}-${line}`} onOpenAnimationSource={onOpenAnimationSource} onOpenCnsSource={onOpenCnsSource} parameterLines={parameterLines} triggerLines={triggerLines} />);
+      continue;
+    }
+    rendered.push(
+      <ReadableRuntimeHistoryLine
+        key={`${index}-${line}`}
+        line={line}
+        onOpenAnimationSource={onOpenAnimationSource}
+        onOpenCnsSource={onOpenCnsSource}
+        stateDefSelection={stateDefSelection}
+      />,
+    );
+  }
   return (
     <div className="history-pre readable-history-view">
-      {lines.map((line, index) => (
-        <ReadableRuntimeHistoryLine key={`${index}-${line}`} line={line} onOpenCnsSource={onOpenCnsSource} />
-      ))}
+      {rendered}
+    </div>
+  );
+}
+
+function ReadableControllerBlock({
+  headerLine,
+  onOpenAnimationSource,
+  onOpenCnsSource,
+  parameterLines,
+  triggerLines,
+}: {
+  headerLine: string;
+  onOpenAnimationSource?: (animNo: number) => void;
+  onOpenCnsSource: (selection: CnsSourceSelection) => void;
+  parameterLines: string[];
+  triggerLines: string[];
+}) {
+  const [triggersExpanded, setTriggersExpanded] = useState(false);
+  const [parametersExpanded, setParametersExpanded] = useState(false);
+  const valueParameter = parseControllerValueText(headerLine);
+  const allParameterLines = [
+    ...(valueParameter ? [`PARAM \`${valueParameter.replace(/^value:\s*/, 'value = ').replace(/\s+=>\s+/, ' || evaluated: ')}\``] : []),
+    ...parameterLines,
+  ];
+  return (
+    <div className="readable-controller-block">
+      <ReadableRuntimeHistoryLine line={headerLine} onOpenAnimationSource={onOpenAnimationSource} onOpenCnsSource={onOpenCnsSource} stateDefSelection={null} />
+      {triggerLines.length > 0 ? (
+        <button
+          aria-expanded={triggersExpanded}
+          className="readable-controller-disclosure"
+          onClick={() => setTriggersExpanded((value) => !value)}
+          type="button"
+        >
+          {triggersExpanded ? '▲' : '▼'} triggers ({triggerLines.length})
+        </button>
+      ) : null}
+      {allParameterLines.length > 0 ? (
+        <button
+          aria-expanded={parametersExpanded}
+          className="readable-controller-disclosure"
+          onClick={() => setParametersExpanded((value) => !value)}
+          type="button"
+        >
+          {parametersExpanded ? '▲' : '▼'} parameters ({allParameterLines.length})
+        </button>
+      ) : null}
+      {triggersExpanded ? triggerLines.map((line, index) => (
+        <ReadableRuntimeHistoryLine key={`${index}-${line}`} line={line} onOpenAnimationSource={onOpenAnimationSource} onOpenCnsSource={onOpenCnsSource} stateDefSelection={null} />
+      )) : null}
+      {parametersExpanded ? allParameterLines.map((line, index) => (
+        <ReadableRuntimeHistoryLine key={`${index}-${line}`} line={line} onOpenAnimationSource={onOpenAnimationSource} onOpenCnsSource={onOpenCnsSource} stateDefSelection={null} />
+      )) : null}
     </div>
   );
 }
@@ -2491,19 +2796,22 @@ function HistoryWindowStatus({
 
 function ReadableRuntimeHistoryLine({
   line,
+  onOpenAnimationSource,
   onOpenCnsSource,
+  stateDefSelection,
 }: {
   line: string;
+  onOpenAnimationSource?: (animNo: number) => void;
   onOpenCnsSource: (selection: CnsSourceSelection) => void;
+  stateDefSelection: CnsSourceSelection;
 }) {
   const trimmed = line.trim();
   if (!trimmed) return <div className="readable-history-spacer" aria-hidden="true" />;
 
   const controllerMatch = trimmed.match(/^\*\*(.+)\*\*\s+\|\s+(.+)$/);
   if (controllerMatch) {
-    const passed = controllerMatch[2].includes('OK');
+    const passed = controllerMatch[2].includes('ACTIVE') && !controllerMatch[2].includes('INACTIVE');
     const source = parseControllerSourceRef(controllerMatch[2]);
-    const valueText = parseControllerValueText(controllerMatch[2]);
     return (
       <div className={`readable-history-controller ${passed ? 'passed' : 'failed'}`}>
         {source ? (
@@ -2513,12 +2821,12 @@ function ReadableRuntimeHistoryLine({
             onClick={() => onOpenCnsSource(source)}
             title={`${source.path}:${source.line}`}
           >
-            {controllerMatch[1]}{valueText ? ` | ${valueText}` : ''}
+            {controllerMatch[1]}
           </button>
         ) : (
-          <strong>{controllerMatch[1]}{valueText ? ` | ${valueText}` : ''}</strong>
+          <strong>{controllerMatch[1]}</strong>
         )}
-        <span>{passed ? '成立' : '不成立'}</span>
+        <span>{passed ? '作動' : '非作動'}</span>
       </div>
     );
   }
@@ -2536,6 +2844,17 @@ function ReadableRuntimeHistoryLine({
     );
   }
 
+  const parameterMatch = trimmed.match(/^PARAM\s+`(.+)`$/);
+  if (parameterMatch) {
+    const [expressionText, evaluatedText] = parameterMatch[1].split(' || evaluated: ', 2);
+    return (
+      <div className="readable-history-parameter">
+        <code>{expressionText}</code>
+        {evaluatedText ? <span className="readable-history-values">evaluated: {evaluatedText}</span> : null}
+      </div>
+    );
+  }
+
   if (trimmed.startsWith('----')) {
     const frameMatch = trimmed.match(/\bframe=(\d+)\b/);
     const frameId = frameMatch ? runtimeFrameElementId(Number(frameMatch[1])) : undefined;
@@ -2544,7 +2863,7 @@ function ReadableRuntimeHistoryLine({
   if (trimmed === 'State状況:' || (trimmed.startsWith('State') && !trimmed.startsWith('StateNo='))) {
     return <div className="readable-history-section">State状況</div>;
   }
-  if (trimmed.startsWith('P1 StateNo=') || trimmed.startsWith('P2 StateNo=')) return <ReadableRuntimeHistoryMeta line={trimmed} />;
+  if (/^(?:P1|P2|H\d+(?: #\d+)?) StateNo=/.test(trimmed)) return <ReadableRuntimeHistoryMeta line={trimmed} onOpenAnimationSource={onOpenAnimationSource} onOpenCnsSource={onOpenCnsSource} source={stateDefSelection} />;
   if (trimmed.startsWith('StateDef ')) return <ReadableStateDefLink line={trimmed} onOpenCnsSource={onOpenCnsSource} />;
   if (trimmed.startsWith('keys=')) return <div className="readable-history-keys">{trimmed}</div>;
   if (trimmed.startsWith('Damage=')) return <div className="readable-history-damage">{trimmed}</div>;
@@ -2569,14 +2888,80 @@ function parseControllerSourceRef(text: string): Exclude<CnsSourceSelection, nul
   return { path: match[1], line: Number(match[2]) };
 }
 
-function ReadableRuntimeHistoryMeta({ line }: { line: string }) {
-  const match = line.match(/^P1 StateNo=(\d+)\s+(.*)$/);
+function ReadableRuntimeHistoryMeta({
+  line,
+  onOpenAnimationSource,
+  onOpenCnsSource,
+  source,
+}: {
+  line: string;
+  onOpenAnimationSource?: (animNo: number) => void;
+  onOpenCnsSource: (selection: CnsSourceSelection) => void;
+  source: CnsSourceSelection;
+}) {
+  const match = line.match(/^((?:P[12]|H\d+(?: #\d+)?)) StateNo=(-?\d+)\s+Anim(?:No)?=(-?\d+)\s+Time=(-?\d+)(.*)$/);
   if (!match) return <div className="readable-history-meta">{line}</div>;
   return (
     <div className="readable-history-meta">
-      <span>P1 </span>
-      <span className="readable-state-badge">StateNo={match[1]}</span>
-      <span> {match[2]}</span>
+      <span>{match[1]} </span>
+      <button className="readable-state-badge" disabled={!source} onClick={() => source && onOpenCnsSource(source)} type="button">StateNo={match[2]}</button>
+      <button
+        className="readable-history-anim readable-history-anim-link"
+        disabled={!onOpenAnimationSource}
+        onClick={() => onOpenAnimationSource?.(Number(match[3]))}
+        title={`Open Begin Action ${match[3]}`}
+        type="button"
+      >
+        Anim={match[3]}
+      </button>
+      <span> Time={match[4]}{match[5]}</span>
+    </div>
+  );
+}
+
+function parseStateDefSourceSelection(lines: readonly string[]): CnsSourceSelection {
+  for (const line of lines) {
+    const match = line.trim().match(/^StateDef\s+-?\d+\s+@\s+(.+):(\d+)$/);
+    if (match) return { path: match[1], line: Number(match[2]) };
+  }
+  return null;
+}
+
+function ReadableStateDefBlock({
+  line,
+  onOpenCnsSource,
+  parameterLines,
+}: {
+  line: string;
+  onOpenCnsSource: (selection: CnsSourceSelection) => void;
+  parameterLines: string[];
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const match = line.match(/^StateDef\s+(-?\d+)(?:\s+@\s+(.+):(\d+))?$/);
+  if (!match) return <div className="readable-history-statedef">{line}</div>;
+  const selection = match[2] && match[3] ? { path: match[2], line: Number(match[3]) } : null;
+  return (
+    <div className="readable-statedef-block">
+      <div className="readable-history-statedef">
+        <button disabled={!selection} onClick={() => selection && onOpenCnsSource(selection)} type="button">StateDef {match[1]}</button>
+        {parameterLines.length > 0 ? (
+          <button
+            aria-expanded={expanded}
+            className="readable-statedef-disclosure"
+            onClick={() => setExpanded((value) => !value)}
+            type="button"
+          >
+            {expanded ? '▲' : '▼'} parameters ({parameterLines.length})
+          </button>
+        ) : null}
+      </div>
+      {expanded ? (
+        <div className="readable-statedef-parameters">
+          {parameterLines.map((parameterLine, index) => (
+            <div key={`${index}-${parameterLine}`}>{parameterLine.trim().replace(/^STATEDEF_PARAM\s+`|`$/g, '')}</div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -2632,10 +3017,11 @@ function runtimeFrameElementId(frameNo: number): string {
   return `runtime-frame-${frameNo}`;
 }
 
-function CharacterSourceFilesViewer({
+export function CharacterSourceFilesViewer({
   files,
   selection,
   onSelect,
+  onSave,
   scrollPositionsRef,
   air,
   sprites,
@@ -2643,6 +3029,7 @@ function CharacterSourceFilesViewer({
   files: CharacterSourceFile[];
   selection: CnsSourceSelection;
   onSelect: (selection: CnsSourceSelection) => void;
+  onSave?: (file: CharacterSourceFile, sourceText: string) => Promise<void>;
   scrollPositionsRef?: MutableRefObject<Record<string, number>>;
   air?: AirDocument | null;
   sprites?: ImageDataSpritePack | null;
@@ -2651,7 +3038,22 @@ function CharacterSourceFilesViewer({
   const localScrollPositionsRef = useRef<Record<string, number>>({});
   const effectiveScrollPositionsRef = scrollPositionsRef ?? localScrollPositionsRef;
   const codeRef = useRef<HTMLDivElement | null>(null);
+  const detailRef = useRef<HTMLDivElement | null>(null);
+  const editorHighlightRef = useRef<HTMLPreElement | null>(null);
+  const resizingRef = useRef(false);
+  const rowResizingRef = useRef<'file-list' | 'detail' | null>(null);
   const [selectedAirActionNo, setSelectedAirActionNo] = useState<number | null>(null);
+  const [summaryWidth, setSummaryWidth] = useState(300);
+  const [fileListHeight, setFileListHeight] = useState(() => calculateCharacterFileListHeight(files));
+  const [detailHeight, setDetailHeight] = useState(560);
+  const [syntaxTheme, setSyntaxTheme] = useState<CharacterSyntaxTheme>('vscode-dark-2026');
+  const [editingPath, setEditingPath] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [saveStatus, setSaveStatus] = useState<{ path: string; state: 'saving' | 'saved' | 'error'; message: string } | null>(null);
+  const [selectedSffSpriteKey, setSelectedSffSpriteKey] = useState<SpriteKey | null>(null);
+  const [selectedSndSampleKey, setSelectedSndSampleKey] = useState<string | null>(null);
+  const [sffZoom, setSffZoom] = useState(1);
+  const [sffPan, setSffPan] = useState({ x: 0, y: 0 });
   const fallbackSelection = files[0] ? { path: files[0].path, line: 1 } : null;
   const effectiveSelection = selection && files.some((file) => file.path === selection.path) ? selection : fallbackSelection;
   const selectedFile = effectiveSelection ? files.find((file) => file.path === effectiveSelection.path) : null;
@@ -2666,6 +3068,28 @@ function CharacterSourceFilesViewer({
   const effectiveAirActionNo = selectedFile?.kind === 'air'
     ? selectedAirActionNo ?? (airActions[0] ? Number(airActions[0].value) : null)
     : null;
+  const selectedDraft = selectedFile ? drafts[selectedFile.path] ?? selectedFile.text : '';
+  const isEditing = selectedFile?.path === editingPath;
+  const isDirty = selectedFile ? selectedDraft !== selectedFile.text : false;
+  const selectedSff = useMemo(() => resolveSffPreview(selectedFile, sprites ?? null), [selectedFile, sprites]);
+  const sffEntries = useMemo(() => sortSffSpriteEntries(selectedSff.pack), [selectedSff.pack]);
+  const effectiveSffSpriteKey = selectedSffSpriteKey && selectedSff.pack?.sprites.has(selectedSffSpriteKey)
+    ? selectedSffSpriteKey
+    : sffEntries[0]?.[0] ?? null;
+  const selectedSnd = useMemo(() => resolveSndPreview(selectedFile), [selectedFile]);
+  const effectiveSndSampleKey = selectedSndSampleKey && selectedSnd.document?.samplesByKey.has(selectedSndSampleKey)
+    ? selectedSndSampleKey
+    : selectedSnd.document?.samples[0]
+      ? sndSampleKey(selectedSnd.document.samples[0].group, selectedSnd.document.samples[0].index)
+      : null;
+
+  const fileInventorySignature = files.map((file) => `${file.external ? 'e' : 'i'}:${file.path}`).join('|');
+  const previousFileInventorySignatureRef = useRef(fileInventorySignature);
+  useEffect(() => {
+    if (previousFileInventorySignatureRef.current === fileInventorySignature) return;
+    previousFileInventorySignatureRef.current = fileInventorySignature;
+    setFileListHeight(calculateCharacterFileListHeight(files));
+  }, [fileInventorySignature, files]);
 
   useEffect(() => {
     const codeElement = codeRef.current;
@@ -2701,6 +3125,47 @@ function CharacterSourceFilesViewer({
     onSelect({ path: selectedFile.path, line: item.line });
   };
 
+  const handleResizePointerMove = (clientX: number) => {
+    if (!resizingRef.current || !detailRef.current) return;
+    const bounds = detailRef.current.getBoundingClientRect();
+    setSummaryWidth(Math.max(160, Math.min(bounds.width - 320, clientX - bounds.left)));
+  };
+
+  const handleSave = async () => {
+    if (!selectedFile || !selectedFile.editable || !isEditing || !onSave) return;
+    setSaveStatus({ path: selectedFile.path, state: 'saving', message: text('Saving…', '保存中…') });
+    try {
+      await onSave(selectedFile, selectedDraft);
+      setSaveStatus({ path: selectedFile.path, state: 'saved', message: text('Saved', '保存しました') });
+      setEditingPath(null);
+    } catch (error) {
+      setSaveStatus({
+        path: selectedFile.path,
+        state: 'error',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  const discardEdit = () => {
+    if (!selectedFile || !isEditing) return;
+    if (isDirty && !window.confirm(text('Discard the unsaved changes?', '未保存の変更を破棄しますか？'))) return;
+    setDrafts((current) => ({ ...current, [selectedFile.path]: selectedFile.text }));
+    setEditingPath(null);
+    setSaveStatus(null);
+  };
+
+  const selectFile = (path: string) => {
+    if (isEditing && isDirty && selectedFile && path !== selectedFile.path) {
+      if (!window.confirm(text('Discard the unsaved changes and open another file?', '未保存の変更を破棄して別のファイルを開きますか？'))) return;
+      setDrafts((current) => ({ ...current, [selectedFile.path]: selectedFile.text }));
+      setEditingPath(null);
+    }
+    setSelectedSffSpriteKey(null);
+    setSelectedSndSampleKey(null);
+    onSelect({ path, line: 1 });
+  };
+
   if (files.length === 0) {
     return (
       <section className="cns-source-viewer character-source-viewer">
@@ -2721,43 +3186,87 @@ function CharacterSourceFilesViewer({
 
   const lines = selectedFile.text.split(/\r?\n/);
   return (
-    <section className="cns-source-viewer character-source-viewer">
+    <section className={`cns-source-viewer character-source-viewer syntax-theme-${syntaxTheme}`}>
       <h2>{text('Character Files', 'キャラクターファイル')}</h2>
       <div className="character-source-layout">
-        <div className="character-source-file-list" aria-label="loaded character files">
-          {files.map((file) => (
+        <div className="character-source-file-list" aria-label="loaded character files" style={{ height: `${fileListHeight}px` }}>
+          {files.map((file, index) => (
+            <div className="character-source-file-entry" key={file.path}>
+            {index === 0 || files[index - 1]?.external !== file.external ? (
+              <div className="character-source-file-group-heading">{file.external ? 'エンジン' : 'キャラ'}</div>
+            ) : null}
             <button
-              className={file.path === selectedFile.path ? 'active' : ''}
-              key={file.path}
-              onClick={() => onSelect({ path: file.path, line: 1 })}
-              title={file.path}
+              className={`${file.path === selectedFile.path ? 'active' : ''} kind-${file.path.toLowerCase().split('.').pop() ?? 'binary'}`.trim()}
+              onClick={() => selectFile(file.path)}
+              title={`${file.path}${file.external ? ` (${text('outside character folder', 'キャラクターフォルダ外')})` : ''}`}
               type="button"
             >
               <span className="character-source-kind">{formatSourceKind(file)}</span>
               <span>{file.label}</span>
+              {file.external ? <small>{text('external', '外部')}</small> : null}
             </button>
+            </div>
           ))}
         </div>
-        <div className="character-source-detail">
+        <div
+          aria-label={text('Resize file list height', 'ファイル一覧の高さを変更')}
+          aria-orientation="horizontal"
+          aria-valuemax={1600}
+          aria-valuemin={68}
+          aria-valuenow={fileListHeight}
+          className="character-source-row-resizer"
+          onKeyDown={(event) => {
+            if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+            event.preventDefault();
+            setFileListHeight((height) => Math.max(68, Math.min(1600, height + (event.key === 'ArrowUp' ? -24 : 24))));
+          }}
+          onPointerDown={(event) => {
+            rowResizingRef.current = 'file-list';
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={(event) => {
+            if (rowResizingRef.current !== 'file-list') return;
+            const list = event.currentTarget.previousElementSibling?.getBoundingClientRect();
+            if (list) setFileListHeight(Math.max(68, Math.min(1600, event.clientY - list.top)));
+          }}
+          onPointerUp={(event) => {
+            rowResizingRef.current = null;
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }}
+          role="separator"
+          tabIndex={0}
+        />
+        <div
+          className="character-source-detail"
+          ref={detailRef}
+          style={{ '--character-summary-width': `${summaryWidth}px`, height: `${detailHeight}px` } as CSSProperties}
+        >
           <div className="character-source-summary">
-            <h3>{text('Summary', '概要')}</h3>
-            {sourceOutline.length === 0 ? (
-              <div className="character-source-summary-empty">outline=-</div>
+            <h3>{text('Map', 'マップ')}</h3>
+            {selectedFile.kind === 'sff' ? (
+              <SffSpriteMap
+                entries={sffEntries}
+                error={selectedSff.error}
+                onSelect={setSelectedSffSpriteKey}
+                paletteCount={selectedSff.pack?.palettes?.size ?? 0}
+                selectedKey={effectiveSffSpriteKey}
+                spriteCount={sffEntries.length}
+              />
+            ) : selectedFile.kind === 'snd' ? (
+              <SndSampleMap
+                document={selectedSnd.document}
+                error={selectedSnd.error}
+                onSelect={setSelectedSndSampleKey}
+                selectedKey={effectiveSndSampleKey}
+              />
             ) : (
-              <div className="character-source-summary-list">
-                {sourceOutline.map((item) => (
-                  <button
-                    key={`${item.kind}-${item.line}-${item.label}`}
-                    type="button"
-                    onClick={() => handleOutlineClick(item)}
-                    className={item.kind === 'air-action' && item.value === effectiveAirActionNo ? 'active' : ''}
-                    title={`line ${item.line}`}
-                  >
-                    <span>{item.label}</span>
-                    <small>:{item.line}</small>
-                  </button>
-                ))}
-              </div>
+              <SourceOutlineMap
+                items={sourceOutline}
+                key={selectedFile.path}
+                onSelect={handleOutlineClick}
+                selectedAirActionNo={effectiveAirActionNo}
+                selectedLine={selectedLine}
+              />
             )}
             {selectedFile.kind === 'air' ? (
               <AirAnimationPreview
@@ -2767,35 +3276,725 @@ function CharacterSourceFilesViewer({
               />
             ) : null}
           </div>
-        <div className="character-source-content">
+          <div
+            aria-label={text('Resize summary and file view', '概要とファイル表示の幅を変更')}
+            aria-orientation="vertical"
+            aria-valuemax={900}
+            aria-valuemin={160}
+            aria-valuenow={Math.round(summaryWidth)}
+            className="character-source-resizer"
+            onKeyDown={(event) => {
+              if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+              event.preventDefault();
+              setSummaryWidth((width) => Math.max(160, width + (event.key === 'ArrowLeft' ? -24 : 24)));
+            }}
+            onPointerDown={(event) => {
+              resizingRef.current = true;
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerMove={(event) => handleResizePointerMove(event.clientX)}
+            onPointerUp={(event) => {
+              resizingRef.current = false;
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            }}
+            role="separator"
+            tabIndex={0}
+          />
+          <div className="character-source-content">
           <div className="cns-source-title">
-            <strong>{selectedFile.label}</strong>
-            <span>{selectedFile.path}:{effectiveSelection?.line ?? 1}</span>
+            <div>
+              <strong>{selectedFile.label}</strong>
+              <span>{selectedFile.path}:{effectiveSelection?.line ?? 1}</span>
+            </div>
+            {selectedFile.editable ? (
+              <label className="character-syntax-theme-select">
+                {text('Highlight', 'ハイライト')}
+                <select value={syntaxTheme} onChange={(event) => setSyntaxTheme(event.currentTarget.value as CharacterSyntaxTheme)}>
+                  <option value="vscode-dark-2026">VS Code Dark 2026</option>
+                  <option value="mps-classic">MPS Classic</option>
+                  <option value="monochrome">Monochrome</option>
+                </select>
+              </label>
+            ) : null}
+            {onSave ? <div className="character-source-edit-actions">
+              <button
+                disabled={!selectedFile.editable}
+                onClick={() => {
+                  setDrafts((current) => ({ ...current, [selectedFile.path]: current[selectedFile.path] ?? selectedFile.text }));
+                  setEditingPath(selectedFile.path);
+                  setSaveStatus(null);
+                }}
+                type="button"
+              >
+                {text('Edit', '編集')}
+              </button>
+              {isEditing ? (
+                <button className="secondary" onClick={discardEdit} type="button">
+                  {text('Cancel Edit', '編集解除')}
+                </button>
+              ) : null}
+              <button
+                disabled={!isEditing || !isDirty || saveStatus?.state === 'saving'}
+                onClick={() => void handleSave()}
+                type="button"
+              >
+                {text('Save', '保存')}
+              </button>
+            </div> : null}
           </div>
-          <div className="cns-source-code" ref={codeRef} onScroll={handleCodeScroll}>
-            {lines.map((line, index) => {
-              const lineNo = index + 1;
-              const selected = lineNo === effectiveSelection?.line;
-              return (
-                <div
-                  className={`cns-source-line ${selected ? 'selected' : ''}`}
-                  id={cnsSourceLineId(selectedFile.path, lineNo)}
-                  key={`${selectedFile.path}-${lineNo}`}
-                >
-                  <span className="cns-source-line-no">{lineNo}</span>
-                  <code>{line || ' '}</code>
-                </div>
-              );
-            })}
+          {saveStatus?.path === selectedFile.path ? (
+            <div className={`character-source-save-status ${saveStatus.state}`}>{saveStatus.message}</div>
+          ) : null}
+          {selectedFile.editable ? (
+            <TextSourceSearch
+              key={selectedFile.path}
+              onSelectLine={(line) => onSelect({ path: selectedFile.path, line })}
+              selectedLine={selectedLine}
+              source={selectedDraft}
+            />
+          ) : null}
+          {selectedFile.kind === 'sff' ? (
+            <SffSpriteViewer
+              error={selectedSff.error}
+              onPanChange={setSffPan}
+              onZoomChange={setSffZoom}
+              pack={selectedSff.pack}
+              pan={sffPan}
+              selectedKey={effectiveSffSpriteKey}
+              zoom={sffZoom}
+            />
+          ) : selectedFile.kind === 'act' ? (
+            <ActPaletteViewer file={selectedFile} sprites={sprites ?? null} />
+          ) : selectedFile.kind === 'snd' ? (
+            <SndSampleViewer document={selectedSnd.document} error={selectedSnd.error} selectedKey={effectiveSndSampleKey} />
+          ) : selectedFile.editable ? isEditing ? (
+            <div className="character-source-editor-shell">
+              <pre aria-hidden="true" className="character-source-editor-highlight" ref={editorHighlightRef}>
+                {selectedDraft.split(/\r?\n/).map((line, index) => (
+                  <span className="character-source-editor-line" key={`${selectedFile.path}-edit-${index}`}>
+                    <HighlightedSourceText line={line} kind={selectedFile.kind} />{'\n'}
+                  </span>
+                ))}
+              </pre>
+              <textarea
+                aria-label={text('Character file editor', 'キャラクターファイル編集')}
+                className="character-source-editor"
+                onChange={(event) => setDrafts((current) => ({ ...current, [selectedFile.path]: event.currentTarget.value }))}
+                onScroll={(event) => {
+                  if (!editorHighlightRef.current) return;
+                  editorHighlightRef.current.scrollTop = event.currentTarget.scrollTop;
+                  editorHighlightRef.current.scrollLeft = event.currentTarget.scrollLeft;
+                }}
+                spellCheck={false}
+                value={selectedDraft}
+              />
+            </div>
+          ) : (
+            <div className="cns-source-code" ref={codeRef} onScroll={handleCodeScroll}>
+              {lines.map((line, index) => {
+                const lineNo = index + 1;
+                const selected = lineNo === effectiveSelection?.line;
+                return (
+                  <div
+                    className={`cns-source-line ${selected ? 'selected' : ''}`}
+                    id={cnsSourceLineId(selectedFile.path, lineNo)}
+                    key={`${selectedFile.path}-${lineNo}`}
+                  >
+                    <span className="cns-source-line-no">{lineNo}</span>
+                    <code><HighlightedSourceText line={line} kind={selectedFile.kind} /></code>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="character-source-binary-empty">
+              {text('Binary preview is not available for this file type.', 'この形式のバイナリプレビューには対応していません。')}
+            </div>
+          )}
           </div>
         </div>
-        </div>
+        <div
+          aria-label={text('Resize file viewer height', 'ファイル表示の高さを変更')}
+          aria-orientation="horizontal"
+          aria-valuemax={1200}
+          aria-valuemin={280}
+          aria-valuenow={detailHeight}
+          className="character-source-row-resizer bottom"
+          onKeyDown={(event) => {
+            if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+            event.preventDefault();
+            setDetailHeight((height) => Math.max(280, Math.min(1200, height + (event.key === 'ArrowUp' ? -32 : 32))));
+          }}
+          onPointerDown={(event) => {
+            rowResizingRef.current = 'detail';
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={(event) => {
+            if (rowResizingRef.current !== 'detail' || !detailRef.current) return;
+            setDetailHeight(Math.max(280, Math.min(1200, event.clientY - detailRef.current.getBoundingClientRect().top)));
+          }}
+          onPointerUp={(event) => {
+            rowResizingRef.current = null;
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }}
+          role="separator"
+          tabIndex={0}
+        />
       </div>
     </section>
   );
 }
 
+function HighlightedSourceText({ line, kind }: { line: string; kind: CharacterSourceFile['kind'] }) {
+  return <>{tokenizeCharacterSourceLine(line, kind).map((token, index) => (
+    <span className={`source-syntax-${token.scope}`} key={`${index}-${token.scope}`}>{token.text}</span>
+  ))}</>;
+}
+
+function calculateCharacterFileListHeight(files: readonly CharacterSourceFile[]): number {
+  const internalCount = files.filter((file) => !file.external).length;
+  const externalCount = files.length - internalCount;
+  const groups = [internalCount, externalCount].filter((count) => count > 0);
+  const rows = groups.reduce((total, count) => total + Math.ceil(count / 4), 0);
+  return Math.max(68, groups.length * 24 + rows * 40 + Math.max(0, groups.length - 1) * 6);
+}
+
+function SourceOutlineMap({
+  items,
+  onSelect,
+  selectedAirActionNo,
+  selectedLine,
+}: {
+  items: readonly SourceOutlineItem[];
+  onSelect: (item: SourceOutlineItem) => void;
+  selectedAirActionNo: number | null;
+  selectedLine: number;
+}) {
+  const [filter, setFilter] = useState('');
+  const [expandedParents, setExpandedParents] = useState<Set<number>>(() => new Set());
+  const parentLines = useMemo(() => new Set(items.filter((item) => item.level === 2).map((item) => item.parentLine)), [items]);
+  const expandableParents = items.filter((item) => item.level === 1 && parentLines.has(item.line));
+  const query = filter.trim().toLowerCase();
+
+  useEffect(() => {
+    const selected = items.find((item) => item.level === 2 && item.line === selectedLine);
+    if (selected?.parentLine === undefined) return;
+    setExpandedParents((current) => current.has(selected.parentLine!) ? current : new Set(current).add(selected.parentLine!));
+  }, [items, selectedLine]);
+
+  const parentMatches = (parent: SourceOutlineItem) => parent.label.toLowerCase().includes(query) || String(parent.line).includes(query);
+  const childMatches = (child: SourceOutlineItem) => child.label.toLowerCase().includes(query) || String(child.line).includes(query);
+  const visibleItems = items.filter((item) => {
+    if (!query) return item.level === 1 || (item.parentLine !== undefined && expandedParents.has(item.parentLine));
+    if (item.level === 1) {
+      return parentMatches(item) || items.some((child) => child.parentLine === item.line && childMatches(child));
+    }
+    const parent = items.find((candidate) => candidate.level === 1 && candidate.line === item.parentLine);
+    return childMatches(item) || Boolean(parent && parentMatches(parent));
+  });
+
+  const toggleParent = (line: number) => setExpandedParents((current) => {
+    const next = new Set(current);
+    if (next.has(line)) next.delete(line);
+    else next.add(line);
+    return next;
+  });
+
+  return (
+    <div className="source-outline-map">
+      <div className="map-toolbar">
+        <input aria-label="Map search" onChange={(event) => setFilter(event.currentTarget.value)} placeholder="マップ検索" value={filter} />
+        {expandableParents.length > 0 ? <div className="map-expand-actions">
+          <button type="button" onClick={() => setExpandedParents(new Set(expandableParents.map((item) => item.line)))}>全て展開</button>
+          <button type="button" onClick={() => setExpandedParents(new Set())}>全てたたむ</button>
+        </div> : null}
+      </div>
+      {visibleItems.length === 0 ? <div className="character-source-summary-empty">該当項目なし</div> : (
+        <div className="character-source-summary-list" role="tree">
+          {visibleItems.map((item) => {
+            const expandable = item.level === 1 && parentLines.has(item.line);
+            const expanded = query ? true : expandedParents.has(item.line);
+            const active = item.line === selectedLine || (item.kind === 'air-action' && item.value === selectedAirActionNo);
+            return (
+              <div
+                aria-expanded={expandable ? expanded : undefined}
+                aria-level={item.level}
+                className={`source-outline-row ${item.level === 2 ? 'child' : 'parent'}`}
+                key={`${item.kind}-${item.line}-${item.label}`}
+                role="treeitem"
+              >
+                {expandable ? (
+                  <button aria-label={`${item.label} ${expanded ? 'をたたむ' : 'を展開'}`} className="map-disclosure" onClick={() => toggleParent(item.line)} type="button">
+                    {expanded ? '▼' : '▶'}
+                  </button>
+                ) : <span className="map-disclosure-placeholder" />}
+                <button className={`source-outline-link ${active ? 'active' : ''}`} onClick={() => onSelect(item)} title={`line ${item.line}`} type="button">
+                  <span>{item.label}</span><small>:{item.line}</small>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TextSourceSearch({ source, selectedLine, onSelectLine }: { source: string; selectedLine: number; onSelectLine: (line: number) => void }) {
+  const [query, setQuery] = useState('');
+  const matchingLines = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return [];
+    return source.split(/\r?\n/).flatMap((line, index) => line.toLowerCase().includes(normalized) ? [index + 1] : []);
+  }, [query, source]);
+  const currentIndex = Math.max(0, matchingLines.indexOf(selectedLine));
+  const move = (offset: number) => {
+    if (matchingLines.length === 0) return;
+    const index = (currentIndex + offset + matchingLines.length) % matchingLines.length;
+    onSelectLine(matchingLines[index]);
+  };
+  return (
+    <div className="text-source-search">
+      <label>文字列検索 <input aria-label="Text search" onChange={(event) => setQuery(event.currentTarget.value)} value={query} /></label>
+      <output>{matchingLines.length > 0 ? `${currentIndex + 1}/${matchingLines.length}` : '0件'}</output>
+      <button disabled={matchingLines.length === 0} onClick={() => move(-1)} type="button">前へ</button>
+      <button disabled={matchingLines.length === 0} onClick={() => move(1)} type="button">次へ</button>
+    </div>
+  );
+}
+
+function resolveSffPreview(
+  file: CharacterSourceFile | null | undefined,
+  loadedSprites: ImageDataSpritePack | null,
+): { pack: ImageDataSpritePack | null; error: string | null } {
+  if (file?.kind !== 'sff') return { pack: null, error: null };
+  if (file.primary && loadedSprites) return { pack: loadedSprites, error: null };
+  if (!file.binary) return { pack: null, error: 'SFF data is not available.' };
+  try {
+    return { pack: convertSffV1ToImageDataSpritePack(toExactArrayBuffer(file.binary)), error: null };
+  } catch (error) {
+    return { pack: null, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+function resolveSndPreview(file: CharacterSourceFile | null | undefined): { document: SndDocument | null; error: string | null } {
+  if (file?.kind !== 'snd') return { document: null, error: null };
+  if (!file.binary) return { document: null, error: 'SND data is not available.' };
+  try {
+    return { document: parseSndV1(file.binary), error: null };
+  } catch (error) {
+    return { document: null, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+function SndSampleMap({
+  document,
+  error,
+  onSelect,
+  selectedKey,
+}: {
+  document: SndDocument | null;
+  error: string | null;
+  onSelect: (key: string) => void;
+  selectedKey: string | null;
+}) {
+  const [filter, setFilter] = useState('');
+  const [expandedGroups, setExpandedGroups] = useState<Set<number>>(() => new Set());
+  const samples = document?.samples ?? [];
+  const groups = useMemo(() => {
+    const grouped = new Map<number, SndSample[]>();
+    for (const sample of samples) grouped.set(sample.group, [...(grouped.get(sample.group) ?? []), sample]);
+    return Array.from(grouped.entries());
+  }, [samples]);
+  const query = filter.trim().toLowerCase();
+
+  const toggleGroup = (group: number) => setExpandedGroups((current) => {
+    const next = new Set(current);
+    if (next.has(group)) next.delete(group);
+    else next.add(group);
+    return next;
+  });
+
+  if (error) return <div className="character-source-summary-empty source-save-error">{error}</div>;
+  return <div className="snd-sample-map">
+    <div className="character-source-sff-summary"><span>samples: {samples.length}</span></div>
+    <label>音声検索 <input aria-label="SND map search" onChange={(event) => setFilter(event.currentTarget.value)} placeholder="group,index" value={filter} /></label>
+    <div className="map-expand-actions">
+      <button type="button" onClick={() => setExpandedGroups(new Set(groups.map(([group]) => group)))}>全て展開</button>
+      <button type="button" onClick={() => setExpandedGroups(new Set())}>全てたたむ</button>
+    </div>
+    <div className="snd-sample-list" role="tree">
+      {groups.map(([group, groupSamples]) => {
+        const matches = query ? groupSamples.filter((sample) => sndSampleKey(sample.group, sample.index).includes(query)) : groupSamples;
+        if (matches.length === 0 && !String(group).includes(query)) return null;
+        const expanded = query ? true : expandedGroups.has(group);
+        return <div className="snd-sample-group" key={group}>
+          <button aria-expanded={expanded} className="snd-group-row" onClick={() => toggleGroup(group)} role="treeitem" type="button">
+            <span>{expanded ? '▼' : '▶'} Group {group}</span><small>{groupSamples.length}</small>
+          </button>
+          {expanded ? matches.map((sample) => {
+            const key = sndSampleKey(sample.group, sample.index);
+            return <button aria-level={2} className={`snd-sample-child ${key === selectedKey ? 'active' : ''}`} key={key} onClick={() => onSelect(key)} role="treeitem" type="button">
+              <span>{key}</span><small>{sample.format} / {sample.bytes.byteLength} bytes</small>
+            </button>;
+          }) : null}
+        </div>;
+      })}
+    </div>
+  </div>;
+}
+
+function SndSampleViewer({ document, error, selectedKey }: { document: SndDocument | null; error: string | null; selectedKey: string | null }) {
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const sample = selectedKey ? document?.samplesByKey.get(selectedKey) ?? null : null;
+  useEffect(() => {
+    if (!sample || sample.format !== 'wave' || typeof URL === 'undefined') {
+      setAudioUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(new Blob([sample.bytes.slice().buffer], { type: 'audio/wav' }));
+    setAudioUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [sample]);
+
+  if (error) return <div className="character-source-binary-empty source-save-error">{error}</div>;
+  if (!sample) return <div className="character-source-binary-empty">再生する音声をマップから選択してください。</div>;
+  return <div className="snd-sample-viewer">
+    <h3>SND {sample.group},{sample.index}</h3>
+    <dl>
+      <div><dt>format</dt><dd>{sample.format}</dd></div>
+      <div><dt>size</dt><dd>{sample.bytes.byteLength} bytes</dd></div>
+      <div><dt>source offset</dt><dd>{sample.sourceOffset}</dd></div>
+    </dl>
+    {audioUrl ? <audio controls key={audioUrl} preload="metadata" src={audioUrl}>音声を再生できません。</audio> : (
+      <p className="source-save-error">このサンプルはWAVE形式ではないため、ブラウザで再生できません。</p>
+    )}
+  </div>;
+}
+
+function sortSffSpriteEntries(pack: ImageDataSpritePack | null): Array<[SpriteKey, ImageDataSprite]> {
+  return Array.from(pack?.sprites.entries() ?? []).sort((left, right) => {
+    const groupDifference = left[1].groupNo - right[1].groupNo;
+    return groupDifference || left[1].imageNo - right[1].imageNo;
+  });
+}
+
+function SffSpriteMap({
+  entries,
+  error,
+  onSelect,
+  paletteCount,
+  selectedKey,
+  spriteCount,
+}: {
+  entries: readonly [SpriteKey, ImageDataSprite][];
+  error: string | null;
+  onSelect: (key: SpriteKey) => void;
+  paletteCount: number;
+  selectedKey: SpriteKey | null;
+  spriteCount: number;
+}) {
+  const { text } = useUiLanguage();
+  const [filter, setFilter] = useState('');
+  const [expandedGroups, setExpandedGroups] = useState<Set<number>>(() => new Set());
+  const groups = useMemo(() => {
+    const grouped = new Map<number, Array<[SpriteKey, ImageDataSprite]>>();
+    for (const entry of entries) {
+      const current = grouped.get(entry[1].groupNo) ?? [];
+      current.push(entry);
+      grouped.set(entry[1].groupNo, current);
+    }
+    return Array.from(grouped.entries());
+  }, [entries]);
+  const query = filter.trim().toLowerCase();
+
+  const toggleGroup = (groupNo: number) => setExpandedGroups((current) => {
+    const next = new Set(current);
+    if (next.has(groupNo)) next.delete(groupNo);
+    else next.add(groupNo);
+    return next;
+  });
+  return (
+    <div className="sff-sprite-map">
+      <div className="character-source-sff-summary">
+        <span>{text('sprites', 'スプライト')}: {spriteCount}</span>
+        <span>{text('palettes', 'パレット')}: {paletteCount}</span>
+        {error ? <span className="source-save-error">{error}</span> : null}
+      </div>
+      <label>
+        {text('Sprite filter', 'スプライト検索')}
+        <input aria-label="SFF map search" onChange={(event) => setFilter(event.currentTarget.value)} placeholder="group,image" value={filter} />
+      </label>
+      <div className="map-expand-actions">
+        <button type="button" onClick={() => setExpandedGroups(new Set(groups.map(([groupNo]) => groupNo)))}>全て展開</button>
+        <button type="button" onClick={() => setExpandedGroups(new Set())}>全てたたむ</button>
+      </div>
+      <div className="sff-sprite-list">
+        {groups.map(([groupNo, groupEntries]) => {
+          const matchingEntries = query
+            ? groupEntries.filter(([key]) => key.toLowerCase().includes(query) || String(groupNo).includes(query))
+            : groupEntries;
+          if (matchingEntries.length === 0) return null;
+          const expanded = query.length > 0 || expandedGroups.has(groupNo);
+          return <div className="sff-sprite-entry" key={groupNo}>
+          <button aria-expanded={expanded} className="sff-group-row" onClick={() => toggleGroup(groupNo)} type="button">
+            <span>{expanded ? '▼' : '▶'} Group {groupNo}</span><small>{groupEntries.length}</small>
+          </button>
+          {expanded ? matchingEntries.map(([key, sprite]) => <button className={`sff-sprite-child ${key === selectedKey ? 'active' : ''}`} key={key} onClick={() => onSelect(key)} type="button">
+            <span>{sprite.groupNo},{sprite.imageNo}</span>
+            <small>{sprite.imageData.width}×{sprite.imageData.height}</small>
+          </button>) : null}
+          </div>;
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SffSpriteViewer({
+  pack,
+  error,
+  onPanChange,
+  onZoomChange,
+  pan,
+  selectedKey,
+  zoom,
+}: {
+  pack: ImageDataSpritePack | null;
+  error: string | null;
+  onPanChange: (pan: { x: number; y: number }) => void;
+  onZoomChange: (zoom: number | ((current: number) => number)) => void;
+  pan: { x: number; y: number };
+  selectedKey: SpriteKey | null;
+  zoom: number;
+}) {
+  const { text } = useUiLanguage();
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const cacheRef = useRef<Map<string, HTMLCanvasElement>>(new Map());
+  const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  const spriteEntries = useMemo(() => sortSffSpriteEntries(pack), [pack]);
+  const effectiveKey = selectedKey && pack?.sprites.has(selectedKey) ? selectedKey : spriteEntries[0]?.[0] ?? null;
+  const selectedSprite = effectiveKey ? pack?.sprites.get(effectiveKey) ?? null : null;
+  const selectedPalette = selectedSprite?.paletteKey ? pack?.palettes?.get(selectedSprite.paletteKey) : undefined;
+
+  useEffect(() => {
+    drawSffSpritePreview(canvasRef.current, pack, selectedSprite, cacheRef.current, { zoom, panX: pan.x, panY: pan.y });
+  }, [pack, pan, selectedSprite, zoom]);
+
+  if (error) return <div className="character-source-binary-empty source-save-error">{error}</div>;
+  if (!pack || spriteEntries.length === 0) {
+    return <div className="character-source-binary-empty">{text('No decodable SFF v1 sprites.', '表示できるSFF v1スプライトがありません。')}</div>;
+  }
+
+  return (
+    <div className="sff-viewer">
+      <div className="sff-preview-detail">
+        <div className="sff-viewport-controls">
+          <button type="button" onClick={() => onZoomChange((value) => Math.max(0.1, value / 1.25))}>−</button>
+          <label>{text('Zoom', '拡縮')} <input min={10} max={800} type="range" value={Math.round(zoom * 100)} onChange={(event) => onZoomChange(Number(event.currentTarget.value) / 100)} /></label>
+          <output>{Math.round(zoom * 100)}%</output>
+          <button type="button" onClick={() => onZoomChange((value) => Math.min(8, value * 1.25))}>＋</button>
+          <button type="button" onClick={() => { onZoomChange(1); onPanChange({ x: 0, y: 0 }); }}>{text('Fit / Center', '全体表示・中央')}</button>
+        </div>
+        <canvas
+          aria-label={text('SFF sprite preview', 'SFFスプライトプレビュー')}
+          height={520}
+          onPointerDown={(event) => {
+            panStartRef.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y };
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={(event) => {
+            const start = panStartRef.current;
+            if (!start) return;
+            const bounds = event.currentTarget.getBoundingClientRect();
+            onPanChange({
+              x: start.panX + (event.clientX - start.x) * event.currentTarget.width / Math.max(1, bounds.width),
+              y: start.panY + (event.clientY - start.y) * event.currentTarget.height / Math.max(1, bounds.height),
+            });
+          }}
+          onPointerUp={(event) => {
+            panStartRef.current = null;
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }}
+          ref={canvasRef}
+          width={860}
+        />
+        {selectedSprite ? (
+          <div className="sff-sprite-meta">
+            <span>group,image = {selectedSprite.groupNo},{selectedSprite.imageNo}</span>
+            <span>size = {selectedSprite.imageData.width}×{selectedSprite.imageData.height}</span>
+            <span>{text('registration', '登録位置')} = x:{selectedSprite.xAxis} y:{selectedSprite.yAxis}</span>
+            <span>{text('palette', 'パレット')} = {selectedSprite.paletteKey ?? 'baked-rgba'}</span>
+            <span>{text('palette source', 'パレット元')} = {selectedSprite.paletteMetadata?.source ?? '-'}</span>
+            <span>samePalette={selectedSprite.paletteMetadata?.samePaletteRaw ?? 0} linked={selectedSprite.paletteMetadata?.linked ? 1 : 0}</span>
+            {selectedSprite.paletteMetadata?.ownerGroupNo !== undefined ? (
+              <span>{text('palette owner', 'パレット所有元')} = {selectedSprite.paletteMetadata.ownerGroupNo},{selectedSprite.paletteMetadata.ownerImageNo} #{selectedSprite.paletteMetadata.ownerSequence}</span>
+            ) : null}
+            {selectedSprite.paletteMetadata?.externalActApplied ? <span>ACT applied / index order={selectedSprite.paletteMetadata.paletteIndexOrder}</span> : null}
+          </div>
+        ) : null}
+        <div className="sff-palette" aria-label={text('applied palette colors', '適用パレット色')}>
+          {selectedPalette ? Array.from({ length: 256 }, (_, index) => {
+            const paletteIndex = selectedPalette.indexOrder === 'reversed' ? 255 - index : index;
+            const offset = paletteIndex * 3;
+            const red = selectedPalette.bytes[offset] ?? 0;
+            const green = selectedPalette.bytes[offset + 1] ?? 0;
+            const blue = selectedPalette.bytes[offset + 2] ?? 0;
+            return <span
+              key={index}
+              style={{ backgroundColor: `rgb(${red}, ${green}, ${blue})` }}
+              title={`index=${index} rgb=${red},${green},${blue}`}
+            />;
+          }) : <small>{text('Palette bytes are not retained for this sprite.', 'このスプライトのパレットデータはありません。')}</small>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ActPaletteViewer({
+  file,
+  sprites,
+}: {
+  file: CharacterSourceFile;
+  sprites: ImageDataSpritePack | null;
+}) {
+  const { text } = useUiLanguage();
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const sprite = sprites?.sprites.get(spriteKey(0, 0))
+    ?? Array.from(sprites?.sprites.values() ?? []).find((candidate) => candidate.indexedPixels)
+    ?? null;
+  const spriteLabel = sprite ? `${sprite.groupNo},${sprite.imageNo}` : '0,0';
+  const actBytes = file.binary;
+  const previewImage = useMemo(() => createActPreviewImage(sprite, actBytes), [actBytes, sprite]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext('2d');
+    if (!canvas || !context) return;
+    context.fillStyle = '#020617';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    if (!previewImage) return;
+    const source = document.createElement('canvas');
+    source.width = previewImage.width;
+    source.height = previewImage.height;
+    source.getContext('2d')?.putImageData(previewImage, 0, 0);
+    const scale = Math.min(6, Math.max(0.1, Math.min(
+      (canvas.width - 48) / Math.max(1, source.width),
+      (canvas.height - 48) / Math.max(1, source.height),
+    )));
+    context.imageSmoothingEnabled = false;
+    context.drawImage(
+      source,
+      (canvas.width - source.width * scale) / 2,
+      (canvas.height - source.height * scale) / 2,
+      source.width * scale,
+      source.height * scale,
+    );
+  }, [previewImage]);
+
+  if (!actBytes) return <div className="character-source-binary-empty">{text('ACT palette bytes are unavailable.', 'ACTパレットデータを取得できません。')}</div>;
+  return (
+    <div className="act-palette-viewer">
+      <div className="act-preview-panel">
+        <strong>{text(`Sprite ${spriteLabel} with this ACT applied`, `${spriteLabel}スプライトへACTを適用した見た目`)}</strong>
+        {previewImage ? (
+          <canvas aria-label={text(`ACT applied sprite ${spriteLabel} preview`, `ACT適用後の${spriteLabel}スプライト`)} height={480} ref={canvasRef} width={760} />
+        ) : (
+          <div className="character-source-binary-empty">{text('No decodable sprite is available for ACT preview.', 'ACTプレビューに利用できるスプライトがありません。')}</div>
+        )}
+      </div>
+      <div>
+        <strong>{text('Palette map (MUGEN index order)', 'パレットマップ（MUGENインデックス順）')}</strong>
+        <div className="sff-palette act-palette" aria-label={text('ACT palette colors', 'ACTパレット色')}>
+          {Array.from({ length: Math.min(256, Math.floor(actBytes.length / 3)) }, (_, index) => {
+            const offset = (255 - index) * 3;
+            const red = actBytes[offset] ?? 0;
+            const green = actBytes[offset + 1] ?? 0;
+            const blue = actBytes[offset + 2] ?? 0;
+            return <span key={index} style={{ backgroundColor: `rgb(${red}, ${green}, ${blue})` }} title={`index=${index} rgb=${red},${green},${blue}`} />;
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function createActPreviewImage(
+  sprite: ImageDataSprite | null,
+  actBytes: Uint8Array | undefined,
+): ImageData | null {
+  if (!sprite?.indexedPixels || !actBytes || actBytes.length < 3) return null;
+  const rgba = new Uint8ClampedArray(sprite.indexedPixels.length * 4);
+  sprite.indexedPixels.forEach((sourceIndex, pixelIndex) => {
+    const paletteOffset = (255 - sourceIndex) * 3;
+    const outputOffset = pixelIndex * 4;
+    rgba[outputOffset] = actBytes[paletteOffset] ?? 0;
+    rgba[outputOffset + 1] = actBytes[paletteOffset + 1] ?? 0;
+    rgba[outputOffset + 2] = actBytes[paletteOffset + 2] ?? 0;
+    rgba[outputOffset + 3] = sourceIndex === 0 ? 0 : 255;
+  });
+  return new ImageData(rgba, sprite.imageData.width, sprite.imageData.height);
+}
+
+export function drawSffSpritePreview(
+  canvas: HTMLCanvasElement | null,
+  pack: ImageDataSpritePack | null,
+  sprite: ImageDataSprite | null,
+  cache: Map<string, HTMLCanvasElement>,
+  viewport: { zoom?: number; panX?: number; panY?: number } = {},
+): void {
+  if (!canvas) return;
+  const context = canvas.getContext('2d');
+  if (!context) return;
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = '#020617';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  let originX = canvas.width / 2 + (viewport.panX ?? 0);
+  let originY = canvas.height / 2 + (viewport.panY ?? 0);
+  if (sprite) {
+    const spriteCanvas = getSpriteCanvas(pack, sprite.groupNo, sprite.imageNo, cache);
+    if (spriteCanvas) {
+      const left = Math.min(0, -sprite.xAxis);
+      const top = Math.min(0, -sprite.yAxis);
+      const right = Math.max(0, spriteCanvas.width - sprite.xAxis);
+      const bottom = Math.max(0, spriteCanvas.height - sprite.yAxis);
+      const contentWidth = Math.max(1, right - left);
+      const contentHeight = Math.max(1, bottom - top);
+      const fitScale = Math.min(4, Math.max(0.02, Math.min(
+        (canvas.width - 48) / contentWidth,
+        (canvas.height - 48) / contentHeight,
+      )));
+      const scale = fitScale * Math.max(0.1, Math.min(8, viewport.zoom ?? 1));
+      originX -= ((left + right) / 2) * scale;
+      originY -= ((top + bottom) / 2) * scale;
+      context.save();
+      context.translate(originX, originY);
+      context.scale(scale, scale);
+      context.imageSmoothingEnabled = false;
+      context.drawImage(spriteCanvas, -sprite.xAxis, -sprite.yAxis);
+      context.restore();
+    }
+  }
+  context.strokeStyle = '#f59e0b';
+  context.lineWidth = 1;
+  context.beginPath();
+  context.moveTo(originX - 16, originY);
+  context.lineTo(originX + 16, originY);
+  context.moveTo(originX, originY - 16);
+  context.lineTo(originX, originY + 16);
+  context.stroke();
+}
+
+function toExactArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.length);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
 function formatSourceKind(file: CharacterSourceFile): string {
+  if (file.external && /common1\.cns$/i.test(file.path)) return 'ENGINE CNS';
+  if (file.external && /common\.cmd$/i.test(file.path)) return 'ENGINE CMD';
   const kind = file.kind ?? file.path.split('.').pop() ?? 'txt';
   return kind.toUpperCase();
 }
@@ -2805,42 +4004,89 @@ function cnsSourceLineId(path: string, line: number): string {
 }
 
 type SourceOutlineItem = {
-  kind: 'air-action' | 'statedef' | 'command' | 'section';
+  kind: 'air-action' | 'statedef' | 'state-controller' | 'command' | 'section';
   label: string;
   line: number;
+  level: 1 | 2;
+  parentLine?: number;
   value: number | string;
 };
 
 export function createSourceOutline(file: CharacterSourceFile): SourceOutlineItem[] {
   const lines = file.text.split(/\r?\n/);
   const items: SourceOutlineItem[] = [];
+  let currentStateDef: { line: number; stateNo: number } | null = null;
   for (let index = 0; index < lines.length; index += 1) {
     const lineNo = index + 1;
     const line = lines[index].trim();
     const airMatch = line.match(/^\[?\s*Begin\s+Action\s+(-?\d+)\s*\]?$/i);
     if (airMatch) {
       const actionNo = Number(airMatch[1]);
-      items.push({ kind: 'air-action', label: `Begin Action ${actionNo}`, line: lineNo, value: actionNo });
+      items.push({ kind: 'air-action', label: `Begin Action ${actionNo}`, line: lineNo, level: 1, value: actionNo });
       continue;
     }
     const stateMatch = line.match(/^\[\s*StateDef\s+(-?\d+)\s*\]$/i);
     if (stateMatch) {
       const stateNo = Number(stateMatch[1]);
-      items.push({ kind: 'statedef', label: `StateDef ${stateNo}`, line: lineNo, value: stateNo });
+      currentStateDef = { line: lineNo, stateNo };
+      items.push({ kind: 'statedef', label: `StateDef ${stateNo}`, line: lineNo, level: 1, value: stateNo });
+      continue;
+    }
+    const controllerMatch = line.match(/^\[\s*State\s+(-?\d+)\s*,\s*(.*?)\s*\]$/i);
+    if (controllerMatch && currentStateDef) {
+      const headerLabel = controllerMatch[2].trim();
+      const controllerType = findFollowingAssignment(lines, index + 1, 'type');
+      const label = controllerType && headerLabel
+        ? `${controllerType} — ${headerLabel}`
+        : controllerType || headerLabel || `State ${controllerMatch[1]}`;
+      items.push({
+        kind: 'state-controller',
+        label,
+        line: lineNo,
+        level: 2,
+        parentLine: currentStateDef.line,
+        value: `${currentStateDef.stateNo}:${lineNo}`,
+      });
       continue;
     }
     const commandSection = line.match(/^\[\s*Command\s*\]$/i);
     if (commandSection) {
       const commandName = findFollowingName(lines, index + 1);
-      items.push({ kind: 'command', label: commandName ? `Command ${commandName}` : 'Command', line: lineNo, value: commandName ?? lineNo });
+      items.push({ kind: 'command', label: commandName ? `Command ${commandName}` : 'Command', line: lineNo, level: 1, value: commandName ?? lineNo });
       continue;
     }
     const sectionMatch = line.match(/^\[\s*([^\]]+)\s*\]$/);
     if (items.length < 120 && sectionMatch && file.kind === 'def') {
-      items.push({ kind: 'section', label: sectionMatch[1], line: lineNo, value: sectionMatch[1] });
+      items.push({ kind: 'section', label: sectionMatch[1], line: lineNo, level: 1, value: sectionMatch[1] });
     }
   }
-  return items.slice(0, 500);
+  return items;
+}
+
+export function findAirActionSourceSelection(
+  files: readonly CharacterSourceFile[],
+  animNo: number,
+): CnsSourceSelection {
+  for (const file of files) {
+    if (file.kind !== 'air' && !/\.air$/i.test(file.path)) continue;
+    const action = createSourceOutline(file).find((item) => item.kind === 'air-action' && Number(item.value) === animNo);
+    if (action) return { path: file.path, line: action.line };
+  }
+  return null;
+}
+
+function findFollowingAssignment(
+  lines: readonly string[],
+  startIndex: number,
+  key: string,
+): string | null {
+  const assignment = new RegExp(`^\\s*${key}\\s*=\\s*(.+?)\\s*$`, 'i');
+  for (let index = startIndex; index < lines.length; index += 1) {
+    if (/^\s*\[/.test(lines[index])) return null;
+    const match = lines[index].match(assignment);
+    if (match) return match[1].replace(/\s*;.*$/, '').trim();
+  }
+  return null;
 }
 
 function findFollowingName(lines: readonly string[], startIndex: number): string | null {
@@ -3195,15 +4441,67 @@ function IdeasPanel() {
   );
 }
 
-function ManualPanel() {
+export function ManualPanel() {
   const { text } = useUiLanguage();
+  const shortcuts = [
+    ['F1', text('Set P2 life to 0', 'P2の体力を0にする')],
+    ['Ctrl + F1', text('Set P1 life to 0', 'P1の体力を0にする')],
+    ['F2', text('Set both players’ life to 1', '両プレイヤーの体力を1にする')],
+    ['Ctrl + F2', text('Set P1 life to 1', 'P1の体力を1にする')],
+    ['Shift + F2', text('Set P2 life to 1', 'P2の体力を1にする')],
+    ['F3', text('Fill both power gauges', '両プレイヤーのパワーゲージを最大にする')],
+    ['F4', text('Restart the current round from its beginning', '現在のラウンドを最初からやり直す')],
+    ['Shift + F4', text('Reload the character and restart the match', 'キャラクターを再読込して試合を最初からやり直す')],
+    ['F5', text('End the round by time over', '時間切れにする')],
+    ['F8', text('Clear runtime logs', '実行ログを消去する')],
+    ['F12', text('Save the game screen as a PNG', 'ゲーム画面をPNGで保存する')],
+    ['Ctrl + C', text('Toggle collision boxes', '当たり判定表示を切り替える')],
+    ['Ctrl + D', text('Toggle runtime history display', '実行履歴表示を切り替える')],
+    ['Ctrl + I', text('Force all characters and helpers to State 0 with Ctrl=0', '全キャラクターとヘルパーをState 0・Ctrl=0にする')],
+    ['Ctrl + L', text('Toggle the life bar and power gauges', 'ライフバーとパワーゲージの表示を切り替える')],
+    ['Ctrl + S', text('Toggle fast-forward', '早送りを切り替える')],
+    ['Space', text('Restore every character’s life and power; reset the timer', '全キャラクターの体力・パワーとタイマーを回復する')],
+    ['Pause', text('Pause or resume the simulation', '一時停止・再開する')],
+    ['Scroll Lock', text('Advance one frame while paused', '一時停止中に1フレーム進める')],
+    ['R', text('Restart after KO or time over', 'KO・時間切れ後に現在のラウンドをやり直す')],
+  ];
   return (
-    <section className="settings-section">
-      <h2>{text('Manual', '操作説明')}</h2>
-      <p>{text('The character intro can be skipped with any configured game key. A new match starts automatically after either player wins two rounds.', 'キャラクターのイントロは設定済みのゲームキーでスキップできます。どちらかが2ラウンド先取すると、自動で次の試合を開始します。')}</p>
-      <p>{text('System: R restarts the current round after KO or time over.', 'システム操作：KOまたは時間切れ後にRで現在のラウンドを再開始します。')}</p>
+    <section className="settings-section manual-panel">
+      <h2>{text('Controls', '操作説明')}</h2>
+      <p>{text(
+        'Any configured game key skips a character intro. A new match starts automatically after either player wins two rounds.',
+        '設定済みのゲームキーでキャラクターのイントロをスキップできます。どちらかが2ラウンド先取すると、自動で次の試合を開始します。',
+      )}</p>
+      <h3>{text('WinMUGEN-compatible system shortcuts', 'WinMUGEN互換のシステム操作')}</h3>
+      <div className="manual-shortcut-grid">
+        {shortcuts.map(([key, description]) => (
+          <div className="manual-shortcut-row" key={key}>
+            <kbd>{key}</kbd>
+            <span>{description}</span>
+          </div>
+        ))}
+      </div>
+      <aside className="manual-limitations">
+        <strong>{text('Not supported yet', '未対応')}</strong>
+        <p>{text(
+          'Ctrl + number (AI toggle), Ctrl + Alt + number (remove a player), and Ctrl + V (VSync toggle) are not available because WebMUGEN does not yet have WinMUGEN player-slot AI/removal controls and browser rendering controls VSync.',
+          'Ctrl＋数字（AI切替）、Ctrl＋Alt＋数字（プレイヤー消去）、Ctrl＋V（VSync切替）は未対応です。WebMUGENにはWinMUGEN相当のプレイヤースロットAI／消去機構がまだなく、VSyncはブラウザー描画側で制御されるためです。',
+        )}</p>
+      </aside>
     </section>
   );
+}
+
+function captureCanvasScreenshot(canvas: HTMLCanvasElement): void {
+  canvas.toBlob((blob) => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `webmugen-${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  }, 'image/png');
 }
 
 function DebugBlock({ title, lines }: { title: string; lines: string[] }) {
@@ -3353,7 +4651,6 @@ export function appendRuntimeHistoryIfNeeded({
   physicsLines,
   roundLine,
   scoreLine,
-  cnsLines,
   traces,
   hitDiagnosticLines = [],
   pressedKeys,
@@ -3367,7 +4664,6 @@ export function appendRuntimeHistoryIfNeeded({
   physicsLines: string[];
   roundLine: string;
   scoreLine: string;
-  cnsLines: string[];
   traces: CnsRuntimeTrace[];
   hitDiagnosticLines?: string[];
   pressedKeys: ReadonlySet<string>;
@@ -3376,7 +4672,10 @@ export function appendRuntimeHistoryIfNeeded({
   setHistoryLines: () => void;
 }) {
   const stateChanged = traces.some((trace) => trace.stateNo !== trace.afterStateNo || trace.animNo !== trace.afterAnimNo);
-  const controllerRan = traces.some((trace) => trace.executedControllers.length > 0 || trace.debugLines.length > 0);
+  const controllerRan = traces.some((trace) => (
+    trace.executedControllers.some((controller) => !controller.startsWith('dbg '))
+    || formatMeaningfulAiTraceDebugLines(trace).length > 0
+  ));
   const hasInput = pressedKeys.size > 0;
   if (!hasInput && !stateChanged && !controllerRan && hitDiagnosticLines.length === 0) return;
 
@@ -3386,10 +4685,8 @@ export function appendRuntimeHistoryIfNeeded({
     physicsLines,
     roundLine,
     scoreLine,
-    cnsLines,
     traces,
     hitDiagnosticLines,
-    pressedKeys,
   });
   const signature = formatRuntimeHistorySignature({
     commandLines,
@@ -3421,25 +4718,22 @@ function formatAiRuntimeSnapshot({
   physicsLines,
   roundLine,
   scoreLine,
-  cnsLines,
   traces,
   hitDiagnosticLines = [],
-  pressedKeys,
 }: {
   inputLines: string[];
   commandLines: string[];
   physicsLines: string[];
   roundLine: string;
   scoreLine: string;
-  cnsLines: string[];
   traces: CnsRuntimeTrace[];
   hitDiagnosticLines?: string[];
-  pressedKeys: ReadonlySet<string>;
 }): string[] {
+  const inputSnapshotLines = inputLines.filter((line) => line !== 'sys R=0');
+  const traceDetailLines = formatCodexTraceDetailLines(traces);
   return freezeHistoryLines([
     'SECTION input',
-    `pressedKeys=${Array.from(pressedKeys).sort().join('+') || '-'}`,
-    ...inputLines.map((line) => `raw.${line}`),
+    ...inputSnapshotLines.map((line) => `raw.${line}`),
     'SECTION command',
     ...commandLines.map((line) => `raw.${line}`),
     'SECTION physics_after_step',
@@ -3447,14 +4741,10 @@ function formatAiRuntimeSnapshot({
     'SECTION round_score',
     `raw.${roundLine}`,
     `raw.${scoreLine}`,
-    'SECTION cns_overlay',
-    ...cnsLines.map((line) => `raw.${line}`),
-    'SECTION cns_trace_summary',
+    'SECTION cns_trace',
     ...formatCodexTraceSummaryLines(traces),
-    'SECTION cns_trace_detail',
-    ...formatCodexTraceDetailLines(traces),
-    'SECTION hit_diagnostics',
-    ...(hitDiagnosticLines.length > 0 ? hitDiagnosticLines : ['raw.hit_diagnostics=-']),
+    ...(traceDetailLines.length > 0 ? ['DETAIL cns_special', ...traceDetailLines] : []),
+    ...(hitDiagnosticLines.length > 0 ? ['SECTION event_diagnostics', ...hitDiagnosticLines] : []),
     'END AI_RUNTIME',
   ]);
 }
@@ -3463,20 +4753,28 @@ function formatCodexTraceSummaryLines(traces: readonly CnsRuntimeTrace[]): strin
   if (traces.length === 0) return ['traceCount=0'];
   return [
     `traceCount=${traces.length}`,
-    ...traces.map((trace) => [
-      `trace p${trace.playerId}`,
-      `state=${trace.stateNo}->${trace.afterStateNo}`,
-      `stateChanged=${trace.stateNo === trace.afterStateNo ? 0 : 1}`,
-      `anim=${trace.animNo}->${trace.afterAnimNo}`,
-      `animChanged=${trace.animNo === trace.afterAnimNo ? 0 : 1}`,
-      `time=${trace.stateTime}->${trace.afterStateTime}`,
-      `mugenAnimTime=${trace.mugenAnimTime}`,
-      `stateFound=${trace.stateFound ? 1 : 0}`,
-      `execCount=${trace.executedControllers.length}`,
-      `exec=${formatExecutedControllers(trace)}`,
-      `debugCount=${trace.debugLines.length}`,
-    ].join(' ')),
+    ...traces.map((trace) => {
+      const executedControllers = actualExecutedControllers(trace);
+      return [
+        `trace p${trace.playerId}`,
+        `state=${trace.stateNo}->${trace.afterStateNo}`,
+        `anim=${trace.animNo}->${trace.afterAnimNo}`,
+        `time=${trace.stateTime}->${trace.afterStateTime}`,
+        `mugenAnimTime=${trace.mugenAnimTime}`,
+        `stateFound=${trace.stateFound ? 1 : 0}`,
+        `execCount=${executedControllers.length}`,
+        `exec=${executedControllers.length > 0 ? executedControllers.join(',') : '-'}`,
+      ].join(' ');
+    }),
   ];
+}
+
+function shouldEvaluateHumanLogFrame(
+  mode: RuntimeSettings['humanLogCaptureMode'],
+  traces: readonly CnsRuntimeTrace[],
+): boolean {
+  if (mode !== 'controller-activated') return true;
+  return traces.some((trace) => trace.executedControllers.some((name) => !name.startsWith('dbg ')));
 }
 
 function appendReadableRuntimeHistoryIfNeeded({
@@ -3493,6 +4791,7 @@ function appendReadableRuntimeHistoryIfNeeded({
   indexStoreRef,
   nextEntryIdRef,
   lastSignatureRef,
+  captureMode,
   setIndexEntries,
 }: {
   cns: CnsDocument;
@@ -3508,6 +4807,7 @@ function appendReadableRuntimeHistoryIfNeeded({
   indexStoreRef: MutableRefObject<RuntimeLogIndexEntry[]>;
   nextEntryIdRef: MutableRefObject<number>;
   lastSignatureRef: MutableRefObject<string>;
+  captureMode: RuntimeSettings['humanLogCaptureMode'];
   setIndexEntries: (entries: RuntimeLogIndexEntry[]) => void;
 }): number {
   const p1KeySummary = formatMugenPressedKeys(pressedKeys, inputConfig.players[0]);
@@ -3515,30 +4815,58 @@ function appendReadableRuntimeHistoryIfNeeded({
   const snapshots = createReadableRuntimeStateSnapshots(state, traces);
   const preparedSnapshots = snapshots.map((snapshot) => {
     const [p1, p2] = snapshot.players;
-    const p1TriggerSummary = formatPlayerSatisfiedStateDefTriggerSummary(cns, snapshot, 0, p1Commands, getAnimEndTime);
-    const p2TriggerSummary = formatPlayerSatisfiedStateDefTriggerSummary(cns, snapshot, 1, p2Commands, getAnimEndTime);
+    const p1Trace = findRootTraceForPlayer(traces, 1, p1.stateNo);
+    const p2Trace = findRootTraceForPlayer(traces, 2, p2.stateNo);
+    const p1TriggerSummary = formatPlayerSatisfiedStateDefTriggerSummary(cns, snapshot, 0, p1Commands, getAnimEndTime, p1Trace);
+    const p2TriggerSummary = formatPlayerSatisfiedStateDefTriggerSummary(cns, snapshot, 1, p2Commands, getAnimEndTime, p2Trace);
     const damageSummary = formatHitEventSummary(snapshot);
-    return { snapshot, p1TriggerSummary, p2TriggerSummary, damageSummary, signature: [
-      p1.stateNo,
-      p1.animNo,
-      stripReadableRuntimeValueSummaries(p1TriggerSummary),
-      p2.stateNo,
-      p2.animNo,
-      stripReadableRuntimeValueSummaries(p2TriggerSummary),
+    const preparedHelperLogs = snapshot.helpers.entries.map((helper) => {
+      const trace = traces.find((candidate) => candidate.entityId === helper.entityId);
+      const opponent = snapshot.players[helper.rootEntityId === 1 ? 1 : 0];
+      const commands = helper.keyCtrl ? (helper.rootEntityId === 1 ? p1Commands : p2Commands) : new Set<string>();
+      const keySummary = helper.rootEntityId === 1 ? p1KeySummary : p2KeySummary;
+      const triggerSummary = formatRuntimeEntitySatisfiedStateDefTriggerSummary(
+        cns, snapshot, helper.player, opponent, commands, getAnimEndTime, trace,
+      );
+      return {
+        key: `helper-${helper.entityId}`,
+        label: `H${helper.helperId}`,
+        triggerSummary,
+        lines: freezeHistoryLines([
+          `---- ${new Date().toLocaleTimeString('ja-JP', { hour12: false })} frame=${frameNo} state=${helper.player.stateNo} ----`,
+          `H${helper.helperId} #${helper.entityId} StateNo=${helper.player.stateNo} Anim=${helper.player.animNo} Time=${helper.player.stateTime}`,
+          ...formatReadableStateDefLines(cns, helper.player.stateNo),
+          keySummary,
+          'State Status',
+          ...triggerSummary.split('\n').map((line) => `  ${line}`),
+          `Damage=${damageSummary}`,
+          '',
+        ]),
+      };
+    });
+    const helperLogs = preparedHelperLogs.map(({ triggerSummary: _triggerSummary, ...helperLog }) => helperLog);
+    return {
+      snapshot,
+      p1TriggerSummary,
+      p2TriggerSummary,
       damageSummary,
-      p1KeySummary,
-      p2KeySummary,
-    ].join('|') };
+      helperLogs,
+      signature: createReadableRuntimeTriggerChangeSignature(
+        p1TriggerSummary,
+        p2TriggerSummary,
+        preparedHelperLogs.map(({ key, triggerSummary }) => ({ key, triggerSummary })),
+      ),
+    };
   });
   const signature = preparedSnapshots.map((prepared) => prepared.signature).join('||');
-  if (signature === lastSignatureRef.current) return 0;
+  if (captureMode === 'trigger-changes' && signature === lastSignatureRef.current) return 0;
 
   lastSignatureRef.current = signature;
   const timestamp = new Date().toLocaleTimeString('ja-JP', { hour12: false });
   let visibleEntries: RuntimeLogIndexEntry[] | null = null;
   let generatedCharacters = 0;
   const appendedKeys = new Set<string>();
-  for (const { snapshot, p1TriggerSummary, p2TriggerSummary, damageSummary } of preparedSnapshots) {
+  for (const { snapshot, p1TriggerSummary, p2TriggerSummary, damageSummary, helperLogs } of preparedSnapshots) {
     const [p1, p2] = snapshot.players;
     const key = createReadableRuntimeEntryKey(frameNo, p1.stateNo);
     if (appendedKeys.has(key)) continue;
@@ -3547,8 +4875,8 @@ function appendReadableRuntimeHistoryIfNeeded({
     nextEntryIdRef.current += 1;
     const lines = freezeHistoryLines([
       `---- ${timestamp} frame=${frameNo} state=${p1.stateNo} ----`,
-      `P1 StateNo=${p1.stateNo} Time=${p1.stateTime} AnimNo=${p1.animNo}`,
-      formatReadableStateDefLine(cns, p1.stateNo),
+      `P1 StateNo=${p1.stateNo} Anim=${p1.animNo} Time=${p1.stateTime}`,
+      ...formatReadableStateDefLines(cns, p1.stateNo),
       p1KeySummary,
       'State Status',
       ...p1TriggerSummary.split('\n').map((line) => `  ${line}`),
@@ -3557,20 +4885,20 @@ function appendReadableRuntimeHistoryIfNeeded({
     ]);
     const p2Lines = freezeHistoryLines([
       `---- ${timestamp} frame=${frameNo} state=${p2.stateNo} ----`,
-      `P2 StateNo=${p2.stateNo} Time=${p2.stateTime} AnimNo=${p2.animNo}`,
-      formatReadableStateDefLine(cns, p2.stateNo),
+      `P2 StateNo=${p2.stateNo} Anim=${p2.animNo} Time=${p2.stateTime}`,
+      ...formatReadableStateDefLines(cns, p2.stateNo),
       p2KeySummary,
       'State Status',
       ...p2TriggerSummary.split('\n').map((line) => `  ${line}`),
       `Damage=${damageSummary}`,
       '',
     ]);
-    generatedCharacters += [...lines, ...p2Lines].reduce((total, line) => total + line.length, 0);
+    generatedCharacters += [...lines, ...p2Lines, ...helperLogs.flatMap((helper) => helper.lines)].reduce((total, line) => total + line.length, 0);
     visibleEntries = appendReadableRuntimeEntry({
       indexStore: indexStoreRef.current,
       entryStore: entryStoreRef.current,
       indexEntry: createRuntimeLogIndexEntry({ id, frameNo, timestamp, state: snapshot }),
-      entry: { id, key, frameNo, p1StateNo: p1.stateNo, p2StateNo: p2.stateNo, lines, p2Lines },
+      entry: { id, key, frameNo, p1StateNo: p1.stateNo, p2StateNo: p2.stateNo, lines, p2Lines, helperLogs },
     });
   }
   if (visibleEntries) setIndexEntries(visibleEntries);
@@ -3594,6 +4922,15 @@ function createReadableRuntimeStateSnapshots(state: GameState, traces: readonly 
   return snapshots;
 }
 
+function findRootTraceForPlayer(
+  traces: readonly CnsRuntimeTrace[],
+  playerId: 1 | 2,
+  stateNo: number,
+): CnsRuntimeTrace | undefined {
+  return traces.find((trace) => trace.playerId === playerId && trace.entityId === undefined && trace.stateNo === stateNo)
+    ?? traces.find((trace) => trace.playerId === playerId && trace.entityId === undefined);
+}
+
 function withReadableP1TraceState(state: GameState, trace: CnsRuntimeTrace): GameState {
   const [p1, p2] = state.players;
   return {
@@ -3610,13 +4947,31 @@ function withReadableP1TraceState(state: GameState, trace: CnsRuntimeTrace): Gam
   };
 }
 
-function formatReadableStateDefLine(cns: CnsDocument, stateNo: number): string {
+function formatReadableStateDefLines(cns: CnsDocument, stateNo: number): string[] {
   const stateDef = cns.states.find((state) => state.stateNo === stateNo);
-  if (!stateDef) return 'StateDef=-';
+  if (!stateDef) return ['StateDef=-'];
   const source = stateDef.sourceFile && stateDef.sourceLine
     ? ` @ ${stateDef.sourceFile}:${stateDef.sourceLine}`
     : '';
-  return `StateDef ${stateNo}${source}`;
+  const params = [
+    ['type', stateDef.stateType],
+    ['movetype', stateDef.moveType],
+    ['physics', stateDef.physics],
+    ['anim', stateDef.initialAnimExpression ?? stateDef.initialAnim],
+    ['sprpriority', stateDef.sprPriority],
+    ['velset', stateDef.velocitySet ? `${stateDef.velocitySet.x},${stateDef.velocitySet.y}` : undefined],
+    ['ctrl', stateDef.ctrl === undefined ? undefined : Number(stateDef.ctrl)],
+    ['poweradd', stateDef.powerAdd],
+    ['juggle', stateDef.juggle],
+    ['facep2', stateDef.faceP2 === undefined ? undefined : Number(stateDef.faceP2)],
+    ['hitdefpersist', stateDef.hitDefPersist === undefined ? undefined : Number(stateDef.hitDefPersist)],
+    ['movehitpersist', stateDef.moveHitPersist === undefined ? undefined : Number(stateDef.moveHitPersist)],
+    ['hitcountpersist', stateDef.hitCountPersist === undefined ? undefined : Number(stateDef.hitCountPersist)],
+  ].filter((entry): entry is [string, string | number] => entry[1] !== undefined);
+  return [
+    `StateDef ${stateNo}${source}`,
+    ...params.map(([key, value]) => `STATEDEF_PARAM \`${key} = ${value}\``),
+  ];
 }
 
 function appendStateTransitionLogIfNeeded({
@@ -3672,7 +5027,9 @@ function formatRuntimeHistorySignature({
       trace.animNo,
       trace.afterAnimNo,
       formatExecutedControllers(trace),
-      trace.debugLines.filter((line) => !/\btime=|StateTime=|animtime=|MugenAnimTime=/.test(line)).join(','),
+      formatMeaningfulAiTraceDebugLines(trace)
+        .filter((line) => !/\btime=|StateTime=|animtime=|MugenAnimTime=/.test(line))
+        .join(','),
     ].join(':')),
   ].join('|');
 }
@@ -3683,15 +5040,28 @@ function formatPlayerSatisfiedStateDefTriggerSummary(
   playerIndex: 0 | 1,
   commands: ReadonlySet<string>,
   getAnimEndTime?: (animNo: number) => number | null,
+  trace?: CnsRuntimeTrace,
 ): string {
   const [p1, p2] = state.players;
   const player = playerIndex === 0 ? p1 : p2;
   const opponent = playerIndex === 0 ? p2 : p1;
+  return formatRuntimeEntitySatisfiedStateDefTriggerSummary(cns, state, player, opponent, commands, getAnimEndTime, trace);
+}
+
+function formatRuntimeEntitySatisfiedStateDefTriggerSummary(
+  cns: CnsDocument,
+  state: GameState,
+  player: PlayerState,
+  opponent: PlayerState,
+  commands: ReadonlySet<string>,
+  getAnimEndTime?: (animNo: number) => number | null,
+  trace?: CnsRuntimeTrace,
+): string {
   const mugenAnimTime = calculateMugenAnimTime(player.animTime, getAnimEndTime?.(player.animNo));
   const context = { player, opponent, commands, animTime: mugenAnimTime, constants: cns, gameTime: state.frame };
   const summaries = cns.states
     .filter((stateDef) => stateDef.stateNo === player.stateNo)
-    .flatMap((stateDef) => formatSatisfiedStateDefTriggers(stateDef, context));
+    .flatMap((stateDef) => formatSatisfiedStateDefTriggers(stateDef, context, trace?.executedControllerRefs));
 
   return summaries.length > 0 ? summaries.join('\n') : '-';
 }
@@ -3699,48 +5069,26 @@ function formatPlayerSatisfiedStateDefTriggerSummary(
 export function formatSatisfiedStateDefTriggers(
   stateDef: CnsStateDefinition,
   context: Parameters<typeof evaluateCnsRuntimeTrigger>[1],
+  executedControllers?: readonly CnsExecutedControllerRef[],
 ): string[] {
-  const controllerSummaries = stateDef.controllers
-    .filter((controller) => controller.triggers.length > 0 && shouldShowReadableController(controller, context));
-  const prioritized = prioritizeReadableControllers(controllerSummaries);
   const lines: string[] = [];
 
-  prioritized.visible.forEach((controller) => {
-    const passed = evaluateReadableController(controller, context);
-    lines.push(formatReadableControllerHeaderOk(controller, passed, context));
+  stateDef.controllers.forEach((controller, controllerIndex) => {
+    const activated = executedControllers === undefined
+      ? evaluateReadableController(controller, context)
+      : executedControllers.some((executed) => (
+          executed.stateNo === stateDef.stateNo
+          && executed.controllerIndex === controllerIndex
+          && executed.type.toLowerCase() === controller.type.toLowerCase()
+          && executed.sourceFile === controller.sourceFile
+          && executed.sourceLine === controller.sourceLine
+        ));
+    lines.push(formatReadableControllerHeaderOk(controller, activated, context));
     lines.push(...controller.triggers.map((trigger) => `  ${formatReadableTriggerLineOk(trigger, context)}`));
+    lines.push(...formatReadableControllerParameterLines(controller, context));
   });
 
-  if (prioritized.hiddenCount > 0) {
-    lines.push(`**...** | ${prioritized.hiddenCount} controllers hidden to keep history light`);
-  }
-
   return lines;
-}
-
-function prioritizeReadableControllers(controllers: CnsStateController[]): { visible: CnsStateController[]; hiddenCount: number } {
-  const visible: CnsStateController[] = [];
-  let extraCount = 0;
-  for (const controller of controllers) {
-    const type = controller.type.toLowerCase();
-    if (READABLE_STATE_STATUS_ALWAYS_SHOW_TYPES.has(type)) {
-      visible.push(controller);
-      continue;
-    }
-    if (extraCount < READABLE_STATE_STATUS_EXTRA_CONTROLLER_LIMIT) {
-      visible.push(controller);
-      extraCount += 1;
-    }
-  }
-  return { visible, hiddenCount: Math.max(0, controllers.length - visible.length) };
-}
-
-function shouldShowReadableController(
-  controller: CnsStateController,
-  context: Parameters<typeof evaluateCnsRuntimeTrigger>[1],
-): boolean {
-  if (controller.type.toLowerCase() === 'changestate') return true;
-  return controller.triggers.some((trigger) => evaluateCnsRuntimeTrigger(trigger.expression, context));
 }
 
 function formatReadableControllerHeader(controller: CnsStateController, passed: boolean): string {
@@ -3759,7 +5107,7 @@ function formatReadableControllerHeaderOk(
     ? ` -> ${readParamNumber(controller, 'value') ?? '?'}`
     : '';
   const source = controller.sourceFile && controller.sourceLine ? ` @ ${controller.sourceFile}:${controller.sourceLine}` : '';
-  return `**${controller.type}${value}** | ${passed ? 'OK' : 'NG'}${formatReadableControllerValue(controller, context)}${source}`;
+  return `**${controller.type}${value}** | ${passed ? 'ACTIVE' : 'INACTIVE'}${formatReadableControllerValue(controller, context)}${source}`;
 }
 
 function formatReadableControllerValue(
@@ -3774,6 +5122,22 @@ function formatReadableControllerValue(
     ? 'unresolved'
     : Number.isFinite(evaluated) ? formatRuntimeNumber(evaluated) : 'NaN';
   return ` | value raw=\`${rawText}\` evaluated=${evaluatedText}`;
+}
+
+function formatReadableControllerParameterLines(
+  controller: CnsStateController,
+  context: CnsRuntimeTriggerContext,
+): string[] {
+  return Object.entries(controller.params)
+    .filter(([key]) => key.toLowerCase() !== 'value')
+    .map(([key, value]) => {
+      const rawText = Array.isArray(value) ? value.join(', ') : String(value);
+      const evaluated = readNumberExpression(rawText, context);
+      const evaluatedText = evaluated === null
+        ? ''
+        : ` || evaluated: ${Number.isFinite(evaluated) ? formatRuntimeNumber(evaluated) : 'NaN'}`;
+      return `PARAM \`${key} = ${rawText}${evaluatedText}\``;
+    });
 }
 
 function formatReadableTriggerLine(
@@ -3826,7 +5190,8 @@ function formatTriggerValueSummary(
 export function stripReadableRuntimeValueSummaries(summary: string): string {
   return summary
     .replace(/\s+\|\| values: .+$/gm, '')
-    .replace(/(\s+\|\s+value raw=`.+?`) evaluated=\S+/gm, '$1');
+    .replace(/(\s+\|\s+value raw=`.+?`) evaluated=\S+/gm, '$1')
+    .replace(/(\bPARAM\s+`.+?)\s+\|\| evaluated: [^`]+`$/gm, '$1`');
 }
 
 function collectTriggerValueNames(expression: string): string[] {
@@ -3904,16 +5269,45 @@ function collectReadableTriggerGroups(triggers: readonly CnsTrigger[]): Array<[n
 }
 
 function formatCodexTraceDetailLines(traces: readonly CnsRuntimeTrace[]): string[] {
-  if (traces.length === 0) return ['trace=-'];
-  return traces.flatMap((trace) => [
-    `trace p${trace.playerId} StateNo=${trace.stateNo}->${trace.afterStateNo} StateTime=${trace.stateTime}->${trace.afterStateTime} AnimNo=${trace.animNo}->${trace.afterAnimNo} MugenAnimTime=${trace.mugenAnimTime} found=${trace.stateFound ? 1 : 0}`,
-    `trace p${trace.playerId} executed=${formatExecutedControllers(trace)}`,
-    ...trace.debugLines.map((line) => `trace p${trace.playerId} debug ${line}`),
-  ]);
+  const lines = Array.from(new Set(traces.flatMap((trace) => (
+    formatMeaningfulAiTraceDebugLines(trace).map((line) => `trace p${trace.playerId} ${line}`)
+  ))));
+  const limit = 120;
+  return lines.length <= limit
+    ? lines
+    : [...lines.slice(0, limit), `trace detail omitted=${lines.length - limit}`];
+}
+
+export function createReadableRuntimeTriggerChangeSignature(
+  p1TriggerSummary: string,
+  p2TriggerSummary: string,
+  helpers: readonly { key: string; triggerSummary: string }[],
+): string {
+  return [
+    `p1:${stripReadableRuntimeValueSummaries(p1TriggerSummary)}`,
+    `p2:${stripReadableRuntimeValueSummaries(p2TriggerSummary)}`,
+    ...helpers
+      .slice()
+      .sort((left, right) => left.key.localeCompare(right.key))
+      .map((helper) => `${helper.key}:${stripReadableRuntimeValueSummaries(helper.triggerSummary)}`),
+  ].join('|');
 }
 
 function formatExecutedControllers(trace: CnsRuntimeTrace): string {
-  return trace.executedControllers.length > 0 ? trace.executedControllers.join(',') : '-';
+  const controllers = actualExecutedControllers(trace);
+  return controllers.length > 0 ? controllers.join(',') : '-';
+}
+
+function actualExecutedControllers(trace: CnsRuntimeTrace): string[] {
+  return trace.executedControllers.filter((controller) => !controller.startsWith('dbg '));
+}
+
+function formatMeaningfulAiTraceDebugLines(trace: CnsRuntimeTrace): string[] {
+  return trace.debugLines.filter((line) => (
+    !/^finish state=/.test(line)
+    && !/^pipe (?:before|after) /.test(line)
+    && !/^return S-?\d+ state=/.test(line)
+  ));
 }
 
 function formatHitEventSummary(state: GameState): string {

@@ -22,10 +22,13 @@ export function convertSffDocumentToImageDataSpritePack(
   options: SffSpritePackConverterOptions = {},
 ): ImageDataSpritePack {
   const sprites = new Map<string, ImageDataSprite>();
+  const palettes = new Map<string, { bytes: Uint8Array; indexOrder: 'normal' | 'reversed' }>();
   const sharedPalette = options.externalPalette ?? findSharedPalette(document);
   const decodedSources = new Map<string, ReturnType<typeof decodePcx>>();
   const sourcePaletteMetadata = new Map<number, PaletteResolution>();
   let previousPalette: PaletteResolution | null = null;
+  let actPreviewSpriteKey: string | null = null;
+  let actPreviewSpritePriority = -1;
 
   for (const sprite of document.sprites) {
     const sourceSprite = resolveLinkedSprite(document, sprite);
@@ -49,6 +52,12 @@ export function convertSffDocumentToImageDataSpritePack(
       externalPaletteSelected: options.externalPalette !== undefined,
       externalPaletteIndexOrder: options.paletteIndexOrder ?? 'normal',
     });
+    if (paletteResolution.palette && !palettes.has(paletteResolution.key)) {
+      palettes.set(paletteResolution.key, {
+        bytes: new Uint8Array(paletteResolution.palette),
+        indexOrder: paletteResolution.paletteIndexOrder,
+      });
+    }
 
     if (!sprite.isLinked) {
       previousPalette = paletteResolution;
@@ -74,12 +83,30 @@ export function convertSffDocumentToImageDataSpritePack(
     const sampleIndex = pcx.indexedPixels.find((value) => value !== 0) ?? pcx.indexedPixels[0];
     const sampleRgba = sampleIndex === undefined ? undefined : rgbaAt(pcx.rgbaPixels, pcx.indexedPixels, sampleIndex);
     const imagePixels = new Uint8ClampedArray(pcx.rgbaPixels);
-    sprites.set(spriteKey(sprite.groupNo, sprite.imageNo), {
+    const currentSpriteKey = spriteKey(sprite.groupNo, sprite.imageNo);
+    const actPreviewPriority = sprite.groupNo === 0 && sprite.imageNo === 0
+      ? 2
+      : sprite.groupNo === 0
+        ? 1
+        : 0;
+    const retainIndexedPixels = actPreviewPriority > actPreviewSpritePriority;
+    if (retainIndexedPixels && actPreviewSpriteKey) {
+      const previousPreview = sprites.get(actPreviewSpriteKey);
+      if (previousPreview) previousPreview.indexedPixels = undefined;
+    }
+    if (retainIndexedPixels) {
+      actPreviewSpriteKey = currentSpriteKey;
+      actPreviewSpritePriority = actPreviewPriority;
+    }
+    sprites.set(currentSpriteKey, {
       groupNo: sprite.groupNo,
       imageNo: sprite.imageNo,
       xAxis: sprite.xAxis,
       yAxis: sprite.yAxis,
       imageData: new ImageData(imagePixels, pcx.width, pcx.height),
+      indexedPixels: retainIndexedPixels
+        ? new Uint8Array(pcx.indexedPixels)
+        : undefined,
       paletteKey: paletteResolution.key,
       paletteMetadata: {
         source: paletteResolution.source,
@@ -91,6 +118,7 @@ export function convertSffDocumentToImageDataSpritePack(
         linkedSource: sprite.isLinked ? sprite.linkedIndex : undefined,
         embeddedPalette: embeddedPalette !== null,
         externalActApplied: paletteResolution.externalActApplied,
+        paletteIndexOrder: paletteResolution.paletteIndexOrder,
         sampleIndex,
         sampleRgba,
       },
@@ -99,6 +127,7 @@ export function convertSffDocumentToImageDataSpritePack(
 
   return {
     sprites: sprites as ImageDataSpritePack['sprites'],
+    palettes,
     cacheKey: `sffv1:${document.header.imageCount}:${document.header.firstSubfileOffset}:${options.externalPalette ? 'act' : 'embedded'}`,
   };
 }

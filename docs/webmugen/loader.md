@@ -1,6 +1,6 @@
 # Loader
 
-Updated: 2026-07-06
+Updated: 2026-07-27
 
 This document describes how WebMUGEN loads and merges character files.
 
@@ -24,6 +24,14 @@ A character load may involve:
 - WebMUGEN common files:
   - `public/chars/common1.cns`
   - `public/chars/common.cmd`
+
+## Character-file inventory and local editing
+
+After the runtime-required assets have loaded, the app builds a separate file-browser inventory. HTTP characters enumerate every file beneath the selected DEF directory through the local Vite middleware. ZIP characters enumerate every archive entry. Known MUGEN text files and arbitrary text files retain decoded Shift-JIS text; SFF and ACT entries retain their binary bytes for sprite/palette inspection; other binary entries remain identifiable without being decoded as text.
+
+The inventory does not alter parser input, runtime merge order, or compatibility behavior. Runtime-referenced files outside the character DEF directory are merged into the inventory and marked external so common CNS/CMD sources remain inspectable without appearing to belong to the character package.
+
+Local editing uses the development-only `/__webmugen/character-files` endpoint. It accepts only files rooted under `public/chars`; direct text files are written as Shift-JIS and ZIP entries are saved by rebuilding the containing archive. Archive entry names containing parent traversal are rejected. Production static hosting intentionally has no write path.
 
 ## CNS loading policy
 
@@ -69,6 +77,7 @@ Rules:
 
 - Character-defined routes should take precedence when they define the same primary behavior.
 - `common.cmd` fills missing baseline routes.
+- `/chars/common.cmd` is the only WebMUGEN common CMD path. There is no loaded `common1.cmd`; `common1.cns` is the separate WinMUGEN-compatible common State body asset.
 - Common routes should be visible as MUGEN data rather than hidden TypeScript when practical.
 
 ## SND loading policy
@@ -123,16 +132,16 @@ The loader must avoid these mistakes:
 
 If a route does not execute, inspect:
 
-1. Static Debug tab StateDef list;
-2. Static Debug tab Command → State expected routes;
-3. State -1 controller count;
+1. the character DEF/CMD/CNS and applied common files in `Character Files`;
+2. the relevant StateDef and State -1 source sections;
+3. State -1 controller count in copied diagnostics or runtime traces;
 4. first several State -1 controllers;
 5. command names resolved at runtime;
 6. trigger group evaluation for the target route.
 
-If Static Debug does not show the expected route, suspect loader/parser/merge.
+If `Character Files` does not contain the expected referenced source, suspect inventory or path resolution first. If the source exists but copied/runtime diagnostics do not contain the expected route, suspect loader/parser/merge.
 
-If Static Debug shows the route but runtime skips it, suspect trigger evaluation or controller execution.
+If diagnostics contain the route but runtime skips it, suspect trigger evaluation or controller execution.
 
 ## Required tests
 

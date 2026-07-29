@@ -32,6 +32,15 @@ export function restartRound(
   };
 }
 
+export function restartCurrentRound(
+  currentRoundNo: number,
+  timer?: number,
+  powerMax: number = DEFAULT_MAX_POWER,
+  playerStartX?: readonly [number, number],
+): RoundRuntimeState {
+  return restartRound(currentRoundNo - 1, timer, powerMax, playerStartX);
+}
+
 export function canRestartRound(roundState: RoundState): boolean {
   return roundState.phase === 'ko' || roundState.phase === 'timeOver';
 }

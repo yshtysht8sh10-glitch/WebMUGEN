@@ -48,8 +48,17 @@ export type CnsRuntimeTrace = {
   mugenAnimTime: number;
   stateFound: boolean;
   executedControllers: string[];
+  executedControllerRefs?: CnsExecutedControllerRef[];
   debugLines: string[];
   entityId?: number;
+};
+
+export type CnsExecutedControllerRef = {
+  type: string;
+  stateNo: number;
+  sourceFile?: string;
+  sourceLine?: number;
+  controllerIndex: number;
 };
 
 export type CnsRuntimeInput = {
@@ -121,6 +130,7 @@ type ControllerResult = { player: PlayerState; executed: boolean; name: string; 
 type ControllerExecutionResult = {
   player: PlayerState;
   executedControllers: string[];
+  executedControllerRefs: CnsExecutedControllerRef[];
   debugLines: string[];
   targetOperations: TargetOperation[];
 };
@@ -333,6 +343,7 @@ function stepPlayer(
     mugenAnimTime: traceDiagnosticsEnabled ? mugenAnimTime(player, input) : 0,
     stateFound: Boolean(findState(cns, player.stateNo)),
     executedControllers: [],
+    executedControllerRefs: [],
     debugLines: [],
   };
   const targetOperations: TargetOperation[] = [];
@@ -359,6 +370,7 @@ function stepPlayer(
       );
       next = result.player;
       if (traceDiagnosticsEnabled) trace.executedControllers.push(...result.executedControllers);
+      if (traceDiagnosticsEnabled) trace.executedControllerRefs?.push(...result.executedControllerRefs);
       if (traceDiagnosticsEnabled) trace.debugLines.push(...result.debugLines);
       targetOperations.push(...result.targetOperations);
     }
@@ -404,6 +416,7 @@ function stepPlayer(
     const result = executeStateControllers(next, opponent, negativeState, cns, input, commands, debugEnabled, traceDiagnosticsEnabled, negativeStateEntry, runtimeFrame);
     next = result.player;
     if (traceDiagnosticsEnabled) trace.executedControllers.push(...result.executedControllers);
+    if (traceDiagnosticsEnabled) trace.executedControllerRefs?.push(...result.executedControllerRefs);
     if (traceDiagnosticsEnabled) trace.debugLines.push(...result.debugLines);
     targetOperations.push(...result.targetOperations);
     if (debugEnabled) appendDebug(trace, `leave S${negativeStateNo} state=${next.stateNo}`);
@@ -441,6 +454,7 @@ function stepPlayer(
   const result = executeStateControllers(next, opponent, stateDef, cns, input, commands, debugEnabled, traceDiagnosticsEnabled, undefined, runtimeFrame);
   next = result.player;
   if (traceDiagnosticsEnabled) trace.executedControllers.push(...result.executedControllers);
+  if (traceDiagnosticsEnabled) trace.executedControllerRefs?.push(...result.executedControllerRefs);
   if (traceDiagnosticsEnabled) trace.debugLines.push(...result.debugLines);
   targetOperations.push(...result.targetOperations);
   if (next.stateNo !== stateDef.stateNo && next.stateTime === 0) {
@@ -457,6 +471,7 @@ function stepPlayer(
         next = { ...next, stateTime: -1 };
       }
       if (traceDiagnosticsEnabled) trace.executedControllers.push(...enteredResult.executedControllers);
+      if (traceDiagnosticsEnabled) trace.executedControllerRefs?.push(...enteredResult.executedControllerRefs);
       if (traceDiagnosticsEnabled) trace.debugLines.push(...enteredResult.debugLines);
       targetOperations.push(...enteredResult.targetOperations);
       if (debugEnabled) appendDebug(trace, `leave target S${enteredState.stateNo} state=${next.stateNo}`);
@@ -491,6 +506,7 @@ function executeStateControllers(
 ): ControllerExecutionResult {
   let next = player;
   const executedControllers: string[] = [];
+  const executedControllerRefs: CnsExecutedControllerRef[] = [];
   const debugLines: string[] = [];
   const targetOperations: TargetOperation[] = [];
 
@@ -558,7 +574,16 @@ function executeStateControllers(
       pushDebug(debugLines, executedControllers, `pipe after S${stateDef.stateNo} ${controller.type} executed=${result.executed ? 1 : 0} before=${beforeStateNo} after=${next.stateNo}`);
     }
     if (result.executed) {
-      if (recordDiagnostics) executedControllers.push(result.name);
+      if (recordDiagnostics) {
+        executedControllers.push(result.name);
+        executedControllerRefs.push({
+          type: result.name,
+          stateNo: stateDef.stateNo,
+          sourceFile: controller.sourceFile,
+          sourceLine: controller.sourceLine,
+          controllerIndex,
+        });
+      }
       if (debugEnabled && beforeStateNo !== next.stateNo) {
         pushDebug(debugLines, executedControllers, `${result.name} ${beforeStateNo}->${next.stateNo}`);
       }
@@ -580,7 +605,7 @@ function executeStateControllers(
   }
 
   if (debugEnabled) pushDebug(debugLines, executedControllers, `return S${stateDef.stateNo} state=${next.stateNo}`);
-  return { player: next, executedControllers, debugLines, targetOperations };
+  return { player: next, executedControllers, executedControllerRefs, debugLines, targetOperations };
 }
 
 function applyTargetOperations(

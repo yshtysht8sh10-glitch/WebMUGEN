@@ -19,13 +19,14 @@ describe('master audio settings UI', () => {
       diagnostic: 'audio=-',
       onUnlock: vi.fn(),
       onTest: vi.fn(),
-      onStop: vi.fn(),
+      onStopTest: vi.fn(),
       onPanTest: vi.fn(),
       onMutedChange: vi.fn(),
       onMasterVolumeChange: vi.fn(),
     }));
 
-    expect(html).toContain('Master volume: 50%');
+    expect(html).toContain('<h3>Master volume</h3><strong>50%</strong>');
+    expect(html).toContain('class="settings-card audio-volume-card"');
     expect(html).toContain('type="range"');
     expect(html).toContain('min="0"');
     expect(html).toContain('max="100"');

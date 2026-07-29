@@ -116,6 +116,20 @@ export function stepRoundState(round: RoundState, gameState: GameState, freezeTi
   };
 }
 
+export function forceRoundTimeOver(round: RoundState, gameState: GameState): RoundState {
+  if (round.phase !== 'fight') return round;
+  return {
+    ...round,
+    phase: 'timeOver',
+    timer: 0,
+    frameInPhase: 0,
+    winner: getTimeOverWinner(gameState),
+    endReason: 'time_over',
+    resultStateEntered: false,
+    resultSkipRequested: false,
+  };
+}
+
 function hasEnteredResultState(round: RoundState, gameState: GameState): boolean {
   const [p1, p2] = gameState.players;
   if (round.phase === 'ko') {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createInitialGameState } from './GameState';
 import {
   createInitialRoundState,
+  forceRoundTimeOver,
   formatRoundState,
   stepRoundState,
   type RoundState,
@@ -112,6 +113,24 @@ describe('RoundState', () => {
 
     expect(round.phase).toBe('timeOver');
     expect(round.winner).toBe('draw');
+  });
+
+  it('forces a fight to time over using the current life totals', () => {
+    const gameState = createInitialGameState();
+    const round = forceRoundTimeOver(fightRound(), {
+      ...gameState,
+      players: [
+        { ...gameState.players[0], life: 900 },
+        { ...gameState.players[1], life: 400 },
+      ],
+    });
+
+    expect(round).toMatchObject({ phase: 'timeOver', timer: 0, winner: 1, endReason: 'time_over' });
+  });
+
+  it('does not force time over outside the fight phase', () => {
+    const round = createInitialRoundState();
+    expect(forceRoundTimeOver(round, createInitialGameState())).toBe(round);
   });
 
   it('formats round state', () => {

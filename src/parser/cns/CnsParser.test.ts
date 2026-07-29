@@ -9,6 +9,7 @@ type = S
 movetype = I
 physics = S
 anim = 0
+sprpriority = 3
 velset = 0, 0
 ctrl = 1
 
@@ -26,6 +27,7 @@ ctrl = 1
       moveType: 'I',
       physics: 'S',
       initialAnim: 0,
+      sprPriority: 3,
       velocitySet: { x: 0, y: 0 },
       ctrl: true,
     });

@@ -11,7 +11,7 @@ import { convertSffV1ToImageDataSpritePack } from '../sprite/SffSpritePackConver
 import type { CharacterAssets, CharacterLoadDiagnostic, CharacterPaletteAsset, CharacterSourceFile } from './CharacterTypes';
 
 const COMMON_CNS_PATH = '/chars/common1.cns';
-const COMMON_CMD_PATHS = ['/chars/common.cmd', '/chars/common1.cmd'];
+const COMMON_CMD_PATHS = ['/chars/common.cmd'];
 const BASELINE_MOVEMENT_STATE_VALUES = new Set([10, 11, 12, 20, 21, 40, 50, 52, 100, 105]);
 const BASELINE_COMMON_CMD_TEXT = `
 [Command]

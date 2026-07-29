@@ -37,6 +37,7 @@ export type CnsStateDefinition = {
   physics?: string;
   initialAnim?: number;
   initialAnimExpression?: string;
+  sprPriority?: number;
   velocitySet?: { x: number; y: number };
   ctrl?: boolean;
   powerAdd?: number;

@@ -29,6 +29,28 @@ trigger1 = 1
   });
 });
 
+describe('controller execution references', () => {
+  it('records the exact State, source line, and controller index without changing execution', () => {
+    const cns = parseCnsText(`
+[StateDef 0]
+type = S
+
+[State 0, set]
+type = VarSet
+trigger1 = 1
+v = 0
+value = 7
+`, { sourceFile: 'detail.cns' });
+
+    const result = stepCnsStateRuntime(createInitialGameState(), cns, { traceDiagnostics: true });
+
+    expect(result.traces[0].executedControllerRefs).toContainEqual({
+      type: 'VarSet', stateNo: 0, sourceFile: 'detail.cns', sourceLine: 5, controllerIndex: 0,
+    });
+    expect(result.state.players[0].vars?.[0]).toBe(7);
+  });
+});
+
 describe('CnsStateRuntime Size constants', () => {
   it('carries push dimensions and scale into PlayerState without pre-scaling them', () => {
     const cns = parseCnsText(`

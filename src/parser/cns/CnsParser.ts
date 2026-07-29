@@ -142,6 +142,9 @@ function applyStateDefValue(state: CnsStateDefinition, key: string, value: CnsVa
         state.initialAnimExpression = String(value);
       }
       break;
+    case 'sprpriority':
+      if (Number.isFinite(Number(value))) state.sprPriority = Number(value);
+      break;
     case 'velset': {
       const parts = Array.isArray(value) ? value : [value];
       const x = Number(parts[0]);

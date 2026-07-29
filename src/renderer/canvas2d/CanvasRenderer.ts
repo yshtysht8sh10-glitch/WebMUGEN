@@ -57,7 +57,7 @@ export class CanvasRenderer {
     hitFeedback?: HitFeedbackState,
     roundState?: RoundState,
     roundScore?: RoundScore,
-    options: { collisionBoxesVisible?: boolean; diagnosticsEnabled?: boolean } = {},
+    options: { collisionBoxesVisible?: boolean; diagnosticsEnabled?: boolean; hudVisible?: boolean } = {},
   ): string[] {
     const normalStartedAt = performance.now();
     const collisionBoxesVisible = options.collisionBoxesVisible ?? true;
@@ -76,7 +76,7 @@ export class CanvasRenderer {
       ctx.restore();
     }
     if (state.envColor?.under) this.drawEnvironmentColor(ctx, state.envColor.color);
-    const hideBars = globalFlags.has('nobardisplay');
+    const hideBars = options.hudVisible === false || globalFlags.has('nobardisplay');
     if (!hideBars) this.drawLifeBars(ctx, state);
     const powerDiagnostics = hideBars ? [] : this.drawPowerBars(ctx, state, diagnosticsEnabled);
     if (roundState && !hideBars) this.roundStateRenderer.render(ctx, roundState, roundScore, this.canvas.width);

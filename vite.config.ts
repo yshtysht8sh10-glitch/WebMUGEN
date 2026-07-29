@@ -1,13 +1,17 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { readdirSync, statSync } from 'node:fs';
-import { join, relative, resolve, sep } from 'node:path';
+import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import iconv from 'iconv-lite';
+import { unzipSync, zipSync } from 'fflate';
 
 const virtualCharacterManifestId = 'virtual:webmugen-character-manifest';
 const resolvedVirtualCharacterManifestId = `\0${virtualCharacterManifestId}`;
 const projectRoot = fileURLToPath(new URL('.', import.meta.url));
 const publicCharsRoot = resolve(projectRoot, 'public/chars');
+const characterFilesApiPath = '/__webmugen/character-files';
+const textExtensions = new Set(['.air', '.cns', '.cmd', '.def', '.zss', '.ini', '.json', '.md', '.txt', '.cfg', '.log']);
 
 function scanCharacterPaths(): string[] {
   let entries: string[];
@@ -105,6 +109,65 @@ function webMugenCharacterManifestPlugin() {
   return {
     name: 'webmugen-character-manifest',
     configureServer(server) {
+      server.middlewares.use(async (request, response, next) => {
+        const requestUrl = new URL(request.url ?? '/', 'http://localhost');
+        if (requestUrl.pathname !== characterFilesApiPath) {
+          next();
+          return;
+        }
+
+        try {
+          if (request.method === 'GET') {
+            const defPath = requestUrl.searchParams.get('defPath');
+            if (!defPath) throw new Error('defPath is required.');
+            const absoluteDefPath = resolvePublicCharacterPath(defPath);
+            const files = listCharacterDirectoryFiles(dirname(absoluteDefPath)).map((absolutePath) => {
+              const bytes = readFileSync(absolutePath);
+              const publicPath = `/chars/${toPublicPath(relative(publicCharsRoot, absolutePath))}`;
+              const extension = extensionOf(absolutePath);
+              const text = textExtensions.has(extension) || isProbablyText(bytes);
+              return {
+                path: publicPath,
+                label: toPublicPath(relative(dirname(absoluteDefPath), absolutePath)),
+                text: text ? decodeMugenText(bytes) : '',
+                binaryBase64: extension === '.sff' || extension === '.snd' || extension === '.act' ? bytes.toString('base64') : undefined,
+              };
+            });
+            sendJson(response, 200, { files });
+            return;
+          }
+
+          if (request.method === 'POST') {
+            const body = JSON.parse(await readRequestBody(request)) as {
+              path?: string;
+              text?: string;
+              archivePath?: string;
+              archiveEntryPath?: string;
+            };
+            if (typeof body.path !== 'string' || typeof body.text !== 'string') {
+              throw new Error('path and text are required.');
+            }
+            if (body.archivePath && body.archiveEntryPath) {
+              const archiveAbsolutePath = resolvePublicCharacterPath(body.archivePath);
+              const archiveEntries = unzipSync(new Uint8Array(readFileSync(archiveAbsolutePath)));
+              const entryName = normalizeArchiveEntryPath(body.archiveEntryPath);
+              if (!Object.prototype.hasOwnProperty.call(archiveEntries, entryName)) {
+                throw new Error(`ZIP entry does not exist: ${entryName}`);
+              }
+              archiveEntries[entryName] = new Uint8Array(iconv.encode(body.text, 'shift_jis'));
+              writeFileSync(archiveAbsolutePath, zipSync(archiveEntries, { level: 6 }));
+            } else {
+              writeFileSync(resolvePublicCharacterPath(body.path), iconv.encode(body.text, 'shift_jis'));
+            }
+            sendJson(response, 200, { saved: true });
+            return;
+          }
+
+          sendJson(response, 405, { error: 'Method not allowed.' });
+        } catch (error) {
+          sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) });
+        }
+      });
       server.watcher.add(publicCharsRoot);
       server.watcher.on('all', (_event, changedPath) => {
         if (!changedPath.startsWith(publicCharsRoot)) return;
@@ -121,6 +184,69 @@ function webMugenCharacterManifestPlugin() {
       return `export const CHARACTER_PATH_OPTIONS = ${JSON.stringify(scanCharacterPaths())};`;
     },
   };
+}
+
+function resolvePublicCharacterPath(publicPath: string): string {
+  const normalized = decodeURIComponent(publicPath).replace(/\\/g, '/');
+  if (!normalized.startsWith('/chars/')) throw new Error(`Character path is outside /chars/: ${publicPath}`);
+  const absolutePath = resolve(publicCharsRoot, normalized.slice('/chars/'.length));
+  const relativePath = relative(publicCharsRoot, absolutePath);
+  if (relativePath.startsWith('..') || resolve(publicCharsRoot, relativePath) !== absolutePath) {
+    throw new Error(`Character path escapes public/chars: ${publicPath}`);
+  }
+  return absolutePath;
+}
+
+function listCharacterDirectoryFiles(directory: string): string[] {
+  const results: string[] = [];
+  for (const entry of readdirSync(directory)) {
+    const absolutePath = join(directory, entry);
+    const stats = statSync(absolutePath);
+    if (stats.isDirectory()) results.push(...listCharacterDirectoryFiles(absolutePath));
+    else if (stats.isFile()) results.push(absolutePath);
+  }
+  return results.sort((left, right) => left.localeCompare(right, 'en'));
+}
+
+function extensionOf(path: string): string {
+  const match = path.toLowerCase().match(/\.[^.\\/]+$/);
+  return match?.[0] ?? '';
+}
+
+function isProbablyText(bytes: Uint8Array): boolean {
+  if (bytes.length === 0) return true;
+  const sample = bytes.subarray(0, Math.min(bytes.length, 4096));
+  let controlCount = 0;
+  for (const byte of sample) {
+    if (byte === 0) return false;
+    if (byte < 0x09 || (byte > 0x0d && byte < 0x20)) controlCount += 1;
+  }
+  return controlCount / sample.length < 0.02;
+}
+
+function decodeMugenText(bytes: Uint8Array): string {
+  return iconv.decode(Buffer.from(bytes), 'shift_jis');
+}
+
+function normalizeArchiveEntryPath(path: string): string {
+  const normalized = path.replace(/\\/g, '/').replace(/^\/+/, '').replace(/^\.\//, '');
+  if (normalized.split('/').some((part) => part === '..')) throw new Error('ZIP entry path escapes the archive.');
+  return normalized;
+}
+
+function readRequestBody(request: import('node:http').IncomingMessage): Promise<string> {
+  return new Promise((resolveBody, rejectBody) => {
+    const chunks: Buffer[] = [];
+    request.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+    request.on('end', () => resolveBody(Buffer.concat(chunks).toString('utf8')));
+    request.on('error', rejectBody);
+  });
+}
+
+function sendJson(response: import('node:http').ServerResponse, status: number, value: unknown): void {
+  response.statusCode = status;
+  response.setHeader('Content-Type', 'application/json; charset=utf-8');
+  response.end(JSON.stringify(value));
 }
 
 export default defineConfig({

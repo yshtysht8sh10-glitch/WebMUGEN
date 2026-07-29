@@ -79,7 +79,8 @@ forceair = 1
     const activated = stepCnsStateRuntime(initial, cns).state;
     const result = resolveFallbackHits(activated, air, true);
 
-    expect(result.players[1]).toMatchObject({ life: 1000, stateNo: 900, stateType: 'A', hitPause: 3 });
+    expect(result.players[1]).toMatchObject({ life: 1000, stateNo: 900, stateType: 'A', hitPause: 0 });
+    expect(result.players[0]).toMatchObject({ hitPause: 2 });
     expect(result.players[0].moveContact).toMatchObject({ contact: true, hit: true });
     expect(result.hitDiagnosticLines?.join('\n')).toContain('raw.hit_override attacker=p1 target=p2');
   });

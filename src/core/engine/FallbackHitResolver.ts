@@ -229,7 +229,9 @@ function resolveAttack(
       stateType: override.forceAir ? 'A' : target.stateType,
       stateOwnerId: override.stateOwnerId,
       selfStateOwnerId: target.selfStateOwnerId ?? target.id,
-      hitPause: active.pauseTime.defender,
+      // WinMUGEN clears P2's inherited hitpause before entering the
+      // HitOverride destination. The attacker's P1 pausetime still applies.
+      hitPause: 0,
     };
     if (enterOverrideState) overriddenTarget = enterOverrideState(overriddenTarget, attacker, override.stateNo);
     if (diagnosticsEnabled) diagnosticLines.push(

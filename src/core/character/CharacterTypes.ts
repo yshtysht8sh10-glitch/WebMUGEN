@@ -33,5 +33,11 @@ export type CharacterSourceFile = {
   path: string;
   label: string;
   text: string;
-  kind?: 'def' | 'cns' | 'cmd' | 'air' | 'common';
+  kind?: 'def' | 'cns' | 'cmd' | 'air' | 'zss' | 'common' | 'text' | 'sff' | 'snd' | 'act' | 'binary';
+  binary?: Uint8Array;
+  editable?: boolean;
+  external?: boolean;
+  primary?: boolean;
+  archivePath?: string;
+  archiveEntryPath?: string;
 };

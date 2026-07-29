@@ -1,6 +1,6 @@
 # Runtime History
 
-Updated: 2026-07-09
+Updated: 2026-07-27
 
 Runtime History is the persistent frame-by-frame diagnostic log shown in the Debug UI.
 
@@ -52,6 +52,16 @@ Runtime history is split into two top-level tabs:
 
 The old nested runtime-history subtabs were removed so runtime logs are available directly from the main debug tab row.
 
+## Human log retention modes
+
+The human-facing history has three selectable retention modes:
+
+- `Every frame`: retain every evaluated runtime frame.
+- `Trigger changes`: retain a frame only when a State-controller/trigger ON/OFF result changes. Display-only timestamps, frame/State time, evaluated trigger values, and evaluated controller parameters do not change the retention signature. Helper spawn/destruction does change it. This is the default.
+- `Controller activated`: retain only frames where at least one non-debug State controller executes. Helper traces participate in this decision.
+
+The selected mode changes only the Human history sink. AI diagnostics and the lower-left lightweight state history keep their independent settings.
+
 ## When to append
 
 History should append when something useful happens, such as:
@@ -78,24 +88,28 @@ If a line changes every frame due only to time counters, decide whether that is 
 
 The human-facing history is capped by both entry count and rendered line count. Long State状況 sections keep ChangeState / ChangeAnim candidates visible first, then only a small number of additional controllers. This prevents large characters from making the browser heavy while preserving the most useful routing diagnostics.
 
+The selected detail renders every State controller belonging to the displayed StateNo. The controller title contains only its type and active/inactive result. Triggers and non-trigger parameters are separate, initially collapsed disclosures; `value` expressions and fields such as `hitsound` are shown under Parameters instead of expanding the controller title.
+
 ## Human runtime index
 
 The human-facing runtime history uses a lightweight frame index plus a selected detail entry.
 
 - Each generated human detail entry is stored outside React render state. The retained key is `frameNo + P1 StateNo`, so a single frame can keep multiple detail entries when CNS execution crosses more than one StateNo.
 - React state holds only the visible frame index and the currently selected detail entry.
-- The frame index records timestamp, `frameNo`, P1 StateNo/AnimNo, and P2 StateNo/AnimNo in compact columns so rows can stay narrow.
+- The frame index records timestamp, `frameNo`, P1 StateNo/AnimNo, P2 StateNo/AnimNo, and active Helper snapshots (`entityId`, Helper ID, StateNo, AnimNo). Helpers present in the latest retained frame receive State/Anim columns to the right of P1/P2. When a Helper is destroyed, the destruction changes the trigger-retention signature and the next retained frame removes its live Helper column. Historical Helper details remain available by selecting their retained frame.
+- AnimNo columns for roots and Helpers can be shown or hidden without changing retained data. Values in the frame index are display-only; the selected entity card provides the clickable Anim badge that opens the matching `Begin Action` definition in the character's AIR file.
 - A frame is indexed whenever a human detail log is generated, even if StateNo did not change.
 - Clicking an index row loads exactly that frame's detail entry into the right pane.
 - New logs append to the index but do not replace the selected detail pane.
-- The human detail pane can be hidden to avoid rendering the heavy State status DOM; selecting a frame or using the latest-frame action opens it again.
+- The selected detail pane uses P1, P2, and Helper tabs and renders one entity card at a time. Helper tabs are derived from both the selected frame index and retained detail logs, so an active Helper remains selectable and its own StateDef/controllers can be inspected. The selected-frame banner contains only timestamp and frame number; the entity card begins with the selected entity State and opposing root State instead of repeating the frame header.
 - `最新フレームを表示` loads the newest retained detail entry on demand.
 - The frame index can auto-scroll to the newest visible index row or stay in fully manual scrolling mode.
 - The visible index is capped separately from the retained store, so older retained frames can still be copied or loaded by frame when exposed through tooling.
 - Frame index rows visually distinguish state numbers and animation numbers so repeated-state failures can be scanned quickly.
-- Human detail entries include a `StateDef` source link that opens the matching source file and line in `Character Files`.
-- Each visible State controller with a `value` parameter shows the raw CNS expression and its evaluated number for that Human Log frame. Invalid results appear as `evaluated=NaN` or `evaluated=unresolved`, including for `ChangeAnim`.
-- `Character Files` can be hidden on the static/files page. The Show button opens it even when no source link has been clicked yet.
+- Human detail entries include a clickable `StateDef` source link and StateNo badge. Both open the matching StateDef start in `Character Files`. StateNo and Anim badges use parallel button styling and hover feedback; the Anim badge opens the AIR action while frame-index Anim cells do not navigate.
+- StateDef header fields are initially hidden behind their own Parameters disclosure.
+- Every State controller in that StateNo is displayed as `作動` or `非作動` from the controller execution reference captured by the runtime. Trigger and Parameter rows are initially hidden behind separate disclosure buttons.
+- Each visible State controller with a `value` parameter keeps the raw CNS expression and its evaluated number under Parameters. Other parsed non-trigger parameters are retained there as raw CNS values. Invalid evaluated results appear as `evaluated=NaN` or `evaluated=unresolved`, including for `ChangeAnim`.
 - Source links from human detail entries switch the main UI to the static/files page before opening `Character Files`, keeping the normal game/runtime page lighter.
 - A runtime log clear action resets retained human entries, the lightweight frame index, AI history, and signatures together.
 

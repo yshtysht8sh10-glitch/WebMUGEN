@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { MutableRefObject } from 'react';
 import type { CnsRuntimeTrace } from '../core/cns/CnsStateRuntime';
-import { AudioStartOverlay, CHARACTER_PATH_OPTIONS, RuntimeSettingsPanel, WebMugenApp, appendRuntimeHistoryIfNeeded, createSourceOutline, drawAirPreview, findAirActionForLine, formatSatisfiedStateDefTriggers, parseControllerValueText, stripReadableRuntimeValueSummaries } from './WebMugenApp';
+import { AudioStartOverlay, CHARACTER_PATH_OPTIONS, CharacterSourceFilesViewer, HumanRuntimePanel, ManualPanel, RuntimeFrameIndexList, RuntimeSettingsPanel, WebMugenApp, appendRuntimeHistoryIfNeeded, createActPreviewImage, createReadableRuntimeTriggerChangeSignature, createRuntimeFrameIndexGridTemplate, createSourceOutline, drawAirPreview, findAirActionForLine, findAirActionSourceSelection, formatSatisfiedStateDefTriggers, parseControllerValueText, stripReadableRuntimeValueSummaries } from './WebMugenApp';
 import { DEFAULT_RUNTIME_SETTINGS } from './RuntimeSettings';
 import type { ImageDataSpritePack } from '../core/sprite/ImageDataSpriteTypes';
 import { parseCnsText } from '../parser/cns/CnsParser';
@@ -11,6 +11,158 @@ import { createInitialGameState } from '../core/engine/GameState';
 import { UiLanguageProvider } from './UiLanguage';
 
 describe('WebMugenApp runtime history', () => {
+  it('uses a simple auto-follow checkbox and descriptive State/Anim columns including helpers', () => {
+    const html = renderToStaticMarkup(createElement(RuntimeFrameIndexList, {
+      entries: [{
+        id: 1, key: '10:191', frameNo: 10, timestamp: '12:00:00',
+        p1StateNo: 191, p1AnimNo: 191, p2StateNo: 0, p2AnimNo: 0,
+        helpers: [{ entityId: 3, helperId: 5504, rootEntityId: 1, stateNo: 5900, animNo: 42 }],
+      }],
+      selectedKey: '10:191', autoScroll: true, onToggleAutoScroll: () => undefined,
+      onSelectFrame: () => undefined, showAnimNos: true,
+    }));
+
+    expect(html).toContain('type="checkbox"');
+    expect(html).toContain('Automatically follow latest log');
+    expect(html).not.toContain('Switch to manual');
+    expect(html).toContain('<span>State</span>');
+    expect(html).toContain('<span>Anim</span>');
+    expect(html).toContain('<span>State2</span>');
+    expect(html.match(/class="runtime-frame-index-row/g)).toHaveLength(1);
+    expect(html).not.toContain('runtime-frame-helper-row');
+    expect(html).toContain('H5504');
+    expect(html).toContain('title="H5504 #3 / P1"');
+    expect(html).toContain('>5900</span>');
+    expect(html).toContain('<span class="runtime-index-anim helper">42</span>');
+    expect(html).not.toContain('Open Begin Action 42');
+    expect(createRuntimeFrameIndexGridTemplate(true, 1)).toBe('62px 52px 58px 58px 58px 58px 82px 82px');
+  });
+
+  it('removes Helper columns when the latest retained frame no longer has that Helper', () => {
+    const html = renderToStaticMarkup(createElement(RuntimeFrameIndexList, {
+      entries: [{
+        id: 1, key: '10:0', frameNo: 10, timestamp: '12:00:00',
+        p1StateNo: 0, p1AnimNo: 0, p2StateNo: 0, p2AnimNo: 0,
+        helpers: [{ entityId: 3, helperId: 5504, rootEntityId: 1, stateNo: 5506, animNo: 19731 }],
+      }, {
+        id: 2, key: '11:0', frameNo: 11, timestamp: '12:00:01',
+        p1StateNo: 0, p1AnimNo: 0, p2StateNo: 0, p2AnimNo: 0, helpers: [],
+      }],
+      selectedKey: '11:0', autoScroll: true, onToggleAutoScroll: () => undefined,
+      onSelectFrame: () => undefined, showAnimNos: true,
+    }));
+
+    expect(html).not.toContain('H5504');
+    expect(html).not.toContain('5506');
+    expect(html).not.toContain('19731');
+    expect(html).toContain('grid-template-columns:62px 52px 58px 58px 58px 58px');
+  });
+
+  it('renders one entity detail tab at a time while retaining Helper tabs', () => {
+    const html = renderToStaticMarkup(createElement(HumanRuntimePanel, {
+      captureMode: 'all-frames',
+      indexEntries: [],
+      selectedEntry: {
+        id: 1, key: '10:191', frameNo: 10, p1StateNo: 191, p2StateNo: 0,
+        lines: ['P1 StateNo=191 Anim=191 Time=79'],
+        p2Lines: ['P2 StateNo=0 Anim=0 Time=79'],
+        helperLogs: [{ key: 'helper-3', label: 'H5504', lines: ['H5504 #3 StateNo=5900 Anim=42 Time=4'] }],
+      },
+      onSelectFrame: () => undefined,
+      autoScrollIndex: true,
+      onToggleAutoScrollIndex: () => undefined,
+      onShowLatest: () => undefined,
+      onOpenAnimationSource: () => undefined,
+      onOpenCnsSource: () => undefined,
+      onCaptureModeChange: () => undefined,
+    }));
+
+    expect(html.match(/role="separator"/g)).toHaveLength(1);
+    expect(html).toContain('Detail log entities');
+    expect(html).toContain('role="tablist"');
+    expect(html).toContain('role="tab" type="button">H5504</button>');
+    expect(html).toContain('H5504');
+    expect(html).not.toContain('aria-label="H5504 detail log"');
+    expect(html).toContain('aria-label="P1 detail log"');
+    expect(html).toContain('class="readable-history-anim readable-history-anim-link"');
+    expect(html.indexOf('Anim=191')).toBeLessThan(html.indexOf('Time=79'));
+    expect(html).toContain('<span>--:--:--</span><strong>f=10</strong>');
+    expect(html).not.toContain('selected frame=10 P1 state=191 P2 state=0');
+  });
+
+  it('shows a Helper tab from the selected frame even before its detail text is available', () => {
+    const html = renderToStaticMarkup(createElement(HumanRuntimePanel, {
+      captureMode: 'all-frames',
+      indexEntries: [{
+        id: 1, key: '10:191', frameNo: 10, timestamp: '12:00:00',
+        p1StateNo: 191, p1AnimNo: 191, p2StateNo: 0, p2AnimNo: 0,
+        helpers: [{ entityId: 4, helperId: 5504, rootEntityId: 1, stateNo: 5506, animNo: 19731 }],
+      }],
+      selectedEntry: {
+        id: 1, key: '10:191', frameNo: 10, p1StateNo: 191, p2StateNo: 0,
+        lines: ['P1 StateNo=191 Anim=191 Time=79'], p2Lines: ['P2 StateNo=0 Anim=0 Time=79'],
+      },
+      onSelectFrame: () => undefined,
+      autoScrollIndex: true,
+      onToggleAutoScrollIndex: () => undefined,
+      onShowLatest: () => undefined,
+      onOpenCnsSource: () => undefined,
+      onCaptureModeChange: () => undefined,
+    }));
+
+    expect(html).toContain('role="tab" type="button">H5504</button>');
+    expect(html).not.toContain('type="checkbox" checked=""/>H5504');
+  });
+
+  it('collapses StateDef fields, triggers, and controller parameters inside the selected entity card', () => {
+    const html = renderToStaticMarkup(createElement(HumanRuntimePanel, {
+      captureMode: 'all-frames',
+      indexEntries: [{
+        id: 1, key: '343:0', frameNo: 343, timestamp: '20:21:13',
+        p1StateNo: 0, p1AnimNo: 0, p2StateNo: 0, p2AnimNo: 0, helpers: [],
+      }],
+      selectedEntry: {
+        id: 1, key: '343:0', frameNo: 343, p1StateNo: 0, p2StateNo: 0,
+        lines: [
+          '---- 20:21:13 frame=343 state=0 ----',
+          'P1 StateNo=0 Anim=0 Time=0',
+          'StateDef 0 @ demo.cns:1',
+          'STATEDEF_PARAM `type = S`',
+          'STATEDEF_PARAM `physics = S`',
+          'STATEDEF_PARAM `sprpriority = 0`',
+          '**HitDef** | ACTIVE | value raw=`1` evaluated=1 @ demo.cns:8',
+          '  OK `trigger1=Time = 0`',
+          'PARAM `hitsound = s630, 0`',
+        ],
+        p2Lines: [],
+      },
+      onSelectFrame: () => undefined,
+      autoScrollIndex: true,
+      onToggleAutoScrollIndex: () => undefined,
+      onShowLatest: () => undefined,
+      onOpenAnimationSource: () => undefined,
+      onOpenCnsSource: () => undefined,
+      onCaptureModeChange: () => undefined,
+    }));
+
+    expect(html).toContain('<span>20:21:13</span><strong>f=343</strong>');
+    expect(html).toContain('<strong>state=0</strong><span>P2 state=0</span>');
+    expect(html).not.toContain('frame=343 state=0');
+    expect(html).toContain('▼ parameters (3)');
+    expect(html).toContain('▼ triggers (1)');
+    expect(html).toContain('▼ parameters (2)');
+    expect(html).toContain('>HitDef</button>');
+    expect(html).not.toContain('HitDef | value:');
+  });
+
+  it('resolves an Anim number to the matching AIR Begin Action line', () => {
+    expect(findAirActionSourceSelection([{
+      path: '/chars/test/test.air', label: 'test.air', kind: 'air',
+      text: '[Begin Action 0]\n0,0,0,0,1\n\n[Begin Action 19731]\n1,0,0,0,1',
+    }], 19731)).toEqual({ path: '/chars/test/test.air', line: 4 });
+    expect(findAirActionSourceSelection([], 19731)).toBeNull();
+  });
+
   it('offers discovered public characters in the character picker', () => {
     expect(CHARACTER_PATH_OPTIONS).toContain('/chars/T-H-M-A.zip');
     expect(CHARACTER_PATH_OPTIONS).toContain('/chars/kfm/kfm.def');
@@ -29,20 +181,37 @@ describe('WebMugenApp runtime history', () => {
     expect(settingsHtml).toContain('aria-label="AI log enabled"');
     expect(settingsHtml).toContain('aria-label="Collision boxes visible"');
     expect(settingsHtml).toContain('aria-label="State history visible"');
+    expect(settingsHtml).toContain('aria-label="Human log capture mode"');
+    expect(settingsHtml).toContain('When trigger ON/OFF changes');
     expect(settingsHtml).toContain('aria-label="Practice Mode"');
-    expect(settingsHtml).toContain('Practice mode (recover at 0 life, unlimited time)');
+    expect(settingsHtml).toContain('Recover at 0 life and remove the round time limit.');
   });
 
-  it('keeps the game panel mounted while leaving hidden static content unmounted', () => {
+  it('keeps the game panel mounted while leaving hidden static and Settings content unmounted', () => {
     const html = renderToStaticMarkup(createElement(WebMugenApp));
 
-    expect(html.match(/class="top-panel/g)?.length).toBe(2);
+    expect(html.match(/class="top-panel/g)?.length).toBe(3);
     expect(html).toContain('class="top-panel active"');
     expect(html).toContain('class="top-panel hidden"');
     expect(html).toContain('<canvas');
-    expect(html).toContain('Static Info / Character Files');
+    expect(html).toContain('Character Files');
     expect(html).not.toContain('<h2>Character Files</h2>');
     expect(html).toContain('Loading character');
+  });
+
+  it('exposes Settings as a top-level page and nests the control summary inside Input Config', () => {
+    const html = renderToStaticMarkup(createElement(WebMugenApp, { initialPage: 'settings' }));
+    const pageTabs = html.slice(html.indexOf('class="page-tabs"'), html.indexOf('</nav>', html.indexOf('class="page-tabs"')));
+    const debugTabs = html.slice(html.indexOf('class="debug-tabs"'), html.indexOf('</nav>', html.indexOf('class="debug-tabs"')));
+    const inputConfigStart = html.indexOf('class="input-config-panel"');
+    const controlSummaryStart = html.indexOf('Control Summary');
+
+    expect(pageTabs).toContain('Settings');
+    expect(debugTabs).not.toContain('Settings');
+    expect(html).toContain('class="debug-panel page-debug-panel settings-page-panel"');
+    expect(inputConfigStart).toBeGreaterThan(-1);
+    expect(controlSummaryStart).toBeGreaterThan(inputConfigStart);
+    expect(html).toContain('class="input-config-card control-summary-card"');
   });
 
   it('renders the user gesture and explicit no-audio start controls without tab navigation', () => {
@@ -79,6 +248,17 @@ describe('WebMugenApp runtime history', () => {
     expect(japanese).not.toContain('Click or press a key to start');
   });
 
+  it('documents implemented WinMUGEN system shortcuts and explicit limitations', () => {
+    const html = renderToStaticMarkup(createElement(UiLanguageProvider, { language: 'ja' }, createElement(ManualPanel)));
+
+    expect(html).toContain('WinMUGEN互換のシステム操作');
+    expect(html).toContain('<kbd>F4</kbd>');
+    expect(html).toContain('現在のラウンドを最初からやり直す');
+    expect(html).toContain('<kbd>Scroll Lock</kbd>');
+    expect(html).toContain('未対応');
+    expect(html).toContain('Ctrl＋数字');
+  });
+
   it('mounts static content on demand while retaining one game canvas across repeated page renders', () => {
     for (let index = 0; index < 10; index += 1) {
       const activePage = index % 2 === 0 ? 'static-files' : 'play';
@@ -89,11 +269,173 @@ describe('WebMugenApp runtime history', () => {
     }
   });
 
+  it('keeps the Character Files page dedicated to the always-visible file viewer', () => {
+    const html = renderToStaticMarkup(createElement(WebMugenApp, { initialPage: 'static-files' }));
+
+    expect(html).toContain('<h2>Character Files</h2>');
+    expect(html).not.toContain('Character / DEF');
+    expect(html).not.toContain('CMD Commands');
+    expect(html).not.toContain('CNS Coverage');
+    expect(html).not.toContain('StateDef List');
+    expect(html).not.toContain('>Hide<');
+  });
+
+  it('renders edit/save, syntax scopes, a movable divider, plain text, and external file styling', () => {
+    const files = [
+      { path: 'Demo/Demo.def', label: 'Demo.def', text: '[Info]\nname = "Demo" ; title', kind: 'def' as const, editable: true },
+      { path: 'Demo/readme.txt', label: 'readme.txt', text: 'ordinary notes', kind: 'text' as const, editable: true },
+      { path: '/chars/common.cmd', label: 'common.cmd', text: '[Command]', kind: 'common' as const, editable: true, external: true },
+    ];
+    const html = renderToStaticMarkup(createElement(CharacterSourceFilesViewer, {
+      files,
+      selection: { path: 'Demo/Demo.def', line: 1 },
+      onSelect: () => undefined,
+      onSave: async () => undefined,
+    }));
+
+    expect(html).toContain('>Edit<');
+    expect(html).toContain('>Save<');
+    expect(html).toContain('role="separator"');
+    expect(html.match(/role="separator"/g)?.length).toBe(3);
+    expect(html).toContain('VS Code Dark 2026');
+    expect(html).toContain('syntax-theme-vscode-dark-2026');
+    expect(html).toContain('>Map<');
+    expect(html).toContain('source-syntax-entity');
+    expect(html).toContain('>キャラ<');
+    expect(html).toContain('>エンジン<');
+    expect(html).toContain('kind-cmd');
+    expect(html).toContain('common.cmd');
+
+    const textHtml = renderToStaticMarkup(createElement(CharacterSourceFilesViewer, {
+      files,
+      selection: { path: 'Demo/readme.txt', line: 1 },
+      onSelect: () => undefined,
+      onSave: async () => undefined,
+    }));
+    expect(textHtml).toContain('source-syntax-plain');
+    expect(textHtml).toContain('ordinary notes');
+    expect(textHtml).not.toContain('outline=-');
+  });
+
+  it('renders SFF sprite, registration, and applied palette metadata', () => {
+    const pack = previewPack([12, 34, 56, 255], 'sprite:10,0#0');
+    pack.palettes = new Map([['sprite:10,0#0', { bytes: new Uint8Array(768), indexOrder: 'normal' }]]);
+    const html = renderToStaticMarkup(createElement(CharacterSourceFilesViewer, {
+      files: [{ path: 'Demo/Demo.sff', label: 'Demo.sff', text: '', kind: 'sff', primary: true }],
+      selection: { path: 'Demo/Demo.sff', line: 1 },
+      onSelect: () => undefined,
+      onSave: async () => undefined,
+      sprites: pack,
+    }));
+
+    expect(html).toContain('SFF sprite preview');
+    expect(html).toContain('group,image = 10,0');
+    expect(html).toContain('registration = x:0 y:0');
+    expect(html).toContain('applied palette colors');
+    expect(html).toContain('Fit / Center');
+  });
+
+  it('renders every SFF sprite in the Map without a 600-item cutoff', () => {
+    const sprites = new Map(Array.from({ length: 601 }, (_, imageNo) => [
+      `${imageNo},0`,
+      {
+        groupNo: imageNo, imageNo: 0, xAxis: 0, yAxis: 0,
+        imageData: { data: new Uint8ClampedArray([0, 0, 0, 0]), width: 1, height: 1 } as ImageData,
+      },
+    ] as const));
+    const html = renderToStaticMarkup(createElement(CharacterSourceFilesViewer, {
+      files: [{ path: 'Demo/Demo.sff', label: 'Demo.sff', text: '', kind: 'sff' as const, primary: true }],
+      selection: { path: 'Demo/Demo.sff', line: 1 },
+      onSelect: () => undefined,
+      sprites: { sprites },
+    }));
+
+    expect(html).toContain('Group 600');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain('Showing first 600 matches');
+  });
+
+  it('does not leave empty sprite rows behind collapsed SFF groups', () => {
+    const sprites = new Map(Array.from({ length: 98 }, (_, imageNo) => [
+      `10520,${imageNo}`,
+      {
+        groupNo: 10520, imageNo, xAxis: 0, yAxis: 0,
+        imageData: { data: new Uint8ClampedArray([0, 0, 0, 0]), width: 1, height: 1 } as ImageData,
+      },
+    ] as const));
+    const html = renderToStaticMarkup(createElement(CharacterSourceFilesViewer, {
+      files: [{ path: 'Demo/Demo.sff', label: 'Demo.sff', text: '', kind: 'sff' as const, primary: true }],
+      selection: { path: 'Demo/Demo.sff', line: 1 },
+      onSelect: () => undefined,
+      sprites: { sprites },
+    }));
+
+    expect(html.match(/class="sff-sprite-entry"/g)).toHaveLength(1);
+    expect(html).toContain('Group 10520');
+    expect(html).not.toContain('sff-sprite-child');
+  });
+
+  it('starts StateDef controllers collapsed and exposes bulk tree controls and map search', () => {
+    const html = renderToStaticMarkup(createElement(CharacterSourceFilesViewer, {
+      files: [{
+        path: 'Demo/Demo.cns', label: 'Demo.cns', kind: 'cns' as const, editable: true,
+        text: '[StateDef 100]\ntype = S\n[State 100, Voice]\ntype = PlaySnd\ntrigger1 = 1',
+      }],
+      selection: { path: 'Demo/Demo.cns', line: 1 },
+      onSelect: () => undefined,
+    }));
+
+    expect(html).toContain('StateDef 100');
+    expect(html).not.toContain('PlaySnd — Voice');
+    expect(html).toContain('aria-label="Map search"');
+    expect(html).toContain('全て展開');
+    expect(html).toContain('全てたたむ');
+  });
+
+  it('parses SND samples for the map and manual preview', () => {
+    const binary = makeViewerSnd(2, 7, new Uint8Array([82, 73, 70, 70, 4, 0, 0, 0, 87, 65, 86, 69]));
+    const html = renderToStaticMarkup(createElement(CharacterSourceFilesViewer, {
+      files: [{ path: 'Demo/Demo.snd', label: 'Demo.snd', kind: 'snd' as const, text: '', binary }],
+      selection: { path: 'Demo/Demo.snd', line: 1 },
+      onSelect: () => undefined,
+    }));
+
+    expect(html).toContain('samples: 1');
+    expect(html).toContain('Group 2');
+    expect(html).toContain('SND 2,7');
+    expect(html).toContain('aria-label="SND map search"');
+  });
+
+  it('applies MUGEN-reversed ACT colors to retained sprite 0,0 indices', () => {
+    const originalImageData = globalThis.ImageData;
+    class TestImageData {
+      constructor(public data: Uint8ClampedArray, public width: number, public height: number) {}
+    }
+    Object.defineProperty(globalThis, 'ImageData', { configurable: true, value: TestImageData });
+    try {
+      const act = new Uint8Array(768);
+      act[(255 - 1) * 3] = 12;
+      act[(255 - 1) * 3 + 1] = 34;
+      act[(255 - 1) * 3 + 2] = 56;
+      const sprite = {
+        groupNo: 0, imageNo: 0, xAxis: 0, yAxis: 0,
+        indexedPixels: new Uint8Array([0, 1]),
+        imageData: { data: new Uint8ClampedArray(8), width: 2, height: 1 } as ImageData,
+      };
+
+      expect(Array.from(createActPreviewImage(sprite, act)?.data ?? [])).toEqual([
+        0, 0, 0, 0,
+        12, 34, 56, 255,
+      ]);
+    } finally {
+      Object.defineProperty(globalThis, 'ImageData', { configurable: true, value: originalImageData });
+    }
+  });
+
   it('stores immutable line snapshots instead of live debug array references', () => {
     const inputLines = ['keys=ArrowRight'];
     const commandLines = ['cmd p1=holdfwd'];
     const physicsLines = ['phys p1 state=20'];
-    const cnsLines = ['cns p1 state=0->20'];
     const pressedKeys = new Set(['ArrowRight']);
     const historyRef: MutableRefObject<string[]> = { current: ['seed'] };
     const lastSignatureRef: MutableRefObject<string> = { current: '' };
@@ -106,7 +448,6 @@ describe('WebMugenApp runtime history', () => {
       physicsLines,
       roundLine: 'round=1 phase=fight',
       scoreLine: 'score p1=0 p2=0 draw=0',
-      cnsLines,
       traces: [createTrace({ stateNo: 0, afterStateNo: 20 })],
       pressedKeys,
       historyRef,
@@ -120,7 +461,6 @@ describe('WebMugenApp runtime history', () => {
     inputLines[0] = 'keys=-';
     commandLines[0] = 'cmd p1=-';
     physicsLines[0] = 'phys p1 state=0';
-    cnsLines[0] = 'cns p1 state=20->0';
     pressedKeys.clear();
     historyRef.current[0] = 'mutated seed';
 
@@ -128,7 +468,7 @@ describe('WebMugenApp runtime history', () => {
     expect(appendedSnapshot.join('\n')).toContain('keys=ArrowRight');
     expect(appendedSnapshot.join('\n')).toContain('cmd p1=holdfwd');
     expect(appendedSnapshot.join('\n')).toContain('phys p1 state=20');
-    expect(appendedSnapshot.join('\n')).toContain('cns p1 state=0->20');
+    expect(appendedSnapshot.join('\n')).toContain('trace p1 state=0->20');
     expect(appendedSnapshot.join('\n')).not.toContain('keys=-');
     expect(appendedSnapshot.join('\n')).not.toContain('mutated seed');
   });
@@ -139,7 +479,7 @@ describe('WebMugenApp runtime history', () => {
     appendRuntimeHistoryIfNeeded({
       frameNo: 20,
       inputLines: ['keys=-'], commandLines: ['cmd p1=-'], physicsLines: ['phys p1=-'],
-      roundLine: 'round=1', scoreLine: 'score=-', cnsLines: ['cns=-'], traces: [],
+      roundLine: 'round=1', scoreLine: 'score=-', traces: [],
       hitDiagnosticLines: [
         'raw.hit_damage target=p2',
         '  activeHitDefId=123 lifeBefore=1000 appliedDamage=37 lifeAfter=963 source=active_hitdef ko=0',
@@ -147,7 +487,7 @@ describe('WebMugenApp runtime history', () => {
       pressedKeys: new Set(), historyRef, lastSignatureRef, setHistoryLines: () => undefined,
     });
 
-    expect(historyRef.current.join('\n')).toContain('SECTION hit_diagnostics');
+    expect(historyRef.current.join('\n')).toContain('SECTION event_diagnostics');
     expect(historyRef.current.join('\n')).toContain('activeHitDefId=123');
   });
 
@@ -163,7 +503,6 @@ describe('WebMugenApp runtime history', () => {
       physicsLines: ['phys p1 state=20 time=10 anim=20:10'],
       roundLine: 'round=1 phase=fight timer=90 winner=-',
       scoreLine: 'score p1=0 p2=0 draw=0',
-      cnsLines: ['cns p1 state=20->20 anim=20->20 time=10->10 animtime=10 found=1'],
       traces: [createTrace({ stateNo: 20, afterStateNo: 20, animNo: 20, afterAnimNo: 20, stateTime: 10, afterStateTime: 10, mugenAnimTime: 10 })],
       pressedKeys: new Set(['ArrowRight']),
       historyRef,
@@ -180,7 +519,6 @@ describe('WebMugenApp runtime history', () => {
       physicsLines: ['phys p1 state=20 time=11 anim=20:11'],
       roundLine: 'round=1 phase=fight timer=89 winner=-',
       scoreLine: 'score p1=0 p2=0 draw=0',
-      cnsLines: ['cns p1 state=20->20 anim=20->20 time=11->11 animtime=11 found=1'],
       traces: [createTrace({ stateNo: 20, afterStateNo: 20, animNo: 20, afterAnimNo: 20, stateTime: 11, afterStateTime: 11, mugenAnimTime: 11 })],
       pressedKeys: new Set(['ArrowRight']),
       historyRef,
@@ -195,13 +533,67 @@ describe('WebMugenApp runtime history', () => {
     expect(historyRef.current.join('\n')).not.toContain('frame=11');
   });
 
+  it('keeps AI snapshots compact without duplicate overlay and pipeline diagnostics', () => {
+    const historyRef: MutableRefObject<string[]> = { current: [] };
+    appendRuntimeHistoryIfNeeded({
+      frameNo: 30,
+      inputLines: ['keys=ArrowDown', 'sys R=0', 'p1 D=1', 'p2 D=0'],
+      commandLines: ['cmd p1=holddown', 'cmd p2=-'],
+      physicsLines: ['phys p1 state=10', 'phys p2 state=0'],
+      roundLine: 'round=1 phase=fight',
+      scoreLine: 'score p1=0 p2=0 draw=0',
+      traces: [createTrace({
+        stateNo: 0,
+        afterStateNo: 10,
+        executedControllers: ['dbg pipe before S-1 ChangeState', 'ChangeState', 'dbg finish state=10'],
+        debugLines: [
+          'pipe before S-1 ChangeState v=10 state=0 run=1',
+          'STATE10 05 final shouldRun=T',
+          'pipe after S-1 ChangeState executed=1 before=0 after=10',
+          'finish state=10',
+        ],
+      })],
+      pressedKeys: new Set(['ArrowDown']),
+      historyRef,
+      lastSignatureRef: { current: '' },
+      setHistoryLines: () => undefined,
+    });
+
+    const text = historyRef.current.join('\n');
+    expect(historyRef.current.length).toBeLessThanOrEqual(22);
+    expect(text).toContain('SECTION cns_trace');
+    expect(text).toContain('execCount=1 exec=ChangeState');
+    expect(text).toContain('STATE10 05 final shouldRun=T');
+    expect(text).not.toContain('SECTION cns_overlay');
+    expect(text).not.toContain('sys R=0');
+    expect(text).not.toContain('pipe before');
+    expect(text).not.toContain('pipe after');
+    expect(text).not.toContain('finish state=');
+    expect(text).not.toContain('hit_diagnostics=-');
+  });
+
+  it('does not retain a frame containing only the routine finish trace', () => {
+    const historyRef: MutableRefObject<string[]> = { current: [] };
+    appendRuntimeHistoryIfNeeded({
+      frameNo: 31,
+      inputLines: ['keys=-'], commandLines: ['cmd p1=-'], physicsLines: ['phys p1 state=0'],
+      roundLine: 'round=1', scoreLine: 'score=-',
+      traces: [createTrace({ debugLines: ['finish state=0'], executedControllers: ['dbg finish state=0'] })],
+      pressedKeys: new Set(), historyRef, lastSignatureRef: { current: '' }, setHistoryLines: () => undefined,
+    });
+
+    expect(historyRef.current).toEqual([]);
+  });
+
   it('ignores readable trigger value summaries for history identity', () => {
     expect(stripReadableRuntimeValueSummaries([
       '**ChangeState -> 0** | NG @ char.cns:10',
       'OK `trigger1=AnimTime = 0 || values: animtime=-4  time=20`',
+      'PARAM `value = Time || evaluated: 20`',
     ].join('\n'))).toBe([
       '**ChangeState -> 0** | NG @ char.cns:10',
       'OK `trigger1=AnimTime = 0',
+      'PARAM `value = Time`',
     ].join('\n'));
   });
 
@@ -221,9 +613,66 @@ value = ifelse((vel x)=0, 44, ifelse((vel x)>0, 45, 46))+var(5)*4
       constants: cns,
     });
 
-    expect(lines[0]).toContain('**ChangeAnim** | OK');
+    expect(lines[0]).toContain('**ChangeAnim** | ACTIVE');
     expect(lines[0]).toContain('value raw=`ifelse((vel x)=0, 44, ifelse((vel x)>0, 45, 46))+var(5)*4` evaluated=50');
     expect(parseControllerValueText(lines[0])).toBe('value: ifelse((vel x)=0, 44, ifelse((vel x)>0, 45, 46))+var(5)*4 => 50');
+  });
+
+  it('does not treat Helper Time-only diagnostic changes as trigger changes', () => {
+    const first = createReadableRuntimeTriggerChangeSignature(
+      'OK `trigger1=Time >= 200 || values: time=41`\nPARAM `value = Time || evaluated: 41`',
+      'OK `trigger1=1`',
+      [{ key: 'helper-3', triggerSummary: 'NG `trigger1=Time >= 200 || values: time=41`' }],
+    );
+    const next = createReadableRuntimeTriggerChangeSignature(
+      'OK `trigger1=Time >= 200 || values: time=42`\nPARAM `value = Time || evaluated: 42`',
+      'OK `trigger1=1`',
+      [{ key: 'helper-3', triggerSummary: 'NG `trigger1=Time >= 200 || values: time=42`' }],
+    );
+    const destroyed = createReadableRuntimeTriggerChangeSignature(
+      'OK `trigger1=Time >= 200 || values: time=42`',
+      'OK `trigger1=1`',
+      [],
+    );
+
+    expect(next).toBe(first);
+    expect(destroyed).not.toBe(next);
+  });
+
+  it('retains non-trigger controller parameters for the Human Log parameter disclosure', () => {
+    const cns = parseCnsText(`
+[Statedef 200]
+[State 200, attack]
+type = HitDef
+trigger1 = Time = 0
+attr = S, NA
+hitsound = s630, 0
+`);
+    const state = createInitialGameState();
+    const lines = formatSatisfiedStateDefTriggers(cns.states[0], {
+      player: state.players[0], opponent: state.players[1], constants: cns,
+    });
+
+    expect(lines).toContain('PARAM `attr = S, NA`');
+    expect(lines).toContain('PARAM `hitsound = s630, 0`');
+  });
+
+  it('keeps every State controller in Human detail instead of truncating the list', () => {
+    const controllers = Array.from({ length: 18 }, (_, index) => `
+[State 0, controller ${index}]
+type = VarSet
+trigger1 = ${index % 2}
+v = ${index}
+value = ${index}
+`).join('');
+    const cns = parseCnsText(`[StateDef 0]\ntype = S\n${controllers}`);
+    const state = createInitialGameState();
+    const lines = formatSatisfiedStateDefTriggers(cns.states[0], {
+      player: state.players[0], opponent: state.players[1], constants: cns,
+    });
+
+    expect(lines.filter((line) => line.startsWith('**VarSet**'))).toHaveLength(18);
+    expect(lines.join('\n')).not.toContain('controllers hidden');
   });
 
   it('builds source outlines for AIR, CNS, and CMD files', () => {
@@ -241,10 +690,12 @@ value = ifelse((vel x)=0, 44, ifelse((vel x)>0, 45, 46))+var(5)*4
       path: 'demo.cns',
       label: 'demo.cns',
       kind: 'cns',
-      text: '[StateDef 50]\ntype = A\n[StateDef 52]\ntype = S',
-    }).map((item) => `${item.label}:${item.line}`)).toEqual([
-      'StateDef 50:1',
-      'StateDef 52:3',
+      text: '[StateDef 50]\ntype = A\n[State 50, Jump]\ntype = ChangeState\ntrigger1 = Time = 0\nvalue = 52\n[State 50, Sound]\ntype = PlaySnd\n[StateDef 52]\ntype = S',
+    }).map((item) => `${item.level}:${item.label}:${item.line}`)).toEqual([
+      '1:StateDef 50:1',
+      '2:ChangeState — Jump:3',
+      '2:PlaySnd — Sound:7',
+      '1:StateDef 52:9',
     ]);
 
     expect(createSourceOutline({
@@ -305,6 +756,21 @@ value = ifelse((vel x)=0, 44, ifelse((vel x)>0, 45, 46))+var(5)*4
 });
 
 type PreviewCanvas = HTMLCanvasElement & { rgba: number[] };
+
+function makeViewerSnd(group: number, index: number, payload: Uint8Array): Uint8Array {
+  const bytes = new Uint8Array(24 + 16 + payload.length);
+  bytes.set(Array.from('ElecbyteSnd\0').map((value) => value.charCodeAt(0)), 0);
+  bytes[12] = 1;
+  const view = new DataView(bytes.buffer);
+  view.setUint32(16, 1, true);
+  view.setUint32(20, 24, true);
+  view.setUint32(24, 0, true);
+  view.setUint32(28, payload.length, true);
+  view.setInt32(32, group, true);
+  view.setInt32(36, index, true);
+  bytes.set(payload, 40);
+  return bytes;
+}
 
 function fakePreviewSpriteCanvas(): PreviewCanvas {
   const canvas = { width: 0, height: 0, rgba: [] as number[] } as unknown as PreviewCanvas;

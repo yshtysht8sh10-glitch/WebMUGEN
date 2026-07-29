@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { parseAirText } from '../../parser/air/AirParser';
 import { getMugenAnimEndTime } from '../animation/AnimationDuration';
 import { advanceExternalCnsStateEntryFrame, enterCnsStateAndRunTimeZero, stepCnsStateRuntime } from '../cns/CnsStateRuntime';
+import { stepCnsPhysicsMotion } from '../cns/CnsPhysicsStep';
 import type { SoundPlayEvent } from '../audio/SoundEvent';
-import { applyPauseControllerEvents, createInitialPauseState, stepPauseState, type PauseControllerEvent } from '../pause/PauseSystem';
+import { applyPauseControllerEvents, createInitialPauseState, restorePausedEntityPhysics, stepPauseState, type PauseControllerEvent } from '../pause/PauseSystem';
 import { createInitialGameState } from '../engine/GameState';
 import { resolveFallbackHits } from '../engine/FallbackHitResolver';
 import type { ActiveHitDef, GameState, PlayerState } from '../engine/types';
@@ -26,7 +27,7 @@ const incomingHit: ActiveHitDef = {
   attr: { stateType: 'S', attackTypes: ['NA'] },
   damage: 80,
   guardDamage: 0,
-  pauseTime: { attacker: 0, defender: 0 },
+  pauseTime: { attacker: 4, defender: 8 },
   groundVelocity: { x: 0, y: 0 },
   airVelocity: { x: 0, y: 0 },
 };
@@ -87,8 +88,9 @@ describe('Issue #92 T-H-M-A blocking regression', () => {
             },
           )));
         expect(blocked.players[defenderId - 1]).toMatchObject({
-          stateNo: 902, animNo: 908, animTime: 1, stateTime: 1, stateHeaderAppliedStateNo: 902, life: 1000,
+          stateNo: 902, animNo: 908, animTime: 1, stateTime: 1, stateHeaderAppliedStateNo: 902, life: 1000, hitPause: 0,
         });
+        expect(blocked.players[attackerId - 1].hitPause).toBe(4);
         expect(pauseEvents).toContainEqual(expect.objectContaining({
           type: 'pause', ownerEntityId: defenderId, time: 12, moveTime: 12,
         }));
@@ -113,6 +115,42 @@ describe('Issue #92 T-H-M-A blocking regression', () => {
         }));
         expect(assets.sounds?.samplesByKey.has('900,0')).toBe(true);
         expect(blocked.hitDiagnosticLines?.join('\n')).toContain(`raw.hit_override attacker=p${attackerId} target=p${defenderId}`);
+
+        let pausedState = blocked;
+        let activePause = stepPauseState(pause);
+        const pauseSounds: SoundPlayEvent[] = [];
+        const ownerTimes = [blocked.players[defenderId - 1].stateTime];
+        const opponentTimes = [blocked.players[attackerId - 1].stateTime];
+        for (let frame = 1; frame < 12; frame += 1) {
+          const runtime = stepCnsStateRuntime(pausedState, assets.cns, {
+            p1Commands: new Set(),
+            p2Commands: new Set(),
+            random: 998,
+            getAnimationDuration: (animNo) => getMugenAnimEndTime(assets.air, animNo),
+            getCnsDocumentForPlayer: (id) => id === defenderId ? assets.cns : emptyCns,
+            pauseState: activePause,
+            onSoundPlay: (event) => pauseSounds.push(event),
+          }).state;
+          const advanced = stepCnsPhysicsMotion(runtime, assets.cns);
+          pausedState = restorePausedEntityPhysics(runtime, advanced, activePause);
+          activePause = stepPauseState(activePause);
+          ownerTimes.push(pausedState.players[defenderId - 1].stateTime);
+          opponentTimes.push(pausedState.players[attackerId - 1].stateTime);
+        }
+
+        expect(ownerTimes).toEqual(Array.from({ length: 12 }, (_, index) => index + 1));
+        expect(new Set(opponentTimes)).toEqual(new Set([opponentTimes[0]]));
+        expect(pausedState.players[defenderId - 1]).toMatchObject({
+          stateNo: 902,
+          stateTime: 12,
+          animTime: 12,
+          x: defender.x,
+          y: defender.y,
+          vx: 3,
+        });
+        expect(pauseSounds).toContainEqual(expect.objectContaining({
+          ownerId: defenderId, scope: 'character', group: 900, index: 0,
+        }));
       });
     }
   }

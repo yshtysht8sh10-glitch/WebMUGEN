@@ -25,7 +25,7 @@ Follow `docs/webmugen/development-policy.md`: do not modify `public/chars/common
 | `hitdefpersist` | Partial | Entering a State with value 1 preserves the ActiveHitDef, its consumed-target generation history, and used flag; value 0 discards them. | Helper/projectile and multi-player HitDef ownership remain incomplete. |
 | `movehitpersist` | Partial | Entering a State with value 1 preserves MoveContact/MoveHit/MoveGuarded result flags; value 0 resets them independently of the hit count. | MoveReversed and multi-player result semantics remain incomplete. |
 | `hitcountpersist` | Partial | Entering a State with value 1 preserves HitCount; value 0 resets it independently of the move-contact result. | UniqHitCount and full team/combo-counter semantics remain incomplete. |
-| `sprpriority` | Partial | Runtime field exists. | Rendering order still needs audit. |
+| `sprpriority` | Partial | Numeric header values are parsed and retained for StateDef diagnostics; the runtime sprite-priority field also exists. | State-entry application and rendering order still need audit. |
 
 ## Implementation guidance
 

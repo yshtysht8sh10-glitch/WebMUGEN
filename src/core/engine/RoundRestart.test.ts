@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialHitFeedbackState } from './HitFeedback';
 import { createInitialRoundState } from './RoundState';
-import { canRestartRound, restartRound } from './RoundRestart';
+import { canRestartRound, restartCurrentRound, restartRound } from './RoundRestart';
 
 describe('RoundRestart', () => {
   it('allows restart after KO', () => {
@@ -37,6 +37,13 @@ describe('RoundRestart', () => {
   it('preserves app-specific symmetric start positions across rounds', () => {
     const restarted = restartRound(1, undefined, undefined, [380, 580]);
 
+    expect(restarted.gameState.players.map((player) => player.x)).toEqual([380, 580]);
+  });
+
+  it('restarts the current round without advancing its number', () => {
+    const restarted = restartCurrentRound(3, 60, 9000, [380, 580]);
+
+    expect(restarted.roundState).toMatchObject({ roundNo: 3, timer: 60, phase: 'intro' });
     expect(restarted.gameState.players.map((player) => player.x)).toEqual([380, 580]);
   });
 });

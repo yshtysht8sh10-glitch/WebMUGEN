@@ -1,6 +1,8 @@
-export const RUNTIME_HISTORY_STORE_LIMIT = 5000;
+export const RUNTIME_HISTORY_STORE_LIMIT = 1000;
 export const RUNTIME_HISTORY_VISIBLE_LIMIT = 50;
 export const RUNTIME_HISTORY_VISIBLE_LINE_LIMIT = 1200;
+export const AI_RUNTIME_HISTORY_VISIBLE_LIMIT = 12;
+export const AI_RUNTIME_HISTORY_VISIBLE_LINE_LIMIT = 400;
 export const RUNTIME_HISTORY_CONTEXT_BEFORE = 100;
 export const RUNTIME_HISTORY_CONTEXT_AFTER = 100;
 const RUNTIME_HISTORY_FULL_COUNT_LINE_SCAN_LIMIT = 20000;
@@ -43,11 +45,12 @@ export function selectVisibleRuntimeHistory(
   kind: RuntimeHistoryKind,
   window: RuntimeHistoryWindow,
 ): VisibleRuntimeHistory {
+  const visibleEntryLimit = kind === 'ai' ? AI_RUNTIME_HISTORY_VISIBLE_LIMIT : RUNTIME_HISTORY_VISIBLE_LIMIT;
   const entries = collectRuntimeHistoryEntries(
     lines,
     kind,
     window.mode === 'latest' && lines.length > RUNTIME_HISTORY_FULL_COUNT_LINE_SCAN_LIMIT
-      ? RUNTIME_HISTORY_VISIBLE_LIMIT + 1
+      ? visibleEntryLimit + 1
       : undefined,
   );
   if (entries.length === 0) {
@@ -72,15 +75,15 @@ export function selectVisibleRuntimeHistory(
     : 0;
   const endEntryIndex = window.mode === 'aroundFrame' && targetIndex >= 0
     ? Math.min(entries.length - 1, centerIndex + RUNTIME_HISTORY_CONTEXT_BEFORE)
-    : Math.min(entries.length - 1, RUNTIME_HISTORY_VISIBLE_LIMIT - 1);
+    : Math.min(entries.length - 1, visibleEntryLimit - 1);
   const startLine = entries[startEntryIndex].start;
   const endLine = entries[endEntryIndex].end;
   const visibleEntries = endEntryIndex - startEntryIndex + 1;
-  const visibleLines = capVisibleRuntimeHistoryLines(lines.slice(startLine, endLine), window.mode);
+  const visibleLines = capVisibleRuntimeHistoryLines(lines.slice(startLine, endLine), kind, window.mode);
   const totalLabel = window.mode === 'latest'
     && lines.length > RUNTIME_HISTORY_FULL_COUNT_LINE_SCAN_LIMIT
-    && entries.length > RUNTIME_HISTORY_VISIBLE_LIMIT
-    ? `${RUNTIME_HISTORY_VISIBLE_LIMIT}+`
+    && entries.length > visibleEntryLimit
+    ? `${visibleEntryLimit}+`
     : `${entries.length}`;
 
   return {
@@ -129,11 +132,16 @@ function isRuntimeHistoryEntryStart(line: string, kind: RuntimeHistoryKind): boo
     : line.startsWith('---- ');
 }
 
-function capVisibleRuntimeHistoryLines(lines: string[], mode: RuntimeHistoryWindow['mode']): string[] {
-  if (mode !== 'latest' || lines.length <= RUNTIME_HISTORY_VISIBLE_LINE_LIMIT) return lines;
-  const omitted = lines.length - RUNTIME_HISTORY_VISIBLE_LINE_LIMIT;
+function capVisibleRuntimeHistoryLines(
+  lines: string[],
+  kind: RuntimeHistoryKind,
+  mode: RuntimeHistoryWindow['mode'],
+): string[] {
+  const lineLimit = kind === 'ai' ? AI_RUNTIME_HISTORY_VISIBLE_LINE_LIMIT : RUNTIME_HISTORY_VISIBLE_LINE_LIMIT;
+  if (mode !== 'latest' || lines.length <= lineLimit) return lines;
+  const omitted = lines.length - lineLimit;
   return [
-    ...lines.slice(0, RUNTIME_HISTORY_VISIBLE_LINE_LIMIT),
+    ...lines.slice(0, lineLimit),
     `... ${omitted} rendered lines hidden; use full log copy or a frame jump for more context ...`,
   ];
 }

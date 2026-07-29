@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AI_RUNTIME_HISTORY_VISIBLE_LINE_LIMIT,
   RUNTIME_HISTORY_VISIBLE_LINE_LIMIT,
   limitRuntimeHistoryEntries,
   selectVisibleRuntimeHistory,
@@ -55,9 +56,9 @@ describe('RuntimeHistoryWindow', () => {
     const lines = Array.from({ length: 220 }, (_, index) => aiEntry(220 - index)).flat();
     const visible = selectVisibleRuntimeHistory(lines, 'ai', { mode: 'latest' });
 
-    expect(visible.visibleEntries).toBe(50);
+    expect(visible.visibleEntries).toBe(12);
     expect(visible.lines[0]).toContain('frame=220');
-    expect(visible.lines.at(-3)).toContain('frame=171');
+    expect(visible.lines.at(-3)).toContain('frame=209');
   });
 
   it('limits internal history by entries rather than raw lines', () => {
@@ -79,6 +80,18 @@ describe('RuntimeHistoryWindow', () => {
 
     expect(visible.visibleEntries).toBe(2);
     expect(visible.lines).toHaveLength(RUNTIME_HISTORY_VISIBLE_LINE_LIMIT + 1);
+    expect(visible.lines.at(-1)).toContain('rendered lines hidden');
+  });
+
+  it('uses a smaller line window for dense AI snapshots', () => {
+    const lines = [
+      '===== AI_RUNTIME frame=2 timestamp=12:00:00 =====',
+      ...Array.from({ length: AI_RUNTIME_HISTORY_VISIBLE_LINE_LIMIT + 20 }, (_, index) => `trace ${index}`),
+      'END AI_RUNTIME',
+    ];
+    const visible = selectVisibleRuntimeHistory(lines, 'ai', { mode: 'latest' });
+
+    expect(visible.lines).toHaveLength(AI_RUNTIME_HISTORY_VISIBLE_LINE_LIMIT + 1);
     expect(visible.lines.at(-1)).toContain('rendered lines hidden');
   });
 });

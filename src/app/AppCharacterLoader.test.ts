@@ -9,7 +9,7 @@ import { readNumberExpression } from '../core/cns/CnsRuntimeTrigger';
 import { analyzeCnsCoverage } from '../core/cns/CnsCoverageDiagnostics';
 import { createInitialGameState } from '../core/engine/GameState';
 import { formatScenarioFrame, holdP1Keys, neutral, simulateCnsInputScenario } from '../testing/CnsInputScenarioSimulator';
-import { createSampleCharacterAssets, loadAppCharacter, readCharacterRuntimeMetadata } from './AppCharacterLoader';
+import { createSampleCharacterAssets, loadAppCharacter, readCharacterRuntimeMetadata, saveCharacterSourceFile } from './AppCharacterLoader';
 
 class FakeImageData {
   data: Uint8ClampedArray;
@@ -45,6 +45,9 @@ describe('AppCharacterLoader', () => {
       'Demo/Demo.cmd': strToU8('[Command]\nname = "a"\ncommand = a\ntime = 1\n'),
       'Demo/audio/Demo.snd': sndBytes,
       'Demo/palettes/demo.act': new Uint8Array(768),
+      'Demo/readme.txt': strToU8('ordinary character notes'),
+      'Demo/states/demo.zss': strToU8('StateDef 100 {}'),
+      'Demo/preview.sff': new Uint8Array([0, 1, 2, 3]),
       'chars/common.cmd': strToU8('[Command]\nname = "holdup"\ncommand = /U\n'),
     });
     const originalFetch = globalThis.fetch;
@@ -74,8 +77,56 @@ describe('AppCharacterLoader', () => {
         'Demo/Demo.cns',
         'Demo/Demo.cmd',
         'Demo/Demo.air',
+        'Demo/readme.txt',
+        'Demo/states/demo.zss',
+        'Demo/preview.sff',
+        'Demo/audio/Demo.snd',
+        'Demo/palettes/demo.act',
         '/chars/common.cmd',
       ]));
+      expect(result.character?.cnsSourceFiles?.find((file) => file.path === 'Demo/readme.txt')).toMatchObject({
+        kind: 'text', text: 'ordinary character notes', editable: true, external: false,
+      });
+      expect(result.character?.cnsSourceFiles?.find((file) => file.path === 'Demo/states/demo.zss')).toMatchObject({
+        kind: 'zss', label: 'states/demo.zss', editable: true, external: false,
+      });
+      expect(result.character?.cnsSourceFiles?.find((file) => file.path === 'Demo/preview.sff')).toMatchObject({
+        kind: 'sff', editable: false, external: false,
+      });
+      expect(result.character?.cnsSourceFiles?.find((file) => file.path === 'Demo/palettes/demo.act')).toMatchObject({
+        kind: 'act', editable: false, external: false, binary: expect.any(Uint8Array),
+      });
+      expect(result.character?.cnsSourceFiles?.find((file) => file.path === 'Demo/audio/Demo.snd')).toMatchObject({
+        kind: 'snd', label: 'audio/Demo.snd', editable: false, external: false, binary: expect.any(Uint8Array),
+      });
+      expect(result.character?.cnsSourceFiles?.find((file) => file.path === '/chars/common.cmd')).toMatchObject({
+        kind: 'common', external: true, archivePath: '/chars/Demo.zip', archiveEntryPath: 'chars/common.cmd',
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('saves editable character text through the restricted development endpoint', async () => {
+    const originalFetch = globalThis.fetch;
+    let request: RequestInit | undefined;
+    globalThis.fetch = (async (_path: RequestInfo | URL, init?: RequestInit) => {
+      request = init;
+      return new Response(JSON.stringify({ saved: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }) as typeof fetch;
+    try {
+      await saveCharacterSourceFile({
+        path: 'Demo/readme.txt', label: 'readme.txt', text: 'before', kind: 'text', editable: true,
+        archivePath: '/chars/Demo.zip', archiveEntryPath: 'Demo/readme.txt',
+      }, 'after');
+
+      expect(request?.method).toBe('POST');
+      expect(JSON.parse(String(request?.body))).toEqual({
+        path: 'Demo/readme.txt',
+        text: 'after',
+        archivePath: '/chars/Demo.zip',
+        archiveEntryPath: 'Demo/readme.txt',
+      });
     } finally {
       globalThis.fetch = originalFetch;
     }

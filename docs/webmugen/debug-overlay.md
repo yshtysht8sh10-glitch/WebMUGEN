@@ -1,10 +1,10 @@
 # Debug Overlay
 
-Updated: 2026-07-09
+Updated: 2026-07-28
 
 The Debug Overlay is part of the compatibility workflow. It is not only a UI convenience; it is how WebMUGEN identifies which runtime layer failed.
 
-Runtime Settings controls Human log capture, AI log capture, Canvas collision boxes, and the lower-left state history independently. All four default to OFF, and OFF stops the corresponding upstream capture/format/render path rather than only hiding markup. See `performance-debug-settings.md`.
+The top-level `Settings` page controls Human log capture, AI log capture, Canvas collision boxes, and the lower-left state history independently. All four default to OFF, and OFF stops the corresponding upstream capture/format/render path rather than only hiding markup. See `performance-debug-settings.md`.
 
 ## Purpose
 
@@ -48,27 +48,51 @@ The live physics line shows `power=current/max`. Canvas renders a bottom Power g
 | `round=` | What is the current round phase? |
 | `score=` | What is the current score/result state? |
 
-## Static tab
+## Character Files tab
 
-The static tab should show information that does not change frame-by-frame:
+The Debug UI is split into top-level pages. The game canvas, runtime logs, manual, and settings live under the play/runtime page. The second page is named `Character Files` and contains only the loaded character file browser. Top-level page switching keeps the game panel and canvas mounted because `CanvasRenderer` owns that canvas reference for the running loop. The file browser unmounts while inactive and remounts when reopened.
 
-- loaded character source;
-- DEF metadata;
-- StateDef list;
-- CMD command list;
-- expected Command → State routes;
-- compatibility coverage summary;
-- control help.
+`Character Files` is always visible while its page is selected; it has no Show/Hide control. It inventories all files under an HTTP character's DEF directory and all entries in a ZIP character archive. MUGEN source extensions receive their MPS-compatible syntax colors. Other text files remain selectable and editable without a generated outline. Binary files that do not have a dedicated viewer remain listed but read-only.
 
-If a route is missing from the static tab, suspect loader/parser/merge before runtime.
+Text files can be switched into Edit mode and saved from the same pane during local Vite development. Save preserves the project's Shift-JIS character-file convention. Direct files are restricted to `public/chars`, while ZIP entries are saved by rebuilding the character archive. A deployed static build does not expose the development save endpoint.
 
-The Debug UI is split into top-level pages. The game canvas, runtime logs, manual, and settings live under the play/runtime page. Static information and `Character Files` live under a separate static/files page so heavy source viewers and AIR previews are not part of the normal play/debug DOM. Top-level page switching keeps the game panel and canvas mounted because `CanvasRenderer` owns that canvas reference for the running loop. Heavy static/files contents unmount while inactive and remount when reopened.
+Files are grouped under `Character` and `Engine` headings instead of using location-dependent colors. Labels are paths relative to the character DEF directory, so nested assets remain distinguishable. Extension colors are stable across both groups: AIR is red, ACT orange, DEF green, SFF/SND purple, CNS vivid blue, CMD yellow, and other files retain the neutral color. Active and hover states stay within each extension's color family; neutral files use a restrained blue-gray state instead of the CNS selection color. Direct files are editable only when the local development save endpoint can map them safely under `public/chars`. The initial list height fits every file and remains manually resizable.
 
-`Character Files` shows loaded character text files and the applied common CNS. It should span the full static-info width so long CNS/AIR files remain readable. Source scrolling is remembered per file; changing tabs or switching files must not reuse another file's scroll position.
+Source scrolling is remembered per file; changing tabs or switching files must not reuse another file's scroll position. The Map/source divider, file-list height, and source-view height are draggable and keyboard adjustable. The Map list consumes the available panel height rather than retaining an unrelated fixed cap.
 
-The file list is shown as a compact multi-column list above the source reader. The source reader itself is on the next row with a summary pane on the left and text on the right. The summary pane should expose useful jump points such as AIR `Begin Action`, CNS `StateDef`, CMD `Command`, and DEF sections. Summary items jump the text reader to the corresponding source line.
+Editing can be cancelled. Cancelling or selecting another file while the draft differs from the loaded source requires explicit discard confirmation. Syntax coloring is selectable; `VS Code Dark 2026` is the default, with MPS Classic and monochrome alternatives. DEF, CNS, AIR, and IKEMEN ZSS scopes mirror the latest MugenPowerStudio TextMate grammars (`01_mugen_def`, `02_mugen_cns`, `03_mugen_air`, and `10_ikemengo_zss`). ZSS files retain distinct scopes for comments, strings, numeric constants, variables, control words, trigger functions, redirects, controllers/parameters, modifiers, and operators.
+
+The file list is shown as a compact multi-column list above the source reader. The source reader itself is on the next row with a summary pane on the left and text on the right. Every non-SFF Map has a label/line search, and text source has a case-insensitive string search with previous/next navigation. The summary pane exposes useful jump points such as AIR `Begin Action`, CNS `StateDef`, CMD `Command`, and DEF sections. CNS maps use a collapsed one-level tree: each `StateDef` is a parent and every owned State Controller is its child, labeled with `type` and header name. Disclosure buttons open individual parents; `Expand all` and `Collapse all` control the complete tree. Parent and child source items both jump to their corresponding source line.
 
 AIR files also include a small debug animation preview. The preview uses the loaded AIR action and sprite pack when sprites are available, and falls back to a missing-sprite label when an element cannot be drawn. This is a diagnostic aid for checking whether the AIR action and SFF sprite references line up.
+
+SFF files have a dedicated single-sprite browser. The complete sprite Map is available without a 600-item cutoff and is grouped by group number. Groups start collapsed, disclose their `group,image` children, support search, and have expand-all/collapse-all actions. The preview canvas keeps its intrinsic aspect ratio so sprites are never stretched by the panel dimensions. The selected group/image initially fits in the viewport while preserving its registration origin, can be zoomed from 10% to 800%, and can be panned by dragging. Zoom and pan are shared by every sprite in the Character Files viewer and do not reset on group/image or SFF-file changes; `Fit / Center` resets them explicitly. Metadata reports group/image, dimensions, X/Y registration coordinates, link and palette ownership, applied palette key/source, ACT path when applicable, and palette index order. The retained effective palette is also shown as 256 swatches. The primary SFF uses the already-loaded sprite pack so its preview reflects the selected DEF palette; another SFF is decoded from its retained archive bytes. SFF v2 remains unsupported by the engine and viewer.
+
+SND v1 files use the existing compatibility parser to list samples by group and index. The Map is searchable and grouped with the same disclosure controls. Selecting a RIFF/WAVE sample creates a temporary browser audio URL and exposes native playback controls; empty or unknown-format payloads remain inspectable but are not advertised as playable.
+
+ACT files show their MUGEN-index-order palette and apply the selected ACT to retained indexed pixels from sprite `0,0`. If `0,0` is absent or undecodable, the first decodable group-0 sprite is used and its actual group/image number is shown. Indexed pixels are retained for only that best preview candidate to avoid duplicating the full SFF pixel memory solely for this inspection feature.
+
+## Settings page
+
+`Settings` is a top-level page beside `Game / Runtime` and `Character Files`; it is not part of the runtime-log tab row. Character loading, runtime behavior, audio, and input configuration remain on this page. Runtime and audio controls are grouped into labeled cards so checkboxes, descriptions, selectors, and action buttons retain a consistent relationship at wide and narrow viewport sizes. The control summary is a child card of `Input Config`, alongside the live input monitor and per-player mappings.
+
+## WinMUGEN-compatible system shortcuts
+
+The Controls tab lists every shortcut implemented by the browser runtime. System shortcuts are handled separately from configured character input and do not skip the round intro.
+
+- F1 / Ctrl+F1: set P2 / P1 life to zero.
+- F2 / Ctrl+F2 / Shift+F2: set both / P1 / P2 life to one.
+- F3: fill both root-player power gauges.
+- F4: rebuild the current round without advancing its number. Shift+F4 reloads the character and starts the match again.
+- F5: enter the normal time-over result flow using the current life totals.
+- F8: clear retained runtime logs. F12 downloads the current canvas as PNG.
+- Ctrl+C / Ctrl+D / Ctrl+L: toggle collision boxes, runtime-history display, and the Canvas HUD.
+- Ctrl+I: put roots and active Helpers into State 0 with `Ctrl = 0`.
+- Ctrl+S: toggle fast-forward.
+- Space: restore root/Helper life and power and reset a fighting round's timer.
+- Pause / Scroll Lock: pause the simulation and advance one frame while paused.
+
+The Controls tab explicitly marks Ctrl+number AI switching, Ctrl+Alt+number player removal, and Ctrl+V VSync switching unsupported. WebMUGEN does not yet expose WinMUGEN-style player-slot AI/removal controls, and browser animation-frame scheduling owns VSync.
 
 ## Runtime history tab
 
@@ -119,17 +143,25 @@ Keep logs when they help future compatibility work. Remove or narrow logs that o
 
 For large characters, cap rendered history by both entry count and line count. Prefer retaining ChangeState and ChangeAnim candidates before less route-critical controller details.
 
+AI runtime history stores compact event snapshots rather than repeating the complete live overlay. Input, command, post-step physics, round/score, and one CNS trace summary are retained. The redundant CNS overlay/detail headers, `dbg` pseudo-controller copies, routine `finish`/`pipe`/`return` plumbing, zero-valued restart status, and empty hit-diagnostic placeholders are omitted. Specialized route diagnostics such as `STATE10` and event diagnostics for HitDef, Projectile, Explod, audio, pause, and rendering remain available when emitted.
+
+A frame containing only routine trace completion is not retained. The AI tab shows the latest 12 entries and at most 400 lines at once; the retained AI buffer keeps the latest 1,000 entries for full-log copying. Human-readable history keeps its separate limits and presentation.
+
 The runtime-history tabs render a visible window instead of the full retained history. The default window is the latest entries. Clicking a StateNo transition frame switches the window to that frame's surrounding entries before scrolling, so old retained frames can still be inspected without keeping the whole history in the DOM. The UI should show the current window mode, displayed range, visible count, retained count, and a `最新へ戻る` action when inspecting an older frame.
 
 Retained runtime-history lines should stay outside React render state. React should track only visible-window controls, lightweight index rows, selected detail entries, and invalidation counters; otherwise every appended log copies and reconciles thousands of retained lines even when the DOM window is capped.
 
-The human runtime-history view should use a frame index on the left and a selected one-entry detail pane on the right. The selected detail displays P1 and P2 side by side, including each player's State/Anim, mapped input summary, and Trigger/controller evaluation; narrow screens stack the two panes. The index is populated whenever a human detail log is generated, including frames where StateNo did not change. If one frame crosses multiple P1 StateNo values, retain separate entries keyed by `frameNo + StateNo`. Clicking an index row loads that retained P1/P2 detail pair from the non-rendering store. New log entries must not automatically replace the selected detail pane; use the latest-frame action for that.
+The human runtime-history view should use a frame index on the left and a selected one-entry detail pane on the right. A draggable splitter changes the width allocated to those regions, and a second splitter changes the P1/P2 detail widths. The selected detail displays P1 and P2 side by side, including each player's State, emphasized Anim, Time, mapped input summary, and Trigger/controller evaluation; narrow screens stack the panes. The index is populated whenever a human detail log is generated, including frames where StateNo did not change. If one frame crosses multiple P1 StateNo values, retain separate entries keyed by `frameNo + StateNo`. Clicking an index row loads that retained P1/P2 detail pair from the non-rendering store. New log entries must not automatically replace the selected detail pane; use the latest-frame action for that. Latest-log following is controlled by one checkbox.
+
+Every retained frame index also lists the Helpers currently on stage with root owner, Helper/entity id, StateNo, and optionally AnimNo. Helpers present in the latest retained frame receive State/Anim columns to the right of P1/P2; a destroyed Helper is removed from the live columns while its historical detail remains selectable from its retained frame. Frame-index Anim values are display-only. The selected detail uses P1, P2, and per-Helper tabs instead of visibility checkboxes and an internal splitter; one entity card is rendered at a time, including the selected Helper's own StateDef and controllers. Its header shows only timestamp and frame number. StateNo and Anim are parallel clickable badges with hover feedback; StateNo opens the CNS StateDef and Anim opens the AIR `Begin Action`. StateDef fields, controller triggers, and controller parameters use separate collapsed disclosures, with `value`, `hitsound`, and other non-trigger fields kept inside Parameters instead of the controller title. Human-log retention is selectable between every frame, Trigger ON/OFF changes, and frames where at least one State Controller actually executed. Trigger-change retention ignores timestamps, Time-only value summaries, and evaluated parameter changes, but records Helper spawn/destruction. Stores remain bounded even in every-frame mode.
+
+The selected State detail lists every controller in that State. Controller headers use exact runtime execution references (`StateNo + source + controller index`) to distinguish actual execution from merely true Triggers. Headers show `作動` / `非作動`; Trigger rows start collapsed and open from the disclosure button. The StateNo badge and StateDef link both open the beginning of the corresponding source StateDef. The detail pane has no nested Hide control.
 
 Human-readable detail entries include a `StateDef` source link. Clicking it should open `Character Files` at the StateDef header line so the active state can be inspected quickly.
 
-The human detail pane and `Character Files` pane can be hidden with Show/Hide controls. This keeps heavy State status markup and source/AIR preview canvases out of the DOM during long debugging sessions. `Character Files` must still be openable from a button even when no StateDef source link has been clicked.
+The human detail pane and `Character Files` have no nested Show/Hide controls. `Character Files` is controlled by its top-level page.
 
-When a runtime detail link opens a source location, the UI should switch to the static/files page, reveal `Character Files`, and scroll to the requested file and line.
+When a runtime detail link opens a source location, the UI should switch to the `Character Files` page and scroll to the requested file and line.
 
 Runtime log tabs should provide a clear action that drops retained human and AI logs together. This is for long debugging sessions where retained history is no longer useful and memory/DOM pressure should be reset.
 
@@ -182,5 +214,5 @@ A useful dump includes:
 - `cmd p1=` and `cmd p2=`;
 - `phys p1=` and `phys p2=`;
 - `cns p1=` and `cns p2=`;
-- static StateDef and Command route lists;
+- the relevant DEF/CMD/CNS source locations from `Character Files`;
 - runtime history around the failing frames.

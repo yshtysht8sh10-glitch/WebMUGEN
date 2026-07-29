@@ -145,10 +145,26 @@ describe('SffSpritePackConverter', () => {
     expect(sprite?.yAxis).toBe(78);
     expect(sprite?.imageData.width).toBe(2);
     expect(sprite?.imageData.height).toBe(1);
+    expect(sprite?.paletteMetadata?.paletteIndexOrder).toBe('normal');
+    expect(pack.palettes?.get(sprite!.paletteKey!)?.bytes).toHaveLength(768);
+    expect(pack.palettes?.get(sprite!.paletteKey!)?.indexOrder).toBe('normal');
     expect(Array.from(sprite!.imageData.data.slice(0, 8))).toEqual([
       10, 20, 30, 255,
       40, 50, 60, 255,
     ]);
+  });
+
+  it('retains indexed pixels only for the best available ACT preview sprite', () => {
+    const document = createDocument();
+    document.sprites[0].groupNo = 0;
+    document.sprites[0].imageNo = 1;
+    document.sprites[1].groupNo = 0;
+    document.sprites[1].imageNo = 0;
+    const pack = convertSffDocumentToImageDataSpritePack(document);
+
+    expect(Array.from(pack.sprites.get('0,0')?.indexedPixels ?? [])).toEqual([1, 2]);
+    expect(pack.sprites.get('0,1')?.indexedPixels).toBeUndefined();
+    expect(pack.sprites.get('200,4')?.indexedPixels).toBeUndefined();
   });
 
   it('uses shared palette for PCX data without embedded palette', () => {

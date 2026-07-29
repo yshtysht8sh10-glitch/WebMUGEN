@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   appendReadableRuntimeEntry,
   clearReadableRuntimeLogStores,
+  createRuntimeLogIndexEntry,
   formatAllReadableRuntimeEntriesCopy,
   formatReadableRuntimeEntryCopy,
   getLatestReadableRuntimeEntry,
@@ -9,6 +10,8 @@ import {
   type ReadableRuntimeEntry,
   type RuntimeLogIndexEntry,
 } from './RuntimeLogIndex';
+import { createInitialGameState } from '../core/engine/GameState';
+import { spawnHelper } from '../core/helper/HelperSystem';
 
 function indexEntry(id: number, frameNo: number, stateNo = 50): RuntimeLogIndexEntry {
   return {
@@ -20,6 +23,7 @@ function indexEntry(id: number, frameNo: number, stateNo = 50): RuntimeLogIndexE
     p1AnimNo: 41,
     p2StateNo: 0,
     p2AnimNo: 0,
+    helpers: [],
   };
 }
 
@@ -48,6 +52,19 @@ function readableEntryForState(id: number, frameNo: number, p1StateNo: number): 
 }
 
 describe('RuntimeLogIndex', () => {
+  it('includes every helper currently present in the frame index snapshot', () => {
+    const state = createInitialGameState();
+    state.helpers = spawnHelper(state.helpers, {
+      helperId: 900, rootEntityId: 1, parentEntityId: 1, ownerCharacterId: 1,
+      stateOwnerId: 1, animationOwnerId: 1, stateNo: 3210, x: 0, y: 0,
+      facing: 1, keyCtrl: false, ownPal: false, spawnFrame: 10, parent: state.players[0],
+    });
+
+    expect(createRuntimeLogIndexEntry({ id: 1, frameNo: 10, timestamp: '12:00:00', state }).helpers).toEqual([
+      { entityId: 3, helperId: 900, rootEntityId: 1, stateNo: 3210, animNo: 3210 },
+    ]);
+  });
+
   it('adds index entries even when StateNo does not change', () => {
     const indexStore: RuntimeLogIndexEntry[] = [];
     const entryStore = new Map<string, ReadableRuntimeEntry>();
@@ -145,11 +162,15 @@ describe('RuntimeLogIndex', () => {
     expect(formatAllReadableRuntimeEntriesCopy({ indexStore, entryStore })).toContain('P2 detail 31');
   });
 
-  it('formats the selected frame with both P1 and P2 detail logs', () => {
-    const entry = readableEntry(1, 32);
+  it('formats the selected frame with root and helper detail logs', () => {
+    const entry = {
+      ...readableEntry(1, 32),
+      helperLogs: [{ key: 'helper-3', label: 'H5504', lines: ['H5504 helper detail'] }],
+    };
 
     expect(formatReadableRuntimeEntryCopy(entry)).toContain('detail 32');
     expect(formatReadableRuntimeEntryCopy(entry)).toContain('P2 detail 32');
+    expect(formatReadableRuntimeEntryCopy(entry)).toContain('H5504 helper detail');
   });
 
   it('clears readable index and retained detail stores together', () => {
