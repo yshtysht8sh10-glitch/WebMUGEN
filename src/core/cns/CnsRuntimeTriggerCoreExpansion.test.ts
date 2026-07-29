@@ -95,6 +95,29 @@ describe('CnsRuntimeTrigger core expansion', () => {
     })).toBe(false);
   });
 
+  it('returns zero for Move result triggers outside an attack State', () => {
+    const contacted = {
+      ...player,
+      moveType: 'I' as const,
+      moveContact: {
+        activeHitDefId: 1005,
+        contact: true,
+        hit: true,
+        guarded: false,
+        reversed: true,
+        elapsed: 12,
+        hitCount: 1,
+      },
+    };
+
+    expect(evaluateCnsRuntimeTrigger('MoveContact', { player: contacted })).toBe(false);
+    expect(evaluateCnsRuntimeTrigger('MoveHit > 0', { player: contacted })).toBe(false);
+    expect(evaluateCnsRuntimeTrigger('MoveGuarded', {
+      player: { ...contacted, moveContact: { ...contacted.moveContact, hit: false, guarded: true } },
+    })).toBe(false);
+    expect(evaluateCnsRuntimeTrigger('MoveReversed', { player: contacted })).toBe(false);
+  });
+
   it('evaluates screen and edge distance triggers', () => {
     expect(evaluateCnsRuntimeTrigger('ScreenPos X = 130', { player })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('BackEdgeDist > 100', { player })).toBe(true);

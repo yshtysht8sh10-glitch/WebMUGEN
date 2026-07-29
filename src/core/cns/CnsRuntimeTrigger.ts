@@ -500,10 +500,10 @@ function getBooleanSource(name: string): BooleanSource | null {
     case 'canrecover': return (context) => context.player.fallRecover !== false
       && (context.player.hitStun?.elapsed ?? context.player.hitReactionElapsed ?? context.player.stateTime) >= (context.player.fallRecoverTime ?? 0);
     case 'inguarddist': return (context) => Math.abs((context.opponent?.x ?? context.player.x + 999) - context.player.x) < 80;
-    case 'movecontact': return (context) => context.player.moveContact?.contact === true;
-    case 'movehit': return (context) => context.player.moveContact?.hit === true;
-    case 'moveguarded': return (context) => context.player.moveContact?.guarded === true;
-    case 'movereversed': return (context) => context.player.moveContact?.reversed === true;
+    case 'movecontact': return (context) => context.player.moveType === 'A' && context.player.moveContact?.contact === true;
+    case 'movehit': return (context) => context.player.moveType === 'A' && context.player.moveContact?.hit === true;
+    case 'moveguarded': return (context) => context.player.moveType === 'A' && context.player.moveContact?.guarded === true;
+    case 'movereversed': return (context) => context.player.moveType === 'A' && context.player.moveContact?.reversed === true;
     case 'matchover': return (context) => context.matchOver === true;
     case 'win': return (context) => context.roundWinner === context.player.id;
     case 'lose': return (context) => context.roundWinner !== null && context.roundWinner !== undefined && context.roundWinner !== 'draw' && context.roundWinner !== context.player.id;
@@ -780,10 +780,10 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'hitcount': return (context) => context.player.moveContact?.hitCount ?? 0;
     case 'uniqhitcount': return (context) => new Set((context.player.hitTargets ?? []).map((entry) => `${entry.activeHitDefId}:${entry.defenderId}`)).size;
     case 'hitfall': return (context) => readOptionalBool(context.player, 'hitFall', false) ? 1 : 0;
-    case 'movecontact': return (context) => context.player.moveContact?.contact ? context.player.moveContact.elapsed ?? 1 : 0;
-    case 'movehit': return (context) => context.player.moveContact?.hit ? context.player.moveContact.elapsed ?? 1 : 0;
-    case 'moveguarded': return (context) => context.player.moveContact?.guarded ? context.player.moveContact.elapsed ?? 1 : 0;
-    case 'movereversed': return (context) => context.player.moveContact?.reversed ? context.player.moveContact.elapsed ?? 1 : 0;
+    case 'movecontact': return (context) => context.player.moveType === 'A' && context.player.moveContact?.contact ? context.player.moveContact.elapsed ?? 1 : 0;
+    case 'movehit': return (context) => context.player.moveType === 'A' && context.player.moveContact?.hit ? context.player.moveContact.elapsed ?? 1 : 0;
+    case 'moveguarded': return (context) => context.player.moveType === 'A' && context.player.moveContact?.guarded ? context.player.moveContact.elapsed ?? 1 : 0;
+    case 'movereversed': return (context) => context.player.moveType === 'A' && context.player.moveContact?.reversed ? context.player.moveContact.elapsed ?? 1 : 0;
     case 'numenemy': return (context) => context.numEnemy ?? 1;
     case 'numproj': return (context) => context.numProj?.() ?? 0;
     case 'numexplod': return (context) => context.numExplod?.() ?? 0;
