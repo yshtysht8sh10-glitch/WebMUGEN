@@ -74,6 +74,8 @@ export class CanvasRenderer {
     const winMugenViewport = viewport.renderScale === 2;
     const hudScale = winMugenViewport ? 0.5 : 1;
     const hudViewportWidth = winMugenViewport ? this.canvas.width : viewport.logicalWidth;
+    const stageTheme = options.stageTheme ?? 'fresh';
+    const freshPlayerVisualOffsetY = stageTheme === 'fresh' ? Math.max(0, 285 - camera.y - viewport.logicalHeight * 0.78) : 0;
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     const shake = getScreenShakeOffset(hitFeedback);
     ctx.save();
@@ -84,7 +86,7 @@ export class CanvasRenderer {
     if (!globalFlags.has('nobg')) {
       ctx.save();
       ctx.filter = bgPalFxFilter;
-      this.drawStage(ctx, viewport.logicalWidth, viewport.logicalHeight, camera.x, camera.y, options.stageTheme ?? 'fresh');
+      this.drawStage(ctx, viewport.logicalWidth, viewport.logicalHeight, camera.x, camera.y, stageTheme);
       ctx.restore();
     }
     if (state.envColor?.under) this.drawEnvironmentColor(ctx, state.envColor.color, viewport.logicalWidth, viewport.logicalHeight);
@@ -143,7 +145,7 @@ export class CanvasRenderer {
     for (const drawable of regularDrawables) {
       if (drawable.kind === 'player') {
         ctx.save();
-        ctx.translate(-camera.x, -camera.y);
+        ctx.translate(-camera.x, -camera.y + freshPlayerVisualOffsetY);
         renderDiagnostics.push(...this.drawAfterImages(ctx, drawable.player, diagnosticsEnabled, drawable.scaleX, drawable.scaleY));
         const palFxFilter = resolveBgPalFxFilter(drawable.player.palFx);
         ctx.save();
@@ -184,7 +186,7 @@ export class CanvasRenderer {
     const debugStartedAt = normalFinishedAt;
     if (collisionBoxesVisible) {
       ctx.save();
-      ctx.translate(-camera.x, -camera.y);
+      ctx.translate(-camera.x, -camera.y + freshPlayerVisualOffsetY);
       this.drawDebugBoxes(ctx, state.players[0]);
       this.drawDebugBoxes(ctx, state.players[1]);
       state.helpers.entries.forEach((helper) => this.drawDebugBoxes(ctx, helper.player));
