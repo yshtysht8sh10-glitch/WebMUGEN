@@ -32,7 +32,7 @@ prototype.drawStage = function drawEnhancedStage(
 
   const cameraOffsetY = 65 - cameraY;
   const horizonY = Math.min(viewportHeight * 0.6 + cameraOffsetY * 0.42, viewportHeight * 0.76);
-  const groundY = Math.min(viewportHeight * 0.79 + cameraOffsetY, viewportHeight * 0.92);
+  const stageGroundY = 285 - cameraY;
   const parallaxX = cameraX * 0.08;
 
   const sky = ctx.createLinearGradient(0, 0, 0, horizonY);
@@ -63,42 +63,43 @@ prototype.drawStage = function drawEnhancedStage(
   drawMountains(ctx, viewportWidth, horizonY + 8, viewportHeight * 0.16, '#7da4bd', parallaxX * 0.22, 0.14);
   drawMountains(ctx, viewportWidth, horizonY + 22, viewportHeight * 0.21, '#496f78', parallaxX * 0.42, 0.39);
 
-  const haze = ctx.createLinearGradient(0, horizonY - 8, 0, groundY);
+  const haze = ctx.createLinearGradient(0, horizonY - 8, 0, stageGroundY);
   haze.addColorStop(0, 'rgba(240, 252, 255, 0.5)');
   haze.addColorStop(1, 'rgba(161, 198, 174, 0)');
   ctx.fillStyle = haze;
-  ctx.fillRect(0, horizonY - 8, viewportWidth, Math.max(0, groundY - horizonY + 8));
+  ctx.fillRect(0, horizonY - 8, viewportWidth, Math.max(0, stageGroundY - horizonY + 8));
 
+  const treeLineY = stageGroundY - Math.max(28, viewportHeight * 0.12);
   ctx.fillStyle = '#2f6c46';
   ctx.beginPath();
-  ctx.moveTo(0, groundY);
+  ctx.moveTo(0, stageGroundY);
   for (let x = -30; x <= viewportWidth + 30; x += 18) {
     const shifted = x - parallaxX * 0.68;
-    const crown = groundY - 15 - positiveMod(Math.round(shifted * 13), 27);
+    const crown = treeLineY - positiveMod(Math.round(shifted * 13), 27);
     ctx.lineTo(x, crown + 8);
     ctx.lineTo(x + 7, crown - 5);
     ctx.lineTo(x + 13, crown + 5);
-    ctx.lineTo(x + 20, groundY - 11 - positiveMod(Math.round(shifted * 7), 17));
+    ctx.lineTo(x + 20, treeLineY + 4 - positiveMod(Math.round(shifted * 7), 17));
   }
-  ctx.lineTo(viewportWidth, groundY);
+  ctx.lineTo(viewportWidth, stageGroundY);
   ctx.closePath();
   ctx.fill();
 
-  const floor = ctx.createLinearGradient(0, groundY, 0, viewportHeight);
+  const floor = ctx.createLinearGradient(0, stageGroundY, 0, viewportHeight);
   floor.addColorStop(0, '#7ea56d');
   floor.addColorStop(0.18, '#5d8358');
   floor.addColorStop(1, '#2b4b35');
   ctx.fillStyle = floor;
-  ctx.fillRect(0, groundY, viewportWidth, Math.max(0, viewportHeight - groundY));
+  ctx.fillRect(0, stageGroundY, viewportWidth, Math.max(0, viewportHeight - stageGroundY));
 
   ctx.fillStyle = 'rgba(225, 245, 191, 0.68)';
-  ctx.fillRect(0, groundY, viewportWidth, 2);
+  ctx.fillRect(0, stageGroundY, viewportWidth, 2);
   ctx.fillStyle = 'rgba(31, 64, 39, 0.5)';
-  ctx.fillRect(0, groundY + 4, viewportWidth, 4);
+  ctx.fillRect(0, stageGroundY + 4, viewportWidth, 4);
 
   ctx.strokeStyle = 'rgba(232, 244, 220, 0.13)';
   ctx.lineWidth = 1;
-  for (let y = groundY + 18; y < viewportHeight; y += 22) {
+  for (let y = stageGroundY + 18; y < viewportHeight; y += 22) {
     ctx.beginPath();
     ctx.moveTo(0, y);
     ctx.lineTo(viewportWidth, y);
@@ -106,16 +107,16 @@ prototype.drawStage = function drawEnhancedStage(
   }
   for (let x = -viewportWidth; x < viewportWidth * 2; x += 58) {
     ctx.beginPath();
-    ctx.moveTo(viewportWidth / 2 - cameraX * 0.03, groundY + 3);
+    ctx.moveTo(viewportWidth / 2 - cameraX * 0.03, stageGroundY + 3);
     ctx.lineTo(x - cameraX * 0.2, viewportHeight);
     ctx.stroke();
   }
 
   ctx.fillStyle = 'rgba(241, 247, 229, 0.12)';
-  const floorHeight = Math.max(1, viewportHeight - groundY - 10);
+  const floorHeight = Math.max(1, viewportHeight - stageGroundY - 10);
   for (let index = 0; index < 76; index += 1) {
     const x = positiveMod(index * 79 + 23 - Math.round(cameraX * 0.15), Math.max(1, Math.round(viewportWidth)));
-    const y = groundY + 8 + positiveMod(index * 43 + 5, Math.max(1, Math.round(floorHeight)));
+    const y = stageGroundY + 8 + positiveMod(index * 43 + 5, Math.max(1, Math.round(floorHeight)));
     ctx.fillRect(x, y, 1 + index % 3, 1);
   }
 
