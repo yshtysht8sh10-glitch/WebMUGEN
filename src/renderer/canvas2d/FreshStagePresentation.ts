@@ -31,71 +31,72 @@ prototype.drawStage = function drawEnhancedStage(
   }
 
   const cameraOffsetY = 65 - cameraY;
-  const horizonY = Math.min(viewportHeight * 0.61 + cameraOffsetY * 0.45, viewportHeight * 0.78);
+  const horizonY = Math.min(viewportHeight * 0.6 + cameraOffsetY * 0.42, viewportHeight * 0.76);
   const groundY = Math.min(viewportHeight * 0.79 + cameraOffsetY, viewportHeight * 0.92);
   const parallaxX = cameraX * 0.08;
 
   const sky = ctx.createLinearGradient(0, 0, 0, horizonY);
-  sky.addColorStop(0, '#17335a');
-  sky.addColorStop(0.48, '#5685ad');
-  sky.addColorStop(0.8, '#d59b83');
-  sky.addColorStop(1, '#f1bf8f');
+  sky.addColorStop(0, '#1789dc');
+  sky.addColorStop(0.5, '#55bff2');
+  sky.addColorStop(0.82, '#a7ddf7');
+  sky.addColorStop(1, '#e9f8ff');
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, viewportWidth, Math.max(0, horizonY));
 
-  const sunX = viewportWidth * 0.76 - parallaxX * 0.2;
-  const sunY = viewportHeight * 0.24 + cameraOffsetY * 0.08;
-  const glow = ctx.createRadialGradient(sunX, sunY, 4, sunX, sunY, viewportHeight * 0.24);
-  glow.addColorStop(0, 'rgba(255, 248, 210, 0.96)');
-  glow.addColorStop(0.22, 'rgba(255, 211, 151, 0.36)');
-  glow.addColorStop(1, 'rgba(255, 187, 126, 0)');
+  const sunX = viewportWidth * 0.74 - parallaxX * 0.18;
+  const sunY = viewportHeight * 0.2 + cameraOffsetY * 0.06;
+  const glow = ctx.createRadialGradient(sunX, sunY, 4, sunX, sunY, viewportHeight * 0.28);
+  glow.addColorStop(0, 'rgba(255, 255, 230, 0.98)');
+  glow.addColorStop(0.2, 'rgba(255, 245, 169, 0.46)');
+  glow.addColorStop(1, 'rgba(255, 245, 169, 0)');
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, viewportWidth, horizonY);
-  ctx.fillStyle = 'rgba(255, 241, 190, 0.92)';
+  ctx.fillStyle = 'rgba(255, 250, 205, 0.96)';
   ctx.beginPath();
-  ctx.arc(sunX, sunY, Math.max(11, viewportHeight * 0.046), 0, Math.PI * 2);
+  ctx.arc(sunX, sunY, Math.max(10, viewportHeight * 0.041), 0, Math.PI * 2);
   ctx.fill();
 
-  drawCloud(ctx, viewportWidth * 0.17 - parallaxX * 0.1, viewportHeight * 0.2, viewportHeight * 0.028, 0.2);
-  drawCloud(ctx, viewportWidth * 0.49 - parallaxX * 0.14, viewportHeight * 0.31, viewportHeight * 0.022, 0.14);
+  drawCloud(ctx, viewportWidth * 0.11 - parallaxX * 0.08, viewportHeight * 0.18, viewportHeight * 0.03, 0.72);
+  drawCloud(ctx, viewportWidth * 0.42 - parallaxX * 0.12, viewportHeight * 0.28, viewportHeight * 0.024, 0.56);
+  drawCloud(ctx, viewportWidth * 0.78 - parallaxX * 0.1, viewportHeight * 0.34, viewportHeight * 0.018, 0.42);
 
-  drawMountains(ctx, viewportWidth, horizonY + 4, viewportHeight * 0.17, '#61778a', parallaxX * 0.25, 0.18);
-  drawMountains(ctx, viewportWidth, horizonY + 20, viewportHeight * 0.22, '#334e5a', parallaxX * 0.45, 0.43);
+  drawMountains(ctx, viewportWidth, horizonY + 8, viewportHeight * 0.16, '#7da4bd', parallaxX * 0.22, 0.14);
+  drawMountains(ctx, viewportWidth, horizonY + 22, viewportHeight * 0.21, '#496f78', parallaxX * 0.42, 0.39);
 
-  const mist = ctx.createLinearGradient(0, horizonY - 8, 0, groundY);
-  mist.addColorStop(0, 'rgba(246, 219, 188, 0.42)');
-  mist.addColorStop(1, 'rgba(83, 110, 99, 0)');
-  ctx.fillStyle = mist;
+  const haze = ctx.createLinearGradient(0, horizonY - 8, 0, groundY);
+  haze.addColorStop(0, 'rgba(240, 252, 255, 0.5)');
+  haze.addColorStop(1, 'rgba(161, 198, 174, 0)');
+  ctx.fillStyle = haze;
   ctx.fillRect(0, horizonY - 8, viewportWidth, Math.max(0, groundY - horizonY + 8));
 
-  ctx.fillStyle = '#173b36';
+  ctx.fillStyle = '#2f6c46';
   ctx.beginPath();
   ctx.moveTo(0, groundY);
   for (let x = -30; x <= viewportWidth + 30; x += 18) {
-    const shifted = x - parallaxX * 0.7;
-    const crown = groundY - 15 - positiveMod(Math.round(shifted * 13), 31);
+    const shifted = x - parallaxX * 0.68;
+    const crown = groundY - 15 - positiveMod(Math.round(shifted * 13), 27);
     ctx.lineTo(x, crown + 8);
-    ctx.lineTo(x + 7, crown - 6);
+    ctx.lineTo(x + 7, crown - 5);
     ctx.lineTo(x + 13, crown + 5);
-    ctx.lineTo(x + 20, groundY - 12 - positiveMod(Math.round(shifted * 7), 19));
+    ctx.lineTo(x + 20, groundY - 11 - positiveMod(Math.round(shifted * 7), 17));
   }
   ctx.lineTo(viewportWidth, groundY);
   ctx.closePath();
   ctx.fill();
 
   const floor = ctx.createLinearGradient(0, groundY, 0, viewportHeight);
-  floor.addColorStop(0, '#4b6250');
-  floor.addColorStop(0.16, '#30463d');
-  floor.addColorStop(1, '#142321');
+  floor.addColorStop(0, '#7ea56d');
+  floor.addColorStop(0.18, '#5d8358');
+  floor.addColorStop(1, '#2b4b35');
   ctx.fillStyle = floor;
   ctx.fillRect(0, groundY, viewportWidth, Math.max(0, viewportHeight - groundY));
 
-  ctx.fillStyle = 'rgba(203, 226, 186, 0.58)';
+  ctx.fillStyle = 'rgba(225, 245, 191, 0.68)';
   ctx.fillRect(0, groundY, viewportWidth, 2);
-  ctx.fillStyle = 'rgba(8, 18, 18, 0.62)';
-  ctx.fillRect(0, groundY + 4, viewportWidth, 5);
+  ctx.fillStyle = 'rgba(31, 64, 39, 0.5)';
+  ctx.fillRect(0, groundY + 4, viewportWidth, 4);
 
-  ctx.strokeStyle = 'rgba(202, 222, 207, 0.12)';
+  ctx.strokeStyle = 'rgba(232, 244, 220, 0.13)';
   ctx.lineWidth = 1;
   for (let y = groundY + 18; y < viewportHeight; y += 22) {
     ctx.beginPath();
@@ -110,7 +111,7 @@ prototype.drawStage = function drawEnhancedStage(
     ctx.stroke();
   }
 
-  ctx.fillStyle = 'rgba(224, 235, 218, 0.11)';
+  ctx.fillStyle = 'rgba(241, 247, 229, 0.12)';
   const floorHeight = Math.max(1, viewportHeight - groundY - 10);
   for (let index = 0; index < 76; index += 1) {
     const x = positiveMod(index * 79 + 23 - Math.round(cameraX * 0.15), Math.max(1, Math.round(viewportWidth)));
@@ -120,14 +121,14 @@ prototype.drawStage = function drawEnhancedStage(
 
   const vignette = ctx.createRadialGradient(
     viewportWidth / 2,
-    viewportHeight * 0.5,
-    viewportHeight * 0.14,
+    viewportHeight * 0.48,
+    viewportHeight * 0.16,
     viewportWidth / 2,
-    viewportHeight * 0.5,
-    viewportWidth * 0.72,
+    viewportHeight * 0.48,
+    viewportWidth * 0.76,
   );
   vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
-  vignette.addColorStop(1, 'rgba(3, 9, 15, 0.28)');
+  vignette.addColorStop(1, 'rgba(10, 38, 55, 0.13)');
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, viewportWidth, viewportHeight);
 };
@@ -139,7 +140,7 @@ function drawCloud(
   radius: number,
   alpha: number,
 ): void {
-  ctx.fillStyle = `rgba(255, 246, 226, ${alpha})`;
+  ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
   ctx.beginPath();
   ctx.arc(x, y, radius, 0, Math.PI * 2);
   ctx.arc(x + radius * 1.2, y - radius * 0.35, radius * 1.15, 0, Math.PI * 2);
