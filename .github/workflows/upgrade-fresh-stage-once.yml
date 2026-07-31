@@ -1,0 +1,183 @@
+name: Upgrade fresh stage once
+
+on:
+  push:
+    branches: [codex/winmugen-compatibility-updates]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  upgrade:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/winmugen-compatibility-updates
+          fetch-depth: 0
+
+      - name: Improve fresh fallback stage
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('src/renderer/canvas2d/CanvasRenderer.ts')
+          text = path.read_text(encoding='utf-8')
+          old = """    const cameraOffsetY = 65 - cameraY;
+              const splitY = Math.min(viewportHeight, viewportHeight * 0.65 + cameraOffsetY);
+              ctx.fillStyle = linearGradient(ctx, 0, 0, 0, splitY, '#7eb6d8', '#d7edf5');
+              ctx.fillRect(0, 0, viewportWidth, splitY);
+              if (typeof ctx.arc === 'function') {
+                ctx.beginPath();
+                ctx.fillStyle = 'rgba(255, 244, 184, 0.78)';
+                ctx.arc(viewportWidth * 0.78, viewportHeight * 0.22, viewportHeight * 0.09, 0, Math.PI * 2);
+                ctx.fill();
+              }
+              if (typeof ctx.beginPath === 'function' && typeof ctx.moveTo === 'function' && typeof ctx.lineTo === 'function') {
+                ctx.beginPath();
+                ctx.moveTo(0, splitY);
+                ctx.lineTo(viewportWidth * 0.2, splitY * 0.62);
+                ctx.lineTo(viewportWidth * 0.38, splitY);
+                ctx.lineTo(viewportWidth * 0.61, splitY * 0.56);
+                ctx.lineTo(viewportWidth * 0.86, splitY);
+                ctx.fillStyle = 'rgba(64, 112, 98, 0.52)';
+                ctx.fill();
+              }
+              ctx.fillStyle = linearGradient(ctx, 0, splitY, 0, viewportHeight, '#6f984e', '#294b2c');
+              ctx.fillRect(0, splitY, viewportWidth, viewportHeight - splitY);
+              ctx.fillStyle = '#26351e';
+              const groundY = viewportWidth === 320 && viewportHeight === 240 ? 220 : 285;
+              ctx.fillRect(0, groundY, viewportWidth, Math.max(0, viewportHeight - groundY));
+          """.replace('          ', '')
+
+          new = """    const cameraOffsetY = 65 - cameraY;
+              const horizonY = Math.min(viewportHeight * 0.72, viewportHeight * 0.58 + cameraOffsetY);
+              const groundY = viewportWidth === 320 && viewportHeight === 240 ? 220 : 285;
+
+              const sky = ctx.createLinearGradient(0, 0, 0, horizonY);
+              sky.addColorStop(0, '#18345f');
+              sky.addColorStop(0.5, '#5f91bd');
+              sky.addColorStop(0.82, '#d7b38f');
+              sky.addColorStop(1, '#f0d2a7');
+              ctx.fillStyle = sky;
+              ctx.fillRect(0, 0, viewportWidth, horizonY);
+
+              if (typeof ctx.arc === 'function') {
+                const sunX = viewportWidth * 0.76;
+                const sunY = viewportHeight * 0.21;
+                const glow = ctx.createRadialGradient(sunX, sunY, 3, sunX, sunY, viewportHeight * 0.22);
+                glow.addColorStop(0, 'rgba(255, 248, 205, 0.9)');
+                glow.addColorStop(0.24, 'rgba(255, 217, 157, 0.35)');
+                glow.addColorStop(1, 'rgba(255, 190, 126, 0)');
+                ctx.fillStyle = glow;
+                ctx.fillRect(0, 0, viewportWidth, horizonY);
+                ctx.beginPath();
+                ctx.fillStyle = 'rgba(255, 244, 194, 0.9)';
+                ctx.arc(sunX, sunY, Math.max(10, viewportHeight * 0.045), 0, Math.PI * 2);
+                ctx.fill();
+              }
+
+              const drawRidge = (baseY: number, amplitude: number, color: string, phase: number, step: number) => {
+                if (typeof ctx.beginPath !== 'function' || typeof ctx.moveTo !== 'function' || typeof ctx.lineTo !== 'function') return;
+                ctx.beginPath();
+                ctx.moveTo(0, baseY);
+                for (let x = 0; x <= viewportWidth; x += step) {
+                  const n = x / Math.max(1, viewportWidth);
+                  const ridge = Math.sin((n + phase) * Math.PI * 4.1) * 0.34
+                    + Math.sin((n + phase * 0.7) * Math.PI * 9.3) * 0.17
+                    + Math.sin((n + phase * 1.2) * Math.PI * 2.2) * 0.49;
+                  ctx.lineTo(x, baseY - amplitude * (0.5 + ridge * 0.34));
+                }
+                ctx.lineTo(viewportWidth, horizonY + amplitude);
+                ctx.lineTo(0, horizonY + amplitude);
+                ctx.closePath();
+                ctx.fillStyle = color;
+                ctx.fill();
+              };
+              drawRidge(horizonY + 6, viewportHeight * 0.16, '#536f78', 0.18, 7);
+              drawRidge(horizonY + 22, viewportHeight * 0.2, '#294f4d', 0.36, 11);
+
+              const mist = ctx.createLinearGradient(0, horizonY - 8, 0, groundY);
+              mist.addColorStop(0, 'rgba(241, 222, 194, 0.34)');
+              mist.addColorStop(1, 'rgba(82, 112, 94, 0)');
+              ctx.fillStyle = mist;
+              ctx.fillRect(0, horizonY - 8, viewportWidth, Math.max(0, groundY - horizonY + 8));
+
+              if (typeof ctx.beginPath === 'function' && typeof ctx.lineTo === 'function') {
+                ctx.beginPath();
+                ctx.moveTo(0, groundY);
+                for (let x = 0; x <= viewportWidth; x += 20) {
+                  const canopy = groundY - 13 - ((x * 17) % 24);
+                  ctx.lineTo(x, canopy);
+                  ctx.lineTo(x + 10, canopy - 9);
+                  ctx.lineTo(x + 20, groundY - 12 - ((x * 11) % 19));
+                }
+                ctx.lineTo(viewportWidth, groundY);
+                ctx.closePath();
+                ctx.fillStyle = '#183f35';
+                ctx.fill();
+              }
+
+              const floor = ctx.createLinearGradient(0, groundY, 0, viewportHeight);
+              floor.addColorStop(0, '#435547');
+              floor.addColorStop(0.16, '#304236');
+              floor.addColorStop(1, '#17231d');
+              ctx.fillStyle = floor;
+              ctx.fillRect(0, groundY, viewportWidth, Math.max(0, viewportHeight - groundY));
+              ctx.fillStyle = 'rgba(205, 226, 183, 0.5)';
+              ctx.fillRect(0, groundY, viewportWidth, 2);
+
+              if (typeof ctx.beginPath === 'function' && typeof ctx.stroke === 'function') {
+                ctx.strokeStyle = 'rgba(202, 218, 201, 0.11)';
+                ctx.lineWidth = 1;
+                for (let y = groundY + 15; y < viewportHeight; y += 18) {
+                  ctx.beginPath();
+                  ctx.moveTo(0, y);
+                  ctx.lineTo(viewportWidth, y);
+                  ctx.stroke();
+                }
+                for (let x = -viewportWidth; x < viewportWidth * 2; x += 54) {
+                  ctx.beginPath();
+                  ctx.moveTo(viewportWidth / 2, groundY + 2);
+                  ctx.lineTo(x, viewportHeight);
+                  ctx.stroke();
+                }
+              }
+
+              ctx.fillStyle = 'rgba(225, 235, 215, 0.09)';
+              for (let index = 0; index < 72; index += 1) {
+                const x = (index * 67 + 13) % viewportWidth;
+                const y = groundY + 7 + ((index * 43 + 5) % Math.max(1, viewportHeight - groundY - 9));
+                ctx.fillRect(x, y, 1 + index % 2, 1);
+              }
+
+              const vignette = ctx.createRadialGradient(viewportWidth / 2, viewportHeight * 0.5, viewportHeight * 0.12, viewportWidth / 2, viewportHeight * 0.5, viewportWidth * 0.7);
+              vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
+              vignette.addColorStop(1, 'rgba(4, 12, 18, 0.28)');
+              ctx.fillStyle = vignette;
+              ctx.fillRect(0, 0, viewportWidth, viewportHeight);
+          """.replace('          ', '')
+
+          if old not in text:
+              raise SystemExit('Fresh stage block not found; refusing to modify unrelated code.')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          Path('.github/workflows/upgrade-fresh-stage-once.yml').unlink()
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm test -- --run
+      - run: npm run build
+
+      - name: Commit verified stage improvement
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/renderer/canvas2d/CanvasRenderer.ts .github/workflows/upgrade-fresh-stage-once.yml
+          git commit -m "Improve fresh fallback stage presentation"
+          git push origin HEAD:codex/winmugen-compatibility-updates
