@@ -31,11 +31,12 @@ prototype.drawPowerBars = function drawPolishedPowerBars(
   }
 
   const [p1, p2] = state.players;
-  const leftX = 18 + (viewportWidth - 640) / 2;
-  const rightX = 488 + (viewportWidth - 640) / 2;
-  const y = 39;
+  const offsetX = (viewportWidth - 640) / 2;
+  const leftX = 24 + offsetX;
+  const rightX = 482 + offsetX;
+  const y = 38;
   const width = 134;
-  const height = 14;
+  const height = 11;
   const p1Power = p1.power ?? 0;
   const p2Power = p2.power ?? 0;
   const p1PowerMax = p1.powerMax ?? 3000;
@@ -47,13 +48,13 @@ prototype.drawPowerBars = function drawPolishedPowerBars(
   drawPowerBar(ctx, rightX, y, width, height, p2Ratio, 'right');
 
   ctx.save();
-  ctx.fillStyle = '#f7fbff';
-  ctx.font = 'bold 13px sans-serif';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 12px sans-serif';
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
-  if (p1.infinitePower) ctx.fillText('∞', leftX + width + 7, y + height / 2);
+  if (p1.infinitePower) ctx.fillText('∞', leftX + width + 8, y + height / 2);
   ctx.textAlign = 'right';
-  if (p2.infinitePower) ctx.fillText('∞', rightX - 7, y + height / 2);
+  if (p2.infinitePower) ctx.fillText('∞', rightX - 8, y + height / 2);
   ctx.restore();
 
   if (!diagnosticsEnabled) return [];
@@ -85,40 +86,38 @@ function drawPowerBar(
 ): void {
   ctx.save();
 
-  ctx.fillStyle = 'rgba(2, 10, 22, 0.42)';
-  roundedRect(ctx, x + 2, y + 3, width, height, 4);
+  ctx.fillStyle = 'rgba(35, 60, 80, 0.18)';
+  roundedRect(ctx, x + 2, y + 2, width, height, 3);
   ctx.fill();
 
-  ctx.fillStyle = verticalGradient(ctx, y, y + height, '#edf7ff', '#60758c');
-  roundedRect(ctx, x, y, width, height, 4);
+  ctx.fillStyle = '#dcecef';
+  roundedRect(ctx, x, y, width, height, 3);
   ctx.fill();
 
-  ctx.fillStyle = '#10243a';
-  roundedRect(ctx, x + 2, y + 2, width - 4, height - 4, 3);
+  ctx.fillStyle = '#315a67';
+  roundedRect(ctx, x + 2, y + 2, width - 4, height - 4, 2);
   ctx.fill();
 
-  const innerX = x + 4;
-  const innerY = y + 4;
-  const innerWidth = width - 8;
-  const innerHeight = height - 8;
-  ctx.fillStyle = verticalGradient(ctx, innerY, innerY + innerHeight, '#17324e', '#071422');
-  roundedRect(ctx, innerX, innerY, innerWidth, innerHeight, 2);
+  const innerX = x + 3;
+  const innerY = y + 3;
+  const innerWidth = width - 6;
+  const innerHeight = height - 6;
+  ctx.fillStyle = '#d5e7e4';
+  roundedRect(ctx, innerX, innerY, innerWidth, innerHeight, 1);
   ctx.fill();
 
   const fillWidth = innerWidth * ratio;
   const fillX = direction === 'left' ? innerX : innerX + innerWidth - fillWidth;
   if (fillWidth > 0) {
     ctx.save();
-    roundedRect(ctx, innerX, innerY, innerWidth, innerHeight, 2);
+    roundedRect(ctx, innerX, innerY, innerWidth, innerHeight, 1);
     ctx.clip();
-    ctx.fillStyle = verticalGradient(ctx, innerY, innerY + innerHeight, '#7ce7ff', '#199bd8');
+    ctx.fillStyle = '#48b9d7';
     ctx.fillRect(fillX, innerY, fillWidth, innerHeight);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.42)';
-    ctx.fillRect(fillX, innerY, fillWidth, Math.max(1, innerHeight * 0.35));
     ctx.restore();
   }
 
-  ctx.strokeStyle = 'rgba(4, 16, 30, 0.28)';
+  ctx.strokeStyle = 'rgba(49, 90, 103, 0.22)';
   ctx.lineWidth = 1;
   for (let segment = 1; segment < 6; segment += 1) {
     const segmentX = innerX + innerWidth * segment / 6;
@@ -128,9 +127,6 @@ function drawPowerBar(
     ctx.stroke();
   }
 
-  ctx.strokeStyle = 'rgba(224, 243, 255, 0.72)';
-  roundedRect(ctx, x + 0.5, y + 0.5, width - 1, height - 1, 4);
-  ctx.stroke();
   ctx.restore();
 }
 
@@ -149,20 +145,6 @@ function roundedRect(
   }
   ctx.beginPath();
   ctx.rect(x, y, width, height);
-}
-
-function verticalGradient(
-  ctx: CanvasRenderingContext2D,
-  y0: number,
-  y1: number,
-  start: string,
-  end: string,
-): CanvasGradient | string {
-  if (typeof ctx.createLinearGradient !== 'function') return start;
-  const gradient = ctx.createLinearGradient(0, y0, 0, y1);
-  gradient.addColorStop(0, start);
-  gradient.addColorStop(1, end);
-  return gradient;
 }
 
 function clamp01(value: number): number {
