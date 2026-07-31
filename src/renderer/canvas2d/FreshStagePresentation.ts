@@ -37,29 +37,28 @@ prototype.drawStage = function drawEnhancedStage(
   const parallaxX = cameraX * 0.08;
 
   const sky = ctx.createLinearGradient(0, 0, 0, horizonY);
-  sky.addColorStop(0, '#1789dc');
-  sky.addColorStop(0.5, '#55bff2');
-  sky.addColorStop(0.82, '#a7ddf7');
-  sky.addColorStop(1, '#e9f8ff');
+  sky.addColorStop(0, '#1592e6');
+  sky.addColorStop(0.55, '#64c7f3');
+  sky.addColorStop(1, '#dff5ff');
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, viewportWidth, Math.max(0, horizonY));
 
-  const sunX = viewportWidth * 0.74 - parallaxX * 0.18;
-  const sunY = viewportHeight * 0.2 + cameraOffsetY * 0.06;
-  const glow = ctx.createRadialGradient(sunX, sunY, 4, sunX, sunY, viewportHeight * 0.28);
-  glow.addColorStop(0, 'rgba(255, 255, 230, 0.98)');
-  glow.addColorStop(0.2, 'rgba(255, 245, 169, 0.46)');
-  glow.addColorStop(1, 'rgba(255, 245, 169, 0)');
+  const sunX = viewportWidth * 0.68 - parallaxX * 0.12;
+  const sunY = viewportHeight * 0.11 + cameraOffsetY * 0.03;
+  const glow = ctx.createRadialGradient(sunX, sunY, 4, sunX, sunY, viewportHeight * 0.17);
+  glow.addColorStop(0, 'rgba(255, 255, 244, 0.98)');
+  glow.addColorStop(0.18, 'rgba(255, 252, 203, 0.34)');
+  glow.addColorStop(1, 'rgba(255, 252, 203, 0)');
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, viewportWidth, horizonY);
-  ctx.fillStyle = 'rgba(255, 250, 205, 0.96)';
+  ctx.fillStyle = '#fffde7';
   ctx.beginPath();
-  ctx.arc(sunX, sunY, Math.max(10, viewportHeight * 0.041), 0, Math.PI * 2);
+  ctx.arc(sunX, sunY, Math.max(9, viewportHeight * 0.032), 0, Math.PI * 2);
   ctx.fill();
 
-  drawCloud(ctx, viewportWidth * 0.11 - parallaxX * 0.08, viewportHeight * 0.18, viewportHeight * 0.03, 0.72);
-  drawCloud(ctx, viewportWidth * 0.42 - parallaxX * 0.12, viewportHeight * 0.28, viewportHeight * 0.024, 0.56);
-  drawCloud(ctx, viewportWidth * 0.78 - parallaxX * 0.1, viewportHeight * 0.34, viewportHeight * 0.018, 0.42);
+  drawCloud(ctx, viewportWidth * 0.1 - parallaxX * 0.08, viewportHeight * 0.16, viewportHeight * 0.03, 0.78);
+  drawCloud(ctx, viewportWidth * 0.4 - parallaxX * 0.12, viewportHeight * 0.25, viewportHeight * 0.024, 0.6);
+  drawCloud(ctx, viewportWidth * 0.79 - parallaxX * 0.1, viewportHeight * 0.31, viewportHeight * 0.018, 0.46);
 
   drawMountains(ctx, viewportWidth, horizonY + 8, viewportHeight * 0.16, '#7da4bd', parallaxX * 0.22, 0.14);
   drawMountains(ctx, viewportWidth, horizonY + 22, viewportHeight * 0.21, '#496f78', parallaxX * 0.42, 0.39);
@@ -130,7 +129,7 @@ prototype.drawStage = function drawEnhancedStage(
     viewportWidth * 0.76,
   );
   vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
-  vignette.addColorStop(1, 'rgba(10, 38, 55, 0.08)');
+  vignette.addColorStop(1, 'rgba(10, 38, 55, 0.06)');
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, viewportWidth, viewportHeight);
 };
