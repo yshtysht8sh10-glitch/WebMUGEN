@@ -1,0 +1,186 @@
+name: Upgrade default stage backdrop
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  upgrade-stage:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Replace the temporary flat-colour stage
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('src/renderer/canvas2d/CanvasRenderer.ts')
+          text = path.read_text(encoding='utf-8')
+          old = """  private drawStage(ctx: CanvasRenderingContext2D): void {
+            const splitY = this.canvas.height * 0.65;
+            ctx.fillStyle = '#5c7898';
+            ctx.fillRect(0, 0, this.canvas.width, splitY);
+            ctx.fillStyle = '#3d612f';
+            ctx.fillRect(0, splitY, this.canvas.width, this.canvas.height - splitY);
+            ctx.fillStyle = '#26351e';
+            ctx.fillRect(0, 285, this.canvas.width, 80);
+          }
+          """.replace('          ', '')
+          new = """  private drawStage(ctx: CanvasRenderingContext2D): void {
+            const width = this.canvas.width;
+            const height = this.canvas.height;
+            const horizonY = Math.round(height * 0.58);
+            const groundY = Math.round(height * 0.77);
+
+            // Sky: a warm arcade-evening gradient with a soft glow around the horizon.
+            const sky = ctx.createLinearGradient(0, 0, 0, horizonY);
+            sky.addColorStop(0, '#172d52');
+            sky.addColorStop(0.48, '#496f9f');
+            sky.addColorStop(0.82, '#d28b78');
+            sky.addColorStop(1, '#f0b47f');
+            ctx.fillStyle = sky;
+            ctx.fillRect(0, 0, width, horizonY);
+
+            const sunX = width * 0.72;
+            const sunY = horizonY * 0.48;
+            const sunGlow = ctx.createRadialGradient(sunX, sunY, 4, sunX, sunY, height * 0.24);
+            sunGlow.addColorStop(0, 'rgba(255, 244, 198, 0.92)');
+            sunGlow.addColorStop(0.2, 'rgba(255, 208, 143, 0.38)');
+            sunGlow.addColorStop(1, 'rgba(255, 178, 115, 0)');
+            ctx.fillStyle = sunGlow;
+            ctx.fillRect(0, 0, width, horizonY);
+
+            ctx.fillStyle = 'rgba(255, 238, 194, 0.88)';
+            ctx.beginPath();
+            ctx.arc(sunX, sunY, Math.max(15, height * 0.045), 0, Math.PI * 2);
+            ctx.fill();
+
+            // Distant mountain layers provide depth without using external image assets.
+            this.drawMountainLayer(ctx, horizonY + 10, width, height * 0.16, '#40536d', 0.16, 7);
+            this.drawMountainLayer(ctx, horizonY + 28, width, height * 0.2, '#263e54', 0.34, 11);
+
+            // Thin mist separates the distant scenery from the playable ground.
+            const mist = ctx.createLinearGradient(0, horizonY - 8, 0, groundY);
+            mist.addColorStop(0, 'rgba(236, 210, 183, 0.36)');
+            mist.addColorStop(1, 'rgba(73, 96, 92, 0)');
+            ctx.fillStyle = mist;
+            ctx.fillRect(0, horizonY - 8, width, groundY - horizonY + 8);
+
+            // Near tree line.
+            ctx.fillStyle = '#173b37';
+            ctx.beginPath();
+            ctx.moveTo(0, groundY);
+            for (let x = 0; x <= width; x += 22) {
+              const canopyY = groundY - 18 - ((x * 17) % 29);
+              ctx.lineTo(x, canopyY);
+              ctx.lineTo(x + 11, canopyY - 11);
+              ctx.lineTo(x + 22, groundY - 16 - ((x * 13) % 23));
+            }
+            ctx.lineTo(width, groundY);
+            ctx.closePath();
+            ctx.fill();
+
+            // Playable floor: stone tiles, edge highlight and subtle perspective lines.
+            const floor = ctx.createLinearGradient(0, groundY, 0, height);
+            floor.addColorStop(0, '#34463f');
+            floor.addColorStop(0.12, '#273b36');
+            floor.addColorStop(1, '#111d1c');
+            ctx.fillStyle = floor;
+            ctx.fillRect(0, groundY, width, height - groundY);
+
+            ctx.fillStyle = 'rgba(182, 217, 176, 0.55)';
+            ctx.fillRect(0, groundY, width, 3);
+            ctx.fillStyle = 'rgba(8, 18, 18, 0.7)';
+            ctx.fillRect(0, groundY + 5, width, 5);
+
+            ctx.strokeStyle = 'rgba(173, 198, 183, 0.11)';
+            ctx.lineWidth = 1;
+            for (let y = groundY + 24; y < height; y += 25) {
+              ctx.beginPath();
+              ctx.moveTo(0, y);
+              ctx.lineTo(width, y);
+              ctx.stroke();
+            }
+            for (let x = -width; x < width * 2; x += 72) {
+              ctx.beginPath();
+              ctx.moveTo(width / 2, groundY + 4);
+              ctx.lineTo(x, height);
+              ctx.stroke();
+            }
+
+            // Deterministic speckles keep the floor from looking computer-flat.
+            ctx.fillStyle = 'rgba(207, 224, 205, 0.1)';
+            for (let index = 0; index < 90; index += 1) {
+              const x = (index * 83 + 17) % width;
+              const y = groundY + 12 + ((index * 47 + 9) % Math.max(1, height - groundY - 16));
+              const size = 1 + (index % 3);
+              ctx.fillRect(x, y, size, 1);
+            }
+
+            // A restrained vignette helps character sprites stand out from the backdrop.
+            const vignette = ctx.createRadialGradient(width / 2, height * 0.52, height * 0.12, width / 2, height * 0.52, width * 0.68);
+            vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
+            vignette.addColorStop(1, 'rgba(3, 8, 15, 0.34)');
+            ctx.fillStyle = vignette;
+            ctx.fillRect(0, 0, width, height);
+          }
+
+          private drawMountainLayer(
+            ctx: CanvasRenderingContext2D,
+            baselineY: number,
+            width: number,
+            amplitude: number,
+            color: string,
+            phase: number,
+            step: number,
+          ): void {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(0, baselineY);
+            for (let x = 0; x <= width; x += step) {
+              const normalized = x / Math.max(1, width);
+              const ridge = Math.sin((normalized + phase) * Math.PI * 4.2) * 0.34
+                + Math.sin((normalized + phase * 0.7) * Math.PI * 9.6) * 0.16
+                + Math.sin((normalized + phase * 1.3) * Math.PI * 2.3) * 0.5;
+              ctx.lineTo(x, baselineY - amplitude * (0.48 + ridge * 0.36));
+            }
+            ctx.lineTo(width, baselineY + amplitude);
+            ctx.lineTo(0, baselineY + amplitude);
+            ctx.closePath();
+            ctx.fill();
+          }
+          """.replace('          ', '')
+
+          if old not in text:
+              raise SystemExit('Expected drawStage implementation was not found; no file was changed.')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test -- --run
+
+      - name: Build
+        run: npm run build
+
+      - name: Commit the upgraded stage
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/renderer/canvas2d/CanvasRenderer.ts
+          git commit -m "Improve the default stage backdrop"
+          git push
