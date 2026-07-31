@@ -67,7 +67,6 @@ prototype.drawStage = function drawCyberTrainingStage(
   ctx.fillRect(drawX, floorTop, drawWidth, drawY + drawHeight - floorTop);
 
   drawPerspectiveGrid(ctx, viewportWidth, viewportHeight, centerX, floorTop, cameraX, overscan);
-  drawSidePylons(ctx, viewportWidth, viewportHeight, floorTop);
 
   const edgeGlow = ctx.createLinearGradient(drawX, 0, drawX + drawWidth, 0);
   edgeGlow.addColorStop(0, 'rgba(217, 70, 239, 0.1)');
@@ -128,25 +127,6 @@ function drawPerspectiveGrid(
   }
 
   ctx.restore();
-}
-
-function drawSidePylons(
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  floorTop: number,
-): void {
-  const pylonY = floorTop + (height - floorTop) * 0.54;
-  const pylonHeight = Math.max(30, (height - floorTop) * 0.18);
-  const pylonWidth = Math.max(7, width * 0.012);
-
-  for (const side of [-1, 1] as const) {
-    const x = side < 0 ? width * 0.09 : width * 0.91 - pylonWidth;
-    ctx.fillStyle = 'rgba(7, 17, 35, 0.92)';
-    ctx.fillRect(x, pylonY, pylonWidth, pylonHeight);
-    ctx.fillStyle = side < 0 ? 'rgba(217, 70, 239, 0.72)' : 'rgba(34, 211, 238, 0.72)';
-    ctx.fillRect(x + pylonWidth * 0.34, pylonY + 3, Math.max(2, pylonWidth * 0.28), pylonHeight - 6);
-  }
 }
 
 function verticalGradient(
