@@ -53,46 +53,43 @@ function drawBar(
 ): void {
   ctx.save();
 
-  ctx.fillStyle = 'rgba(35, 60, 80, 0.22)';
-  roundedRect(ctx, x + 2, y + 2, width, height, 4);
+  ctx.fillStyle = '#1f4250';
+  roundedRect(ctx, x, y, width, height, 3);
   ctx.fill();
 
-  ctx.fillStyle = '#e6f2f7';
-  roundedRect(ctx, x, y, width, height, 4);
-  ctx.fill();
-
-  ctx.fillStyle = '#315a67';
-  roundedRect(ctx, x + 2, y + 2, width - 4, height - 4, 3);
+  ctx.fillStyle = '#d9edf0';
+  roundedRect(ctx, x + 2, y + 2, width - 4, height - 4, 2);
   ctx.fill();
 
   const innerX = x + 4;
   const innerY = y + 4;
   const innerWidth = width - 8;
   const innerHeight = height - 8;
-  ctx.fillStyle = '#d5e7e4';
-  roundedRect(ctx, innerX, innerY, innerWidth, innerHeight, 2);
+  ctx.fillStyle = '#b8d5d1';
+  roundedRect(ctx, innerX, innerY, innerWidth, innerHeight, 1);
   ctx.fill();
 
   const fillWidth = Math.max(0, innerWidth * ratio);
   const fillX = direction === 'left' ? innerX : innerX + innerWidth - fillWidth;
   if (fillWidth > 0) {
-    ctx.save();
-    roundedRect(ctx, innerX, innerY, innerWidth, innerHeight, 2);
-    ctx.clip();
-    ctx.fillStyle = ratio < 0.3 ? '#e26b4f' : ratio < 0.55 ? '#e7b34d' : '#70c96d';
+    ctx.fillStyle = ratio < 0.3 ? '#d9573f' : ratio < 0.55 ? '#d99d35' : '#55b85a';
     ctx.fillRect(fillX, innerY, fillWidth, innerHeight);
-    ctx.restore();
   }
 
-  ctx.strokeStyle = 'rgba(49, 90, 103, 0.24)';
+  ctx.strokeStyle = '#1f4250';
   ctx.lineWidth = 1;
   for (let segment = 1; segment < 10; segment += 1) {
-    const segmentX = innerX + innerWidth * segment / 10;
+    const segmentX = Math.round(innerX + innerWidth * segment / 10) + 0.5;
     ctx.beginPath();
-    ctx.moveTo(segmentX, innerY + 1);
-    ctx.lineTo(segmentX, innerY + innerHeight - 1);
+    ctx.moveTo(segmentX, innerY);
+    ctx.lineTo(segmentX, innerY + innerHeight);
     ctx.stroke();
   }
+
+  ctx.strokeStyle = '#f3fbfc';
+  ctx.lineWidth = 1;
+  roundedRect(ctx, x + 0.5, y + 0.5, width - 1, height - 1, 3);
+  ctx.stroke();
 
   ctx.restore();
 }
