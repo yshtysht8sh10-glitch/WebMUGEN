@@ -40,9 +40,6 @@ prototype.drawLifeBars = function drawPolishedLifeBars(
 
   drawBar(ctx, leftX, y, width, height, p1Ratio, 'left');
   drawBar(ctx, rightX, y, width, height, p2Ratio, 'right');
-
-  drawPlayerBadge(ctx, leftX - 1, y + height + 4, 'P1', false);
-  drawPlayerBadge(ctx, rightX + width + 1, y + height + 4, 'P2', true);
 };
 
 function drawBar(
@@ -56,7 +53,6 @@ function drawBar(
 ): void {
   ctx.save();
 
-  // Drop shadow and metallic outer shell.
   ctx.fillStyle = 'rgba(3, 12, 24, 0.42)';
   roundedRect(ctx, x + 2, y + 3, width, height, 5);
   ctx.fill();
@@ -70,7 +66,6 @@ function drawBar(
   roundedRect(ctx, x + 2, y + 2, width - 4, height - 4, 4);
   ctx.fill();
 
-  // Inner glass track.
   const innerX = x + 5;
   const innerY = y + 5;
   const innerWidth = width - 10;
@@ -90,7 +85,6 @@ function drawBar(
     ctx.fillStyle = life;
     ctx.fillRect(fillX, innerY, fillWidth, innerHeight);
 
-    // Gloss strip and subtle warm warning toward the depleted edge.
     ctx.fillStyle = 'rgba(255, 255, 255, 0.38)';
     ctx.fillRect(fillX, innerY, fillWidth, Math.max(2, innerHeight * 0.28));
 
@@ -105,7 +99,6 @@ function drawBar(
     ctx.restore();
   }
 
-  // Segment marks make the bar easier to read during combat.
   ctx.strokeStyle = 'rgba(4, 19, 31, 0.28)';
   ctx.lineWidth = 1;
   for (let segment = 1; segment < 10; segment += 1) {
@@ -116,39 +109,11 @@ function drawBar(
     ctx.stroke();
   }
 
-  // Bright inner rim.
   ctx.strokeStyle = 'rgba(222, 243, 255, 0.68)';
   ctx.lineWidth = 1;
   roundedRect(ctx, x + 1.5, y + 1.5, width - 3, height - 3, 4);
   ctx.stroke();
 
-  ctx.restore();
-}
-
-function drawPlayerBadge(
-  ctx: CanvasRenderingContext2D,
-  anchorX: number,
-  y: number,
-  label: string,
-  alignRight: boolean,
-): void {
-  const badgeWidth = 34;
-  const badgeHeight = 16;
-  const x = alignRight ? anchorX - badgeWidth : anchorX;
-
-  ctx.save();
-  ctx.fillStyle = 'rgba(7, 25, 45, 0.9)';
-  roundedRect(ctx, x, y, badgeWidth, badgeHeight, 3);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(204, 232, 255, 0.82)';
-  ctx.lineWidth = 1;
-  roundedRect(ctx, x + 0.5, y + 0.5, badgeWidth - 1, badgeHeight - 1, 3);
-  ctx.stroke();
-  ctx.fillStyle = '#f4fbff';
-  ctx.font = 'bold 10px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(label, x + badgeWidth / 2, y + badgeHeight / 2 + 0.5);
   ctx.restore();
 }
 
