@@ -48,8 +48,8 @@ prototype.drawPowerBars = function drawPolishedPowerBars(
   drawPowerBar(ctx, rightX, y, width, height, p2Ratio, 'right');
 
   ctx.save();
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 12px sans-serif';
+  ctx.fillStyle = '#173b4a';
+  ctx.font = 'bold 11px sans-serif';
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
   if (p1.infinitePower) ctx.fillText('∞', leftX + width + 8, y + height / 2);
@@ -64,7 +64,7 @@ prototype.drawPowerBars = function drawPolishedPowerBars(
   if (signature === this.lastPowerHudSignature) return [];
   this.lastPowerHudSignature = signature;
 
-  const diagnostics = [`raw.power_hud p1=${p1Power}/${p1PowerMax} width=${126 * p1Ratio} p2=${p2Power}/${p2PowerMax} width=${126 * p2Ratio} infinite=${infiniteMode}`];
+  const diagnostics = [`raw.power_hud p1=${p1Power}/${p1PowerMax} width=${128 * p1Ratio} p2=${p2Power}/${p2PowerMax} width=${128 * p2Ratio} infinite=${infiniteMode}`];
   if (!this.reportedInitialPower) {
     this.reportedInitialPower = true;
     diagnostics.unshift(
@@ -86,41 +86,32 @@ function drawPowerBar(
 ): void {
   ctx.save();
 
-  ctx.fillStyle = 'rgba(35, 60, 80, 0.18)';
-  roundedRect(ctx, x + 2, y + 2, width, height, 3);
+  ctx.fillStyle = '#1f4250';
+  roundedRect(ctx, x, y, width, height, 2);
   ctx.fill();
 
-  ctx.fillStyle = '#dcecef';
-  roundedRect(ctx, x, y, width, height, 3);
-  ctx.fill();
-
-  ctx.fillStyle = '#315a67';
-  roundedRect(ctx, x + 2, y + 2, width - 4, height - 4, 2);
+  ctx.fillStyle = '#d9edf0';
+  roundedRect(ctx, x + 1, y + 1, width - 2, height - 2, 1);
   ctx.fill();
 
   const innerX = x + 3;
   const innerY = y + 3;
   const innerWidth = width - 6;
   const innerHeight = height - 6;
-  ctx.fillStyle = '#d5e7e4';
-  roundedRect(ctx, innerX, innerY, innerWidth, innerHeight, 1);
-  ctx.fill();
+  ctx.fillStyle = '#b8d5d1';
+  ctx.fillRect(innerX, innerY, innerWidth, innerHeight);
 
   const fillWidth = innerWidth * ratio;
   const fillX = direction === 'left' ? innerX : innerX + innerWidth - fillWidth;
   if (fillWidth > 0) {
-    ctx.save();
-    roundedRect(ctx, innerX, innerY, innerWidth, innerHeight, 1);
-    ctx.clip();
-    ctx.fillStyle = '#48b9d7';
+    ctx.fillStyle = '#2aaed0';
     ctx.fillRect(fillX, innerY, fillWidth, innerHeight);
-    ctx.restore();
   }
 
-  ctx.strokeStyle = 'rgba(49, 90, 103, 0.22)';
+  ctx.strokeStyle = '#1f4250';
   ctx.lineWidth = 1;
   for (let segment = 1; segment < 6; segment += 1) {
-    const segmentX = innerX + innerWidth * segment / 6;
+    const segmentX = Math.round(innerX + innerWidth * segment / 6) + 0.5;
     ctx.beginPath();
     ctx.moveTo(segmentX, innerY);
     ctx.lineTo(segmentX, innerY + innerHeight);
