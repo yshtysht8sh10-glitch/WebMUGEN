@@ -238,7 +238,7 @@ function splitCommaValues(valueText: string): string[] {
     if (!inQuote && char === '[') bracketDepth += 1;
     if (!inQuote && char === ']') bracketDepth = Math.max(0, bracketDepth - 1);
 
-    if (char === ',' && !inQuote && parenthesisDepth === 0 && bracketDepth === 0) {
+    if (char === ',' && !inQuote && parenthesisDepth === 0 && bracketDepth === 0 && !endsWithRedirectPrefix(current)) {
       parts.push(trimCnsWhitespace(current));
       current = '';
       continue;
@@ -249,6 +249,26 @@ function splitCommaValues(valueText: string): string[] {
 
   parts.push(trimCnsWhitespace(current));
   return parts;
+}
+
+function endsWithRedirectPrefix(value: string): boolean {
+  const trimmed = value.trimEnd();
+  let tokenEnd = trimmed.length;
+  if (trimmed.endsWith(')')) {
+    let depth = 0;
+    for (let index = trimmed.length - 1; index >= 0; index -= 1) {
+      if (trimmed[index] === ')') depth += 1;
+      else if (trimmed[index] === '(') {
+        depth -= 1;
+        if (depth === 0) {
+          tokenEnd = index;
+          break;
+        }
+      }
+    }
+  }
+  const token = trimmed.slice(0, tokenEnd).match(/([a-z_][a-z0-9_]*)\s*$/i)?.[1]?.toLowerCase();
+  return token !== undefined && ['enemynear', 'enemy', 'target', 'parent', 'root', 'helper', 'playerid', 'partner'].includes(token);
 }
 
 function parseSingleValue(valueText: string): string | number | boolean {

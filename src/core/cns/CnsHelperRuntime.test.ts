@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parseCnsText } from '../../parser/cns/CnsParser';
 import { createInitialGameState } from '../engine/GameState';
 import { restartRound } from '../engine/RoundRestart';
+import { applyExplodControllerEvents, type ExplodControllerEvent } from '../explod/ExplodSystem';
 import { spawnHelper } from '../helper/HelperSystem';
 import { createInitialPauseState, startPause } from '../pause/PauseSystem';
 import { stepCnsPhysicsMotion } from './CnsPhysicsStep';
@@ -102,6 +103,88 @@ ctrl = 0
     const destroyed = stepCnsStateRuntime(state, cns);
     expect(destroyed.state.helpers.entries.map((helper) => helper.helperId)).toEqual([200, 200]);
     expect(destroyed.state.hitDiagnosticLines?.join('\n')).toContain('event=destroy entityId=3');
+  });
+
+  it('keeps Helper Explod ownership through RemoveExplod and DestroySelf', () => {
+    const explodCns = parseCnsText(`
+[StateDef 0]
+type = S
+physics = N
+
+[State 0, Root Explod]
+type = Explod
+trigger1 = time = 0
+anim = 10
+id = 77
+bindtime = -1
+removetime = -1
+
+[State 0, Spawn]
+type = Helper
+trigger1 = time = 0
+id = 100
+stateno = 100
+
+[StateDef 100]
+type = S
+physics = N
+
+[State 100, Helper Explod]
+type = Explod
+trigger1 = time = 0
+anim = 10
+id = 77
+bindtime = 0
+removetime = -1
+
+[State 100, Modify owned Explod]
+type = ModifyExplod
+trigger1 = time = 0
+id = 77
+pos = 5, -6
+bindtime = 2
+
+[State 100, Rebind owned Explod]
+type = ExplodBindTime
+trigger1 = time = 0
+id = 77
+time = -1
+
+[State 100, Remove owned Explod]
+type = RemoveExplod
+trigger1 = time = 1
+id = 77
+
+[State 100, Destroy]
+type = DestroySelf
+trigger1 = time = 1
+`);
+    let state = createInitialGameState();
+
+    let events: ExplodControllerEvent[] = [];
+    let result = stepCnsStateRuntime(state, explodCns, explodCallbacks(events));
+    state = applyExplodControllerEvents(result.state, events);
+    expect(state.explods.entries).toHaveLength(2);
+    expect(state.explods.entries.map((entry) => entry.owner.entityId)).toEqual([1, 2]);
+
+    state = stepCnsPhysicsMotion(state, explodCns);
+    events = [];
+    result = stepCnsStateRuntime(state, explodCns, explodCallbacks(events));
+    state = applyExplodControllerEvents(result.state, events);
+    expect(state.explods.entries.map((entry) => entry.owner.entityId)).toEqual([1, 2, 3, 4]);
+    expect(state.explods.entries.map((entry) => entry.bind?.targetEntityId)).toEqual([1, 2, 3, 4]);
+    expect(state.explods.entries.slice(2).map((entry) => entry.offset)).toEqual([{ x: 5, y: -6 }, { x: 5, y: -6 }]);
+    expect(state.hitDiagnosticLines?.join('\n')).toContain('raw.explod_modify owner=p1 id=77 matched=1');
+    expect(state.hitDiagnosticLines?.join('\n')).toContain('raw.explod_bindtime owner=p2 id=77 matched=1');
+
+    state = stepCnsPhysicsMotion(state, explodCns);
+    events = [];
+    result = stepCnsStateRuntime(state, explodCns, explodCallbacks(events));
+    state = applyExplodControllerEvents(result.state, events);
+    expect(state.helpers.entries).toHaveLength(0);
+    expect(state.explods.entries.map((entry) => entry.owner.entityId)).toEqual([1, 2]);
+    expect(state.hitDiagnosticLines?.join('\n')).toContain('raw.explod_remove owner=p1 id=77 matched=1');
+    expect(state.hitDiagnosticLines?.join('\n')).toContain('raw.explod_remove owner=p2 id=77 matched=1');
   });
 
   it('clears every Helper and resets the allocator on round restart', () => {
@@ -256,3 +339,12 @@ x = 5
     expect(result.traces.find((trace) => trace.entityId === 3)?.executedControllers).toContain('PosAdd');
   });
 });
+
+function explodCallbacks(events: ExplodControllerEvent[]) {
+  return {
+    onExplodCreate: (event: Extract<ExplodControllerEvent, { type: 'create' | 'rejected' }>) => events.push(event),
+    onExplodModify: (event: Extract<ExplodControllerEvent, { type: 'modify' }>) => events.push(event),
+    onExplodRemove: (event: Extract<ExplodControllerEvent, { type: 'remove' }>) => events.push(event),
+    onExplodBindTime: (event: Extract<ExplodControllerEvent, { type: 'bindtime' }>) => events.push(event),
+  };
+}

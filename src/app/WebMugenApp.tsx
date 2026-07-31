@@ -5,6 +5,7 @@ import type { GameState, PlayerState, ProjectileState, Rect } from '../core/engi
 import { applyInfinitePowerAtFrameStart } from '../core/power/InfinitePower';
 import { applyPracticeModeRecovery } from '../core/training/PracticeMode';
 import { createSampleCharacterAssets, loadAppCharacter, readCharacterRuntimeMetadata, saveCharacterSourceFile } from './AppCharacterLoader';
+import { loadMugenStageZip } from './AppStageLoader';
 import type { CharacterSourceFile } from '../core/character/CharacterTypes';
 import type { SndDocument, SndSample } from '../parser/snd/SndTypes';
 import { sndSampleKey } from '../parser/snd/SndTypes';
@@ -74,6 +75,7 @@ import {
   isWinMugenStateAction,
   isWinMugenSystemKey,
   resolveWinMugenHotkey,
+  shouldPreserveNativeTextCopy,
   type WinMugenHotkeyAction,
 } from './WinMugenHotkeys';
 import {
@@ -144,6 +146,7 @@ import {
 import { RuntimePerformanceMetrics } from './RuntimePerformanceMetrics';
 import { CHARACTER_PATH_OPTIONS as DISCOVERED_CHARACTER_PATH_OPTIONS } from 'virtual:webmugen-character-manifest';
 import { loadUiLanguage, saveUiLanguage, UiLanguageProvider, useUiLanguage } from './UiLanguage';
+import { applyViewportCameraRules, getScreenSizeProfile } from '../core/engine/ScreenSize';
 
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/T-H-M-A.zip';
 const ENABLE_RUNTIME_FALLBACKS = false;
@@ -162,6 +165,12 @@ type DebugTab = 'runtime-human' | 'runtime-ai' | 'manual';
 type RuntimeLogTab = 'human' | 'ai';
 type CnsSourceSelection = { path: string; line: number } | null;
 type CharacterSyntaxTheme = 'vscode-dark-2026' | 'mps-classic' | 'monochrome';
+export type SourceViewHistoryEntry = {
+  label: string;
+  line: number;
+  path: string;
+  sourceLine: string;
+};
 
 type StaticDebugInfo = {
   characterRows: string[];
@@ -253,6 +262,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
   const [copyStatus, setCopyStatus] = useState('');
   const [inputConfig, setInputConfigState] = useState<InputConfig>(inputConfigRef.current);
   const [runtimeSettings, setRuntimeSettingsState] = useState<RuntimeSettings>(runtimeSettingsRef.current);
+  const screenSizeProfile = getScreenSizeProfile(runtimeSettings.screenSizeMode);
   const [audioStatus, setAudioStatus] = useState<'locked' | 'unlocked' | 'unsupported'>('locked');
   const [audioMuted, setAudioMuted] = useState(audioSettingsRef.current.muted);
   const [audioMasterVolume, setAudioMasterVolume] = useState(audioSettingsRef.current.masterVolumePercent);
@@ -263,12 +273,14 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
   const [loadedAir, setLoadedAir] = useState<AirDocument | null>(null);
   const [loadedSprites, setLoadedSprites] = useState<ImageDataSpritePack | null>(null);
   const [selectedCnsSource, setSelectedCnsSource] = useState<CnsSourceSelection>(null);
+  const [sourceViewHistory, setSourceViewHistory] = useState<SourceViewHistoryEntry[]>([]);
   const [characterReloadVersion, setCharacterReloadVersion] = useState(0);
   const cnsSourceScrollPositionsRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
     const handleWinMugenHotkey = (event: KeyboardEvent) => {
       if (isEditableHotkeyTarget(event.target)) return;
+      if (shouldPreserveNativeTextCopy(event)) return;
       const action = resolveWinMugenHotkey(event);
       if (!action) return;
       event.preventDefault();
@@ -372,6 +384,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
       p1HitPauseCommandBufferRef.current?.clear();
       p2HitPauseCommandBufferRef.current?.clear();
       setSelectedCnsSource(null);
+      setSourceViewHistory([]);
       setLoadedAir(null);
       setLoadedSprites(null);
       const audioRuntime = audioRuntimeRef.current;
@@ -381,6 +394,16 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
       setStateTransitionLogLines(['StateNoが変化すると、ここに遷移だけが残ります。']);
 
       const loadResult = await loadAppCharacter(characterPath);
+      if (disposed) return;
+      let loadedStage = null;
+      let stageLoadError: string | null = null;
+      if (runtimeSettingsRef.current.stageTheme === 'external') {
+        try {
+          loadedStage = await loadMugenStageZip(runtimeSettingsRef.current.stageArchivePath);
+        } catch (error) {
+          stageLoadError = error instanceof Error ? error.message : String(error);
+        }
+      }
       if (disposed) return;
 
       const loadedCharacter = loadResult.character ?? createSampleCharacterAssets();
@@ -404,7 +427,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
       setStaticDebugInfo(createStaticDebugInfo(character, loadResult.source, spriteCount));
       setLoadMessage(
         loadResult.source === 'def'
-          ? `Loaded character: ${characterPath}`
+          ? `Loaded character: ${characterPath}${stageLoadError ? ` / Stage fallback: ${stageLoadError}` : loadedStage ? ` / Stage: ${loadedStage.name}` : ''}`
           : `Sample character fallback: ${loadResult.errorMessage ?? 'unknown reason'}`,
       );
 
@@ -414,7 +437,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
         rendererRef.current = new CanvasRenderer(canvas, character.air, null, character.sprites, {
           1: characterRenderAssets,
           2: characterRenderAssets,
-        });
+        }, undefined, loadedStage);
         inputRef.current = new BrowserInput(window);
         p1CommandBufferRef.current = new InputBuffer(60);
         p2CommandBufferRef.current = new InputBuffer(60);
@@ -470,6 +493,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
             collisionBoxesVisible: runtimeSettingsRef.current.collisionBoxesVisible,
             diagnosticsEnabled: runtimeSettingsRef.current.aiLogEnabled,
             hudVisible: winMugenHudVisibleRef.current,
+            hudTheme: runtimeSettingsRef.current.hudTheme,
+            stageTheme: runtimeSettingsRef.current.stageTheme,
           });
           frameId = requestAnimationFrame(tick);
           return;
@@ -602,7 +627,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
               hitBox: getProjectileHitBox(character.air, projectile.animNo) ?? projectile.hitBox,
             }),
             pauseState: pauseAtFrameStart,
-            screenWidth: canvas.width,
+            screenWidth: getScreenSizeProfile(runtimeSettingsRef.current.screenSizeMode).logicalWidth,
             roundState: winMugenRoundState(nextRoundState),
             roundNo: nextRoundState.roundNo,
             roundsExisted: Math.max(0, nextRoundState.roundNo - 1),
@@ -679,7 +704,9 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
           }
 
           nextState = applyFallbackStageRules(nextState);
-          if (pausedThisFrame || !fightActive) {
+          const activeScreenProfile = getScreenSizeProfile(runtimeSettingsRef.current.screenSizeMode);
+          nextState = applyViewportCameraRules(nextState, activeScreenProfile.logicalWidth, activeScreenProfile.logicalHeight);
+          if (!fightActive) {
             nextState = { ...nextState, hitEvents: [] };
           } else {
             nextState = resolveFallbackHits(
@@ -719,7 +746,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
                     hitBox: getProjectileHitBox(character.air, projectile.animNo) ?? projectile.hitBox,
                   }),
                   pauseState: pauseDuringFrame,
-                  screenWidth: canvas.width,
+                  screenWidth: getScreenSizeProfile(runtimeSettingsRef.current.screenSizeMode).logicalWidth,
                   roundState: winMugenRoundState(nextRoundState),
                   roundNo: nextRoundState.roundNo,
                   matchOver: isMatchOver(nextScore),
@@ -729,6 +756,13 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
                 },
                 player.id === 1 ? p1Commands : p2Commands,
               )),
+              (entityId) => {
+                if (!pausedThisFrame) return true;
+                const helper = nextState.helpers.entries.find((entry) => entry.entityId === entityId);
+                return helper
+                  ? canHelperMoveDuringPause(pauseDuringFrame, helper)
+                  : canEntityMoveDuringPause(pauseDuringFrame, entityId);
+              },
             );
             const deferredPauseEvents = pauseEvents.slice(processedPauseEventCount);
             if (deferredPauseEvents.length > 0) {
@@ -851,6 +885,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
           collisionBoxesVisible: runtimeSettingsRef.current.collisionBoxesVisible,
           diagnosticsEnabled: aiLogEnabled,
           hudVisible: winMugenHudVisibleRef.current,
+          hudTheme: runtimeSettingsRef.current.hudTheme,
+          stageTheme: runtimeSettingsRef.current.stageTheme,
         }) ?? [];
         if (explodRenderDiagnosticLines.length > 0) {
           nextState = { ...nextState, hitDiagnosticLines: [...(nextState.hitDiagnosticLines ?? []), ...explodRenderDiagnosticLines] };
@@ -1042,6 +1078,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
   const openCnsSource = (selection: CnsSourceSelection) => {
     setSelectedCnsSource(selection);
     if (selection) {
+      const historyEntry = createSourceViewHistoryEntry(cnsSourceFiles, selection);
+      if (historyEntry) setSourceViewHistory((history) => appendSourceViewHistory(history, historyEntry));
       setActivePage('static-files');
     }
   };
@@ -1089,6 +1127,9 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
 
   const setRuntimeSettings = (nextSettings: RuntimeSettings) => {
     const normalized = normalizeRuntimeSettings(nextSettings);
+    const screenSizeChanged = normalized.screenSizeMode !== runtimeSettingsRef.current.screenSizeMode;
+    const appearanceSourceChanged = normalized.stageTheme !== runtimeSettingsRef.current.stageTheme
+      || normalized.stageArchivePath !== runtimeSettingsRef.current.stageArchivePath;
     if (normalized.humanLogCaptureMode !== runtimeSettingsRef.current.humanLogCaptureMode) {
       lastReadableRuntimeSignatureRef.current = '';
     }
@@ -1118,6 +1159,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
     runtimeSettingsRef.current = normalized;
     setRuntimeSettingsState(normalized);
     saveRuntimeSettings(normalized);
+    if (screenSizeChanged || appearanceSourceChanged) setCharacterReloadVersion((version) => version + 1);
   };
 
   const setCharacterPath = (nextPath: string) => {
@@ -1210,9 +1252,10 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
         <section className="stage-panel">
             <div className="stage-viewport">
               <canvas
+                className="game-canvas"
                 ref={canvasRef}
-                width={960}
-                height={540}
+                width={screenSizeProfile.width}
+                height={screenSizeProfile.height}
               />
               {runtimeStartState !== 'running' && (
                 <AudioStartOverlay
@@ -1251,7 +1294,6 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
                 onSelectFrame={handleSelectRuntimeFrame}
                 autoScrollIndex={runtimeFrameIndexAutoScroll}
                 onToggleAutoScrollIndex={() => setRuntimeFrameIndexAutoScroll((enabled) => !enabled)}
-                onShowLatest={showLatestRuntimeHistory}
                 onOpenCnsSource={openCnsSource}
                 onOpenAnimationSource={openAnimationSource}
                 onCaptureModeChange={(humanLogCaptureMode) => setRuntimeSettings({ ...runtimeSettings, humanLogCaptureMode })}
@@ -1278,6 +1320,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
           <section className="debug-panel page-debug-panel">
             <StaticDebugPanel
               sourceFiles={cnsSourceFiles}
+              sourceViewHistory={sourceViewHistory}
               selectedSource={selectedCnsSource}
               onOpenSource={openCnsSource}
               onSaveSource={handleSaveCharacterSource}
@@ -1640,6 +1683,35 @@ export function RuntimeSettingsPanel({
               <span>{text('Frame duration (ms)', 'フレーム間隔（ms）')}</span>
               <input min={1} max={1000} step={1} type="number" value={Math.round(settings.frameIntervalMs)} onChange={(event) => onChange({ ...settings, frameIntervalMs: Number(event.currentTarget.value) })} />
             </label>
+            <label className="settings-field">
+              <span>{text('Logical screen size', '論理画面サイズ')}</span>
+              <select aria-label="Logical screen size" value={settings.screenSizeMode} onChange={(event) => onChange({ ...settings, screenSizeMode: event.currentTarget.value as RuntimeSettings['screenSizeMode'] })}>
+                <option value="winmugen-800x480">Extended Hi-Res 800×480 (400×240 coordinates)</option>
+                <option value="winmugen-classic-640x480">WinMUGEN Classic 640×480 (320×240 coordinates)</option>
+                <option value="wide-960x540">Wide 960×540 (16:9)</option>
+              </select>
+              <small>{text('Changing this setting reloads the current match.', '変更すると現在の対戦を再読み込みします。')}</small>
+            </label>
+            <label className="settings-field">
+              <span>{text('Gauge design', 'ゲージデザイン')}</span>
+              <select aria-label="Gauge design" value={settings.hudTheme} onChange={(event) => onChange({ ...settings, hudTheme: event.currentTarget.value as RuntimeSettings['hudTheme'] })}>
+                <option value="fresh">Fresh</option>
+                <option value="cyber">Cyber</option>
+              </select>
+            </label>
+            <label className="settings-field">
+              <span>{text('Stage design', '背景・ステージ')}</span>
+              <select aria-label="Stage design" value={settings.stageTheme} onChange={(event) => onChange({ ...settings, stageTheme: event.currentTarget.value as RuntimeSettings['stageTheme'] })}>
+                <option value="fresh">Fresh</option>
+                <option value="cyber">Cyber</option>
+                <option value="external">MUGEN Stage ZIP</option>
+              </select>
+            </label>
+            <label className="settings-field">
+              <span>{text('Stage ZIP path', 'ステージZIPパス')}</span>
+              <input aria-label="Stage ZIP path" defaultValue={settings.stageArchivePath} key={settings.stageArchivePath} type="text" onBlur={(event) => onChange({ ...settings, stageArchivePath: event.currentTarget.value })} />
+              <small>{text('Use a URL served by WebMUGEN, such as /stages/example.zip.', 'public/stages 配下など、WebMUGENから配信されるURLを指定します。')}</small>
+            </label>
           </div>
         </section>
         <label className="settings-card settings-toggle-card">
@@ -1664,6 +1736,7 @@ export function RuntimeSettingsPanel({
           <label className="settings-field compact">
             <span>{text('Retention', '保持条件')}</span>
             <select aria-label="Human log capture mode" disabled={!settings.humanLogEnabled} value={settings.humanLogCaptureMode} onChange={(event) => onChange({ ...settings, humanLogCaptureMode: event.currentTarget.value as RuntimeSettings['humanLogCaptureMode'] })}>
+              <option value="state-transition">{text('When StateNo changes', 'Stateが遷移したとき')}</option>
               <option value="all-frames">{text('Every frame', '全フレーム')}</option>
               <option value="trigger-changes">{text('When trigger ON/OFF changes', 'トリガーのON/OFFに変化があったとき')}</option>
               <option value="controller-activated">{text('When a state controller activates', 'ステコンが作動したとき')}</option>
@@ -2192,6 +2265,7 @@ function CopyToolbar({
 
 function StaticDebugPanel({
   sourceFiles,
+  sourceViewHistory,
   selectedSource,
   onOpenSource,
   onSaveSource,
@@ -2200,6 +2274,7 @@ function StaticDebugPanel({
   sprites,
 }: {
   sourceFiles: CharacterSourceFile[];
+  sourceViewHistory: readonly SourceViewHistoryEntry[];
   selectedSource: CnsSourceSelection;
   onOpenSource: (selection: CnsSourceSelection) => void;
   onSaveSource: (file: CharacterSourceFile, sourceText: string) => Promise<void>;
@@ -2210,6 +2285,7 @@ function StaticDebugPanel({
   return (
     <CharacterSourceFilesViewer
       files={sourceFiles}
+      history={sourceViewHistory}
       selection={selectedSource}
       onSelect={onOpenSource}
       onSave={onSaveSource}
@@ -2312,10 +2388,10 @@ export const RuntimeFrameIndexList = memo(function RuntimeFrameIndexList({
           <div className="runtime-frame-index-header" style={{ gridTemplateColumns }}>
             <span>時</span>
             <span>f</span>
-            <span>State</span>
-            {showAnimNos ? <span>Anim</span> : null}
-            <span>State2</span>
-            {showAnimNos ? <span>Anim2</span> : null}
+            <span>P1 State</span>
+            {showAnimNos ? <span>P1 Anim</span> : null}
+            <span>P2 State</span>
+            {showAnimNos ? <span>P2 Anim</span> : null}
             {helperColumns.flatMap((helper) => [
               <span className="runtime-helper-column-header" key={`${helper.entityId}-state`} title={`H${helper.helperId} #${helper.entityId} / P${helper.rootEntityId}`}>
                 H{helper.helperId}<small>State</small>
@@ -2423,7 +2499,6 @@ export function HumanRuntimePanel({
   onSelectFrame,
   autoScrollIndex,
   onToggleAutoScrollIndex,
-  onShowLatest,
   onOpenCnsSource,
   onOpenAnimationSource,
   onCaptureModeChange,
@@ -2434,7 +2509,6 @@ export function HumanRuntimePanel({
   onSelectFrame: (entry: RuntimeLogIndexEntry) => void;
   autoScrollIndex: boolean;
   onToggleAutoScrollIndex: () => void;
-  onShowLatest: () => void;
   onOpenCnsSource: (selection: CnsSourceSelection) => void;
   onOpenAnimationSource?: (animNo: number) => void;
   onCaptureModeChange: (mode: RuntimeSettings['humanLogCaptureMode']) => void;
@@ -2453,16 +2527,11 @@ export function HumanRuntimePanel({
     if (!helperOptions.has(key)) helperOptions.set(key, { key, label: `H${helper.helperId}` });
   }
   const entityOptions = [
-    { key: 'p1', label: 'P1', lines: selectedEntry?.lines ?? [], stateNo: selectedEntry?.p1StateNo, opponentLabel: 'P2', opponentStateNo: selectedEntry?.p2StateNo },
-    { key: 'p2', label: 'P2', lines: selectedEntry?.p2Lines ?? [], stateNo: selectedEntry?.p2StateNo, opponentLabel: 'P1', opponentStateNo: selectedEntry?.p1StateNo },
+    { key: 'p1', label: 'P1', lines: selectedEntry?.lines ?? [] },
+    { key: 'p2', label: 'P2', lines: selectedEntry?.p2Lines ?? [] },
     ...Array.from(helperOptions.values()).map((option) => ({
       ...option,
       lines: helperLogs.find((helper) => helper.key === option.key)?.lines ?? [],
-      stateNo: selectedIndexEntry?.helpers.find((helper) => `helper-${helper.entityId}` === option.key)?.stateNo,
-      opponentLabel: selectedIndexEntry?.helpers.find((helper) => `helper-${helper.entityId}` === option.key)?.rootEntityId === 2 ? 'P1' : 'P2',
-      opponentStateNo: selectedIndexEntry?.helpers.find((helper) => `helper-${helper.entityId}` === option.key)?.rootEntityId === 2
-        ? selectedEntry?.p1StateNo
-        : selectedEntry?.p2StateNo,
     })),
   ];
   const activeEntity = entityOptions.find((entity) => entity.key === activeEntityKey) ?? entityOptions[0];
@@ -2480,6 +2549,7 @@ export function HumanRuntimePanel({
           <label className="runtime-frame-capture-mode">
             {text('Retain logs', 'ログ保持')}
             <select value={captureMode} onChange={(event) => onCaptureModeChange(event.currentTarget.value as RuntimeSettings['humanLogCaptureMode'])}>
+              <option value="state-transition">{text('StateNo changed', 'Stateが遷移したとき')}</option>
               <option value="all-frames">{text('Every frame', '全フレーム')}</option>
               <option value="trigger-changes">{text('Trigger ON/OFF changes', 'トリガーのON/OFFに変化があったとき')}</option>
               <option value="controller-activated">{text('State controller activated', 'ステコンが作動したとき')}</option>
@@ -2523,10 +2593,9 @@ export function HumanRuntimePanel({
           role="separator"
           tabIndex={0}
         />
-        <section>
+        <section className="human-detail-pane">
           <h2>{text('Human Detail Log', '人間向け詳細ログ')}</h2>
           <p className="debug-note">{text('Selecting a row loads only that detail entry. New logs do not replace the current selection.', '行を選ぶと、その詳細だけを表示します。新しいログが現在の選択を置き換えることはありません。')}</p>
-          <button type="button" className="history-latest-button" onClick={onShowLatest}>{text('Show Latest Frame', '最新フレームを表示')}</button>
           {selectedEntry ? (
             <>
               <div className="history-selected-frame">
@@ -2555,17 +2624,11 @@ export function HumanRuntimePanel({
                 role="tabpanel"
               >
                 {activeEntity.lines.length > 0 ? (
-                  <>
-                    <div className="human-detail-state-summary">
-                      <strong>state={activeEntity.stateNo ?? '-'}</strong>
-                      <span>{activeEntity.opponentLabel} state={activeEntity.opponentStateNo ?? '-'}</span>
-                    </div>
-                    <ReadableRuntimeHistoryMarkup
-                      lines={activeEntity.lines.filter((line) => !line.trim().startsWith('----'))}
-                      onOpenAnimationSource={onOpenAnimationSource}
-                      onOpenCnsSource={onOpenCnsSource}
-                    />
-                  </>
+                  <ReadableRuntimeHistoryMarkup
+                    lines={activeEntity.lines.filter((line) => !line.trim().startsWith('----'))}
+                    onOpenAnimationSource={onOpenAnimationSource}
+                    onOpenCnsSource={onOpenCnsSource}
+                  />
                 ) : (
                   <div className="history-empty">{text('No retained detail is available for this entity in the selected frame.', '選択中フレームには、この対象の詳細ログがありません。')}</div>
                 )}
@@ -2672,16 +2735,21 @@ function ReadableRuntimeHistoryMarkup({
   onOpenAnimationSource?: (animNo: number) => void;
 }) {
   const stateDefSelection = parseStateDefSourceSelection(lines);
+  const compactMetaLine = lines.find((line) => /^(?:P1|P2|H\d+(?: #\d+)?) StateNo=/.test(line.trim()));
+  const compactMeta = compactMetaLine ? parseReadableRuntimeMeta(compactMetaLine.trim()) : null;
+  const hasStateDefBlock = lines.some((line) => line.trim().startsWith('StateDef '));
   const rendered: ReactNode[] = [];
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
+    if (hasStateDefBlock && line === compactMetaLine) continue;
+    if (line.trim().startsWith('keys=')) continue;
     if (line.trim().startsWith('StateDef ')) {
       const parameterLines: string[] = [];
       while (index + 1 < lines.length && /^STATEDEF_PARAM\s+`/.test(lines[index + 1].trim())) {
         parameterLines.push(lines[index + 1]);
         index += 1;
       }
-      rendered.push(<ReadableStateDefBlock key={`${index}-${line}`} line={line.trim()} onOpenCnsSource={onOpenCnsSource} parameterLines={parameterLines} />);
+      rendered.push(<ReadableStateDefBlock compactMeta={compactMeta} key={`${index}-${line}`} line={line.trim()} onOpenAnimationSource={onOpenAnimationSource} onOpenCnsSource={onOpenCnsSource} parameterLines={parameterLines} />);
       continue;
     }
     if (/^\s*\*\*.+\*\*\s+\|\s+/.test(line)) {
@@ -2710,6 +2778,11 @@ function ReadableRuntimeHistoryMarkup({
       {rendered}
     </div>
   );
+}
+
+function parseReadableRuntimeMeta(line: string): { animNo: number; time: number } | null {
+  const match = line.match(/^(?:P[12]|H\d+(?: #\d+)?) StateNo=-?\d+\s+Anim(?:No)?=(-?\d+)\s+Time=(-?\d+)/);
+  return match ? { animNo: Number(match[1]), time: Number(match[2]) } : null;
 }
 
 function ReadableControllerBlock({
@@ -2928,11 +3001,15 @@ function parseStateDefSourceSelection(lines: readonly string[]): CnsSourceSelect
 }
 
 function ReadableStateDefBlock({
+  compactMeta,
   line,
+  onOpenAnimationSource,
   onOpenCnsSource,
   parameterLines,
 }: {
+  compactMeta: { animNo: number; time: number } | null;
   line: string;
+  onOpenAnimationSource?: (animNo: number) => void;
   onOpenCnsSource: (selection: CnsSourceSelection) => void;
   parameterLines: string[];
 }) {
@@ -2942,9 +3019,11 @@ function ReadableStateDefBlock({
   const selection = match[2] && match[3] ? { path: match[2], line: Number(match[3]) } : null;
   return (
     <div className="readable-statedef-block">
-      <div className="readable-history-statedef">
+      <div className={`readable-history-statedef ${compactMeta ? 'readable-statedef-heading' : ''}`}>
         <button disabled={!selection} onClick={() => selection && onOpenCnsSource(selection)} type="button">StateDef {match[1]}</button>
-        {parameterLines.length > 0 ? (
+        {compactMeta ? <span className="readable-statedef-time">Time={compactMeta.time}</span> : null}
+        {compactMeta ? <span className="readable-statedef-rule" aria-hidden="true" /> : null}
+        {!compactMeta && parameterLines.length > 0 ? (
           <button
             aria-expanded={expanded}
             className="readable-statedef-disclosure"
@@ -2955,6 +3034,29 @@ function ReadableStateDefBlock({
           </button>
         ) : null}
       </div>
+      {compactMeta ? (
+        <div className="readable-statedef-actions">
+          <button
+            className="readable-history-anim readable-history-anim-link"
+            disabled={!onOpenAnimationSource}
+            onClick={() => onOpenAnimationSource?.(compactMeta.animNo)}
+            title={`Open Begin Action ${compactMeta.animNo}`}
+            type="button"
+          >
+            Anim={compactMeta.animNo}
+          </button>
+          {parameterLines.length > 0 ? (
+            <button
+              aria-expanded={expanded}
+              className="readable-statedef-disclosure"
+              onClick={() => setExpanded((value) => !value)}
+              type="button"
+            >
+              {expanded ? '▲' : '▼'} parameters ({parameterLines.length})
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {expanded ? (
         <div className="readable-statedef-parameters">
           {parameterLines.map((parameterLine, index) => (
@@ -3019,6 +3121,7 @@ function runtimeFrameElementId(frameNo: number): string {
 
 export function CharacterSourceFilesViewer({
   files,
+  history = [],
   selection,
   onSelect,
   onSave,
@@ -3027,6 +3130,7 @@ export function CharacterSourceFilesViewer({
   sprites,
 }: {
   files: CharacterSourceFile[];
+  history?: readonly SourceViewHistoryEntry[];
   selection: CnsSourceSelection;
   onSelect: (selection: CnsSourceSelection) => void;
   onSave?: (file: CharacterSourceFile, sourceText: string) => Promise<void>;
@@ -3039,13 +3143,16 @@ export function CharacterSourceFilesViewer({
   const effectiveScrollPositionsRef = scrollPositionsRef ?? localScrollPositionsRef;
   const codeRef = useRef<HTMLDivElement | null>(null);
   const detailRef = useRef<HTMLDivElement | null>(null);
+  const summaryRef = useRef<HTMLDivElement | null>(null);
   const editorHighlightRef = useRef<HTMLPreElement | null>(null);
   const resizingRef = useRef(false);
+  const historyResizingRef = useRef(false);
   const rowResizingRef = useRef<'file-list' | 'detail' | null>(null);
   const [selectedAirActionNo, setSelectedAirActionNo] = useState<number | null>(null);
   const [summaryWidth, setSummaryWidth] = useState(300);
   const [fileListHeight, setFileListHeight] = useState(() => calculateCharacterFileListHeight(files));
   const [detailHeight, setDetailHeight] = useState(560);
+  const [historyHeight, setHistoryHeight] = useState(140);
   const [syntaxTheme, setSyntaxTheme] = useState<CharacterSyntaxTheme>('vscode-dark-2026');
   const [editingPath, setEditingPath] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -3071,6 +3178,10 @@ export function CharacterSourceFilesViewer({
   const selectedDraft = selectedFile ? drafts[selectedFile.path] ?? selectedFile.text : '';
   const isEditing = selectedFile?.path === editingPath;
   const isDirty = selectedFile ? selectedDraft !== selectedFile.text : false;
+  const sourceNavigationTargets = useMemo(
+    () => selectedFile ? createSourceNavigationTargets(selectedFile, files) : new Map<number, SourceNavigationTarget>(),
+    [files, selectedFile],
+  );
   const selectedSff = useMemo(() => resolveSffPreview(selectedFile, sprites ?? null), [selectedFile, sprites]);
   const sffEntries = useMemo(() => sortSffSpriteEntries(selectedSff.pack), [selectedSff.pack]);
   const effectiveSffSpriteKey = selectedSffSpriteKey && selectedSff.pack?.sprites.has(selectedSffSpriteKey)
@@ -3129,6 +3240,13 @@ export function CharacterSourceFilesViewer({
     if (!resizingRef.current || !detailRef.current) return;
     const bounds = detailRef.current.getBoundingClientRect();
     setSummaryWidth(Math.max(160, Math.min(bounds.width - 320, clientX - bounds.left)));
+  };
+
+  const handleHistoryResizePointerMove = (clientY: number) => {
+    if (!historyResizingRef.current || !summaryRef.current) return;
+    const bounds = summaryRef.current.getBoundingClientRect();
+    const maximum = Math.max(70, bounds.height - 120);
+    setHistoryHeight(Math.max(70, Math.min(maximum, bounds.bottom - clientY)));
   };
 
   const handleSave = async () => {
@@ -3241,7 +3359,7 @@ export function CharacterSourceFilesViewer({
           ref={detailRef}
           style={{ '--character-summary-width': `${summaryWidth}px`, height: `${detailHeight}px` } as CSSProperties}
         >
-          <div className="character-source-summary">
+          <div className="character-source-summary" ref={summaryRef}>
             <h3>{text('Map', 'マップ')}</h3>
             {selectedFile.kind === 'sff' ? (
               <SffSpriteMap
@@ -3275,6 +3393,32 @@ export function CharacterSourceFilesViewer({
                 sprites={sprites ?? null}
               />
             ) : null}
+            <div
+              aria-label={text('Resize Map and View History', 'マップと閲覧履歴の高さを変更')}
+              aria-orientation="horizontal"
+              aria-valuemax={Math.max(70, detailHeight - 120)}
+              aria-valuemin={70}
+              aria-valuenow={Math.round(historyHeight)}
+              className="source-view-history-resizer"
+              onKeyDown={(event) => {
+                if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+                event.preventDefault();
+                const maximum = Math.max(70, detailHeight - 120);
+                setHistoryHeight((height) => Math.max(70, Math.min(maximum, height + (event.key === 'ArrowUp' ? 20 : -20))));
+              }}
+              onPointerDown={(event) => {
+                historyResizingRef.current = true;
+                event.currentTarget.setPointerCapture(event.pointerId);
+              }}
+              onPointerMove={(event) => handleHistoryResizePointerMove(event.clientY)}
+              onPointerUp={(event) => {
+                historyResizingRef.current = false;
+                event.currentTarget.releasePointerCapture(event.pointerId);
+              }}
+              role="separator"
+              tabIndex={0}
+            />
+            <SourceViewHistory entries={history} height={historyHeight} onSelect={onSelect} selected={effectiveSelection} />
           </div>
           <div
             aria-label={text('Resize summary and file view', '概要とファイル表示の幅を変更')}
@@ -3370,11 +3514,7 @@ export function CharacterSourceFilesViewer({
           ) : selectedFile.editable ? isEditing ? (
             <div className="character-source-editor-shell">
               <pre aria-hidden="true" className="character-source-editor-highlight" ref={editorHighlightRef}>
-                {selectedDraft.split(/\r?\n/).map((line, index) => (
-                  <span className="character-source-editor-line" key={`${selectedFile.path}-edit-${index}`}>
-                    <HighlightedSourceText line={line} kind={selectedFile.kind} />{'\n'}
-                  </span>
-                ))}
+                <CharacterSourceEditorLines kind={selectedFile.kind} path={selectedFile.path} source={selectedDraft} />
               </pre>
               <textarea
                 aria-label={text('Character file editor', 'キャラクターファイル編集')}
@@ -3400,8 +3540,23 @@ export function CharacterSourceFilesViewer({
                     id={cnsSourceLineId(selectedFile.path, lineNo)}
                     key={`${selectedFile.path}-${lineNo}`}
                   >
-                    <span className="cns-source-line-no">{lineNo}</span>
-                    <code><HighlightedSourceText line={line} kind={selectedFile.kind} /></code>
+                    <button
+                      aria-label={`${text('Highlight line', '行を強調')} ${lineNo}`}
+                      className="cns-source-line-no"
+                      onClick={() => onSelect({ path: selectedFile.path, line: lineNo })}
+                      title={`${text('Highlight line', '行を強調')} ${lineNo}`}
+                      type="button"
+                    >
+                      {lineNo}
+                    </button>
+                    <code>
+                      <HighlightedSourceText
+                        kind={selectedFile.kind}
+                        line={line}
+                        navigationTarget={sourceNavigationTargets.get(lineNo)}
+                        onNavigate={onSelect}
+                      />
+                    </code>
                   </div>
                 );
               })}
@@ -3445,10 +3600,106 @@ export function CharacterSourceFilesViewer({
   );
 }
 
-function HighlightedSourceText({ line, kind }: { line: string; kind: CharacterSourceFile['kind'] }) {
+type SourceNavigationTarget = {
+  end: number;
+  kind: 'animation' | 'state';
+  selection: Exclude<CnsSourceSelection, null>;
+  start: number;
+  value: number;
+};
+
+function HighlightedSourceTokens({ line, kind }: { line: string; kind: CharacterSourceFile['kind'] }) {
   return <>{tokenizeCharacterSourceLine(line, kind).map((token, index) => (
     <span className={`source-syntax-${token.scope}`} key={`${index}-${token.scope}`}>{token.text}</span>
   ))}</>;
+}
+
+function HighlightedSourceText({
+  line,
+  kind,
+  navigationTarget,
+  onNavigate,
+}: {
+  line: string;
+  kind: CharacterSourceFile['kind'];
+  navigationTarget?: SourceNavigationTarget;
+  onNavigate?: (selection: CnsSourceSelection) => void;
+}) {
+  if (!navigationTarget || !onNavigate) return <HighlightedSourceTokens kind={kind} line={line} />;
+  const linkedText = line.slice(navigationTarget.start, navigationTarget.end);
+  const label = navigationTarget.kind === 'animation'
+    ? `Open Begin Action ${navigationTarget.value}`
+    : `Open StateDef ${navigationTarget.value}`;
+  return <>
+    <HighlightedSourceTokens kind={kind} line={line.slice(0, navigationTarget.start)} />
+    <button
+      className={`character-source-navigation-link ${navigationTarget.kind}`}
+      onClick={() => onNavigate(navigationTarget.selection)}
+      title={label}
+      type="button"
+    >
+      <HighlightedSourceTokens kind={kind} line={linkedText} />
+    </button>
+    <HighlightedSourceTokens kind={kind} line={line.slice(navigationTarget.end)} />
+  </>;
+}
+
+export function CharacterSourceEditorLines({
+  kind,
+  path,
+  source,
+}: {
+  kind: CharacterSourceFile['kind'];
+  path: string;
+  source: string;
+}) {
+  return <>{source.split(/\r?\n/).map((line, index) => (
+    <span
+      className="character-source-editor-line"
+      data-line-number={index + 1}
+      key={`${path}-edit-${index}`}
+    >
+      <HighlightedSourceText line={line} kind={kind} />{'\n'}
+    </span>
+  ))}</>;
+}
+
+function SourceViewHistory({
+  entries,
+  height,
+  onSelect,
+  selected,
+}: {
+  entries: readonly SourceViewHistoryEntry[];
+  height: number;
+  onSelect: (selection: CnsSourceSelection) => void;
+  selected: CnsSourceSelection;
+}) {
+  const { text } = useUiLanguage();
+  return (
+    <section className="source-view-history" style={{ height: `${height}px` }}>
+      <h4>{text('View History', '閲覧履歴')}</h4>
+      {entries.length > 0 ? (
+        <div className="source-view-history-list">
+          {entries.map((entry) => {
+            const active = selected?.path === entry.path && selected.line === entry.line;
+            return (
+              <button
+                className={active ? 'active' : ''}
+                key={`${entry.path}:${entry.line}`}
+                onClick={() => onSelect({ path: entry.path, line: entry.line })}
+                title={`${entry.path}:${entry.line}`}
+                type="button"
+              >
+                <span>{entry.label}:{entry.line}</span>
+                <small>{entry.sourceLine}</small>
+              </button>
+            );
+          })}
+        </div>
+      ) : <div className="source-view-history-empty">{text('No highlighted locations yet.', '強調表示した箇所はまだありません。')}</div>}
+    </section>
+  );
 }
 
 function calculateCharacterFileListHeight(files: readonly CharacterSourceFile[]): number {
@@ -4073,6 +4324,99 @@ export function findAirActionSourceSelection(
     if (action) return { path: file.path, line: action.line };
   }
   return null;
+}
+
+export function findStateDefSourceSelection(
+  files: readonly CharacterSourceFile[],
+  stateNo: number,
+  preferredPath?: string,
+): CnsSourceSelection {
+  const orderedFiles = preferredPath
+    ? [...files.filter((file) => file.path === preferredPath), ...files.filter((file) => file.path !== preferredPath)]
+    : files;
+  for (const file of orderedFiles) {
+    if (!/\.(?:cns|cmd)$/i.test(file.path) && file.kind !== 'cns' && file.kind !== 'common') continue;
+    const stateDef = createSourceOutline(file).find((item) => item.kind === 'statedef' && Number(item.value) === stateNo);
+    if (stateDef) return { path: file.path, line: stateDef.line };
+  }
+  return null;
+}
+
+export function createSourceViewHistoryEntry(
+  files: readonly CharacterSourceFile[],
+  selection: Exclude<CnsSourceSelection, null>,
+): SourceViewHistoryEntry | null {
+  const file = files.find((candidate) => candidate.path === selection.path);
+  if (!file) return null;
+  const sourceLine = file.text.split(/\r?\n/)[selection.line - 1]?.trim() ?? '';
+  return {
+    label: file.label,
+    line: selection.line,
+    path: selection.path,
+    sourceLine: sourceLine || '(blank line)',
+  };
+}
+
+export function appendSourceViewHistory(
+  history: readonly SourceViewHistoryEntry[],
+  entry: SourceViewHistoryEntry,
+  limit = 50,
+): SourceViewHistoryEntry[] {
+  const key = `${entry.path}:${entry.line}`;
+  return [entry, ...history.filter((candidate) => `${candidate.path}:${candidate.line}` !== key)].slice(0, limit);
+}
+
+export function createSourceNavigationTargets(
+  file: CharacterSourceFile,
+  files: readonly CharacterSourceFile[],
+): Map<number, SourceNavigationTarget> {
+  const targets = new Map<number, SourceNavigationTarget>();
+  const lines = file.text.split(/\r?\n/);
+  let insideController = false;
+  let controllerType = '';
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const sectionMatch = line.match(/^\s*\[\s*([^\]]+)\s*\]/);
+    if (sectionMatch) {
+      insideController = /^State\s+-?\d+\s*,/i.test(sectionMatch[1].trim());
+      controllerType = '';
+      continue;
+    }
+
+    const code = line.replace(/;.*$/, '');
+    const assignment = code.match(/^\s*([a-z][a-z0-9_.]*)\s*=\s*(.*?)\s*$/i);
+    if (!assignment) continue;
+    const key = assignment[1].toLowerCase();
+    if (insideController && key === 'type') {
+      controllerType = assignment[2].trim().toLowerCase();
+      continue;
+    }
+
+    const navigable = key === 'anim' || (key === 'value' && insideController && controllerType === 'changeanim')
+      ? 'animation'
+      : key === 'stateno' || (key === 'value' && insideController && controllerType === 'changestate')
+        ? 'state'
+        : null;
+    if (!navigable) continue;
+    const valueMatch = code.match(/^\s*[a-z][a-z0-9_.]*\s*=\s*(-?\d+)\b/i);
+    if (!valueMatch || valueMatch.index === undefined) continue;
+    const value = Number(valueMatch[1]);
+    const start = valueMatch.index + valueMatch[0].lastIndexOf(valueMatch[1]);
+    const selection = navigable === 'animation'
+      ? findAirActionSourceSelection(files, value)
+      : findStateDefSourceSelection(files, value, file.path);
+    if (!selection) continue;
+    targets.set(index + 1, {
+      end: start + valueMatch[1].length,
+      kind: navigable,
+      selection,
+      start,
+      value,
+    });
+  }
+
+  return targets;
 }
 
 function findFollowingAssignment(
@@ -4769,10 +5113,13 @@ function formatCodexTraceSummaryLines(traces: readonly CnsRuntimeTrace[]): strin
   ];
 }
 
-function shouldEvaluateHumanLogFrame(
+export function shouldEvaluateHumanLogFrame(
   mode: RuntimeSettings['humanLogCaptureMode'],
   traces: readonly CnsRuntimeTrace[],
 ): boolean {
+  if (mode === 'state-transition') {
+    return traces.some((trace) => trace.stateNo !== trace.afterStateNo);
+  }
   if (mode !== 'controller-activated') return true;
   return traces.some((trace) => trace.executedControllers.some((name) => !name.startsWith('dbg ')));
 }

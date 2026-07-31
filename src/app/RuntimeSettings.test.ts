@@ -56,6 +56,52 @@ describe('Practice Mode setting', () => {
   });
 });
 
+describe('Screen size setting', () => {
+  it('uses the 800x480 extended viewport for new, legacy, and invalid settings', () => {
+    expect(DEFAULT_RUNTIME_SETTINGS.screenSizeMode).toBe('winmugen-800x480');
+    expect(normalizeRuntimeSettings({ roundTime: 20 }).screenSizeMode).toBe('winmugen-800x480');
+    expect(normalizeRuntimeSettings({ screenSizeMode: 'winmugen-320x240' }).screenSizeMode).toBe('winmugen-800x480');
+    expect(normalizeRuntimeSettings({ screenSizeMode: 'winmugen-640x480' }).screenSizeMode).toBe('winmugen-800x480');
+    expect(normalizeRuntimeSettings({ screenSizeMode: 'invalid' }).screenSizeMode).toBe('winmugen-800x480');
+  });
+
+  it('preserves the exact classic 640x480 alternative', () => {
+    expect(normalizeRuntimeSettings({ screenSizeMode: 'winmugen-classic-640x480' }).screenSizeMode).toBe('winmugen-classic-640x480');
+  });
+
+  it('persists the wide screen alternative', () => {
+    let stored: string | null = null;
+    const storage = {
+      getItem: () => stored,
+      setItem: (_key: string, value: string) => { stored = value; },
+    };
+    saveRuntimeSettings({ ...DEFAULT_RUNTIME_SETTINGS, screenSizeMode: 'wide-960x540' }, storage);
+    expect(loadRuntimeSettings(storage).screenSizeMode).toBe('wide-960x540');
+  });
+});
+
+describe('HUD and stage appearance settings', () => {
+  it('defaults themes independently and keeps the bundled stage ZIP path', () => {
+    expect(normalizeRuntimeSettings({})).toMatchObject({
+      hudTheme: 'fresh',
+      stageTheme: 'fresh',
+      stageArchivePath: '/stages/material-22-archive.zip',
+    });
+  });
+
+  it('normalizes independent cyber HUD and external stage selection', () => {
+    expect(normalizeRuntimeSettings({
+      hudTheme: 'cyber',
+      stageTheme: 'external',
+      stageArchivePath: ' /stages/custom.zip ',
+    })).toMatchObject({
+      hudTheme: 'cyber',
+      stageTheme: 'external',
+      stageArchivePath: '/stages/custom.zip',
+    });
+  });
+});
+
 describe('Issue #75 debug and logging settings', () => {
   it('defaults all four settings to OFF for new, legacy, and invalid data', () => {
     expect(DEFAULT_RUNTIME_SETTINGS).toMatchObject({
@@ -85,7 +131,7 @@ describe('Issue #75 debug and logging settings', () => {
     });
   });
 
-  it.each(['all-frames', 'trigger-changes', 'controller-activated'] as const)('persists human log mode %s', (humanLogCaptureMode) => {
+  it.each(['all-frames', 'trigger-changes', 'state-transition', 'controller-activated'] as const)('persists human log mode %s', (humanLogCaptureMode) => {
     let stored: string | null = null;
     const storage = {
       getItem: () => stored,

@@ -14,7 +14,7 @@ describe('BGPalFX runtime', () => {
       ownerEntityId: 1,
     }]);
 
-    expect(resolveBgPalFxFilter(result.bgPalFx)).toBe('grayscale(1) brightness(0) invert(1)');
+    expect(resolveBgPalFxFilter(result.bgPalFx)).toBe('invert(1) grayscale(1) brightness(0)');
     expect(stepBgPalFx(result.bgPalFx)).toMatchObject({ remainingTime: 19, elapsedTime: 1 });
     let effect = result.bgPalFx;
     for (let frame = 0; frame < 20; frame += 1) effect = stepBgPalFx(effect);

@@ -1,6 +1,6 @@
 # Physics Runtime
 
-Updated: 2026-07-11
+Updated: 2026-07-30
 
 This document describes the physics layer after CNS runtime has executed controllers for a frame.
 
@@ -62,7 +62,7 @@ Important interactions:
 
 - `VelSet` sets velocity before physics integrates position;
 - `VelAdd` and `VelMul` modify velocity before integration;
-- `PosSet` and `PosAdd` modify position directly;
+- `PosSet` assigns absolute stage coordinates after evaluating CNS expressions, while `PosAdd` adds a Facing-relative X offset and an axis-space Y offset;
 - air physics may apply gravity;
 - ground checks may trigger landing state routes.
 
@@ -121,7 +121,7 @@ Issue #62 keeps KO and fall recovery as separate common-state routes. State 5150
 
 State 5110 get-up scheduling uses an independent counter loaded from the defender's `[Data] liedown.time`. It freezes during hitpause/Pause, does not depend on StateTime or `down.hittime`, and never schedules 5120 at zero Life. `raw.down_clock` exposes elapsed/duration/remaining and the advance/frozen/getup/ko_hold result.
 
-HitDef `pausetime = p1, p2` initializes separate attacker and defender counters. WinMUGEN defaults an omitted pair to `0,0`; `guard.pausetime` inherits that normal pair when omitted. While a counter is positive, CNS controllers, position, velocity integration, StateTime, and AnimTime are frozen; the physics step decrements the counter once per game frame. A counter of zero resumes normally without an extra frozen frame. Input buffering remains active outside this per-player freeze. Match-level Pause/SuperPause is separate: it freezes non-moving players and round/hit stepping, permits only the controller owner for `movetime`, and uses a resume guard before normal CNS execution restarts.
+HitDef `pausetime = p1, p2` initializes separate attacker and defender counters. WinMUGEN defaults an omitted pair to `0,0`; `guard.pausetime` inherits that normal pair when omitted. While a counter is positive, CNS controllers, position, velocity integration, StateTime, and AnimTime are frozen; the physics step decrements the counter once per game frame. HitPause is not collision immunity: an unpaused attacker with a different ActiveHitDef generation can still contact the frozen defender, while the generation/defender history rejects continued overlap from the already-consumed generation. A newly accepted contact keeps the longer remaining defender pause. A counter of zero resumes normally without an extra frozen frame. Input buffering remains active outside this per-player freeze. Match-level Pause/SuperPause is separate: it freezes non-moving players and round/hit stepping, permits only the controller owner for `movetime`, and uses a resume guard before normal CNS execution restarts.
 
 ## Movement debugging
 
@@ -156,7 +156,9 @@ Issue #57 removes the fixed 44x80 normal path. The runtime carries `[Size]` `gro
 
 Horizontal separation is applied only when both Size rectangles overlap vertically and horizontally. `PlayerPush = 0` disables separation for the frame in which the controller executes; it returns to enabled on the next CNS frame unless another `PlayerPush = 0` executes. Grounded neutral players (`MoveType = I`) automatically face the opponent unless `AssertSpecial noautoturn` is active for that tick. Attack and get-hit states preserve Facing, which prevents custom TargetBind carries such as bundled T-H-M-A State 3420 from flipping direction when the bound target is deliberately placed behind the attacker. Airborne players also preserve Facing through a cross-over; explicit `Turn`/`facep2` behavior still changes it.
 
-This remains Partial compatibility because dynamic `Width` controller overrides, camera-relative stage bounds, and broader multi-entity push behavior still need integration. `raw.push` records both resolved boxes, their Size source, overlap and skip/apply result; `raw.cross` records airborne status, each player's `noAutoTurn` value, and Facing changes. Canvas debug draws the same resolved push rectangle in blue.
+This remains Partial compatibility because dynamic `Width` controller overrides and broader multi-entity push behavior still need integration. After push and fallback stage clamping, the selected 320x240 or extended 400x240 viewport computes one shared camera. A root whose `ScreenBound value` is enabled is shifted horizontally until its Size-derived Push Box remains four logical pixels inside that camera; velocity is preserved. `value = 0` bypasses the correction. `raw.push` records both resolved boxes, their Size source, overlap and skip/apply result; `raw.cross` records airborne status, each player's `noAutoTurn` value, and Facing changes; `raw.camera` records the final origin and corrected players. Canvas debug draws the same resolved push rectangle in blue.
+
+Vertical camera motion uses the highest camera-enabled root as a quarter-strength jump target while retaining the lowest root near the floor whenever both axes fit in 240 logical pixels. This gives jumps visible stage movement without moving either player's Y physics coordinate. Exact Stage DEF `verticalfollow`, `floortension`, camera bounds/tension, and impossible spans taller than the viewport remain Partial.
 
 ## HitDef cornerpush and snap
 

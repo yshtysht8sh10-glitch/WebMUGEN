@@ -208,6 +208,62 @@ y = -2
     expect(result.traces[0].executedControllers).toEqual(['PosAdd']);
   });
 
+  it('evaluates redirected position expressions and applies PosAdd X relative to Facing', () => {
+    const cns = parseCnsText(`
+[Statedef 3110]
+type = A
+movetype = A
+physics = N
+ctrl = 0
+
+[State 3110, Turn]
+type = Turn
+trigger1 = Time = 0
+
+[State 3110, Match enemy position]
+type = PosSet
+trigger1 = Time = 1
+trigger1 = Enemy(0), Life > 0
+x = Enemy(0), Pos X
+y = Enemy(0), Pos Y
+
+[State 3110, Move behind]
+type = PosAdd
+trigger1 = Time = 2
+x = -5
+`);
+
+    const initial = createInitialGameState();
+    const atTimeZero = stepCnsStateRuntime({
+      ...initial,
+      players: [
+        { ...initial.players[0], stateNo: 3110, stateTime: 0, x: 200, y: 250, facing: 1 },
+        { ...initial.players[1], x: 500, y: 260, facing: -1 },
+      ],
+    }, cns);
+    expect(atTimeZero.state.players[0]).toMatchObject({ x: 200, y: 250, facing: -1 });
+
+    const atTimeOne = stepCnsStateRuntime({
+      ...atTimeZero.state,
+      players: [
+        { ...atTimeZero.state.players[0], stateTime: 1 },
+        atTimeZero.state.players[1],
+      ],
+    }, cns);
+    expect(atTimeOne.state.players[0]).toMatchObject({ x: 500, y: 260, facing: -1 });
+    expect(atTimeOne.traces[0].executedControllers).toEqual(['PosSet']);
+
+    const atTimeTwo = stepCnsStateRuntime({
+      ...atTimeOne.state,
+      players: [
+        { ...atTimeOne.state.players[0], stateTime: 2 },
+        atTimeOne.state.players[1],
+      ],
+    }, cns);
+    expect(atTimeTwo.state.players[0]).toMatchObject({ x: 505, y: 260, facing: -1 });
+    expect(atTimeTwo.traces[0].executedControllers).toEqual(['PosAdd']);
+  });
+
   it('maps WinMUGEN PosSet y=0 to the internal ground y', () => {
     const cns = parseCnsText(`
 [Statedef 101]

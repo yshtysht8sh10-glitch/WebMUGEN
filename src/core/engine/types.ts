@@ -385,6 +385,7 @@ export type HitEvent = {
 
 export type GameState = {
   frame: number;
+  camera?: { x: number; y: number; viewportWidth: number; viewportHeight: number };
   players: [PlayerState, PlayerState];
   projectiles: ProjectileState[];
   hitEvents: HitEvent[];

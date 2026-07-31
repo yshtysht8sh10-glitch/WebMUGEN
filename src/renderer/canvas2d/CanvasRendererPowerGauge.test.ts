@@ -17,9 +17,9 @@ describe('Issue #52 Canvas power gauge', () => {
     const firstDiagnostics = renderer.render(state);
     const unchangedDiagnostics = renderer.render(state);
 
-    expect(fillRect).toHaveBeenCalledWith(20, 342, 130, 8);
-    expect(fillRect).toHaveBeenCalledWith(555, 342, 65, 8);
-    expect(firstDiagnostics).toContain('raw.power_hud p1=4500/9000 width=130 p2=2250/9000 width=65 infinite=off');
+    expect(fillRect).toHaveBeenCalledWith(20, 37, 65, 8);
+    expect(fillRect).toHaveBeenCalledWith(587.5, 37, 32.5, 8);
+    expect(firstDiagnostics).toContain('raw.power_hud p1=4500/9000 width=65 p2=2250/9000 width=32.5 infinite=off');
     expect(unchangedDiagnostics.some((line) => line.startsWith('raw.power_hud'))).toBe(false);
   });
 
@@ -38,9 +38,9 @@ describe('Issue #52 Canvas power gauge', () => {
 
     const diagnostics = new CanvasRenderer(canvas).render(state);
 
-    expect(fillText).toHaveBeenCalledWith('∞', 284, 350);
-    expect(fillText).toHaveBeenCalledWith('∞', 344, 350);
-    expect(diagnostics).toContain('raw.power_hud p1=9000/9000 width=260 p2=9000/9000 width=260 infinite=both');
+    expect(fillText).toHaveBeenCalledWith('∞', 154, 45);
+    expect(fillText).toHaveBeenCalledWith('∞', 476, 45);
+    expect(diagnostics).toContain('raw.power_hud p1=9000/9000 width=130 p2=9000/9000 width=130 infinite=both');
   });
 
   it('centers both gauges symmetrically in the 960px app canvas', () => {
@@ -53,10 +53,26 @@ describe('Issue #52 Canvas power gauge', () => {
 
     new CanvasRenderer(canvas).render(createInitialGameState());
 
-    expect(fillRect).toHaveBeenCalledWith(180, 18, 260, 16);
-    expect(fillRect).toHaveBeenCalledWith(520, 18, 260, 16);
-    expect(fillRect).toHaveBeenCalledWith(180, 342, 260, 8);
-    expect(fillRect).toHaveBeenCalledWith(520, 342, 260, 8);
+    expect(fillRect).toHaveBeenCalledWith(178, 14, 264, 20);
+    expect(fillRect).toHaveBeenCalledWith(518, 14, 264, 20);
+    expect(fillRect).toHaveBeenCalledWith(178, 35, 134, 12);
+    expect(fillRect).toHaveBeenCalledWith(648, 35, 134, 12);
+  });
+
+  it('centers the classic 640px HUD inside the extended 800px canvas', () => {
+    const fillRect = vi.fn();
+    const context = {
+      clearRect: vi.fn(), save: vi.fn(), restore: vi.fn(), translate: vi.fn(), fillRect, strokeRect: vi.fn(),
+      beginPath: vi.fn(), arc: vi.fn(), ellipse: vi.fn(), fill: vi.fn(), fillText: vi.fn(), scale: vi.fn(), drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D;
+    const canvas = { width: 800, height: 480, getContext: () => context } as unknown as HTMLCanvasElement;
+
+    new CanvasRenderer(canvas).render(createInitialGameState());
+
+    expect(fillRect).toHaveBeenCalledWith(98, 14, 264, 20);
+    expect(fillRect).toHaveBeenCalledWith(438, 14, 264, 20);
+    expect(fillRect).toHaveBeenCalledWith(98, 35, 134, 12);
+    expect(fillRect).toHaveBeenCalledWith(568, 35, 134, 12);
   });
 
   it('suppresses life, power, and round HUD drawing when the system HUD toggle is off', () => {
@@ -70,6 +86,23 @@ describe('Issue #52 Canvas power gauge', () => {
     new CanvasRenderer(canvas).render(createInitialGameState(), undefined, undefined, undefined, { hudVisible: false });
 
     expect(fillRect).not.toHaveBeenCalledWith(180, 18, 260, 16);
-    expect(fillRect).not.toHaveBeenCalledWith(180, 342, 260, 8);
+    expect(fillRect).not.toHaveBeenCalledWith(180, 37, 130, 8);
+  });
+
+  it('draws the HUD before character sprites so gauges stay behind', () => {
+    const calls: string[] = [];
+    const context = {
+      clearRect: vi.fn(), save: vi.fn(), restore: vi.fn(), translate: vi.fn(),
+      fillRect: (x: number, y: number) => calls.push(x === 18 && y === 14 ? 'hud' : x < 0 || y < 0 ? 'character' : 'world'),
+      strokeRect: vi.fn(), beginPath: vi.fn(), arc: vi.fn(), ellipse: vi.fn(), fill: vi.fn(),
+      fillText: vi.fn(), scale: vi.fn(), drawImage: () => calls.push('sprite'),
+    } as unknown as CanvasRenderingContext2D;
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+
+    new CanvasRenderer(canvas).render(createInitialGameState());
+
+    expect(calls.indexOf('hud')).toBeGreaterThanOrEqual(0);
+    expect(calls.lastIndexOf('character')).toBeGreaterThanOrEqual(0);
+    expect(calls.indexOf('hud')).toBeLessThan(calls.lastIndexOf('character'));
   });
 });

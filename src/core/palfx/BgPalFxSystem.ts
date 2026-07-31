@@ -35,5 +35,5 @@ export function resolveBgPalFxFilter(state: BgPalFxState | undefined): string {
   const multiplier = Math.max(0, average(state.multiply) / 256);
   const brightness = Math.max(0, multiplier + additive);
   const grayscale = Math.min(1, Math.max(0, 1 - state.color / 256));
-  return `grayscale(${grayscale}) brightness(${brightness})${state.invertAll ? ' invert(1)' : ''}`;
+  return `${state.invertAll ? 'invert(1) ' : ''}grayscale(${grayscale}) brightness(${brightness})`;
 }

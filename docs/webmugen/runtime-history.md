@@ -1,6 +1,6 @@
 # Runtime History
 
-Updated: 2026-07-27
+Updated: 2026-07-30
 
 Runtime History is the persistent frame-by-frame diagnostic log shown in the Debug UI.
 
@@ -54,10 +54,11 @@ The old nested runtime-history subtabs were removed so runtime logs are availabl
 
 ## Human log retention modes
 
-The human-facing history has three selectable retention modes:
+The human-facing history has four selectable retention modes:
 
 - `Every frame`: retain every evaluated runtime frame.
 - `Trigger changes`: retain a frame only when a State-controller/trigger ON/OFF result changes. Display-only timestamps, frame/State time, evaluated trigger values, and evaluated controller parameters do not change the retention signature. Helper spawn/destruction does change it. This is the default.
+- `State transition`: retain a frame only when a root player or Helper trace changes from `stateNo` to a different `afterStateNo`. Same-State animation changes and Controller executions are omitted.
 - `Controller activated`: retain only frames where at least one non-debug State controller executes. Helper traces participate in this decision.
 
 The selected mode changes only the Human history sink. AI diagnostics and the lower-left lightweight state history keep their independent settings.
@@ -101,8 +102,7 @@ The human-facing runtime history uses a lightweight frame index plus a selected 
 - A frame is indexed whenever a human detail log is generated, even if StateNo did not change.
 - Clicking an index row loads exactly that frame's detail entry into the right pane.
 - New logs append to the index but do not replace the selected detail pane.
-- The selected detail pane uses P1, P2, and Helper tabs and renders one entity card at a time. Helper tabs are derived from both the selected frame index and retained detail logs, so an active Helper remains selectable and its own StateDef/controllers can be inspected. The selected-frame banner contains only timestamp and frame number; the entity card begins with the selected entity State and opposing root State instead of repeating the frame header.
-- `最新フレームを表示` loads the newest retained detail entry on demand.
+- The selected detail pane uses compact P1, P2, and Helper tabs and renders one thin-bordered entity panel at a time. Helper tabs are derived from both the selected frame index and retained detail logs, so an active Helper remains selectable and its own StateDef/controllers can be inspected. The selected-frame header is a plain timestamp/frame line. There is no separate latest-frame button or duplicated selected/opposing State summary. The entity panel begins with `StateDef + Time`, followed by an indented `Anim + StateDef parameters` child row; those badges provide the source-navigation context without repeating a `P1/P2 StateNo` metadata row. The compact panel hides `keys=`, but the retained/raw log keeps the input summary for pipeline diagnostics and copying.
 - The frame index can auto-scroll to the newest visible index row or stay in fully manual scrolling mode.
 - The visible index is capped separately from the retained store, so older retained frames can still be copied or loaded by frame when exposed through tooling.
 - Frame index rows visually distinguish state numbers and animation numbers so repeated-state failures can be scanned quickly.
@@ -161,7 +161,7 @@ Each controller activation also emits `raw.hitdef_parameters` with the evaluated
 
 `raw.hit_collision` records attacker/defender, ActiveHitDef id, both animation and element numbers, Clsn1/Clsn2 counts, overlapping attack/body box indexes, and an accepted/rejected reason. Missing ActiveHitDef, Clsn1, or Clsn2 rejects contact explicitly; the live path does not synthesize a fixed collision rectangle.
 
-Repeated overlap for an already recorded `(activeHitDefId, defenderId)` pair is rejected as `hitonce_already_consumed`. The record also carries HitDef `id`; every later execution of a HitDef controller creates a new generation and can hit again with the same or a different id. This is required by AnimElem-driven multihit States such as bundled T-H-M-A State 1016. With `hitonce = 1`, any successful target record for that generation rejects a different target as well.
+Repeated overlap for an already recorded `(activeHitDefId, defenderId)` pair is rejected as `hitonce_already_consumed`. The record also carries HitDef `id`; every later execution of a HitDef controller creates a new generation and can hit again with the same or a different id, including while the defender still has HitPause from the preceding generation. This is required by AnimElem-driven multihit States such as bundled T-H-M-A State 1016 and by the delayed State 3165 -> 3169 follow-up. Defender HitPause is therefore no longer reported as a collision miss reason. With `hitonce = 1`, any successful target record for that generation rejects a different target as well.
 
 `raw.hit_chain` records the current `id`, `chainid`, `nochainid`, defender's previous HitDef id for this attacker, `hitonce`, and the accepted/rejected reason (`no_constraint`, `chainid_match`, `chainid_mismatch`, or `nochainid_match`). The check occurs after confirmed Clsn overlap and before damage/guard resolution.
 
@@ -185,7 +185,7 @@ For air contact, `raw.hit_reaction` also records State 5020, the selected air an
 
 `raw.explod_step` records age, animation time/element, bind remainder and position for retained entries. Removal records `removetime_zero`, `removetime`, or `animtime_zero`; no later render/draw line is emitted for that internal id.
 
-Issue #34 extends `raw.explod_create` with the sampled random offset and `raw.explod_step` with position, resulting velocity/acceleration, and whether movement applied or was held by creation/binding. `raw.explod_draw` records scale, effective trans/alpha, `transSource=controller|air|default`, Canvas composite, ownpal, shadow, and explicit approximation limitations. Issue #81 uses `transSource=air` when an omitted or `default` Explod `trans` inherits the current AIR element's seventh-field blend value. Bare AIR `A` additionally reports `limitation=air_a_source_alpha_approximated` because Canvas uses 50% source alpha to preserve visible ghost transparency. `raw.explod_remove_on_gethit` identifies entries filtered after their owner receives an unguarded hit.
+Issue #34 extends `raw.explod_create` with the sampled random offset and `raw.explod_step` with position, resulting velocity/acceleration, and whether movement applied or was held by creation/binding. `raw.explod_draw` records scale, effective trans/alpha, `transSource=controller|air|default`, Canvas composite, ownpal, shadow, and explicit approximation limitations. Issue #81 uses `transSource=air` when an omitted or `default` Explod `trans` inherits the current AIR element's seventh-field blend value. Bare AIR `A` additionally reports `limitation=air_a_source_alpha_approximated` because Canvas uses 50% source alpha to preserve visible ghost transparency. AIR `S`/`sub` reports `composite=subtractive` after applying destination-color subtraction and no longer reports `subtractive_blend_unsupported`. `raw.explod_remove_on_gethit` identifies entries filtered after their owner receives an unguarded hit.
 
 `raw.explod_modify` records the owner, requested MUGEN id, number of exact owner/id matches, changed fields, and affected internal ids. Missing explicit ids use `reason=not_found`; omitted ids use `reason=id_missing`. The following same-frame `raw.explod_step`, `raw.explod_render`, and `raw.explod_draw` lines expose the resulting lifecycle, position, scale, priority, and ontop values.
 
@@ -195,7 +195,7 @@ Issue #34 extends `raw.explod_create` with the sampled random offset and `raw.ex
 
 `raw.hit_effect` records the Clsn overlap contact separately from the resolved `sparkPos` and `sparkSpace`. For HitDef sparks, `sparkPos` is absolute stage-space: X uses P2's P1-facing character `Size` edge plus `sparkxy.x`, and Y uses P1's root axis plus `sparkxy.y`. Subsequent `raw.explod_create`, `raw.explod_render`, and `raw.explod_draw` lines expose the unchanged world point, one camera conversion, and final AIR/SFF draw transform.
 
-`raw.global_pause` records Pause/SuperPause activation kind, owner, time, movetime, darken, and the continuing-audio policy. CNS traces use `global_pause skip` with the pause kind or `resume_guard`. Frozen Explods emit `raw.explod_step ... result=frozen` with the matching allowance; allowed ticks emit `raw.explod_pause` with allowance before/after values. When an active SuperPause has `darken = 1`, Canvas emits `raw.superpause_darken` with remaining time, opacity, and its `before_ontop` layer position.
+`raw.global_pause` records Pause/SuperPause activation kind, owner, time, movetime, darken, and the continuing-audio policy. CNS traces use `global_pause skip` with the pause kind or `resume_guard`. Frozen Explods emit `raw.explod_step ... result=frozen` with the matching allowance; allowed ticks emit `raw.explod_pause` with allowance before/after values. A negative indefinite allowance keeps the same before/after value and adds `mode=indefinite`. When an active SuperPause has `darken = 1`, Canvas emits `raw.superpause_darken` with remaining time, opacity, and its `before_ontop` layer position.
 
 `raw.helper event=spawn` records the evaluated Helper Size scale and separate Pause/SuperPause move-time allowances together with identity, ownership, State, Anim, and deferred first-step timing. `raw.render` includes the effective Helper draw scale.
 

@@ -33,6 +33,7 @@ export function resolveFallbackHits(
   diagnosticsEnabled = true,
   animationSnapshot?: GameState,
   enterOverrideState?: (player: PlayerState, opponent: PlayerState, stateNo: number) => PlayerState,
+  canEntityResolveHit: (entityId: number) => boolean = () => true,
 ): GameState {
   if (!airDocument) {
     return state;
@@ -50,9 +51,11 @@ export function resolveFallbackHits(
 
   const collisionP1 = withSnapshotAnimation(p1, animationSnapshot?.players[0]);
   const collisionP2 = withSnapshotAnimation(p2, animationSnapshot?.players[1]);
-  const p1Attack = getPlayerAttackBoxes(collisionP1, airDocument);
+  const p1CanResolveHit = canEntityResolveHit(p1.id);
+  const p2CanResolveHit = canEntityResolveHit(p2.id);
+  const p1Attack = p1CanResolveHit ? getPlayerAttackBoxes(collisionP1, airDocument) : [];
   const p1Body = getPlayerBodyBoxes(collisionP1, airDocument);
-  const p2Attack = getPlayerAttackBoxes(collisionP2, airDocument);
+  const p2Attack = p2CanResolveHit ? getPlayerAttackBoxes(collisionP2, airDocument) : [];
   const p2Body = getPlayerBodyBoxes(collisionP2, airDocument);
 
   const p1Reversal = resolveReversal(p1, p2, p1Attack, p2Attack, diagnosticsEnabled);
@@ -75,11 +78,11 @@ export function resolveFallbackHits(
 
   const originalP1 = p1;
   const originalP2 = p2;
-  const p1Result = resolveAttack(originalP1, originalP2, p1Attack, p2Body, airDocument, diagnosticsEnabled, priority.p1, enterOverrideState);
+  const p1Result = resolveAttack(originalP1, originalP2, p1Attack, p2Body, airDocument, diagnosticsEnabled, priority.p1, enterOverrideState, p1CanResolveHit);
   hitDiagnosticLines.push(...p1Result.diagnosticLines);
   if (p1Result.hitEvent) hitEvents.push(p1Result.hitEvent);
 
-  const p2Result = resolveAttack(originalP2, originalP1, p2Attack, p1Body, airDocument, diagnosticsEnabled, priority.p2, enterOverrideState);
+  const p2Result = resolveAttack(originalP2, originalP1, p2Attack, p1Body, airDocument, diagnosticsEnabled, priority.p2, enterOverrideState, p2CanResolveHit);
   hitDiagnosticLines.push(...p2Result.diagnosticLines);
   if (p2Result.hitEvent) hitEvents.push(p2Result.hitEvent);
 
@@ -93,15 +96,17 @@ export function resolveFallbackHits(
     const collisionAttacker = withSnapshotAnimation(attacker, snapshotHelper);
     const snapshotTarget = helper.rootEntityId === 1 ? animationSnapshot?.players[1] : animationSnapshot?.players[0];
     const collisionTarget = withSnapshotAnimation(target, snapshotTarget);
+    const helperCanResolveHit = canEntityResolveHit(helper.entityId);
     const result = resolveAttack(
       attacker,
       target,
-      getPlayerAttackBoxes(collisionAttacker, airDocument),
+      helperCanResolveHit ? getPlayerAttackBoxes(collisionAttacker, airDocument) : [],
       getPlayerBodyBoxes(collisionTarget, airDocument),
       airDocument,
       diagnosticsEnabled,
       undefined,
       enterOverrideState,
+      helperCanResolveHit,
     );
     hitDiagnosticLines.push(...result.diagnosticLines);
     if (result.hitEvent || result.contactApplied) {
@@ -133,8 +138,16 @@ function resolveAttack(
   diagnosticsEnabled: boolean,
   priorityDecision: PriorityDecision = { allowed: true, reason: 'no_clash', own: 4, opponent: 4, ownType: 'Hit', opponentType: 'Hit' },
   enterOverrideState?: (player: PlayerState, opponent: PlayerState, stateNo: number) => PlayerState,
+  canResolveHit = true,
 ): { attacker: PlayerState; target: PlayerState; hitEvent: HitEvent | null; diagnosticLines: string[]; contactApplied?: boolean } {
   const diagnosticLines: string[] = [];
+  if (!canResolveHit) {
+    if (diagnosticsEnabled && attacker.activeHitDef) diagnosticLines.push(
+      `raw.hit_collision attacker=p${attacker.id} target=p${target.id}`,
+      `  activeHitDefId=${attacker.activeHitDef.diagnosticId ?? 'none'} result=rejected reason=global_pause_frozen`,
+    );
+    return { attacker, target, hitEvent: null, diagnosticLines };
+  }
   if (attacker.moveType !== 'A' || attacker.hitPause > 0) {
     return { attacker, target, hitEvent: null, diagnosticLines };
   }
@@ -169,11 +182,11 @@ function resolveAttack(
     return { attacker, target, hitEvent: null, diagnosticLines };
   }
 
-  if (!collided || target.hitPause > 0) {
+  if (!collided) {
     if (diagnosticsEnabled && activeHitDefId !== null && !active?.missLogged) {
       diagnosticLines.push(
         `raw.hit_collision attacker=p${attacker.id} target=p${target.id}`,
-        `${collisionHeader} overlap=${formatOverlap(overlap)} damage=${damage},${guardDamage} source=${source} result=miss reason=${target.hitPause > 0 ? 'target_hitpause' : 'clsn_no_overlap'}`,
+        `${collisionHeader} overlap=${formatOverlap(overlap)} damage=${damage},${guardDamage} source=${source} result=miss reason=clsn_no_overlap`,
       );
       attacker = { ...attacker, activeHitDef: active ? { ...active, missLogged: true } : active };
     }
@@ -536,7 +549,6 @@ function isPriorityCandidate(
   const alreadyConsumed = active ? hasConsumedHitTarget(attacker, target, active) : false;
   return attacker.moveType === 'A'
     && attacker.hitPause <= 0
-    && target.hitPause <= 0
     && Boolean(attacker.activeHitDef)
     && !alreadyConsumed
     && findOverlap(attackBoxes, bodyBoxes) !== null

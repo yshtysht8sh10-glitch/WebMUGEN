@@ -24,6 +24,16 @@ vel = 1, 0
 removetime = -1
 pausemovetime = 1
 
+[State 940, Indefinite pause Explod]
+type = Explod
+trigger1 = time = 0
+anim = 100
+id = 112
+bindtime = 0
+vel = 1, 0
+removetime = -1
+pausemovetime = -1
+
 [State 940, Sound on pause frame]
 type = PlaySnd
 trigger1 = time = 0
@@ -58,6 +68,15 @@ id = 121
 bindtime = 0
 removetime = -1
 supermovetime = 1
+
+[State 941, Indefinite super Explod]
+type = Explod
+trigger1 = time = 0
+anim = 100
+id = 122
+bindtime = 0
+removetime = -1
+supermovetime = -1
 
 [State 941, SuperPause two ticks]
 type = SuperPause

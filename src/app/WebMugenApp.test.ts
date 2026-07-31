@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { MutableRefObject } from 'react';
 import type { CnsRuntimeTrace } from '../core/cns/CnsStateRuntime';
-import { AudioStartOverlay, CHARACTER_PATH_OPTIONS, CharacterSourceFilesViewer, HumanRuntimePanel, ManualPanel, RuntimeFrameIndexList, RuntimeSettingsPanel, WebMugenApp, appendRuntimeHistoryIfNeeded, createActPreviewImage, createReadableRuntimeTriggerChangeSignature, createRuntimeFrameIndexGridTemplate, createSourceOutline, drawAirPreview, findAirActionForLine, findAirActionSourceSelection, formatSatisfiedStateDefTriggers, parseControllerValueText, stripReadableRuntimeValueSummaries } from './WebMugenApp';
+import { AudioStartOverlay, CHARACTER_PATH_OPTIONS, CharacterSourceEditorLines, CharacterSourceFilesViewer, HumanRuntimePanel, ManualPanel, RuntimeFrameIndexList, RuntimeSettingsPanel, WebMugenApp, appendRuntimeHistoryIfNeeded, appendSourceViewHistory, createActPreviewImage, createReadableRuntimeTriggerChangeSignature, createRuntimeFrameIndexGridTemplate, createSourceNavigationTargets, createSourceOutline, createSourceViewHistoryEntry, drawAirPreview, findAirActionForLine, findAirActionSourceSelection, findStateDefSourceSelection, formatSatisfiedStateDefTriggers, parseControllerValueText, shouldEvaluateHumanLogFrame, stripReadableRuntimeValueSummaries } from './WebMugenApp';
 import { DEFAULT_RUNTIME_SETTINGS } from './RuntimeSettings';
 import type { ImageDataSpritePack } from '../core/sprite/ImageDataSpriteTypes';
 import { parseCnsText } from '../parser/cns/CnsParser';
@@ -25,9 +25,10 @@ describe('WebMugenApp runtime history', () => {
     expect(html).toContain('type="checkbox"');
     expect(html).toContain('Automatically follow latest log');
     expect(html).not.toContain('Switch to manual');
-    expect(html).toContain('<span>State</span>');
-    expect(html).toContain('<span>Anim</span>');
-    expect(html).toContain('<span>State2</span>');
+    expect(html).toContain('<span>P1 State</span>');
+    expect(html).toContain('<span>P1 Anim</span>');
+    expect(html).toContain('<span>P2 State</span>');
+    expect(html).toContain('<span>P2 Anim</span>');
     expect(html.match(/class="runtime-frame-index-row/g)).toHaveLength(1);
     expect(html).not.toContain('runtime-frame-helper-row');
     expect(html).toContain('H5504');
@@ -71,13 +72,13 @@ describe('WebMugenApp runtime history', () => {
       onSelectFrame: () => undefined,
       autoScrollIndex: true,
       onToggleAutoScrollIndex: () => undefined,
-      onShowLatest: () => undefined,
       onOpenAnimationSource: () => undefined,
       onOpenCnsSource: () => undefined,
       onCaptureModeChange: () => undefined,
     }));
 
     expect(html.match(/role="separator"/g)).toHaveLength(1);
+    expect(html).toContain('<option value="state-transition">StateNo changed</option>');
     expect(html).toContain('Detail log entities');
     expect(html).toContain('role="tablist"');
     expect(html).toContain('role="tab" type="button">H5504</button>');
@@ -88,6 +89,19 @@ describe('WebMugenApp runtime history', () => {
     expect(html.indexOf('Anim=191')).toBeLessThan(html.indexOf('Time=79'));
     expect(html).toContain('<span>--:--:--</span><strong>f=10</strong>');
     expect(html).not.toContain('selected frame=10 P1 state=191 P2 state=0');
+  });
+
+  it('retains only frames containing a root or Helper StateNo transition in state-transition mode', () => {
+    expect(shouldEvaluateHumanLogFrame('state-transition', [
+      createTrace({ playerId: 1, stateNo: 0, afterStateNo: 0 }),
+      createTrace({ playerId: 2, stateNo: 20, afterStateNo: 20 }),
+    ])).toBe(false);
+    expect(shouldEvaluateHumanLogFrame('state-transition', [
+      createTrace({ playerId: 2, stateNo: 0, afterStateNo: 3110 }),
+    ])).toBe(true);
+    expect(shouldEvaluateHumanLogFrame('state-transition', [
+      createTrace({ playerId: 1, entityId: 3, stateNo: 5504, afterStateNo: 5506 }),
+    ])).toBe(true);
   });
 
   it('shows a Helper tab from the selected frame even before its detail text is available', () => {
@@ -105,7 +119,6 @@ describe('WebMugenApp runtime history', () => {
       onSelectFrame: () => undefined,
       autoScrollIndex: true,
       onToggleAutoScrollIndex: () => undefined,
-      onShowLatest: () => undefined,
       onOpenCnsSource: () => undefined,
       onCaptureModeChange: () => undefined,
     }));
@@ -130,6 +143,7 @@ describe('WebMugenApp runtime history', () => {
           'STATEDEF_PARAM `type = S`',
           'STATEDEF_PARAM `physics = S`',
           'STATEDEF_PARAM `sprpriority = 0`',
+          'keys=-',
           '**HitDef** | ACTIVE | value raw=`1` evaluated=1 @ demo.cns:8',
           '  OK `trigger1=Time = 0`',
           'PARAM `hitsound = s630, 0`',
@@ -139,15 +153,20 @@ describe('WebMugenApp runtime history', () => {
       onSelectFrame: () => undefined,
       autoScrollIndex: true,
       onToggleAutoScrollIndex: () => undefined,
-      onShowLatest: () => undefined,
       onOpenAnimationSource: () => undefined,
       onOpenCnsSource: () => undefined,
       onCaptureModeChange: () => undefined,
     }));
 
     expect(html).toContain('<span>20:21:13</span><strong>f=343</strong>');
-    expect(html).toContain('<strong>state=0</strong><span>P2 state=0</span>');
+    expect(html).not.toContain('state=0</strong>');
+    expect(html).not.toContain('Show Latest Frame');
     expect(html).not.toContain('frame=343 state=0');
+    expect(html).toContain('StateDef 0</button><span class="readable-statedef-time">Time=0</span>');
+    expect(html).toContain('>Anim=0</button>');
+    expect(html).not.toContain('>P1 </span>');
+    expect(html).not.toContain('StateNo=0</button>');
+    expect(html).not.toContain('keys=-');
     expect(html).toContain('▼ parameters (3)');
     expect(html).toContain('▼ triggers (1)');
     expect(html).toContain('▼ parameters (2)');
@@ -185,6 +204,12 @@ describe('WebMugenApp runtime history', () => {
     expect(settingsHtml).toContain('When trigger ON/OFF changes');
     expect(settingsHtml).toContain('aria-label="Practice Mode"');
     expect(settingsHtml).toContain('Recover at 0 life and remove the round time limit.');
+    expect(settingsHtml).toContain('aria-label="Logical screen size"');
+    expect(settingsHtml).toContain('Extended Hi-Res 800×480 (400×240 coordinates)');
+    expect(settingsHtml).toContain('WinMUGEN Classic 640×480 (320×240 coordinates)');
+    expect(settingsHtml).toContain('Wide 960×540 (16:9)');
+    const appHtml = renderToStaticMarkup(createElement(WebMugenApp, { initialPage: 'play' }));
+    expect(appHtml).toContain('width="800" height="480"');
   });
 
   it('keeps the game panel mounted while leaving hidden static and Settings content unmounted', () => {
@@ -296,7 +321,8 @@ describe('WebMugenApp runtime history', () => {
     expect(html).toContain('>Edit<');
     expect(html).toContain('>Save<');
     expect(html).toContain('role="separator"');
-    expect(html.match(/role="separator"/g)?.length).toBe(3);
+    expect(html.match(/role="separator"/g)?.length).toBe(4);
+    expect(html).toContain('aria-label="Resize Map and View History"');
     expect(html).toContain('VS Code Dark 2026');
     expect(html).toContain('syntax-theme-vscode-dark-2026');
     expect(html).toContain('>Map<');
@@ -315,6 +341,69 @@ describe('WebMugenApp runtime history', () => {
     expect(textHtml).toContain('source-syntax-plain');
     expect(textHtml).toContain('ordinary notes');
     expect(textHtml).not.toContain('outline=-');
+  });
+
+  it('links constant Anim, ChangeState value, and stateno assignments while browsing', () => {
+    const cnsFile = {
+      path: 'Demo/Demo.cns', label: 'Demo.cns', kind: 'cns' as const, editable: true,
+      text: '[StateDef 100]\nanim = 103\n[State 100, Route]\ntype = ChangeState\nvalue = 3201\n[State 100, Helper]\ntype = Helper\nstateno = 3201\n[State 100, Animation]\ntype = ChangeAnim\nvalue = 103\n[StateDef 3201]\ntype = S',
+    };
+    const airFile = {
+      path: 'Demo/Demo.air', label: 'Demo.air', kind: 'air' as const, editable: true,
+      text: '[Begin Action 103]\n0,0,0,0,1',
+    };
+    const files = [cnsFile, airFile];
+    const targets = createSourceNavigationTargets(cnsFile, files);
+
+    expect(targets.get(2)).toMatchObject({ kind: 'animation', value: 103, selection: { path: 'Demo/Demo.air', line: 1 } });
+    expect(targets.get(5)).toMatchObject({ kind: 'state', value: 3201, selection: { path: 'Demo/Demo.cns', line: 12 } });
+    expect(targets.get(8)).toMatchObject({ kind: 'state', value: 3201, selection: { path: 'Demo/Demo.cns', line: 12 } });
+    expect(targets.get(11)).toMatchObject({ kind: 'animation', value: 103, selection: { path: 'Demo/Demo.air', line: 1 } });
+    expect(findStateDefSourceSelection(files, 3201, cnsFile.path)).toEqual({ path: 'Demo/Demo.cns', line: 12 });
+
+    const html = renderToStaticMarkup(createElement(CharacterSourceFilesViewer, {
+      files,
+      selection: { path: cnsFile.path, line: 1 },
+      onSelect: () => undefined,
+      onSave: async () => undefined,
+    }));
+    expect(html).toContain('title="Open Begin Action 103"');
+    expect(html.match(/title="Open Begin Action 103"/g)).toHaveLength(2);
+    expect(html.match(/title="Open StateDef 3201"/g)).toHaveLength(2);
+    expect(html).toContain('aria-label="Highlight line 1"');
+  });
+
+  it('deduplicates highlighted source locations in newest-first view history', () => {
+    const files = [{ path: 'Demo/Demo.cns', label: 'Demo.cns', kind: 'cns' as const, text: '[StateDef 100]\ntype = S' }];
+    const first = createSourceViewHistoryEntry(files, { path: 'Demo/Demo.cns', line: 1 });
+    const second = createSourceViewHistoryEntry(files, { path: 'Demo/Demo.cns', line: 2 });
+    expect(first).toMatchObject({ label: 'Demo.cns', line: 1, sourceLine: '[StateDef 100]' });
+    expect(second).not.toBeNull();
+
+    const history = appendSourceViewHistory(appendSourceViewHistory([first!], second!), first!);
+    expect(history.map((entry) => entry.line)).toEqual([1, 2]);
+
+    const html = renderToStaticMarkup(createElement(CharacterSourceFilesViewer, {
+      files,
+      history,
+      selection: { path: 'Demo/Demo.cns', line: 1 },
+      onSelect: () => undefined,
+    }));
+    expect(html).toContain('>View History<');
+    expect(html).toContain('Demo.cns:1');
+    expect(html).toContain('[StateDef 100]');
+  });
+
+  it('keeps visible line numbers in the editor highlight layer', () => {
+    const html = renderToStaticMarkup(createElement(CharacterSourceEditorLines, {
+      kind: 'cns',
+      path: 'Demo/Demo.cns',
+      source: 'type = ChangeState\nvalue = 3201',
+    }));
+
+    expect(html).toContain('data-line-number="1"');
+    expect(html).toContain('data-line-number="2"');
+    expect(html).not.toContain('character-source-navigation-link');
   });
 
   it('renders SFF sprite, registration, and applied palette metadata', () => {

@@ -321,7 +321,7 @@ function stepPlayer(
     playerPush: true,
     noAutoTurn: false,
     assertSpecialFlags: [],
-    screenBound: { value: true, moveCameraX: false, moveCameraY: false },
+    screenBound: { value: true, moveCameraX: true, moveCameraY: true },
     hitDiagnosticLines: [],
     juggleMax,
     juggleRemaining: resetJuggle ? juggleMax : player.juggleRemaining ?? juggleMax,
@@ -1203,10 +1203,10 @@ function executeController(
   if (type === 'velset') return velSet(player, opponent, controller, input, commands);
   if (type === 'veladd') return velAdd(player, opponent, controller, input, commands);
   if (type === 'velmul') return velMul(player, controller);
-  if (type === 'posset') return posSet(player, controller);
+  if (type === 'posset') return posSet(player, opponent, controller, input, commands);
   if (type === 'posfreeze') return withPlayer({ ...player, positionFrozen: (num(controller, 'value') ?? 1) !== 0 }, true, 'PosFreeze');
   if (type === 'gravity') return withPlayer({ ...player, vy: player.vy + readCnsConst(cns, 'movement.yaccel') }, true, 'Gravity');
-  if (type === 'posadd') return withPlayer({ ...player, x: player.x + (num(controller, 'x') ?? 0), y: player.y + (num(controller, 'y') ?? 0) }, hasNum(controller, 'x') || hasNum(controller, 'y'), 'PosAdd');
+  if (type === 'posadd') return posAdd(player, opponent, controller, input, commands);
   if (type === 'ctrlset') return setCtrl(player, controller);
   if (type === 'statetypeset') return stateTypeSet(player, controller);
   if (type === 'movetypeset') return moveTypeSet(player, controller);
@@ -1863,13 +1863,35 @@ function velAdd(
   );
 }
 
-function posSet(player: PlayerState, controller: CnsStateController): ControllerResult {
-  const x = num(controller, 'x');
-  const y = num(controller, 'y');
+function posSet(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const x = num(controller, 'x', player, input, commands, opponent);
+  const y = num(controller, 'y', player, input, commands, opponent);
   return withPlayer(
     { ...player, x: x ?? player.x, y: y === null ? player.y : mugenYToInternalY(y) },
     x !== null || y !== null,
     'PosSet',
+  );
+}
+
+function posAdd(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const x = num(controller, 'x', player, input, commands, opponent);
+  const y = num(controller, 'y', player, input, commands, opponent);
+  return withPlayer(
+    { ...player, x: player.x + (x ?? 0) * player.facing, y: player.y + (y ?? 0) },
+    x !== null || y !== null,
+    'PosAdd',
   );
 }
 
@@ -2231,10 +2253,7 @@ function createExplod(
   input: CnsRuntimeInput,
   commands?: ReadonlySet<string>,
 ): ControllerResult {
-  const owner: RuntimeEntityRef = {
-    entityId: input.entityContext?.entityId ?? player.id,
-    rootPlayerId: input.entityContext?.rootEntityId ?? player.id,
-  };
+  const owner = currentRuntimeEntityRef(player, input);
   const rawAnim = controller.params.anim;
   if (rawAnim === undefined) {
     input.onExplodCreate?.({ type: 'rejected', owner, reason: 'missing_anim', rawAnim: '' });
@@ -2259,7 +2278,7 @@ function createExplod(
   const random = pair(controller, 'random', player, input, commands, opponent, 0, 0);
   const facingParameter = normalizeExplodFacing(num(controller, 'facing', player, input, commands, opponent) ?? 1);
   const verticalFacing = normalizeExplodFacing(num(controller, 'vfacing', player, input, commands, opponent) ?? 1);
-  const resolved = resolveExplodOrigin(postype, player, opponent, offset.x, offset.y, input.screenWidth ?? 640);
+  const resolved = resolveExplodOrigin(postype, player, opponent, offset.x, offset.y, input.screenWidth ?? 640, owner.entityId);
   const facing = normalizeExplodFacing(resolved.baseFacing * facingParameter);
   const bindTime = Math.trunc(num(controller, 'bindtime', player, input, commands, opponent) ?? 1);
   const rawRemoveTime = num(controller, 'removetime', player, input, commands, opponent) ?? -2;
@@ -2310,7 +2329,7 @@ function modifyExplod(
   input: CnsRuntimeInput,
   commands?: ReadonlySet<string>,
 ): ControllerResult {
-  const owner: RuntimeEntityRef = { entityId: player.id, rootPlayerId: player.id };
+  const owner = currentRuntimeEntityRef(player, input);
   const patch: ExplodModifyPatch = {};
   const changedFields: string[] = [];
   const include = (field: string): void => { changedFields.push(field); };
@@ -2382,7 +2401,7 @@ function removeExplod(
   const requestedId = optionalNum(controller, 'id', player, input, commands, opponent);
   input.onExplodRemove?.({
     type: 'remove',
-    owner: { entityId: player.id, rootPlayerId: player.id },
+    owner: currentRuntimeEntityRef(player, input),
     mugenId: requestedId === null ? null : Math.trunc(requestedId),
   });
   return withPlayer(player, true, 'RemoveExplod');
@@ -2399,12 +2418,19 @@ function setExplodBindTime(
   const requestedTime = optionalNum(controller, 'time', player, input, commands, opponent);
   input.onExplodBindTime?.({
     type: 'bindtime',
-    owner: { entityId: player.id, rootPlayerId: player.id },
+    owner: currentRuntimeEntityRef(player, input),
     mugenId: requestedId === null ? null : Math.trunc(requestedId),
     time: requestedTime === null ? null : Math.trunc(requestedTime),
     screenWidth: input.screenWidth ?? 640,
   });
   return withPlayer(player, true, 'ExplodBindTime');
+}
+
+function currentRuntimeEntityRef(player: PlayerState, input: CnsRuntimeInput): RuntimeEntityRef {
+  return {
+    entityId: input.entityContext?.entityId ?? player.id,
+    rootPlayerId: input.entityContext?.rootEntityId ?? player.id,
+  };
 }
 
 function normalizeExplodPostype(value: string | null): ExplodPostype {

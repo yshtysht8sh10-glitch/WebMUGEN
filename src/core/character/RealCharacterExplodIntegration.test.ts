@@ -5,6 +5,7 @@ import { parseAirText } from '../../parser/air/AirParser';
 import { applyExplodCreateEvents, stepExplodRuntime, type ExplodCreateEvent } from '../explod/ExplodSystem';
 import { createInitialGameState } from '../engine/GameState';
 import { stepCnsStateRuntime } from '../cns/CnsStateRuntime';
+import { createInitialHelperState, spawnHelper } from '../helper/HelperSystem';
 
 describe('real character Explod production integration', () => {
   it('retains T-H-M-A State 3300 Explod pause allowances and State 3310 AfterImage parameters', async () => {
@@ -48,6 +49,59 @@ describe('real character Explod production integration', () => {
     const action = air.actions.find((candidate) => candidate.actionNo === 3301);
 
     expect(action?.elements[0]).toMatchObject({ groupNo: 999, imageNo: 6, duration: -1, flip: '', blend: 'A' });
+  });
+
+  it('retains T-H-M-A Action 10030 subtractive AIR blending used by State 3540', async () => {
+    const bytes = await readFile('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.air');
+    const air = parseAirText(new TextDecoder('shift_jis').decode(bytes));
+    const action = air.actions.find((candidate) => candidate.actionNo === 10030);
+
+    expect(action?.elements).toHaveLength(12);
+    expect(action?.elements.every((element) => element.blend === 'S')).toBe(true);
+  });
+
+  it('creates the T-H-M-A State 5400 Helper gauge with its parent-scaled dimensions', async () => {
+    const bytes = await readFile('public/chars/T-H-M-A/T-H-M-A/T-H-M-Atokusyudousa.cns');
+    const cns = parseCnsText(new TextDecoder('shift_jis').decode(bytes));
+    const initial = createInitialGameState();
+    const parent = { ...initial.players[0], fvars: { ...initial.players[0].fvars, 12: 2 } };
+    const helpers = spawnHelper(createInitialHelperState(), {
+      helperId: 5400,
+      rootEntityId: 1,
+      parentEntityId: 1,
+      ownerCharacterId: 1,
+      stateOwnerId: 1,
+      animationOwnerId: 1,
+      stateNo: 5400,
+      x: 120,
+      y: 0,
+      facing: 1,
+      keyCtrl: false,
+      ownPal: true,
+      spawnFrame: -1,
+      parent,
+    }, cns);
+    const events: ExplodCreateEvent[] = [];
+
+    const result = stepCnsStateRuntime({
+      ...initial,
+      players: [parent, initial.players[1]],
+      helpers,
+    }, cns, { onExplodCreate: (event) => events.push(event) });
+
+    const gauge = events.find((event) => event.type === 'create' && event.request.animNo === 11100);
+    expect(gauge).toMatchObject({
+      type: 'create',
+      request: {
+        mugenId: 11100,
+        owner: { entityId: 3, rootPlayerId: 1 },
+        postype: 'left',
+        position: { x: 123, y: 50 },
+        removeTime: 1,
+        render: { scaleX: 0.4, scaleY: 0.25 },
+      },
+    });
+    expect(result.traces.find((trace) => trace.entityId === 3)?.executedControllers).toContain('Explod');
   });
 
   it('creates KFM State 191 wood through CNS into GameState with evaluated coordinates', async () => {

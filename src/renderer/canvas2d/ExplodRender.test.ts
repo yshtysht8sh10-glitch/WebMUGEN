@@ -52,6 +52,17 @@ describe('Explod render resolution', () => {
 
     expect(getExplodsInDrawOrder(frames).map((frame) => frame.entry.runtimeId)).toEqual([2, 3, 1]);
   });
+
+  it('draws newer Explods first so the earlier-created Explod stays in front when sprpriority ties', () => {
+    const state = createInitialGameState();
+    state.explods.entries = [
+      entry({ runtimeId: 1, spritePriority: 7 }),
+      entry({ runtimeId: 2, spritePriority: 7 }),
+    ];
+    const frames = resolveExplodRenderFrames(state, { airDocument: air(100, 10, 0) }).frames;
+
+    expect(getExplodsInDrawOrder(frames).map((frame) => frame.entry.runtimeId)).toEqual([2, 1]);
+  });
 });
 
 function air(actionNo: number, groupNo: number, imageNo: number): AirDocument {

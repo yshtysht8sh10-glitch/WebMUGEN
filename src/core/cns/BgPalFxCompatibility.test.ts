@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { parseCnsText } from '../../parser/cns/CnsParser';
 import { createInitialGameState } from '../engine/GameState';
-import type { BgPalFxEvent } from '../palfx/BgPalFxSystem';
+import { applyBgPalFxEvents, resolveBgPalFxFilter, type BgPalFxEvent } from '../palfx/BgPalFxSystem';
 import { stepCnsStateRuntime } from './CnsStateRuntime';
 
 describe('BGPalFX controller compatibility', () => {
@@ -53,5 +53,26 @@ ignorehitpause=1
       invertAll: true,
       multiply: { red: 0, green: 0, blue: 0 },
     }));
+  });
+
+  it('applies production T-H-M-A State 3169 inversion before its zero multiplier', async () => {
+    const bytes = await readFile('public/chars/T-H-M-A/T-H-M-A/T-H-M-Atyouhi.cns');
+    const cns = parseCnsText(new TextDecoder('shift_jis').decode(bytes));
+    const initial = createInitialGameState();
+    const events: BgPalFxEvent[] = [];
+
+    stepCnsStateRuntime({
+      ...initial,
+      players: [{ ...initial.players[0], stateNo: 3169, stateTime: 0, animNo: 3169 }, initial.players[1]],
+    }, cns, { onBgPalFx: (event) => events.push(event) });
+
+    expect(events).toContainEqual(expect.objectContaining({
+      duration: 50,
+      color: 0,
+      invertAll: true,
+      multiply: { red: 0, green: 0, blue: 0 },
+    }));
+    const applied = applyBgPalFxEvents(initial, events);
+    expect(resolveBgPalFxFilter(applied.bgPalFx)).toBe('invert(1) grayscale(1) brightness(0)');
   });
 });
