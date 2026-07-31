@@ -76,16 +76,6 @@ function drawBar(
     ctx.fillRect(fillX, innerY, fillWidth, innerHeight);
   }
 
-  ctx.strokeStyle = '#1f4250';
-  ctx.lineWidth = 1;
-  for (let segment = 1; segment < 10; segment += 1) {
-    const segmentX = Math.round(innerX + innerWidth * segment / 10) + 0.5;
-    ctx.beginPath();
-    ctx.moveTo(segmentX, innerY);
-    ctx.lineTo(segmentX, innerY + innerHeight);
-    ctx.stroke();
-  }
-
   ctx.strokeStyle = '#f3fbfc';
   ctx.lineWidth = 1;
   roundedRect(ctx, x + 0.5, y + 0.5, width - 1, height - 1, 3);
