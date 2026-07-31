@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { WebMugenApp } from './WebMugenApp';
 import '../renderer/canvas2d/FreshStagePresentation';
+import '../renderer/canvas2d/CyberTrainingStagePresentation';
 import '../renderer/canvas2d/FreshLifeBarPresentation';
 import '../renderer/canvas2d/FreshPowerBarPresentation';
 import '../renderer/canvas2d/ResponsivePlayerPlacement';
