@@ -494,8 +494,15 @@ export class CanvasRenderer {
 
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 15px sans-serif';
-    if (p1.infinitePower) ctx.fillText('∞', 154 + offsetX, 45);
-    if (p2.infinitePower) ctx.fillText('∞', 476 + offsetX, 45);
+    ctx.textBaseline = 'middle';
+    if (p1.infinitePower) {
+      ctx.textAlign = 'right';
+      ctx.fillText('∞', 14 + offsetX, 41);
+    }
+    if (p2.infinitePower) {
+      ctx.textAlign = 'left';
+      ctx.fillText('∞', 626 + offsetX, 41);
+    }
 
     const p1Power = p1.power ?? 0;
     const p2Power = p2.power ?? 0;
