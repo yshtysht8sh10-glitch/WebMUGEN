@@ -108,16 +108,6 @@ function drawPowerBar(
     ctx.fillRect(fillX, innerY, fillWidth, innerHeight);
   }
 
-  ctx.strokeStyle = '#1f4250';
-  ctx.lineWidth = 1;
-  for (let segment = 1; segment < 6; segment += 1) {
-    const segmentX = Math.round(innerX + innerWidth * segment / 6) + 0.5;
-    ctx.beginPath();
-    ctx.moveTo(segmentX, innerY);
-    ctx.lineTo(segmentX, innerY + innerHeight);
-    ctx.stroke();
-  }
-
   ctx.restore();
 }
 
