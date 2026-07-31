@@ -8,9 +8,9 @@ export class RoundStateRenderer {
     const centerX = viewportWidth / 2;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = theme === 'cyber' ? 'rgba(2, 8, 23, 0.92)' : 'rgba(15, 23, 42, 0.82)';
+    ctx.fillStyle = theme === 'cyber' ? 'rgba(2, 8, 23, 0.92)' : '#18324f';
     ctx.fillRect(centerX - 46, 10, 92, 34);
-    ctx.strokeStyle = theme === 'cyber' ? '#22d3ee' : '#dbeafe';
+    ctx.strokeStyle = theme === 'cyber' ? '#22d3ee' : '#d8edf3';
     if (typeof ctx.strokeRect === 'function') ctx.strokeRect(centerX - 46.5, 9.5, 93, 35);
 
     ctx.fillStyle = theme === 'cyber' ? '#a5f3fc' : '#ffffff';
@@ -48,16 +48,24 @@ export class RoundStateRenderer {
 
   private drawScore(ctx: CanvasRenderingContext2D, score: RoundScore, viewportWidth: number, theme: HudTheme): void {
     const offsetX = (viewportWidth - 640) / 2;
-    ctx.fillStyle = theme === 'cyber' ? 'rgba(2, 8, 23, 0.82)' : 'rgba(30, 41, 59, 0.72)';
-    ctx.fillRect(20 + offsetX, 50, 120, 18);
-    ctx.fillRect(500 + offsetX, 50, 120, 18);
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '700 11px "Segoe UI", sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(`P1 WINS ${score.p1Wins}`, 30 + offsetX, 59);
-    ctx.textAlign = 'right';
-    ctx.fillText(`P2 WINS ${score.p2Wins}`, 610 + offsetX, 59);
+    if (theme === 'cyber') {
+      ctx.fillStyle = 'rgba(2, 8, 23, 0.82)';
+      ctx.fillRect(20 + offsetX, 50, 120, 18);
+      ctx.fillRect(500 + offsetX, 50, 120, 18);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '700 11px "Segoe UI", sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(`P1 WINS ${score.p1Wins}`, 30 + offsetX, 59);
+      ctx.textAlign = 'right';
+      ctx.fillText(`P2 WINS ${score.p2Wins}`, 610 + offsetX, 59);
+    } else {
+      ctx.fillStyle = 'rgba(23, 59, 74, 0.58)';
+      ctx.font = '600 9px "Segoe UI", sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(`P1 ${score.p1Wins}`, 28 + offsetX, 57);
+      ctx.textAlign = 'right';
+      ctx.fillText(`P2 ${score.p2Wins}`, 612 + offsetX, 57);
+    }
 
     if (score.draws > 0) {
       ctx.textAlign = 'center';
