@@ -33,7 +33,7 @@ prototype.drawStage = function drawEnhancedStage(
   const cameraOffsetY = 65 - cameraY;
   const horizonY = Math.min(viewportHeight * 0.6 + cameraOffsetY * 0.42, viewportHeight * 0.76);
   const stageGroundY = 285 - cameraY;
-  const visibleFloorTop = Math.max(viewportHeight * 0.78, stageGroundY - Math.max(18, viewportHeight * 0.045));
+  const floorTopY = Math.min(stageGroundY, viewportHeight * 0.78 + cameraOffsetY * 0.3);
   const parallaxX = cameraX * 0.08;
 
   const sky = ctx.createLinearGradient(0, 0, 0, horizonY);
@@ -64,60 +64,60 @@ prototype.drawStage = function drawEnhancedStage(
   drawMountains(ctx, viewportWidth, horizonY + 8, viewportHeight * 0.16, '#7da4bd', parallaxX * 0.22, 0.14);
   drawMountains(ctx, viewportWidth, horizonY + 22, viewportHeight * 0.21, '#496f78', parallaxX * 0.42, 0.39);
 
-  const haze = ctx.createLinearGradient(0, horizonY - 8, 0, visibleFloorTop);
+  const haze = ctx.createLinearGradient(0, horizonY - 8, 0, floorTopY);
   haze.addColorStop(0, 'rgba(240, 252, 255, 0.5)');
   haze.addColorStop(1, 'rgba(161, 198, 174, 0)');
   ctx.fillStyle = haze;
-  ctx.fillRect(0, horizonY - 8, viewportWidth, Math.max(0, visibleFloorTop - horizonY + 8));
+  ctx.fillRect(0, horizonY - 8, viewportWidth, Math.max(0, floorTopY - horizonY + 8));
 
-  const treeLineY = visibleFloorTop - Math.max(26, viewportHeight * 0.1);
+  const treeLineY = floorTopY - Math.max(24, viewportHeight * 0.09);
   ctx.fillStyle = '#2f6c46';
   ctx.beginPath();
-  ctx.moveTo(0, visibleFloorTop);
+  ctx.moveTo(0, floorTopY);
   for (let x = -30; x <= viewportWidth + 30; x += 18) {
     const shifted = x - parallaxX * 0.68;
-    const crown = treeLineY - positiveMod(Math.round(shifted * 13), 24);
+    const crown = treeLineY - positiveMod(Math.round(shifted * 13), 27);
     ctx.lineTo(x, crown + 8);
     ctx.lineTo(x + 7, crown - 5);
     ctx.lineTo(x + 13, crown + 5);
-    ctx.lineTo(x + 20, treeLineY + 4 - positiveMod(Math.round(shifted * 7), 15));
+    ctx.lineTo(x + 20, treeLineY + 4 - positiveMod(Math.round(shifted * 7), 17));
   }
-  ctx.lineTo(viewportWidth, visibleFloorTop);
+  ctx.lineTo(viewportWidth, floorTopY);
   ctx.closePath();
   ctx.fill();
 
-  const floor = ctx.createLinearGradient(0, visibleFloorTop, 0, viewportHeight);
-  floor.addColorStop(0, '#789a68');
-  floor.addColorStop(0.22, '#5f8057');
-  floor.addColorStop(1, '#36523b');
+  const floor = ctx.createLinearGradient(0, floorTopY, 0, viewportHeight);
+  floor.addColorStop(0, '#7ea56d');
+  floor.addColorStop(0.22, '#5d8358');
+  floor.addColorStop(1, '#2b4b35');
   ctx.fillStyle = floor;
-  ctx.fillRect(0, visibleFloorTop, viewportWidth, Math.max(0, viewportHeight - visibleFloorTop));
+  ctx.fillRect(0, floorTopY, viewportWidth, Math.max(0, viewportHeight - floorTopY));
 
-  ctx.fillStyle = '#b7d28f';
-  ctx.fillRect(0, visibleFloorTop, viewportWidth, 2);
-  ctx.fillStyle = '#426246';
-  ctx.fillRect(0, visibleFloorTop + 3, viewportWidth, 3);
+  ctx.fillStyle = 'rgba(225, 245, 191, 0.48)';
+  ctx.fillRect(0, floorTopY, viewportWidth, 2);
+  ctx.fillStyle = 'rgba(31, 64, 39, 0.32)';
+  ctx.fillRect(0, floorTopY + 4, viewportWidth, 3);
 
-  ctx.strokeStyle = 'rgba(222, 237, 211, 0.12)';
+  ctx.strokeStyle = 'rgba(232, 244, 220, 0.08)';
   ctx.lineWidth = 1;
-  for (let y = visibleFloorTop + 18; y < viewportHeight; y += 24) {
+  for (let y = floorTopY + 28; y < viewportHeight; y += 34) {
     ctx.beginPath();
     ctx.moveTo(0, y);
     ctx.lineTo(viewportWidth, y);
     ctx.stroke();
   }
-  for (let x = -viewportWidth; x < viewportWidth * 2; x += 72) {
+  for (let x = -viewportWidth; x < viewportWidth * 2; x += 92) {
     ctx.beginPath();
-    ctx.moveTo(viewportWidth / 2 - cameraX * 0.03, visibleFloorTop + 3);
+    ctx.moveTo(viewportWidth / 2 - cameraX * 0.03, floorTopY + 3);
     ctx.lineTo(x - cameraX * 0.16, viewportHeight);
     ctx.stroke();
   }
 
-  ctx.fillStyle = 'rgba(239, 246, 229, 0.08)';
-  const floorHeight = Math.max(1, viewportHeight - visibleFloorTop - 8);
-  for (let index = 0; index < 42; index += 1) {
+  ctx.fillStyle = 'rgba(241, 247, 229, 0.07)';
+  const floorHeight = Math.max(1, viewportHeight - floorTopY - 10);
+  for (let index = 0; index < 36; index += 1) {
     const x = positiveMod(index * 79 + 23 - Math.round(cameraX * 0.15), Math.max(1, Math.round(viewportWidth)));
-    const y = visibleFloorTop + 7 + positiveMod(index * 43 + 5, Math.max(1, Math.round(floorHeight)));
+    const y = floorTopY + 8 + positiveMod(index * 43 + 5, Math.max(1, Math.round(floorHeight)));
     ctx.fillRect(x, y, 1 + index % 2, 1);
   }
 
@@ -130,7 +130,7 @@ prototype.drawStage = function drawEnhancedStage(
     viewportWidth * 0.76,
   );
   vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
-  vignette.addColorStop(1, 'rgba(10, 38, 55, 0.09)');
+  vignette.addColorStop(1, 'rgba(10, 38, 55, 0.08)');
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, viewportWidth, viewportHeight);
 };
