@@ -12,6 +12,8 @@ type PowerBarDraw = (
 
 type PatchableRenderer = {
   drawPowerBars: PowerBarDraw;
+  lastPowerHudSignature?: string;
+  reportedInitialPower?: boolean;
 };
 
 const prototype = CanvasRenderer.prototype as unknown as PatchableRenderer;
@@ -34,8 +36,12 @@ prototype.drawPowerBars = function drawPolishedPowerBars(
   const y = 39;
   const width = 134;
   const height = 14;
-  const p1Ratio = clamp01((p1.power ?? 0) / Math.max(1, p1.powerMax ?? 3000));
-  const p2Ratio = clamp01((p2.power ?? 0) / Math.max(1, p2.powerMax ?? 3000));
+  const p1Power = p1.power ?? 0;
+  const p2Power = p2.power ?? 0;
+  const p1PowerMax = p1.powerMax ?? 3000;
+  const p2PowerMax = p2.powerMax ?? 3000;
+  const p1Ratio = clamp01(p1Power / Math.max(1, p1PowerMax));
+  const p2Ratio = clamp01(p2Power / Math.max(1, p2PowerMax));
 
   drawPowerBar(ctx, leftX, y, width, height, p1Ratio, 'left');
   drawPowerBar(ctx, rightX, y, width, height, p2Ratio, 'right');
@@ -50,8 +56,22 @@ prototype.drawPowerBars = function drawPolishedPowerBars(
   if (p2.infinitePower) ctx.fillText('∞', rightX - 7, y + height / 2);
   ctx.restore();
 
-  return originalDrawPowerBars.call(this, ctx, state, diagnosticsEnabled, viewportWidth, theme)
-    .filter((line) => line.startsWith('raw.power'));
+  if (!diagnosticsEnabled) return [];
+
+  const infiniteMode = p1.infinitePower && p2.infinitePower ? 'both' : p1.infinitePower ? 'p1' : p2.infinitePower ? 'p2' : 'off';
+  const signature = `${p1Power}/${p1PowerMax}|${p2Power}/${p2PowerMax}|${infiniteMode}`;
+  if (signature === this.lastPowerHudSignature) return [];
+  this.lastPowerHudSignature = signature;
+
+  const diagnostics = [`raw.power_hud p1=${p1Power}/${p1PowerMax} width=${126 * p1Ratio} p2=${p2Power}/${p2PowerMax} width=${126 * p2Ratio} infinite=${infiniteMode}`];
+  if (!this.reportedInitialPower) {
+    this.reportedInitialPower = true;
+    diagnostics.unshift(
+      `raw.power entity=p1 source=initial before=0 delta=${p1Power} after=${p1Power} max=${p1PowerMax}`,
+      `raw.power entity=p2 source=initial before=0 delta=${p2Power} after=${p2Power} max=${p2PowerMax}`,
+    );
+  }
+  return diagnostics;
 };
 
 function drawPowerBar(
