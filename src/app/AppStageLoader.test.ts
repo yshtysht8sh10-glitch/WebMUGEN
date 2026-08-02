@@ -38,7 +38,21 @@ describe('MUGEN stage ZIP loader', () => {
 
     const stage = await loadMugenStageZip('/stages/material-22-archive.zip');
 
-    expect(stage).toMatchObject({ name: 'Beach in summer A', hiRes: true, zOffset: 220 });
+    expect(stage).toMatchObject({
+      name: 'Beach in summer A',
+      hiRes: true,
+      zOffset: 220,
+      camera: {
+        startX: 0, startY: 0, boundLeft: -160, boundRight: 160,
+        boundHigh: -110, boundLow: 10, verticalFollow: 0.9, floorTension: 100, tension: 50,
+      },
+      playerInfo: {
+        p1StartX: -80, p1StartY: 0, p1Facing: 1,
+        p2StartX: 80, p2StartY: 0, p2Facing: -1,
+        leftBound: -1000, rightBound: 1000,
+      },
+      screenBound: { left: 15, right: 15 },
+    });
     expect(stage.layers).toEqual([
       expect.objectContaining({ groupNo: 0, imageNo: 1, startX: -640, startY: -220, deltaX: 2, deltaY: 2 }),
       expect.objectContaining({ groupNo: 0, imageNo: 0, startX: -640, startY: -220, deltaX: 2, deltaY: 2 }),

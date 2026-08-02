@@ -123,7 +123,9 @@ controllers and let the destination inherit the previous State's velocity for on
 bound position and the target receives the owner's current world velocity. After both root-player
 physics steps, active finite or indefinite binds reapply the owner's resulting position, Facing, and
 velocity. Stage clamp/push performs a final bind correction, then the selected WinMUGEN viewport
-updates its shared camera and applies horizontal ScreenBound correction before rendering. Expiry clears only the bind
+updates its shared camera and applies horizontal ScreenBound correction before rendering. External
+stages use their parsed DEF camera bounds/tension/vertical-follow settings and screen insets; built-in
+stages retain the fallback camera. Expiry clears only the bind
 metadata, leaving the last synchronized velocity in place; `TargetDrop` clears matching bind metadata.
 
 ## Controller execution flow

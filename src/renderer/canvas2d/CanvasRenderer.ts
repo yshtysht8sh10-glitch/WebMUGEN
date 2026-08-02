@@ -25,7 +25,12 @@ import {
   type ExplodRenderFrame,
 } from './ExplodRender';
 import { resolveBgPalFxFilter } from '../../core/palfx/BgPalFxSystem';
-import { resolveCanvasViewport, resolveViewportCamera } from '../../core/engine/ScreenSize';
+import {
+  MUGEN_GROUND_Y,
+  MUGEN_WORLD_ORIGIN_X,
+  resolveCanvasViewport,
+  resolveViewportCamera,
+} from '../../core/engine/ScreenSize';
 import type { HudTheme, StageTheme } from '../../app/RuntimeSettings';
 import type { MugenStage } from '../../core/stage/MugenStage';
 
@@ -268,6 +273,7 @@ export class CanvasRenderer {
     ctx.save();
     ctx.scale(scale, scale);
     const sourceViewportWidth = viewportWidth / scale;
+    const stageCamera = resolveStageCameraPosition({ viewportWidth, zOffset: stage.zOffset, cameraX, cameraY });
     for (const layer of stage.layers) {
       const sprite = stage.sprites.sprites.get(spriteKey(layer.groupNo, layer.imageNo));
       const image = this.imageDataSpriteRenderer.findCanvas(stage.sprites, layer.groupNo, layer.imageNo);
@@ -279,8 +285,8 @@ export class CanvasRenderer {
         startY: layer.startY,
         spriteAxisX: sprite.xAxis,
         spriteAxisY: sprite.yAxis,
-        cameraX: cameraX / scale,
-        cameraY: cameraY / scale,
+        cameraX: stageCamera.x,
+        cameraY: stageCamera.y,
         deltaX: layer.deltaX,
         deltaY: layer.deltaY,
       });
@@ -842,5 +848,17 @@ export function resolveStageLayerPosition(input: {
   return {
     x: input.viewportWidth / 2 + input.startX - input.spriteAxisX - input.cameraX * input.deltaX,
     y: input.zOffset + input.startY - input.spriteAxisY - input.cameraY * input.deltaY,
+  };
+}
+
+export function resolveStageCameraPosition(input: {
+  viewportWidth: number;
+  zOffset: number;
+  cameraX: number;
+  cameraY: number;
+}): { x: number; y: number } {
+  return {
+    x: input.cameraX + input.viewportWidth / 2 - MUGEN_WORLD_ORIGIN_X,
+    y: input.cameraY + input.zOffset - MUGEN_GROUND_Y,
   };
 }

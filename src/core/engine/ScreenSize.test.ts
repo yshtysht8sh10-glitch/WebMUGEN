@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialGameState } from './GameState';
 import { applyViewportCameraRules, getScreenSizeProfile, resolveCanvasViewport, resolveViewportCamera } from './ScreenSize';
+import type { MugenStage } from '../stage/MugenStage';
 
 describe('screen size profiles', () => {
   it('keeps 2x Hi-Res scaling while offering extended and classic horizontal viewports', () => {
@@ -69,4 +70,44 @@ describe('screen size profiles', () => {
     expect(next.players[0].x).toBe(48);
     expect(next.players[0].vx).toBe(0);
   });
+
+  it('maps an external Stage camera origin to the extended viewport center', () => {
+    const state = createInitialGameState(undefined, {}, [380, 580]);
+    const next = applyViewportCameraRules(state, 400, 240, beachStage());
+
+    expect(resolveViewportCamera(next, 400, 240)).toEqual({ x: 280, y: 65 });
+  });
+
+  it('uses Stage tension, horizontal bounds, and vertical follow', () => {
+    const state = createInitialGameState(undefined, {}, [380, 700]);
+    state.players[0] = { ...state.players[0], y: 125, stateType: 'A', physics: 'A' };
+    const next = applyViewportCameraRules(state, 400, 240, beachStage());
+
+    expect(resolveViewportCamera(next, 400, 240)).toEqual({ x: 350, y: 11 });
+
+    const beyond = createInitialGameState(undefined, {}, [380, 1000]);
+    const bounded = applyViewportCameraRules(beyond, 400, 240, beachStage());
+    expect(resolveViewportCamera(bounded, 400, 240).x).toBe(440);
+  });
 });
+
+function beachStage(): MugenStage {
+  return {
+    name: 'Beach in summer A',
+    defPath: 'Beach_in_summerA.def',
+    hiRes: true,
+    zOffset: 220,
+    camera: {
+      startX: 0, startY: 0, boundLeft: -160, boundRight: 160,
+      boundHigh: -110, boundLow: 10, verticalFollow: 0.9, floorTension: 100, tension: 50,
+    },
+    playerInfo: {
+      p1StartX: -80, p1StartY: 0, p1Facing: 1,
+      p2StartX: 80, p2StartY: 0, p2Facing: -1,
+      leftBound: -1000, rightBound: 1000,
+    },
+    screenBound: { left: 15, right: 15 },
+    sprites: { sprites: new Map() },
+    layers: [],
+  } as MugenStage;
+}

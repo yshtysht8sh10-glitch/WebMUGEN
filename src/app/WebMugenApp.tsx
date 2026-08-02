@@ -705,7 +705,12 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
 
           nextState = applyFallbackStageRules(nextState);
           const activeScreenProfile = getScreenSizeProfile(runtimeSettingsRef.current.screenSizeMode);
-          nextState = applyViewportCameraRules(nextState, activeScreenProfile.logicalWidth, activeScreenProfile.logicalHeight);
+          nextState = applyViewportCameraRules(
+            nextState,
+            activeScreenProfile.logicalWidth,
+            activeScreenProfile.logicalHeight,
+            loadedStage,
+          );
           if (!fightActive) {
             nextState = { ...nextState, hitEvents: [] };
           } else {

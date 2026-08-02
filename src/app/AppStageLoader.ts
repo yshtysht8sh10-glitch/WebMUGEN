@@ -43,11 +43,40 @@ export async function loadMugenStageZip(zipPath: string): Promise<MugenStage> {
   }
   if (layers.length === 0) throw new Error(`Stage DEF has no supported normal BG layers: ${defPath}`);
 
+  const camera = getDefSection(def, 'Camera');
+  const playerInfo = getDefSection(def, 'PlayerInfo');
+  const screenBound = getDefSection(def, 'Bound');
+
   return {
     name: getDefValue(def, 'Info', 'name') ?? defPath,
     defPath,
     hiRes: parseNumber(getDefSection(def, 'StageInfo')?.values.get('hires'), 0) !== 0,
     zOffset: parseNumber(getDefSection(def, 'StageInfo')?.values.get('zoffset'), 220),
+    camera: {
+      startX: parseNumber(camera?.values.get('startx'), 0),
+      startY: parseNumber(camera?.values.get('starty'), 0),
+      boundLeft: parseNumber(camera?.values.get('boundleft'), -160),
+      boundRight: parseNumber(camera?.values.get('boundright'), 160),
+      boundHigh: parseNumber(camera?.values.get('boundhigh'), -25),
+      boundLow: parseNumber(camera?.values.get('boundlow'), 0),
+      verticalFollow: parseNumber(camera?.values.get('verticalfollow'), 0.2),
+      floorTension: parseNumber(camera?.values.get('floortension'), 0),
+      tension: parseNumber(camera?.values.get('tension'), 50),
+    },
+    playerInfo: {
+      p1StartX: parseNumber(playerInfo?.values.get('p1startx'), -70),
+      p1StartY: parseNumber(playerInfo?.values.get('p1starty'), 0),
+      p1Facing: parseFacing(playerInfo?.values.get('p1facing'), 1),
+      p2StartX: parseNumber(playerInfo?.values.get('p2startx'), 70),
+      p2StartY: parseNumber(playerInfo?.values.get('p2starty'), 0),
+      p2Facing: parseFacing(playerInfo?.values.get('p2facing'), -1),
+      leftBound: parseNumber(playerInfo?.values.get('leftbound'), -1000),
+      rightBound: parseNumber(playerInfo?.values.get('rightbound'), 1000),
+    },
+    screenBound: {
+      left: parseNumber(screenBound?.values.get('screenleft'), 15),
+      right: parseNumber(screenBound?.values.get('screenright'), 15),
+    },
     sprites: convertSffV1ToImageDataSpritePack(toArrayBuffer(spriteBytes)),
     layers: layers.sort((left, right) => left.layerNo - right.layerNo),
   };
@@ -87,6 +116,10 @@ function parsePair(value: string | undefined): [number, number] | null {
 function parseNumber(value: string | undefined, fallback: number): number {
   const number = Number(value?.trim());
   return Number.isFinite(number) ? number : fallback;
+}
+
+function parseFacing(value: string | undefined, fallback: 1 | -1): 1 | -1 {
+  return parseNumber(value, fallback) < 0 ? -1 : 1;
 }
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {

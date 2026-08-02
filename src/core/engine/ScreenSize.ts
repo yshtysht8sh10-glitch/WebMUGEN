@@ -1,5 +1,9 @@
 import type { GameState } from './types';
 import { buildPushBox } from './FallbackStageRules';
+import type { MugenStage } from '../stage/MugenStage';
+
+export const MUGEN_WORLD_ORIGIN_X = 480;
+export const MUGEN_GROUND_Y = 285;
 
 export type ScreenSizeMode = 'winmugen-800x480' | 'winmugen-classic-640x480' | 'wide-960x540';
 
@@ -39,7 +43,7 @@ export function resolveViewportCamera(state: GameState, width: number, height: n
   return resolveDesiredCamera(state, width, height);
 }
 
-export function applyViewportCameraRules(state: GameState, width: number, height: number): GameState {
+export function applyViewportCameraRules(state: GameState, width: number, height: number, stage?: MugenStage | null): GameState {
   if ((width !== 320 && width !== 400) || height !== 240) {
     return { ...state, camera: { x: 0, y: 0, viewportWidth: width, viewportHeight: height } };
   }
@@ -47,12 +51,22 @@ export function applyViewportCameraRules(state: GameState, width: number, height
   let nextState = state;
   let clampedPlayers: string[] = [];
   for (let pass = 0; pass < 2; pass += 1) {
-    const camera = resolveDesiredCamera(nextState, width, height);
-    const result = keepPlayersInsideCamera(nextState, camera.x, width);
+    const camera = stage
+      ? resolveStageCamera(nextState, width, height, stage)
+      : resolveDesiredCamera(nextState, width, height);
+    const result = keepPlayersInsideCamera(
+      nextState,
+      camera.x,
+      width,
+      stage?.screenBound.left ?? 4,
+      stage?.screenBound.right ?? 4,
+    );
     nextState = { ...nextState, players: result.players };
     clampedPlayers = [...clampedPlayers, ...result.clampedPlayers];
   }
-  const camera = resolveDesiredCamera(nextState, width, height);
+  const camera = stage
+    ? resolveStageCamera(nextState, width, height, stage)
+    : resolveDesiredCamera(nextState, width, height);
   const uniqueClampedPlayers = [...new Set(clampedPlayers)];
   return {
     ...nextState,
@@ -61,6 +75,36 @@ export function applyViewportCameraRules(state: GameState, width: number, height
       ...(nextState.hitDiagnosticLines ?? []),
       `raw.camera viewport=${width}x${height} pos=(${formatNumber(camera.x)},${formatNumber(camera.y)}) clamped=${uniqueClampedPlayers.length > 0 ? uniqueClampedPlayers.join(',') : 'none'}`,
     ],
+  };
+}
+
+function resolveStageCamera(state: GameState, width: number, height: number, stage: MugenStage): { x: number; y: number } {
+  const xFollowers = state.players.filter((player) => player.screenBound?.moveCameraX !== false);
+  const yFollowers = state.players.filter((player) => player.screenBound?.moveCameraY !== false);
+  const xSources = xFollowers.length > 0 ? xFollowers : state.players;
+  const ySources = yFollowers.length > 0 ? yFollowers : state.players;
+  const previousStageX = state.camera?.viewportWidth === width && state.camera.viewportHeight === height
+    ? state.camera.x + width / 2 - MUGEN_WORLD_ORIGIN_X
+    : stage.camera.startX;
+  const minimumX = Math.min(...xSources.map((player) => player.x));
+  const maximumX = Math.max(...xSources.map((player) => player.x));
+  const tension = Math.max(0, Math.min(width / 2, stage.camera.tension));
+  let stageX = previousStageX;
+  let leftEdge = MUGEN_WORLD_ORIGIN_X + stageX - width / 2;
+  if (minimumX < leftEdge + tension) stageX -= leftEdge + tension - minimumX;
+  leftEdge = MUGEN_WORLD_ORIGIN_X + stageX - width / 2;
+  if (maximumX > leftEdge + width - tension) stageX += maximumX - (leftEdge + width - tension);
+  stageX = clamp(stageX, stage.camera.boundLeft, stage.camera.boundRight);
+
+  const highestY = Math.min(...ySources.map((player) => player.y));
+  const heightAboveFloor = Math.max(0, MUGEN_GROUND_Y - highestY);
+  const desiredStageY = heightAboveFloor > stage.camera.floorTension
+    ? stage.camera.startY - (heightAboveFloor - stage.camera.floorTension) * clamp(stage.camera.verticalFollow, 0, 1)
+    : stage.camera.startY;
+  const stageY = clamp(desiredStageY, stage.camera.boundHigh, stage.camera.boundLow);
+  return {
+    x: MUGEN_WORLD_ORIGIN_X + stageX - width / 2,
+    y: MUGEN_GROUND_Y - stage.zOffset + stageY,
   };
 }
 
@@ -84,9 +128,15 @@ function resolveDesiredCamera(state: GameState, width: number, height: number): 
   };
 }
 
-function keepPlayersInsideCamera(state: GameState, cameraX: number, width: number): { players: GameState['players']; clampedPlayers: string[] } {
-  const leftEdge = cameraX + 4;
-  const rightEdge = cameraX + width - 4;
+function keepPlayersInsideCamera(
+  state: GameState,
+  cameraX: number,
+  width: number,
+  leftInset: number,
+  rightInset: number,
+): { players: GameState['players']; clampedPlayers: string[] } {
+  const leftEdge = cameraX + Math.max(0, leftInset);
+  const rightEdge = cameraX + width - Math.max(0, rightInset);
   const clampedPlayers: string[] = [];
   const players = state.players.map((player) => {
     if (player.screenBound?.value === false) return player;
@@ -99,6 +149,10 @@ function keepPlayersInsideCamera(state: GameState, cameraX: number, width: numbe
     return { ...player, x: player.x + offsetX };
   }) as GameState['players'];
   return { players, clampedPlayers };
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.max(Math.min(minimum, maximum), Math.min(Math.max(minimum, maximum), value));
 }
 
 function formatNumber(value: number): string {

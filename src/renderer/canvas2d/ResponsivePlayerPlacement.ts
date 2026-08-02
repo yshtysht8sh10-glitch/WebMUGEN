@@ -62,21 +62,38 @@ prototype.render = function renderWithResponsiveFreshPlacement(
     return originalRender.call(this, state, hitFeedback, roundState, roundScore, options);
   }
 
-  const adjustedState: GameState = {
-    ...state,
+  const adjustedState = {
+    ...shiftFreshWorldVisuals(state, visualOffset),
     camera: { ...camera, viewportWidth: viewport.logicalWidth, viewportHeight: viewport.logicalHeight },
-    players: state.players.map((player) => shiftPlayer(player, visualOffset)) as GameState['players'],
+  };
+
+  return originalRender.call(this, adjustedState, hitFeedback ? shiftHitFeedback(hitFeedback, visualOffset) : undefined, roundState, roundScore, options);
+};
+
+export function shiftFreshWorldVisuals(state: GameState, offsetY: number): GameState {
+  return {
+    ...state,
+    players: state.players.map((player) => shiftPlayer(player, offsetY)) as GameState['players'],
     helpers: {
       ...state.helpers,
       entries: state.helpers.entries.map((helper) => ({
         ...helper,
-        player: shiftPlayer(helper.player, visualOffset),
+        player: shiftPlayer(helper.player, offsetY),
       })),
     },
+    projectiles: state.projectiles.map((projectile) => ({ ...projectile, y: projectile.y + offsetY })),
+    explods: {
+      ...state.explods,
+      entries: state.explods.entries.map((entry) => entry.coordinateSpace === 'stage'
+        ? { ...entry, position: { ...entry.position, y: entry.position.y + offsetY } }
+        : entry),
+    },
   };
+}
 
-  return originalRender.call(this, adjustedState, hitFeedback, roundState, roundScore, options);
-};
+function shiftHitFeedback(feedback: HitFeedbackState, offsetY: number): HitFeedbackState {
+  return { ...feedback, sparks: feedback.sparks.map((spark) => ({ ...spark, y: spark.y + offsetY })) };
+}
 
 function shiftPlayer(player: PlayerState, offsetY: number): PlayerState {
   return {
