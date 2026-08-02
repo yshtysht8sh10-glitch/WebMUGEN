@@ -6,13 +6,13 @@ This document defines how to maintain the WebMUGEN compatibility matrix.
 
 ## Source of truth
 
-`docs/webmugen/winmugen-compatibility-matrix.html` is the canonical checklist.
+`docs/webmugen/winmugen-compatibility-matrix.md` is the canonical row inventory and human-readable evidence checklist.
 
-`docs/webmugen/winmugen-compatibility-matrix.md` is the row inventory and human-readable evidence mirror. Every Markdown row stores the same explicit canonical status and progress shown by the HTML. The HTML reads that inventory for normal browser use and retains its audited fallback inventory so the checklist remains diagnosable if the mirror request fails.
+`docs/webmugen/winmugen-compatibility-matrix.html` is the browser viewer. It fetches and parses the Markdown inventory at runtime instead of embedding a second copy of every row. Every Markdown row stores the explicit canonical status, progress, and evidence shown by the HTML.
 
-Update both whenever compatibility behavior changes. When a row needs a special classification or progress value, update the HTML override table and the Markdown note together.
+Update the Markdown inventory whenever compatibility behavior changes. Update the HTML in the same work cycle only when viewer behavior, labels, filters, or presentation change.
 
-Run `npm run matrix:check` after every Matrix edit. Use `node scripts/compatibility-matrix.mjs --write` only to migrate legacy four-status rows; normal edits must state the seven-status value directly in both files.
+Run `npm run matrix:check` after every Matrix edit. `node scripts/compatibility-matrix.mjs --write` refreshes the Markdown status summary; normal edits must state the canonical status directly in the Markdown row.
 
 Trigger rows additionally carry Issue #82's six-way audit classification in
 their Meaning column. Run `npm run trigger:audit` after Trigger changes. Use

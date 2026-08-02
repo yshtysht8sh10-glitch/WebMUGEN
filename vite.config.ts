@@ -1,10 +1,11 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
-import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { closeSync, openSync, readFileSync, readSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import iconv from 'iconv-lite';
 import { unzipSync, zipSync } from 'fflate';
+import { calculateTestTimeoutMs } from './src/testing/TestTimeoutBudget';
 
 const virtualCharacterManifestId = 'virtual:webmugen-character-manifest';
 const resolvedVirtualCharacterManifestId = `\0${virtualCharacterManifestId}`;
@@ -12,6 +13,51 @@ const projectRoot = fileURLToPath(new URL('.', import.meta.url));
 const publicCharsRoot = resolve(projectRoot, 'public/chars');
 const characterFilesApiPath = '/__webmugen/character-files';
 const textExtensions = new Set(['.air', '.cns', '.cmd', '.def', '.zss', '.ini', '.json', '.md', '.txt', '.cfg', '.log']);
+const testTimeoutMs = calculateTestTimeoutMs({
+  dataCount: countSffImageEntries(publicCharsRoot),
+  testCount: countTestCases(resolve(projectRoot, 'src')),
+});
+
+function countSffImageEntries(directory: string): number {
+  let count = 0;
+  for (const filePath of listFilesRecursive(directory, (path) => path.toLowerCase().endsWith('.sff'))) {
+    const descriptor = openSync(filePath, 'r');
+    try {
+      const header = Buffer.alloc(24);
+      if (readSync(descriptor, header, 0, header.length, 0) !== header.length) continue;
+      if (!header.subarray(0, 11).equals(Buffer.from('ElecbyteSpr'))) continue;
+      count += Math.max(0, header.readInt32LE(20));
+    } finally {
+      closeSync(descriptor);
+    }
+  }
+  return count;
+}
+
+function countTestCases(directory: string): number {
+  let count = 0;
+  for (const filePath of listFilesRecursive(directory, (path) => path.endsWith('.test.ts') || path.endsWith('.test.tsx'))) {
+    const source = readFileSync(filePath, 'utf8');
+    count += source.match(/\b(?:it|test)(?:\.each\([^)]*\))?\s*\(/g)?.length ?? 0;
+  }
+  return count;
+}
+
+function listFilesRecursive(directory: string, include: (path: string) => boolean): string[] {
+  let entries;
+  try {
+    entries = readdirSync(directory, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const results: string[] = [];
+  for (const entry of entries) {
+    const absolutePath = join(directory, entry.name);
+    if (entry.isDirectory()) results.push(...listFilesRecursive(absolutePath, include));
+    else if (entry.isFile() && include(absolutePath)) results.push(absolutePath);
+  }
+  return results;
+}
 
 function scanCharacterPaths(): string[] {
   let entries: string[];
@@ -252,4 +298,7 @@ function sendJson(response: import('node:http').ServerResponse, status: number, 
 export default defineConfig({
   plugins: [webMugenCharacterManifestPlugin(), react()],
   base: './',
+  test: {
+    testTimeout: testTimeoutMs,
+  },
 });

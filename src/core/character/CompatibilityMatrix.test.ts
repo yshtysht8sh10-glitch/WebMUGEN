@@ -21,14 +21,21 @@ describe('WinMUGEN compatibility Matrix', () => {
     expect(markdown).not.toMatch(/^\| [^|]+ \| (Partial|Unsupported|Untested) \| [^|]+ \|$/m);
   });
 
-  it('renders the Markdown mirror with matching detailed badges and filters', () => {
+  it('renders the Markdown inventory with dynamic badges and filters', () => {
     const html = readFileSync('docs/webmugen/winmugen-compatibility-matrix.html', 'utf8');
-    for (const status of ['complete', 'partial', 'fallback', 'safe-noop', 'issue-ready', 'not-started', 'audit-needed']) {
-      expect(html).toContain(`value="${status}"`);
+    for (const status of ['complete', 'partial', 'fallback']) {
+      expect(html).toContain(`${status}:{`);
     }
-    expect(html).toContain("fetch('./winmugen-compatibility-matrix.md')");
-    expect(html).toContain("if(parsed.length!==8)");
+    for (const status of ['safe-noop', 'issue-ready', 'not-started', 'audit-needed', 'not-applicable']) {
+      expect(html).toContain(`'${status}':{`);
+    }
+    expect(html).toMatch(/fetch\('\.\/winmugen-compatibility-matrix\.md'/);
+    expect(html).toContain('sections=parse(md)');
+    expect(html).toContain('function kindOf(');
+    expect(html).toContain('function parse(');
+    expect(html).toContain('function render(');
     expect(html).toContain('class="progress"');
+    expect(html).not.toMatch(/\b(?:stateRows|headerRows|controllerRows|triggerRows)\b/);
     expect(html).not.toContain('s-unsupported');
     expect(html).not.toContain('s-untested');
   });

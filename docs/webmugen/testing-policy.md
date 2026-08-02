@@ -81,6 +81,17 @@ For game-screen checks, use Debug Overlay to compare:
 
 If the screen behavior and UnitTest result disagree, treat that as an integration bug and add a new test at the layer where the mismatch occurs.
 
+## Test timeout budget
+
+Vitest starts from twice its former five-second timeout. The configured timeout then grows in
+small steps from the number of SFF image entries under `public/chars` and the number of test cases
+under `src`. This keeps real-character conversion tests tolerant of expected corpus growth and
+parallel-suite contention without assigning arbitrary timeouts to individual characters.
+
+The configuration reads only each SFF header when counting image entries. A timeout increase is not
+evidence that a slow path is acceptable: real-character tests that exceed the calculated budget must
+still be profiled for repeated decoding, excessive allocation, or a stalled parser.
+
 ## External real-character regression
 
 The repository bundles fewer than three independent characters, so the optional `RealCharacterHitDefRegression.test.ts` suite accepts external `.def` paths through `WEBMUGEN_REAL_CHARACTER_DEFS`. It must be run with at least three structurally different WinMUGEN characters before a broad HitDef compatibility audit is considered complete. External character assets are not copied into the repository.
