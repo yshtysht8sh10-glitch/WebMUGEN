@@ -218,6 +218,20 @@ ground.velocity = ifelse(facing = 1, -4, 4), -2
     expect(doc.states[0].controllers[0].params['ground.velocity']).toEqual(['ifelse(facing = 1, -4, 4)', -2]);
   });
 
+  it('keeps a redirect comma inside the first component of a parameter pair', () => {
+    const doc = parseCnsText(`
+[StateDef 5400]
+type = S
+[State 5400, Gauge]
+type = Explod
+trigger1 = parent,fvar(12) < 5
+scale = 0.5-parent,fvar(12)/20, 0.25
+`);
+
+    expect(doc.states[0].controllers[0].triggers[0].expression).toBe('parent,fvar(12) < 5');
+    expect(doc.states[0].controllers[0].params.scale).toEqual(['0.5-parent,fvar(12)/20', 0.25]);
+  });
+
   it('records source file and line numbers when provided', () => {
     const doc = parseCnsText(`
 [StateDef 240]

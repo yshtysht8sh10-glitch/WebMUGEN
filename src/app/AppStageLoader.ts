@@ -1,0 +1,94 @@
+import { unzipSync } from 'fflate';
+import { convertSffV1ToImageDataSpritePack } from '../core/sprite/SffSpritePackConverter';
+import type { MugenStage, MugenStageLayer } from '../core/stage/MugenStage';
+import { getDefSection, getDefValue, parseDefText } from '../parser/def/DefParser';
+
+export async function loadMugenStageZip(zipPath: string): Promise<MugenStage> {
+  const response = await fetch(zipPath);
+  if (!response.ok) throw new Error(`Stage ZIP load failed: HTTP ${response.status}`);
+  const entries = unzipSync(new Uint8Array(await response.arrayBuffer()));
+  const files = new Map<string, Uint8Array>();
+  for (const [name, bytes] of Object.entries(entries)) {
+    if (!name.endsWith('/')) files.set(normalizePath(name), bytes);
+  }
+
+  const defPath = Array.from(files.keys())
+    .filter((path) => path.toLowerCase().endsWith('.def'))
+    .sort((left, right) => left.localeCompare(right))[0];
+  if (!defPath) throw new Error('Stage ZIP does not contain a DEF file.');
+  const def = parseDefText(decodeText(files.get(defPath)!));
+  const spriteName = getDefValue(def, 'BGDef', 'spr');
+  if (!spriteName) throw new Error(`Stage DEF has no BGDef spr: ${defPath}`);
+  const spritePath = resolveSibling(defPath, spriteName);
+  const spriteBytes = files.get(normalizePath(spritePath));
+  if (!spriteBytes) throw new Error(`Stage SFF is missing: ${spritePath}`);
+
+  const layers: MugenStageLayer[] = [];
+  for (const section of def.sections) {
+    if (!/^bg(?:\s|$)/i.test(section.name)) continue;
+    if ((section.values.get('type') ?? 'normal').trim().toLowerCase() !== 'normal') continue;
+    const spriteNo = parsePair(section.values.get('spriteno'));
+    if (!spriteNo) continue;
+    const start = parsePair(section.values.get('start')) ?? [0, 0];
+    const delta = parsePair(section.values.get('delta')) ?? [1, 1];
+    layers.push({
+      groupNo: spriteNo[0],
+      imageNo: spriteNo[1],
+      layerNo: parseNumber(section.values.get('layerno'), 0),
+      startX: start[0],
+      startY: start[1],
+      deltaX: delta[0],
+      deltaY: delta[1],
+    });
+  }
+  if (layers.length === 0) throw new Error(`Stage DEF has no supported normal BG layers: ${defPath}`);
+
+  return {
+    name: getDefValue(def, 'Info', 'name') ?? defPath,
+    defPath,
+    hiRes: parseNumber(getDefSection(def, 'StageInfo')?.values.get('hires'), 0) !== 0,
+    zOffset: parseNumber(getDefSection(def, 'StageInfo')?.values.get('zoffset'), 220),
+    sprites: convertSffV1ToImageDataSpritePack(toArrayBuffer(spriteBytes)),
+    layers: layers.sort((left, right) => left.layerNo - right.layerNo),
+  };
+}
+
+function decodeText(bytes: Uint8Array): string {
+  try {
+    return new TextDecoder('shift-jis').decode(bytes);
+  } catch {
+    return new TextDecoder().decode(bytes);
+  }
+}
+
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase();
+}
+
+function resolveSibling(basePath: string, relativePath: string): string {
+  const parts = basePath.replace(/\\/g, '/').split('/');
+  parts.pop();
+  for (const part of relativePath.replace(/\\/g, '/').split('/')) {
+    if (!part || part === '.') continue;
+    if (part === '..') parts.pop();
+    else parts.push(part);
+  }
+  return parts.join('/');
+}
+
+function parsePair(value: string | undefined): [number, number] | null {
+  if (!value) return null;
+  const values = value.split(',').map((part) => Number(part.trim()));
+  return values.length >= 2 && values.slice(0, 2).every(Number.isFinite)
+    ? [values[0], values[1]]
+    : null;
+}
+
+function parseNumber(value: string | undefined, fallback: number): number {
+  const number = Number(value?.trim());
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}

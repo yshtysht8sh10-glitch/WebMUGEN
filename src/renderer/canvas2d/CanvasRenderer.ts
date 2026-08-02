@@ -25,12 +25,16 @@ import {
   type ExplodRenderFrame,
 } from './ExplodRender';
 import { resolveBgPalFxFilter } from '../../core/palfx/BgPalFxSystem';
+import { resolveCanvasViewport, resolveViewportCamera } from '../../core/engine/ScreenSize';
+import type { HudTheme, StageTheme } from '../../app/RuntimeSettings';
+import type { MugenStage } from '../../core/stage/MugenStage';
 
 export class CanvasRenderer {
   private readonly context: CanvasRenderingContext2D;
   private readonly imageDataSpriteRenderer = new ImageDataSpriteRenderer();
   private readonly hitFeedbackRenderer = new HitFeedbackRenderer();
   private readonly roundStateRenderer = new RoundStateRenderer();
+  private subtractiveLayer: HTMLCanvasElement | null = null;
   private lastPowerHudSignature = '';
   private reportedInitialPower = false;
   private lastTimings = { normalMs: 0, debugMs: 0 };
@@ -46,10 +50,12 @@ export class CanvasRenderer {
     private readonly imageDataSpritePack?: ImageDataSpritePack | null,
     private readonly ownerAssets: Partial<Record<1 | 2, CharacterRenderAssets>> = {},
     private readonly fightFxAssets?: CharacterRenderAssets,
+    private readonly stage?: MugenStage | null,
   ) {
     const context = canvas.getContext('2d');
     if (!context) throw new Error('CanvasRenderingContext2D is not available.');
     this.context = context;
+    this.context.imageSmoothingEnabled = false;
   }
 
   render(
@@ -57,31 +63,45 @@ export class CanvasRenderer {
     hitFeedback?: HitFeedbackState,
     roundState?: RoundState,
     roundScore?: RoundScore,
-    options: { collisionBoxesVisible?: boolean; diagnosticsEnabled?: boolean; hudVisible?: boolean } = {},
+    options: { collisionBoxesVisible?: boolean; diagnosticsEnabled?: boolean; hudVisible?: boolean; hudTheme?: HudTheme; stageTheme?: StageTheme } = {},
   ): string[] {
     const normalStartedAt = performance.now();
     const collisionBoxesVisible = options.collisionBoxesVisible ?? true;
     const diagnosticsEnabled = options.diagnosticsEnabled ?? true;
     const ctx = this.context;
+    const viewport = resolveCanvasViewport(this.canvas.width, this.canvas.height);
+    const camera = resolveViewportCamera(state, viewport.logicalWidth, viewport.logicalHeight);
+    const winMugenViewport = viewport.renderScale === 2;
+    const hudScale = winMugenViewport ? 0.5 : 1;
+    const hudViewportWidth = winMugenViewport ? this.canvas.width : viewport.logicalWidth;
+    const stageTheme = options.stageTheme ?? 'fresh';
+    const freshPlayerVisualOffsetY = stageTheme === 'fresh' ? Math.max(0, 285 - camera.y - viewport.logicalHeight * 0.78) : 0;
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     const shake = getScreenShakeOffset(hitFeedback);
     ctx.save();
+    ctx.scale(viewport.renderScale, viewport.renderScale);
     ctx.translate(shake.x, shake.y);
     const bgPalFxFilter = resolveBgPalFxFilter(state.bgPalFx);
     const globalFlags = new Set(state.players.flatMap((player) => player.assertSpecialFlags ?? []).map((flag) => flag.trim().toLowerCase()));
     if (!globalFlags.has('nobg')) {
       ctx.save();
       ctx.filter = bgPalFxFilter;
-      this.drawStage(ctx);
+      this.drawStage(ctx, viewport.logicalWidth, viewport.logicalHeight, camera.x, camera.y, stageTheme);
       ctx.restore();
     }
-    if (state.envColor?.under) this.drawEnvironmentColor(ctx, state.envColor.color);
+    if (state.envColor?.under) this.drawEnvironmentColor(ctx, state.envColor.color, viewport.logicalWidth, viewport.logicalHeight);
     const hideBars = options.hudVisible === false || globalFlags.has('nobardisplay');
-    if (!hideBars) this.drawLifeBars(ctx, state);
-    const powerDiagnostics = hideBars ? [] : this.drawPowerBars(ctx, state, diagnosticsEnabled);
-    if (roundState && !hideBars) this.roundStateRenderer.render(ctx, roundState, roundScore, this.canvas.width);
+    ctx.save();
+    ctx.scale(hudScale, hudScale);
+    if (!hideBars) this.drawLifeBars(ctx, state, hudViewportWidth, options.hudTheme ?? 'fresh');
+    const powerDiagnostics = hideBars ? [] : this.drawPowerBars(ctx, state, diagnosticsEnabled, hudViewportWidth, options.hudTheme ?? 'fresh');
+    if (roundState && !hideBars) this.roundStateRenderer.render(ctx, roundState, roundScore, hudViewportWidth, options.hudTheme ?? 'fresh');
+    ctx.restore();
+    ctx.save();
+    ctx.translate(-camera.x, -camera.y);
     this.drawProjectiles(ctx, state.projectiles, diagnosticsEnabled);
-    const explodResolution = resolveExplodRenderFrames(state, this.defaultAssets(), this.ownerAssets, this.fightFxAssets, 0, 0, diagnosticsEnabled);
+    ctx.restore();
+    const explodResolution = resolveExplodRenderFrames(state, this.defaultAssets(), this.ownerAssets, this.fightFxAssets, camera.x, camera.y, diagnosticsEnabled);
     const renderDiagnostics = [
       ...(diagnosticsEnabled && globalFlags.has('nobg') ? ['raw.assertspecial_draw flag=noBG target=stage result=hidden'] : []),
       ...(diagnosticsEnabled && hideBars ? ['raw.assertspecial_draw flag=nobardisplay target=hud result=hidden'] : []),
@@ -94,8 +114,8 @@ export class CanvasRenderer {
         priority: player.sprPriority ?? 0,
         stableId: player.id,
         player,
-        scaleX: 1,
-        scaleY: 1,
+        scaleX: player.collisionWidth?.xScale ?? 1,
+        scaleY: player.collisionWidth?.yScale ?? 1,
       })),
       ...state.helpers.entries.map((helper) => ({
         kind: 'player' as const,
@@ -113,9 +133,19 @@ export class CanvasRenderer {
           stableId: frame.entry.runtimeId,
           frame,
         })),
-    ].sort((a, b) => a.priority - b.priority || Number(a.kind === 'explod') - Number(b.kind === 'explod') || a.stableId - b.stableId);
+    ].sort((a, b) => {
+      const priorityOrder = a.priority - b.priority;
+      if (priorityOrder !== 0) return priorityOrder;
+      const kindOrder = Number(a.kind === 'explod') - Number(b.kind === 'explod');
+      if (kindOrder !== 0) return kindOrder;
+      return a.kind === 'explod' && b.kind === 'explod'
+        ? b.stableId - a.stableId
+        : a.stableId - b.stableId;
+    });
     for (const drawable of regularDrawables) {
       if (drawable.kind === 'player') {
+        ctx.save();
+        ctx.translate(-camera.x, -camera.y + freshPlayerVisualOffsetY);
         renderDiagnostics.push(...this.drawAfterImages(ctx, drawable.player, diagnosticsEnabled, drawable.scaleX, drawable.scaleY));
         const palFxFilter = resolveBgPalFxFilter(drawable.player.palFx);
         ctx.save();
@@ -130,18 +160,19 @@ export class CanvasRenderer {
         ctx.restore();
         if (diagnostic) renderDiagnostics.push(diagnostic);
         if (diagnosticsEnabled && drawable.player.palFx) renderDiagnostics.push(`raw.palfx_draw entity=p${drawable.player.id} remaining=${drawable.player.palFx.remainingTime} filter=${palFxFilter} result=drawn limitation=canvas_filter_approximated`);
+        ctx.restore();
       } else {
         const diagnostic = this.drawExplod(ctx, drawable.frame, diagnosticsEnabled);
         if (diagnostic) renderDiagnostics.push(diagnostic);
       }
     }
-    if (state.envColor && !state.envColor.under) this.drawEnvironmentColor(ctx, state.envColor.color);
+    if (state.envColor && !state.envColor.under) this.drawEnvironmentColor(ctx, state.envColor.color, viewport.logicalWidth, viewport.logicalHeight);
     if (diagnosticsEnabled && state.envColor) {
       renderDiagnostics.push(`raw.envcolor_draw owner=${state.envColor.ownerEntityId} remaining=${state.envColor.remainingTime} color=(${state.envColor.color.red},${state.envColor.color.green},${state.envColor.color.blue}) under=${state.envColor.under ? 1 : 0} result=drawn`);
     }
     if ((state.pause?.superPauseTime ?? 0) > 0 && state.pause?.darken) {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+      ctx.fillRect(0, 0, viewport.logicalWidth, viewport.logicalHeight);
       if (diagnosticsEnabled) {
         renderDiagnostics.push(`raw.superpause_darken remaining=${state.pause.superPauseTime} opacity=0.5 layer=before_ontop result=drawn`);
       }
@@ -154,10 +185,13 @@ export class CanvasRenderer {
     const normalFinishedAt = performance.now();
     const debugStartedAt = normalFinishedAt;
     if (collisionBoxesVisible) {
+      ctx.save();
+      ctx.translate(-camera.x, -camera.y + freshPlayerVisualOffsetY);
       this.drawDebugBoxes(ctx, state.players[0]);
       this.drawDebugBoxes(ctx, state.players[1]);
       state.helpers.entries.forEach((helper) => this.drawDebugBoxes(ctx, helper.player));
       this.drawProjectileDebugBoxes(ctx, state.projectiles);
+      ctx.restore();
     }
     this.lastTimings = {
       normalMs: normalFinishedAt - normalStartedAt,
@@ -175,34 +209,108 @@ export class CanvasRenderer {
     };
   }
 
-  private drawStage(ctx: CanvasRenderingContext2D): void {
-    const splitY = this.canvas.height * 0.65;
-    ctx.fillStyle = '#5c7898';
-    ctx.fillRect(0, 0, this.canvas.width, splitY);
-    ctx.fillStyle = '#3d612f';
-    ctx.fillRect(0, splitY, this.canvas.width, this.canvas.height - splitY);
+  private drawStage(ctx: CanvasRenderingContext2D, viewportWidth: number, viewportHeight: number, cameraX: number, cameraY: number, theme: StageTheme): void {
+    if (theme === 'external' && this.stage) {
+      this.drawExternalStage(ctx, viewportWidth, cameraX, cameraY);
+      return;
+    }
+    if (theme === 'cyber') {
+      const cameraOffsetY = 65 - cameraY;
+      const horizonY = viewportHeight * 0.48 + cameraOffsetY;
+      ctx.fillStyle = linearGradient(ctx, 0, 0, 0, viewportHeight, '#071225', '#17365b');
+      ctx.fillRect(0, 0, viewportWidth, viewportHeight);
+      ctx.fillStyle = 'rgba(34, 211, 238, 0.12)';
+      for (let y = horizonY; y < viewportHeight; y += 12) ctx.fillRect(0, y, viewportWidth, 1);
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.22)';
+      if (typeof ctx.beginPath === 'function' && typeof ctx.moveTo === 'function' && typeof ctx.lineTo === 'function') {
+        for (let x = -viewportWidth; x < viewportWidth * 2; x += 24) {
+          ctx.beginPath();
+          ctx.moveTo(viewportWidth / 2, horizonY);
+          ctx.lineTo(x, viewportHeight);
+          ctx.stroke();
+        }
+      }
+      ctx.fillStyle = 'rgba(2, 6, 23, 0.55)';
+      ctx.fillRect(0, viewportHeight * 0.84, viewportWidth, viewportHeight * 0.16);
+      return;
+    }
+    const cameraOffsetY = 65 - cameraY;
+    const splitY = Math.min(viewportHeight, viewportHeight * 0.65 + cameraOffsetY);
+    ctx.fillStyle = linearGradient(ctx, 0, 0, 0, splitY, '#7eb6d8', '#d7edf5');
+    ctx.fillRect(0, 0, viewportWidth, splitY);
+    if (typeof ctx.arc === 'function') {
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(255, 244, 184, 0.78)';
+      ctx.arc(viewportWidth * 0.78, viewportHeight * 0.22, viewportHeight * 0.09, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (typeof ctx.beginPath === 'function' && typeof ctx.moveTo === 'function' && typeof ctx.lineTo === 'function') {
+      ctx.beginPath();
+      ctx.moveTo(0, splitY);
+      ctx.lineTo(viewportWidth * 0.2, splitY * 0.62);
+      ctx.lineTo(viewportWidth * 0.38, splitY);
+      ctx.lineTo(viewportWidth * 0.61, splitY * 0.56);
+      ctx.lineTo(viewportWidth * 0.86, splitY);
+      ctx.fillStyle = 'rgba(64, 112, 98, 0.52)';
+      ctx.fill();
+    }
+    ctx.fillStyle = linearGradient(ctx, 0, splitY, 0, viewportHeight, '#6f984e', '#294b2c');
+    ctx.fillRect(0, splitY, viewportWidth, viewportHeight - splitY);
     ctx.fillStyle = '#26351e';
-    ctx.fillRect(0, 285, this.canvas.width, 80);
+    const groundY = viewportWidth === 320 && viewportHeight === 240 ? 220 : 285;
+    ctx.fillRect(0, groundY, viewportWidth, Math.max(0, viewportHeight - groundY));
   }
 
-  private drawEnvironmentColor(ctx: CanvasRenderingContext2D, color: { red: number; green: number; blue: number }): void {
+  private drawExternalStage(ctx: CanvasRenderingContext2D, viewportWidth: number, cameraX: number, cameraY: number): void {
+    const stage = this.stage;
+    if (!stage) return;
+    const scale = stage.hiRes ? 0.5 : 1;
+    ctx.save();
+    ctx.scale(scale, scale);
+    const sourceViewportWidth = viewportWidth / scale;
+    for (const layer of stage.layers) {
+      const sprite = stage.sprites.sprites.get(spriteKey(layer.groupNo, layer.imageNo));
+      const image = this.imageDataSpriteRenderer.findCanvas(stage.sprites, layer.groupNo, layer.imageNo);
+      if (!sprite || !image) continue;
+      const { x, y } = resolveStageLayerPosition({
+        viewportWidth: sourceViewportWidth,
+        zOffset: stage.zOffset,
+        startX: layer.startX,
+        startY: layer.startY,
+        spriteAxisX: sprite.xAxis,
+        spriteAxisY: sprite.yAxis,
+        cameraX: cameraX / scale,
+        cameraY: cameraY / scale,
+        deltaX: layer.deltaX,
+        deltaY: layer.deltaY,
+      });
+      ctx.drawImage(image, Math.round(x), Math.round(y));
+    }
+    ctx.restore();
+  }
+
+  private drawEnvironmentColor(ctx: CanvasRenderingContext2D, color: { red: number; green: number; blue: number }, viewportWidth: number, viewportHeight: number): void {
     const channel = (value: number): number => Math.max(0, Math.min(255, Math.trunc(value)));
     ctx.fillStyle = `rgb(${channel(color.red)}, ${channel(color.green)}, ${channel(color.blue)})`;
-    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    ctx.fillRect(0, 0, viewportWidth, viewportHeight);
   }
 
-  private drawLifeBars(ctx: CanvasRenderingContext2D, state: GameState): void {
+  private drawLifeBars(ctx: CanvasRenderingContext2D, state: GameState, viewportWidth = this.canvas.width, theme: HudTheme = 'fresh'): void {
     const [p1, p2] = state.players;
-    const offsetX = (this.canvas.width - 640) / 2;
-    ctx.fillStyle = '#111827';
-    ctx.fillRect(20 + offsetX, 18, 260, 16);
-    ctx.fillRect(360 + offsetX, 18, 260, 16);
-    ctx.fillStyle = '#22c55e';
-    ctx.fillRect(20 + offsetX, 18, 260 * (p1.life / 1000), 16);
-    ctx.fillRect(620 + offsetX - 260 * (p2.life / 1000), 18, 260 * (p2.life / 1000), 16);
-    ctx.strokeStyle = '#fff';
-    ctx.strokeRect(20 + offsetX, 18, 260, 16);
-    ctx.strokeRect(360 + offsetX, 18, 260, 16);
+    const offsetX = (viewportWidth - 640) / 2;
+    const y = 16;
+    ctx.fillStyle = theme === 'cyber' ? 'rgba(2, 8, 23, 0.9)' : 'rgba(30, 41, 59, 0.88)';
+    ctx.fillRect(18 + offsetX, y - 2, 264, 20);
+    ctx.fillRect(358 + offsetX, y - 2, 264, 20);
+    ctx.fillStyle = theme === 'cyber' ? '#06b6d4' : '#38c96b';
+    ctx.fillRect(20 + offsetX, y, 260 * (p1.life / 1000), 14);
+    ctx.fillRect(620 + offsetX - 260 * (p2.life / 1000), y, 260 * (p2.life / 1000), 14);
+    ctx.fillStyle = theme === 'cyber' ? 'rgba(165, 243, 252, 0.38)' : 'rgba(255,255,255,0.35)';
+    ctx.fillRect(20 + offsetX, y, 260 * (p1.life / 1000), 3);
+    ctx.fillRect(620 + offsetX - 260 * (p2.life / 1000), y, 260 * (p2.life / 1000), 3);
+    ctx.strokeStyle = theme === 'cyber' ? '#67e8f9' : '#dbeafe';
+    ctx.strokeRect(18.5 + offsetX, y - 2.5, 263, 19);
+    ctx.strokeRect(358.5 + offsetX, y - 2.5, 263, 19);
   }
 
   private drawProjectiles(ctx: CanvasRenderingContext2D, projectiles: ProjectileState[], diagnosticsEnabled: boolean): void {
@@ -231,6 +339,7 @@ export class CanvasRenderer {
           projectile.scaleY ?? 1,
           false,
           diagnosticsEnabled,
+          blend.subtractive,
         );
         ctx.restore();
 
@@ -307,10 +416,11 @@ export class CanvasRenderer {
         scaleY,
         false,
         diagnosticsEnabled,
+        blend.subtractive,
       );
       ctx.restore();
 
-      if (drawn.drawn) return diagnosticsEnabled ? `${prefix} ${elementFields} scale=(${scaleX},${scaleY}) airBlend=${blend.mode || 'none'} composite=${blend.compositeOperation} spriteExists=1 result=drawn playerVisible=1 rendererDrawRequested=1 ${drawn.diagnostic}${blend.limitation ? ` limitation=${blend.limitation}` : ''}` : '';
+      if (drawn.drawn) return diagnosticsEnabled ? `${prefix} ${elementFields} scale=(${scaleX},${scaleY}) airBlend=${blend.mode || 'none'} composite=${describeSpriteComposite(blend)} spriteExists=1 result=drawn playerVisible=1 rendererDrawRequested=1 ${drawn.diagnostic}${blend.limitation ? ` limitation=${blend.limitation}` : ''}` : '';
       if (assets.imageDataSpritePack || assets.spritePack) {
         return diagnosticsEnabled ? `${prefix} ${elementFields} spriteExists=0 result=skip reason=sprite_missing playerVisible=0 rendererDrawRequested=0` : '';
       }
@@ -354,33 +464,45 @@ export class CanvasRenderer {
         scaleY,
         false,
         diagnosticsEnabled,
+        blend.subtractive,
       );
       ctx.restore();
       if (result.drawn) drawn += 1;
     }
     if (!diagnosticsEnabled) return [];
-    return [`raw.afterimage_draw entity=p${player.id} captured=${afterImage.frames.length} displayed=${displayed.length} drawn=${drawn} time=${afterImage.remainingTime} timegap=${afterImage.timeGap} framegap=${afterImage.frameGap} trans=${blend.mode || 'none'} composite=${blend.compositeOperation} palette=canvas_filter_approximated${blend.limitation ? ` limitation=${blend.limitation}` : ''}`];
+    return [`raw.afterimage_draw entity=p${player.id} captured=${afterImage.frames.length} displayed=${displayed.length} drawn=${drawn} time=${afterImage.remainingTime} timegap=${afterImage.timeGap} framegap=${afterImage.frameGap} trans=${blend.mode || 'none'} composite=${describeSpriteComposite(blend)} palette=canvas_filter_approximated${blend.limitation ? ` limitation=${blend.limitation}` : ''}`];
   }
 
-  private drawPowerBars(ctx: CanvasRenderingContext2D, state: GameState, diagnosticsEnabled: boolean): string[] {
+  private drawPowerBars(ctx: CanvasRenderingContext2D, state: GameState, diagnosticsEnabled: boolean, viewportWidth = this.canvas.width, theme: HudTheme = 'fresh'): string[] {
     const [p1, p2] = state.players;
     const p1Ratio = getPlayerPowerRatio(p1);
     const p2Ratio = getPlayerPowerRatio(p2);
-    const offsetX = (this.canvas.width - 640) / 2;
-    ctx.fillStyle = '#111827';
-    ctx.fillRect(20 + offsetX, 342, 260, 8);
-    ctx.fillRect(360 + offsetX, 342, 260, 8);
-    ctx.fillStyle = '#38bdf8';
-    ctx.fillRect(20 + offsetX, 342, 260 * p1Ratio, 8);
-    ctx.fillRect(620 + offsetX - 260 * p2Ratio, 342, 260 * p2Ratio, 8);
-    ctx.strokeStyle = '#fff';
-    ctx.strokeRect(20 + offsetX, 342, 260, 8);
-    ctx.strokeRect(360 + offsetX, 342, 260, 8);
+    const offsetX = (viewportWidth - 640) / 2;
+    const gaugeWidth = 130;
+    ctx.fillStyle = theme === 'cyber' ? 'rgba(2, 8, 23, 0.94)' : 'rgba(30, 41, 59, 0.9)';
+    ctx.fillRect(18 + offsetX, 35, 134, 12);
+    ctx.fillRect(488 + offsetX, 35, 134, 12);
+    ctx.fillStyle = theme === 'cyber' ? '#d946ef' : '#38bdf8';
+    ctx.fillRect(20 + offsetX, 37, gaugeWidth * p1Ratio, 8);
+    ctx.fillRect(620 + offsetX - gaugeWidth * p2Ratio, 37, gaugeWidth * p2Ratio, 8);
+    ctx.fillStyle = 'rgba(255,255,255,0.36)';
+    ctx.fillRect(20 + offsetX, 37, gaugeWidth * p1Ratio, 2);
+    ctx.fillRect(620 + offsetX - gaugeWidth * p2Ratio, 37, gaugeWidth * p2Ratio, 2);
+    ctx.strokeStyle = theme === 'cyber' ? '#f0abfc' : '#dbeafe';
+    ctx.strokeRect(18.5 + offsetX, 35.5, 133, 11);
+    ctx.strokeRect(488.5 + offsetX, 35.5, 133, 11);
 
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 15px sans-serif';
-    if (p1.infinitePower) ctx.fillText('∞', 284 + offsetX, 350);
-    if (p2.infinitePower) ctx.fillText('∞', 344 + offsetX, 350);
+    ctx.textBaseline = 'middle';
+    if (p1.infinitePower) {
+      ctx.textAlign = 'right';
+      ctx.fillText('∞', 14 + offsetX, 41);
+    }
+    if (p2.infinitePower) {
+      ctx.textAlign = 'left';
+      ctx.fillText('∞', 626 + offsetX, 41);
+    }
 
     const p1Power = p1.power ?? 0;
     const p2Power = p2.power ?? 0;
@@ -390,7 +512,7 @@ export class CanvasRenderer {
     const signature = `${p1Power}/${p1PowerMax}|${p2Power}/${p2PowerMax}|${infiniteMode}`;
     if (!diagnosticsEnabled || signature === this.lastPowerHudSignature) return [];
     this.lastPowerHudSignature = signature;
-    const diagnostics = [`raw.power_hud p1=${p1Power}/${p1PowerMax} width=${260 * p1Ratio} p2=${p2Power}/${p2PowerMax} width=${260 * p2Ratio} infinite=${infiniteMode}`];
+    const diagnostics = [`raw.power_hud p1=${p1Power}/${p1PowerMax} width=${gaugeWidth * p1Ratio} p2=${p2Power}/${p2PowerMax} width=${gaugeWidth * p2Ratio} infinite=${infiniteMode}`];
     if (!this.reportedInitialPower) {
       this.reportedInitialPower = true;
       diagnostics.unshift(
@@ -424,10 +546,11 @@ export class CanvasRenderer {
       entry.render.scaleY,
       entry.render.ownPalette,
       diagnosticsEnabled,
+      blend.subtractive,
     );
     ctx.restore();
     if (!diagnosticsEnabled) return '';
-    return `raw.explod_draw internalId=${entry.runtimeId} mugenId=${entry.mugenId} anim=${entry.animationSource === 'fightfx' ? 'F' : ''}${entry.animNo} elem=${currentElement.elementIndex + 1} screen=(${frame.screenX},${frame.screenY}) facing=${entry.facing} vfacing=${entry.verticalFacing} scale=(${entry.render.scaleX},${entry.render.scaleY}) trans=${blend.mode || 'none'} alpha=(${blend.sourceAlpha},${blend.destinationAlpha}) composite=${blend.compositeOperation} ownpal=${entry.render.ownPalette ? 1 : 0} shadow=(${entry.render.shadow.red},${entry.render.shadow.green},${entry.render.shadow.blue}) sprpriority=${entry.spritePriority} ontop=${entry.onTop ? 1 : 0} result=${drawResult.drawn ? 'drawn' : 'hidden'}${drawResult.drawn ? ` ${drawResult.diagnostic}` : ' reason=sprite_not_found'} transSource=${controllerTransparency ? 'controller' : currentElement.element.blend ? 'air' : 'default'}${blend.limitation ? ` limitation=${blend.limitation}` : ''}${entry.render.ownPalette ? ' limitation_ownpal=dynamic_palette_effects_unverified' : ''}${entry.render.shadow.red || entry.render.shadow.green || entry.render.shadow.blue ? ' limitation_shadow=no_effect_shadow_pass' : ''}`;
+    return `raw.explod_draw internalId=${entry.runtimeId} mugenId=${entry.mugenId} anim=${entry.animationSource === 'fightfx' ? 'F' : ''}${entry.animNo} elem=${currentElement.elementIndex + 1} screen=(${frame.screenX},${frame.screenY}) facing=${entry.facing} vfacing=${entry.verticalFacing} scale=(${entry.render.scaleX},${entry.render.scaleY}) trans=${blend.mode || 'none'} alpha=(${blend.sourceAlpha},${blend.destinationAlpha}) composite=${describeSpriteComposite(blend)} ownpal=${entry.render.ownPalette ? 1 : 0} shadow=(${entry.render.shadow.red},${entry.render.shadow.green},${entry.render.shadow.blue}) sprpriority=${entry.spritePriority} ontop=${entry.onTop ? 1 : 0} result=${drawResult.drawn ? 'drawn' : 'hidden'}${drawResult.drawn ? ` ${drawResult.diagnostic}` : ' reason=sprite_not_found'} transSource=${controllerTransparency ? 'controller' : currentElement.element.blend ? 'air' : 'default'}${blend.limitation ? ` limitation=${blend.limitation}` : ''}${entry.render.ownPalette ? ' limitation_ownpal=dynamic_palette_effects_unverified' : ''}${entry.render.shadow.red || entry.render.shadow.green || entry.render.shadow.blue ? ' limitation_shadow=no_effect_shadow_pass' : ''}`;
   }
 
   private drawSpriteByElement(
@@ -446,6 +569,7 @@ export class CanvasRenderer {
     scaleY = 1,
     ownPalette = false,
     diagnosticsEnabled = true,
+    subtractive = false,
   ): { drawn: boolean; diagnostic: string } {
     const flipX = flip.toUpperCase().includes('H');
     const key = spriteKey(groupNo, imageNo);
@@ -455,25 +579,83 @@ export class CanvasRenderer {
       const resolved = this.imageDataSpriteRenderer.resolveCanvas(assets.imageDataSpritePack, groupNo, imageNo, ownPalette, diagnosticsEnabled);
       if (!resolved) return { drawn: false, diagnostic: '' };
 
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.scale(facing * (flipX ? -1 : 1) * scaleX, verticalFacing * scaleY);
-      ctx.drawImage(resolved.canvas, -imageDataSprite.xAxis + offsetX, -imageDataSprite.yAxis + offsetY);
-      ctx.restore();
+      this.drawSpriteCanvas(ctx, resolved.canvas, x, y, facing * (flipX ? -1 : 1) * scaleX, verticalFacing * scaleY, -imageDataSprite.xAxis + offsetX, -imageDataSprite.yAxis + offsetY, subtractive);
       return { drawn: true, diagnostic: resolved.diagnostic };
     }
 
     const sprite = findSprite(assets.spritePack, groupNo, imageNo);
     if (sprite) {
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.scale(facing * (flipX ? -1 : 1) * scaleX, verticalFacing * scaleY);
-      ctx.drawImage(sprite.image, -sprite.xAxis + offsetX, -sprite.yAxis + offsetY);
-      ctx.restore();
+      this.drawSpriteCanvas(ctx, sprite.image, x, y, facing * (flipX ? -1 : 1) * scaleX, verticalFacing * scaleY, -sprite.xAxis + offsetX, -sprite.yAxis + offsetY, subtractive);
       return { drawn: true, diagnostic: 'sprite=bitmap cache=external' };
     }
 
     return { drawn: false, diagnostic: '' };
+  }
+
+  private drawSpriteCanvas(
+    ctx: CanvasRenderingContext2D,
+    source: CanvasImageSource,
+    x: number,
+    y: number,
+    scaleX: number,
+    scaleY: number,
+    drawX: number,
+    drawY: number,
+    subtractive: boolean,
+  ): void {
+    if (subtractive && this.drawSubtractiveSprite(ctx, source, x, y, scaleX, scaleY, drawX, drawY)) return;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scaleX, scaleY);
+    ctx.drawImage(source, drawX, drawY);
+    ctx.restore();
+  }
+
+  private drawSubtractiveSprite(
+    ctx: CanvasRenderingContext2D,
+    source: CanvasImageSource,
+    x: number,
+    y: number,
+    scaleX: number,
+    scaleY: number,
+    drawX: number,
+    drawY: number,
+  ): boolean {
+    if (typeof document === 'undefined' || typeof ctx.getTransform !== 'function' || typeof ctx.setTransform !== 'function') return false;
+    const layer = this.subtractiveLayer ?? document.createElement('canvas');
+    this.subtractiveLayer = layer;
+    if (layer.width !== this.canvas.width) layer.width = this.canvas.width;
+    if (layer.height !== this.canvas.height) layer.height = this.canvas.height;
+    const layerContext = layer.getContext('2d');
+    if (!layerContext) return false;
+
+    layerContext.save();
+    layerContext.setTransform(1, 0, 0, 1, 0, 0);
+    layerContext.clearRect(0, 0, layer.width, layer.height);
+    layerContext.globalAlpha = 1;
+    layerContext.globalCompositeOperation = 'source-over';
+    layerContext.filter = 'invert(1)';
+    layerContext.drawImage(this.canvas, 0, 0);
+    layerContext.restore();
+
+    layerContext.save();
+    layerContext.setTransform(ctx.getTransform());
+    layerContext.translate(x, y);
+    layerContext.scale(scaleX, scaleY);
+    layerContext.globalAlpha = ctx.globalAlpha;
+    layerContext.globalCompositeOperation = 'lighter';
+    layerContext.filter = ctx.filter;
+    layerContext.drawImage(source, drawX, drawY);
+    layerContext.restore();
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.filter = 'invert(1)';
+    ctx.drawImage(layer, 0, 0);
+    ctx.restore();
+    return true;
   }
 
   private drawFallbackPlayer(
@@ -576,6 +758,7 @@ type ResolvedSpriteBlend = {
   sourceAlpha: number;
   destinationAlpha: number;
   limitation: string | null;
+  subtractive: boolean;
 };
 
 function resolveAfterImageFilter(afterImage: NonNullable<PlayerState['afterImage']>, historyIndex: number): string {
@@ -608,10 +791,11 @@ function resolveSpriteBlend(
       limitation: approximatedAirAdd
         ? 'air_a_source_alpha_approximated'
         : destinationAlpha !== 0 && destinationAlpha !== 256 ? 'destination_alpha_approximated' : null,
+      subtractive: false,
     };
   }
-  if (mode === 's' || mode === 'sub') return { mode: transparency?.trim() ?? '', compositeOperation: 'source-over', globalAlpha, sourceAlpha, destinationAlpha, limitation: 'subtractive_blend_unsupported' };
-  return { mode: transparency?.trim() ?? '', compositeOperation: 'source-over', globalAlpha, sourceAlpha, destinationAlpha, limitation: null };
+  if (mode === 's' || mode === 'sub') return { mode: transparency?.trim() ?? '', compositeOperation: 'source-over', globalAlpha, sourceAlpha, destinationAlpha, limitation: null, subtractive: true };
+  return { mode: transparency?.trim() ?? '', compositeOperation: 'source-over', globalAlpha, sourceAlpha, destinationAlpha, limitation: null, subtractive: false };
 }
 
 function applySpriteBlend(ctx: CanvasRenderingContext2D, blend: ResolvedSpriteBlend): void {
@@ -619,6 +803,44 @@ function applySpriteBlend(ctx: CanvasRenderingContext2D, blend: ResolvedSpriteBl
   ctx.globalAlpha = blend.globalAlpha;
 }
 
+function describeSpriteComposite(blend: ResolvedSpriteBlend): string {
+  return blend.subtractive ? 'subtractive' : blend.compositeOperation;
+}
+
+function linearGradient(
+  ctx: CanvasRenderingContext2D,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  startColor: string,
+  endColor: string,
+): CanvasGradient | string {
+  if (typeof ctx.createLinearGradient !== 'function') return startColor;
+  const gradient = ctx.createLinearGradient(x0, y0, x1, y1);
+  gradient.addColorStop(0, startColor);
+  gradient.addColorStop(1, endColor);
+  return gradient;
+}
+
 export function getPlayersInSpritePriorityOrder(state: GameState): PlayerState[] {
   return [...state.players].sort((a, b) => (a.sprPriority ?? 0) - (b.sprPriority ?? 0) || a.id - b.id);
+}
+
+export function resolveStageLayerPosition(input: {
+  viewportWidth: number;
+  zOffset: number;
+  startX: number;
+  startY: number;
+  spriteAxisX: number;
+  spriteAxisY: number;
+  cameraX: number;
+  cameraY: number;
+  deltaX: number;
+  deltaY: number;
+}): { x: number; y: number } {
+  return {
+    x: input.viewportWidth / 2 + input.startX - input.spriteAxisX - input.cameraX * input.deltaX,
+    y: input.zOffset + input.startY - input.spriteAxisY - input.cameraY * input.deltaY,
+  };
 }

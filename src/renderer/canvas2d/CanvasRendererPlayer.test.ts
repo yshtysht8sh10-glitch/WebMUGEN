@@ -40,6 +40,51 @@ describe('CanvasRenderer player sprite fallback', () => {
     expect(fillText.mock.calls.some(([text]) => String(text).startsWith('push '))).toBe(true);
   });
 
+  it('renders a 320x240 WinMUGEN coordinate view into a 640x480 Hi-Res canvas at 2x', () => {
+    const drawImage = vi.fn();
+    const context = fakeContext(vi.fn(), vi.fn(), drawImage);
+    const canvas = { width: 640, height: 480, getContext: () => context } as unknown as HTMLCanvasElement;
+    const assets = { airDocument: air(0, 10, 0), spritePack: spritePack(10, 0) };
+    const renderer = new CanvasRenderer(canvas, undefined, null, null, { 1: assets, 2: assets });
+    const state = createInitialGameState(undefined, {}, [380, 580]);
+
+    renderer.render(state, undefined, undefined, undefined, { collisionBoxesVisible: false });
+
+    expect(context.scale).toHaveBeenCalledWith(2, 2);
+    expect(context.translate).toHaveBeenCalledWith(-320, -65);
+    expect(context.imageSmoothingEnabled).toBe(false);
+    expect(drawImage).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses the retained vertical camera position while rendering airborne players', () => {
+    const context = fakeContext(vi.fn(), vi.fn(), vi.fn());
+    const canvas = { width: 800, height: 480, getContext: () => context } as unknown as HTMLCanvasElement;
+    const state = createInitialGameState(undefined, {}, [380, 580]);
+    state.camera = { x: 280, y: 53, viewportWidth: 400, viewportHeight: 240 };
+
+    new CanvasRenderer(canvas).render(state, undefined, undefined, undefined, { collisionBoxesVisible: false });
+
+    expect(context.translate).toHaveBeenCalledWith(-280, -53);
+  });
+
+  it('applies root Size xscale/yscale inside the 2x WinMUGEN Hi-Res transform', () => {
+    const drawImage = vi.fn();
+    const context = fakeContext(vi.fn(), vi.fn(), drawImage);
+    const canvas = { width: 640, height: 480, getContext: () => context } as unknown as HTMLCanvasElement;
+    const assets = { airDocument: air(0, 10, 0), spritePack: spritePack(10, 0) };
+    const state = createInitialGameState(undefined, {}, [380, 580]);
+    state.players[0] = {
+      ...state.players[0],
+      collisionWidth: { groundFront: 15, groundBack: 15, airFront: 12, airBack: 12, xScale: 0.5, yScale: 0.5 },
+    };
+
+    new CanvasRenderer(canvas, undefined, null, null, { 1: assets, 2: assets }).render(state, undefined, undefined, undefined, { collisionBoxesVisible: false });
+
+    expect(context.scale).toHaveBeenCalledWith(2, 2);
+    expect(context.scale).toHaveBeenCalledWith(0.5, 0.5);
+    expect(drawImage).toHaveBeenCalledTimes(2);
+  });
+
   it('renders nothing when AIR intentionally references a missing SFF sprite', () => {
     const fillRect = vi.fn();
     const ellipse = vi.fn();

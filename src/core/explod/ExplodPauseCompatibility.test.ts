@@ -29,6 +29,7 @@ describe('Explod Pause/SuperPause production integration', () => {
     expect(soundCount).toBe(1);
     expect(state.explods.entries.find((entry) => entry.mugenId === 110)).toMatchObject({ age: 0, animTime: 0, pauseMoveTime: 0 });
     expect(state.explods.entries.find((entry) => entry.mugenId === 111)).toMatchObject({ age: 0, animTime: 0, pauseMoveTime: 0 });
+    expect(state.explods.entries.find((entry) => entry.mugenId === 112)).toMatchObject({ age: 0, animTime: 0, pauseMoveTime: -1 });
     expect(state.hitDiagnosticLines?.join('\n')).toContain('result=frozen pause=pause allowance=0');
     expect(state.hitDiagnosticLines?.join('\n')).toContain('pause=pause update=allowed allowanceBefore=1 allowanceAfter=0');
 
@@ -36,18 +37,24 @@ describe('Explod Pause/SuperPause production integration', () => {
     ({ state, pause, soundCount } = executeFrame(state, pause, soundCount));
     expect(pause).toMatchObject({ pauseTime: 0, resumeGuard: true });
     expect(soundCount).toBe(1);
+    expect(state.explods.entries.find((entry) => entry.mugenId === 110)).toMatchObject({ age: 0, animTime: 0 });
+    expect(state.explods.entries.find((entry) => entry.mugenId === 111)).toMatchObject({ age: 0, animTime: 0 });
+    expect(state.explods.entries.find((entry) => entry.mugenId === 112)).toMatchObject({ age: 1, animTime: 1, pauseMoveTime: -1 });
+    expect(state.hitDiagnosticLines?.join('\n')).toContain('pause=pause update=allowed allowanceBefore=-1 allowanceAfter=-1 mode=indefinite');
 
     state = { ...state, frame: 3 };
     ({ state, pause, soundCount } = executeFrame(state, pause, soundCount, true));
     expect(soundCount).toBe(1);
     expect(pause.resumeGuard).toBe(false);
     expect(state.players[0].stateTime).toBe(1);
-    expect(state.explods.entries.every((entry) => entry.age === 1)).toBe(true);
+    expect(state.explods.entries.find((entry) => entry.mugenId === 110)?.age).toBe(1);
+    expect(state.explods.entries.find((entry) => entry.mugenId === 111)?.age).toBe(1);
+    expect(state.explods.entries.find((entry) => entry.mugenId === 112)?.age).toBe(2);
 
     state = { ...state, frame: 4 };
     ({ state, pause, soundCount } = executeFrame(state, pause, soundCount, true));
     expect(soundCount).toBe(1);
-    expect(state.explods.entries).toHaveLength(2);
+    expect(state.explods.entries).toHaveLength(3);
   });
 
   it('distinguishes SuperPause allowance and darken from normal Pause', () => {
@@ -57,7 +64,14 @@ describe('Explod Pause/SuperPause production integration', () => {
     expect(result.pause).toMatchObject({ superPauseTime: 1, kind: 'superpause', darken: false });
     expect(result.state.explods.entries.find((entry) => entry.mugenId === 120)).toMatchObject({ age: 0, superMoveTime: 0 });
     expect(result.state.explods.entries.find((entry) => entry.mugenId === 121)).toMatchObject({ age: 0, superMoveTime: 0 });
+    expect(result.state.explods.entries.find((entry) => entry.mugenId === 122)).toMatchObject({ age: 0, animTime: 0, superMoveTime: -1 });
     expect(result.state.hitDiagnosticLines?.join('\n')).toContain('pause=superpause update=allowed');
+
+    const second = executeFrame({ ...result.state, frame: 2 }, result.pause, 0);
+    expect(second.state.explods.entries.find((entry) => entry.mugenId === 120)).toMatchObject({ age: 0, animTime: 0 });
+    expect(second.state.explods.entries.find((entry) => entry.mugenId === 121)).toMatchObject({ age: 0, animTime: 0 });
+    expect(second.state.explods.entries.find((entry) => entry.mugenId === 122)).toMatchObject({ age: 1, animTime: 1, superMoveTime: -1 });
+    expect(second.state.hitDiagnosticLines?.join('\n')).toContain('pause=superpause update=allowed allowanceBefore=-1 allowanceAfter=-1 mode=indefinite');
   });
 
   it('does not treat player-local hitpause as global Explod pause', () => {
@@ -125,6 +139,31 @@ type = S
       kind: 'superpause',
       ownerEntityId: 1,
     });
+  });
+
+  it('preserves bundled T-H-M-A State 3500 supermovetime=-1 as an indefinite Explod allowance', () => {
+    const realCns = parseCnsText(readFileSync('public/chars/T-H-M-A/T-H-M-A/T-H-M-Atyouhi.cns', 'utf8'));
+    const initial = createInitialGameState();
+    const explods: ExplodControllerEvent[] = [];
+    const pauses: PauseControllerEvent[] = [];
+
+    stepCnsStateRuntime({
+      ...initial,
+      players: [{ ...initial.players[0], stateNo: 3500, stateTime: 0, animNo: 3500 }, initial.players[1]],
+    }, realCns, { onExplodCreate: (event) => explods.push(event) });
+    let state = applyExplodControllerEvents(initial, explods);
+    expect(state.explods.entries).toContainEqual(expect.objectContaining({ animNo: 10040, superMoveTime: -1 }));
+
+    stepCnsStateRuntime({
+      ...state,
+      frame: 2,
+      players: [{ ...state.players[0], stateNo: 3500, stateTime: 2, animNo: 3500 }, state.players[1]],
+    }, realCns, { onPause: (event) => pauses.push(event) });
+    const superPause = applyPauseControllerEvents(createInitialPauseState(), pauses);
+    expect(superPause).toMatchObject({ superPauseTime: 60, kind: 'superpause' });
+
+    state = stepExplodRuntime({ ...state, frame: 2 }, () => null, superPause);
+    expect(state.explods.entries).toContainEqual(expect.objectContaining({ animNo: 10040, age: 1, animTime: 1, superMoveTime: -1 }));
   });
 });
 

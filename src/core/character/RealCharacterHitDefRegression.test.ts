@@ -11,6 +11,12 @@ import { createInitialGameState } from '../engine/GameState';
 import { applyFallbackHitRecovery } from '../engine/FallbackHitRecovery';
 import { resolveFallbackHits } from '../engine/FallbackHitResolver';
 import { applyFallbackStageRules } from '../engine/FallbackStageRules';
+import {
+  canEntityMoveDuringPause,
+  restorePausedEntityPhysics,
+  startSuperPause,
+  stepPauseState,
+} from '../pause/PauseSystem';
 import { createInitialRoundState, stepRoundState } from '../engine/RoundState';
 import type { GameState } from '../engine/types';
 import { loadCharacterFromDef, type CharacterAssetFetcher } from './CharacterLoader';
@@ -136,6 +142,63 @@ realCharacterDescribe('WinMUGEN real-character HitDef regression', () => {
       }
     }
   }, 120_000);
+});
+
+describe('T-H-M-A State 3110 behind-the-opponent regression', () => {
+  it('contacts when AnimElem 2 starts after the behind-position controllers run', async () => {
+    const assets = await loadCharacterFromDef('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.def', createFileSystemFetcher());
+    const initial = createInitialGameState();
+    let state: GameState = {
+      ...initial,
+      players: [
+        {
+          ...initial.players[0],
+          x: 300,
+          stateNo: 3110,
+          stateHeaderAppliedStateNo: 3110,
+          stateTime: 0,
+          stateType: 'A',
+          moveType: 'A',
+          physics: 'N',
+          ctrl: false,
+          animNo: 3110,
+          animTime: 0,
+          facing: 1,
+        },
+        { ...initial.players[1], x: 500, animNo: 0, animTime: 0, facing: -1 },
+      ],
+    };
+    let pause = startSuperPause(state.pause!, 40, { moveTime: 40, ownerEntityId: 1 });
+    const timeline: Array<{ frame: number; stateTime: number; animTime: number; x: number; hitDef: boolean; hit: boolean }> = [];
+
+    for (let frame = 0; frame < 40 && state.hitEvents.length === 0; frame += 1) {
+      const cns = stepCnsStateRuntime(state, assets.cns, {
+        hitDiagnostics: true,
+        getAnimationDuration: (animNo) => getMugenAnimEndTime(assets.air, animNo),
+        getAnimationElementNo: (animNo, animTime) => {
+          const element = getCurrentAnimationElement(assets.air, animNo, animTime);
+          return element ? element.elementIndex + 1 : null;
+        },
+        getAnimationTriggerInfo: (animNo, animTime) => getAnimationTriggerInfo(assets.air, animNo, animTime),
+        pauseState: pause,
+      }).state;
+      const moved = applyFallbackStageRules(restorePausedEntityPhysics(cns, stepCnsPhysicsMotion(cns, assets.cns), pause));
+      state = resolveFallbackHits(moved, assets.air, true, cns, undefined, (entityId) => canEntityMoveDuringPause(pause, entityId));
+      timeline.push({
+        frame,
+        stateTime: cns.players[0].stateTime,
+        animTime: cns.players[0].animTime,
+        x: cns.players[0].x,
+        hitDef: cns.players[0].activeHitDef !== null,
+        hit: state.hitEvents.length > 0,
+      });
+      pause = stepPauseState(pause);
+    }
+
+    expect(timeline.find((entry) => entry.hitDef)?.stateTime, JSON.stringify(timeline)).toBe(10);
+    expect(timeline.find((entry) => entry.hit)?.stateTime, JSON.stringify(timeline)).toBe(10);
+    expect(pause.superPauseTime).toBeGreaterThan(0);
+  }, 15_000);
 });
 
 describe('T-H-M-A State 215 launch regression', () => {
@@ -665,6 +728,51 @@ describe('T-H-M-A State 1016 multihit regression', () => {
       stateNo: 1012, prevStateNo: 1011,
     });
     expect(result.state.players[0].hitDiagnosticLines?.join('\n')).toContain('targetRedirectRequestedId=1011');
+  });
+});
+
+describe('T-H-M-A State 3169 defender-hitpause regression', () => {
+  it('accepts the follow-up HitDef while State 3165 defender hitpause remains', async () => {
+    const assets = await loadCharacterFromDef('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.def', createFileSystemFetcher());
+    const state3169 = assets.cns.states.find((state) => state.stateNo === 3169);
+    if (!state3169) throw new Error('State 3169 not found');
+    const focusedCns: CnsDocument = { metadataSections: assets.cns.metadataSections, states: [state3169] };
+    const attackElementTime = findActionElementStart(assets.air.actions, 3169, 8);
+    expect(attackElementTime).not.toBeNull();
+    const initial = createInitialGameState(9000);
+    const activation = stepCnsStateRuntime({
+      ...initial,
+      players: [{
+        ...initial.players[0],
+        x: 650, y: 285, facing: 1, stateNo: 3169, stateHeaderAppliedStateNo: 3169,
+        stateTime: 0, stateType: 'A', moveType: 'A', physics: 'N', ctrl: false,
+        animNo: 3169, animTime: 0, fvars: { 3: 1 },
+        hitTargets: [{ activeHitDefId: 77, defenderId: 2, hitDefId: 3165 }],
+      }, {
+        ...initial.players[1],
+        x: 580, y: 285, facing: -1, stateNo: 5000, stateType: 'S', moveType: 'H', physics: 'N',
+        animNo: 5002, animTime: 0, hitPause: 30,
+        lastHitAttackerId: 1, lastHitDefByAttacker: { 1: 3165 },
+      }],
+    }, focusedCns, {
+      hitDiagnostics: true,
+      getAnimationTriggerInfo: (animNo, animTime) => getAnimationTriggerInfo(assets.air, animNo, animTime),
+    }).state;
+    const activeHitDefId = activation.players[0].activeHitDef?.diagnosticId;
+    expect(activeHitDefId).toBeDefined();
+
+    const contact = resolveFallbackHits({
+      ...activation,
+      players: [{
+        ...activation.players[0], stateTime: attackElementTime!, animTime: attackElementTime!, facing: -1,
+      }, activation.players[1]],
+    }, assets.air, true);
+
+    expect(contact.hitEvents, contact.hitDiagnosticLines?.join('\n')).toHaveLength(1);
+    expect(contact.players[1]).toMatchObject({ life: 920, hitPause: 30 });
+    expect(contact.players[0].moveContact).toMatchObject({ hit: true, hitCount: 1, activeHitDefId });
+    expect(contact.hitDiagnosticLines?.join('\n')).toContain('previous=3165');
+    expect(contact.hitDiagnosticLines?.join('\n')).not.toContain('target_hitpause');
   });
 });
 

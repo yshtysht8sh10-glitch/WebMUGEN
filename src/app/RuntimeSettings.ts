@@ -1,10 +1,13 @@
 import { DEFAULT_ROUND_TIMER } from '../core/engine/RoundState';
 import type { InfinitePowerMode } from '../core/power/InfinitePower';
+import type { ScreenSizeMode } from '../core/engine/ScreenSize';
 
 export const DEFAULT_FRAME_INTERVAL_MS = 1000 / 60;
 export const RUNTIME_SETTINGS_STORAGE_KEY = 'webmugen.runtimeSettings.v1';
 
-export type HumanLogCaptureMode = 'all-frames' | 'trigger-changes' | 'controller-activated';
+export type HumanLogCaptureMode = 'all-frames' | 'trigger-changes' | 'state-transition' | 'controller-activated';
+export type HudTheme = 'fresh' | 'cyber';
+export type StageTheme = 'fresh' | 'cyber' | 'external';
 
 export type RuntimeSettings = {
   roundTime: number;
@@ -17,6 +20,10 @@ export type RuntimeSettings = {
   aiLogEnabled: boolean;
   collisionBoxesVisible: boolean;
   stateHistoryVisible: boolean;
+  screenSizeMode: ScreenSizeMode;
+  hudTheme: HudTheme;
+  stageTheme: StageTheme;
+  stageArchivePath: string;
 };
 
 export const DEFAULT_RUNTIME_SETTINGS: RuntimeSettings = {
@@ -30,6 +37,10 @@ export const DEFAULT_RUNTIME_SETTINGS: RuntimeSettings = {
   aiLogEnabled: false,
   collisionBoxesVisible: false,
   stateHistoryVisible: false,
+  screenSizeMode: 'winmugen-800x480',
+  hudTheme: 'fresh',
+  stageTheme: 'fresh',
+  stageArchivePath: '/stages/material-22-archive.zip',
 };
 
 export function loadRuntimeSettings(storage: Pick<Storage, 'getItem'> | undefined = readLocalStorage()): RuntimeSettings {
@@ -67,11 +78,28 @@ export function normalizeRuntimeSettings(value: unknown): RuntimeSettings {
     aiLogEnabled: normalizeBoolean(source.aiLogEnabled),
     collisionBoxesVisible: normalizeBoolean(source.collisionBoxesVisible),
     stateHistoryVisible: normalizeBoolean(source.stateHistoryVisible),
+    screenSizeMode: normalizeScreenSizeMode(source.screenSizeMode),
+    hudTheme: source.hudTheme === 'cyber' ? 'cyber' : 'fresh',
+    stageTheme: source.stageTheme === 'cyber' || source.stageTheme === 'external' ? source.stageTheme : 'fresh',
+    stageArchivePath: normalizeStageArchivePath(source.stageArchivePath),
   };
 }
 
+function normalizeStageArchivePath(value: unknown): string {
+  const path = typeof value === 'string' ? value.trim() : '';
+  return path || DEFAULT_RUNTIME_SETTINGS.stageArchivePath;
+}
+
+function normalizeScreenSizeMode(value: unknown): ScreenSizeMode {
+  return value === 'wide-960x540' || value === 'winmugen-classic-640x480'
+    ? value
+    : 'winmugen-800x480';
+}
+
 function normalizeHumanLogCaptureMode(value: unknown): HumanLogCaptureMode {
-  return value === 'all-frames' || value === 'controller-activated' ? value : 'trigger-changes';
+  return value === 'all-frames' || value === 'state-transition' || value === 'controller-activated'
+    ? value
+    : 'trigger-changes';
 }
 
 function normalizeBoolean(value: unknown): boolean {

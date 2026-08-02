@@ -48,6 +48,31 @@ describe('CanvasRenderer Explod integration', () => {
     expect(diagnostics).toContainEqual(expect.stringContaining('result=hidden reason=sprite_not_found'));
   });
 
+  it('keeps an earlier-created same-priority Explod in front like the State 5400 blue gauge layer', () => {
+    const drawImage = vi.fn();
+    const context = fakeContext({ drawImage, scale: vi.fn(), translate: vi.fn() });
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+    const state = createInitialGameState();
+    state.explods.entries = [
+      entry({ runtimeId: 1, animNo: 11100, spritePriority: 7 }),
+      entry({ runtimeId: 2, animNo: 11200, spritePriority: 7 }),
+    ];
+    const blueImage = {} as HTMLImageElement;
+    const redImage = {} as HTMLImageElement;
+    const gaugeAir: AirDocument = { actions: [
+      { actionNo: 11100, elements: [{ groupNo: 11000, imageNo: 110, offsetX: 0, offsetY: 0, duration: 1, clsn1: [], clsn2: [] }], defaultClsn1: [], defaultClsn2: [] },
+      { actionNo: 11200, elements: [{ groupNo: 11000, imageNo: 120, offsetX: 0, offsetY: 0, duration: 1, clsn1: [], clsn2: [] }], defaultClsn1: [], defaultClsn2: [] },
+    ] };
+    const gaugeSprites: SpritePack = { sprites: new Map([
+      ['11000,110', { groupNo: 11000, imageNo: 110, src: '', xAxis: 0, yAxis: 0, image: blueImage }],
+      ['11000,120', { groupNo: 11000, imageNo: 120, src: '', xAxis: 0, yAxis: 0, image: redImage }],
+    ]) };
+
+    new CanvasRenderer(canvas, undefined, null, null, { 2: { airDocument: gaugeAir, spritePack: gaugeSprites } }).render(state, undefined, undefined, undefined, { collisionBoxesVisible: false });
+
+    expect(drawImage.mock.calls.map(([image]) => image)).toEqual([redImage, blueImage]);
+  });
+
   it('uses the AIR element A field when the Explod controller has no trans override', () => {
     const observedBlend: Array<{ composite: GlobalCompositeOperation; alpha: number }> = [];
     let context: CanvasRenderingContext2D;
@@ -68,6 +93,51 @@ describe('CanvasRenderer Explod integration', () => {
     expect(diagnostics).toContainEqual(expect.stringContaining('trans=A alpha=(256,256) composite=lighter'));
     expect(diagnostics).toContainEqual(expect.stringContaining('transSource=air'));
     expect(diagnostics).toContainEqual(expect.stringContaining('limitation=air_a_source_alpha_approximated'));
+  });
+
+  it('uses the AIR element S field as a subtractive destination-color pass', () => {
+    const mainPasses: Array<{ source: CanvasImageSource; filter: string; composite: GlobalCompositeOperation }> = [];
+    let mainContext: CanvasRenderingContext2D;
+    const mainDrawImage = vi.fn((source: CanvasImageSource) => mainPasses.push({
+      source,
+      filter: mainContext.filter,
+      composite: mainContext.globalCompositeOperation,
+    }));
+    mainContext = subtractiveContext(mainDrawImage);
+    const canvas = { width: 640, height: 360, getContext: () => mainContext } as unknown as HTMLCanvasElement;
+    const layerPasses: Array<{ source: CanvasImageSource; filter: string; composite: GlobalCompositeOperation }> = [];
+    let layerContext: CanvasRenderingContext2D;
+    const layerDrawImage = vi.fn((source: CanvasImageSource) => layerPasses.push({
+      source,
+      filter: layerContext.filter,
+      composite: layerContext.globalCompositeOperation,
+    }));
+    layerContext = subtractiveContext(layerDrawImage);
+    const layer = { width: 0, height: 0, getContext: () => layerContext } as unknown as HTMLCanvasElement;
+    const originalDocument = globalThis.document;
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: { createElement: () => layer } });
+    try {
+      const state = createInitialGameState();
+      state.explods.entries = [entry()];
+      const image = {} as HTMLImageElement;
+      const assets = { airDocument: air(200, 20, 3, 'S'), spritePack: { sprites: new Map([['20,3', { groupNo: 20, imageNo: 3, src: '', xAxis: 4, yAxis: 5, image }]]) } as SpritePack };
+
+      const diagnostics = new CanvasRenderer(canvas, undefined, null, null, { 2: assets }).render(state);
+
+      expect(layerDrawImage).toHaveBeenCalledWith(canvas, 0, 0);
+      expect(layerDrawImage).toHaveBeenCalledWith(image, -2, -7);
+      expect(mainDrawImage).toHaveBeenCalledWith(layer, 0, 0);
+      expect(layerPasses).toEqual([
+        { source: canvas, filter: 'invert(1)', composite: 'source-over' },
+        { source: image, filter: 'none', composite: 'lighter' },
+      ]);
+      expect(mainPasses).toContainEqual({ source: layer, filter: 'invert(1)', composite: 'source-over' });
+      expect(diagnostics).toContainEqual(expect.stringContaining('trans=S alpha=(256,0) composite=subtractive'));
+      expect(diagnostics).toContainEqual(expect.stringContaining('transSource=air'));
+      expect(diagnostics.join('\n')).not.toContain('subtractive_blend_unsupported');
+    } finally {
+      Object.defineProperty(globalThis, 'document', { configurable: true, value: originalDocument });
+    }
   });
 
   it('darkens an active SuperPause before drawing onTop Explods', () => {
@@ -162,7 +232,7 @@ describe('CanvasRenderer Explod integration', () => {
 
     const diagnostics = new CanvasRenderer(canvas).render(state);
 
-    expect(stageFilters).toEqual(['grayscale(1) brightness(0) invert(1)']);
+    expect(stageFilters).toEqual(['invert(1) grayscale(1) brightness(0)']);
     expect(diagnostics).toContainEqual(expect.stringContaining('raw.bgpalfx_draw owner=1 remaining=19'));
   });
 
@@ -194,11 +264,22 @@ function fakeContext(spies: { drawImage: ReturnType<typeof vi.fn>; scale: Return
   } as unknown as CanvasRenderingContext2D;
 }
 
+function subtractiveContext(drawImage: ReturnType<typeof vi.fn>): CanvasRenderingContext2D {
+  return {
+    ...fakeContext({ drawImage, scale: vi.fn(), translate: vi.fn() }),
+    globalAlpha: 1,
+    globalCompositeOperation: 'source-over',
+    filter: 'none',
+    getTransform: vi.fn(() => ({}) as DOMMatrix),
+    setTransform: vi.fn(),
+  } as unknown as CanvasRenderingContext2D;
+}
+
 function air(actionNo: number, groupNo: number, imageNo: number, blend = ''): AirDocument {
   return { actions: [{ actionNo, elements: [{ groupNo, imageNo, offsetX: 2, offsetY: -2, duration: 3, blend, clsn1: [], clsn2: [] }], defaultClsn1: [], defaultClsn2: [] }] };
 }
 
-function entry(): ExplodRuntimeEntry {
+function entry(overrides: Partial<ExplodRuntimeEntry> = {}): ExplodRuntimeEntry {
   return {
     runtimeId: 9, mugenId: 90, owner: { entityId: 2, rootPlayerId: 2 }, animationOwner: { entityId: 2, rootPlayerId: 2 },
     animationSource: 'owner', animNo: 200, animTime: 0, animElement: 0, creationFrame: 0, age: 0, removeTimeElapsed: 0, removeTimeStartFrame: 0,
@@ -206,5 +287,6 @@ function entry(): ExplodRuntimeEntry {
     facing: -1, verticalFacing: -1, postype: 'p2', coordinateSpace: 'stage', bind: null, removeTime: null, removalReason: null,
     spritePriority: 2, onTop: false, pauseMoveTime: 0, superMoveTime: 0, removeOnGetHit: false, random: { x: 0, y: 0 },
     render: { transparency: null, alpha: null, scaleX: 2, scaleY: 3, ownPalette: false, shadow: { red: 0, green: 0, blue: 0 } },
+    ...overrides,
   };
 }

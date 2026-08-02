@@ -70,6 +70,8 @@ export function getExplodsInDrawOrder(frames: readonly ExplodRenderFrame[]): Exp
   return [...frames].sort((a, b) =>
     Number(a.entry.onTop) - Number(b.entry.onTop)
     || a.entry.spritePriority - b.entry.spritePriority
-    || a.entry.runtimeId - b.entry.runtimeId,
+    // WinMUGEN places the earlier-created Explod in front when priorities tie.
+    // Canvas draws back-to-front, so newer runtime IDs must be emitted first.
+    || b.entry.runtimeId - a.entry.runtimeId,
   );
 }

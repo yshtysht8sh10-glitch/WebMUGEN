@@ -30,6 +30,38 @@ Clsn1: 1
 `);
 
 describe('FallbackHitResolver', () => {
+  it('allows only pause-movable entities to resolve an active HitDef', () => {
+    const cns = parseCnsText(`
+[Statedef 200]
+type = S
+movetype = A
+physics = S
+[State 200, Hit]
+type = HitDef
+trigger1 = 1
+attr = S, NA
+hitflag = MAF
+damage = 37, 0
+pausetime = 0, 0
+`);
+    const initial = createInitialGameState();
+    const runtime = stepCnsStateRuntime({
+      ...initial,
+      players: [
+        { ...initial.players[0], x: 240, stateNo: 200, animNo: 200, moveType: 'A' },
+        { ...initial.players[1], x: 290, animNo: 0 },
+      ],
+    }, cns).state;
+
+    const frozen = resolveFallbackHits(runtime, air, true, undefined, undefined, () => false);
+    expect(frozen.hitEvents).toHaveLength(0);
+    expect(frozen.hitDiagnosticLines?.join('\n')).toContain('reason=global_pause_frozen');
+
+    const movingOwner = resolveFallbackHits(runtime, air, true, undefined, undefined, (entityId) => entityId === 1);
+    expect(movingOwner.hitEvents).toHaveLength(1);
+    expect(movingOwner.players[1].life).toBe(963);
+  });
+
   it('resolves active P1 and P2 Helper HitDefs against their opposing root players', () => {
     const cns = parseCnsText(`
 [StateDef 3320]
@@ -1077,20 +1109,22 @@ movetype = A
     expect(state.players[0].hitTargets).toHaveLength(1);
   });
 
-  it('allows the same defender to be hit by a new ActiveHitDef generation', () => {
-    const first = resolveConfiguredHit({ damage: 25 });
+  it('allows the same defender to be hit by a new ActiveHitDef generation during defender hitpause', () => {
+    const first = resolveConfiguredHit({ damage: 25, pauseTime: [0, 50] });
     const previous = first.players[0].activeHitDef!;
     const second = resolveFallbackHits({
       ...first,
       players: [{
         ...first.players[0], hitPause: 0,
         activeHitDef: { ...previous, diagnosticId: (previous.diagnosticId ?? 0) + 1, rejectedLogged: false },
-      }, { ...first.players[1], hitPause: 0, animNo: 0 }],
+      }, { ...first.players[1], animNo: 0 }],
     }, air);
     expect(second.hitEvents).toHaveLength(1);
     expect(second.players[1].life).toBe(first.players[1].life - 25);
+    expect(second.players[1].hitPause).toBe(50);
     expect(second.players[0].hitTargets).toHaveLength(2);
     expect(second.players[0].moveContact?.hitCount).toBe(2);
+    expect(second.hitDiagnosticLines?.join('\n')).not.toContain('target_hitpause');
   });
 
   it('rejects new collision against an already-KO target', () => {

@@ -166,3 +166,9 @@ When loader behavior changes, update:
 - this document;
 - `development-policy.md` if the architectural rule changes;
 - compatibility matrix only when an actual compatibility item changes.
+
+## MUGEN stage ZIPs
+
+The application can select an external ZIP URL independently from the HUD design. `AppStageLoader` normalizes archive paths, decodes WinMUGEN-era Shift-JIS DEF text, selects the first DEF deterministically, resolves its sibling `[BGDef] spr` entry, and converts the referenced SFF v1 into the existing RGBA sprite pack. The first supported milestone covers static normal BG layers (`spriteno`, `start`, `delta`, and `layerno`) plus `StageInfo hires/zoffset`. Missing DEF/SFF data or an archive without supported layers fails visibly and falls back to the selected built-in stage rather than silently producing a blank arena.
+
+This is not yet a complete stage loader. BG animations/controllers, tiling, window clipping, foreground `layerno = 1`, camera bounds/tension, shadow/reflection, and stage audio still require separate compatibility work.

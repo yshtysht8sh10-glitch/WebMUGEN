@@ -22,10 +22,20 @@ export type WinMugenHotkeyAction =
 export type WinMugenHotkeyEvent = {
   code: string;
   ctrlKey?: boolean;
+  metaKey?: boolean;
   shiftKey?: boolean;
   altKey?: boolean;
   repeat?: boolean;
 };
+
+export function shouldPreserveNativeTextCopy(
+  event: WinMugenHotkeyEvent,
+  selectedText = getSelectedText(),
+): boolean {
+  return event.code === 'KeyC'
+    && (event.ctrlKey === true || event.metaKey === true)
+    && selectedText.length > 0;
+}
 
 export function resolveWinMugenHotkey(event: WinMugenHotkeyEvent): WinMugenHotkeyAction | null {
   if (event.repeat || event.altKey) return null;
@@ -60,6 +70,11 @@ export function isEditableHotkeyTarget(target: EventTarget | null): boolean {
   const element = target as { tagName?: string; isContentEditable?: boolean } | null;
   const tagName = element?.tagName?.toUpperCase();
   return element?.isContentEditable === true || tagName === 'INPUT' || tagName === 'SELECT' || tagName === 'TEXTAREA';
+}
+
+function getSelectedText(): string {
+  if (typeof window === 'undefined') return '';
+  return window.getSelection()?.toString() ?? '';
 }
 
 export function isWinMugenSystemKey(code: string): boolean {

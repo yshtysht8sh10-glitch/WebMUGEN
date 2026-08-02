@@ -137,7 +137,7 @@ export function applyExplodCreateEvents(gameState: GameState, events: readonly E
       x: randomDisplacement(event.request.random.x, randomSource),
       y: randomDisplacement(event.request.random.y, randomSource),
     };
-    const owner = gameState.players.find((player) => player.id === event.request.owner.entityId);
+    const owner = findRuntimePlayer(gameState, event.request.owner.entityId);
     const opponent = gameState.players.find((player) => player.id !== event.request.owner.rootPlayerId) ?? gameState.players[1];
     const randomWorldX = event.request.postype === 'p2'
       ? randomOffset.x * opponent.facing
@@ -244,14 +244,14 @@ export function applyExplodBindTimeEvents(gameState: GameState, events: readonly
       continue;
     }
 
-    const owner = gameState.players.find((player) => player.id === event.owner.entityId);
+    const owner = findRuntimePlayer(gameState, event.owner.entityId);
     const opponent = gameState.players.find((player) => player.id !== event.owner.rootPlayerId) ?? gameState.players[1];
     const changes: string[] = [];
     entries = entries.map((entry) => {
       if (!isControllerExplod(entry) || !sameRuntimeOwner(entry.owner, event.owner) || entry.mugenId !== event.mugenId) return entry;
       const oldTime = entry.bind?.remaining ?? 0;
       const resolved = owner
-        ? resolveExplodOrigin(entry.postype, owner, opponent, entry.offset.x, entry.offset.y, event.screenWidth)
+        ? resolveExplodOrigin(entry.postype, owner, opponent, entry.offset.x, entry.offset.y, event.screenWidth, event.owner.entityId)
         : null;
       const bind = event.time !== 0 && resolved?.bindTargetEntityId !== null && resolved?.bindTargetEntityId !== undefined
         ? { targetEntityId: resolved.bindTargetEntityId, remaining: event.time, offsetX: entry.offset.x, offsetY: entry.offset.y }
@@ -279,11 +279,11 @@ export function applyExplodControllerEvents(gameState: GameState, events: readon
 
 function applyExplodModifyPatch(entry: ExplodRuntimeEntry, event: ExplodModifyEvent, gameState: GameState): ExplodRuntimeEntry {
   const patch = event.patch;
-  const owner = gameState.players.find((player) => player.id === event.owner.entityId);
+  const owner = findRuntimePlayer(gameState, event.owner.entityId);
   const opponent = gameState.players.find((player) => player.id !== event.owner.rootPlayerId) ?? gameState.players[1];
   const postype = patch.postype ?? entry.postype;
   const offset = patch.offset ?? entry.offset;
-  const resolved = owner ? resolveExplodOrigin(postype, owner, opponent, offset.x, offset.y, event.screenWidth) : null;
+  const resolved = owner ? resolveExplodOrigin(postype, owner, opponent, offset.x, offset.y, event.screenWidth, event.owner.entityId) : null;
   const facing = patch.facingParameter === undefined
     ? entry.facing
     : normalizeExplodFacing((resolved?.baseFacing ?? 1) * patch.facingParameter);
@@ -349,8 +349,9 @@ export function resolveExplodOrigin(
   offsetX: number,
   offsetY: number,
   screenWidth: number,
+  ownerEntityId: number = player.id,
 ): { x: number; y: number; baseFacing: 1 | -1; coordinateSpace: ExplodCoordinateSpace; bindTargetEntityId: number | null } {
-  if (postype === 'p1') return { x: player.x + offsetX * player.facing, y: player.y + offsetY, baseFacing: player.facing, coordinateSpace: 'stage', bindTargetEntityId: player.id };
+  if (postype === 'p1') return { x: player.x + offsetX * player.facing, y: player.y + offsetY, baseFacing: player.facing, coordinateSpace: 'stage', bindTargetEntityId: ownerEntityId };
   if (postype === 'p2') return { x: opponent.x + offsetX * opponent.facing, y: opponent.y + offsetY, baseFacing: opponent.facing, coordinateSpace: 'stage', bindTargetEntityId: opponent.id };
   if (postype === 'front') return { x: (player.facing === 1 ? screenWidth : 0) + offsetX, y: offsetY, baseFacing: 1, coordinateSpace: 'screen', bindTargetEntityId: null };
   if (postype === 'back') return { x: (player.facing === 1 ? 0 : screenWidth) + offsetX * player.facing, y: offsetY, baseFacing: player.facing, coordinateSpace: 'screen', bindTargetEntityId: null };
@@ -376,15 +377,19 @@ export function stepExplodRuntime(gameState: GameState, resolveAnimation: Explod
       : pauseState?.pauseTime && pauseState.pauseTime > 0 ? 'pause' : null;
     if (pauseReason) {
       const allowance = pauseReason === 'superpause' ? entry.superMoveTime : entry.pauseMoveTime;
-      if (allowance <= 0) {
+      if (allowance === 0) {
         entries.push(entry);
         diagnosticLines.push(`raw.explod_step internalId=${entry.runtimeId} mugenId=${entry.mugenId} result=frozen pause=${pauseReason} allowance=0 age=${entry.age} animTime=${entry.animTime} pos=(${entry.position.x},${entry.position.y}) vel=(${entry.velocity.x},${entry.velocity.y})`);
         continue;
       }
-      entry = pauseReason === 'superpause'
-        ? { ...entry, superMoveTime: allowance - 1 }
-        : { ...entry, pauseMoveTime: allowance - 1 };
-      diagnosticLines.push(`raw.explod_pause internalId=${entry.runtimeId} mugenId=${entry.mugenId} pause=${pauseReason} update=allowed allowanceBefore=${allowance} allowanceAfter=${allowance - 1}`);
+      if (allowance > 0) {
+        entry = pauseReason === 'superpause'
+          ? { ...entry, superMoveTime: allowance - 1 }
+          : { ...entry, pauseMoveTime: allowance - 1 };
+        diagnosticLines.push(`raw.explod_pause internalId=${entry.runtimeId} mugenId=${entry.mugenId} pause=${pauseReason} update=allowed allowanceBefore=${allowance} allowanceAfter=${allowance - 1}`);
+      } else {
+        diagnosticLines.push(`raw.explod_pause internalId=${entry.runtimeId} mugenId=${entry.mugenId} pause=${pauseReason} update=allowed allowanceBefore=${allowance} allowanceAfter=${allowance} mode=indefinite`);
+      }
     }
     const creationFrame = entry.creationFrame === gameState.frame && entry.age === 0;
     const nextAge = creationFrame ? entry.age : entry.age + 1;
@@ -478,7 +483,7 @@ function stepExplodBind(
     return { bind: null, position: entry.position, diagnostic: ' bindResult=released' };
   }
 
-  const target = gameState.players.find((player) => player.id === bind.targetEntityId);
+  const target = findRuntimePlayer(gameState, bind.targetEntityId);
   if (!target) return { bind: null, position: entry.position, diagnostic: ' bindResult=released_owner_missing' };
 
   return {
@@ -489,4 +494,9 @@ function stepExplodBind(
     },
     diagnostic: ' bindResult=followed',
   };
+}
+
+function findRuntimePlayer(gameState: GameState, entityId: number): PlayerState | undefined {
+  return gameState.players.find((player) => player.id === entityId)
+    ?? gameState.helpers.entries.find((helper) => helper.entityId === entityId)?.player;
 }

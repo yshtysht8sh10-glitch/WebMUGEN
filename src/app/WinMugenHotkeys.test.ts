@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialGameState } from '../core/engine/GameState';
 import { createInitialRoundState } from '../core/engine/RoundState';
-import { applyWinMugenStateActions, isWinMugenSystemKey, resolveWinMugenHotkey } from './WinMugenHotkeys';
+import {
+  applyWinMugenStateActions,
+  isWinMugenSystemKey,
+  resolveWinMugenHotkey,
+  shouldPreserveNativeTextCopy,
+} from './WinMugenHotkeys';
 
 describe('WinMUGEN hotkeys', () => {
   it.each([
@@ -33,6 +38,13 @@ describe('WinMUGEN hotkeys', () => {
     expect(resolveWinMugenHotkey({ code: 'F3', ctrlKey: true })).toBeNull();
     expect(resolveWinMugenHotkey({ code: 'Digit1', ctrlKey: true })).toBeNull();
     expect(resolveWinMugenHotkey({ code: 'Digit1', ctrlKey: true, altKey: true })).toBeNull();
+  });
+
+  it('preserves the native copy shortcut when text is selected', () => {
+    expect(shouldPreserveNativeTextCopy({ code: 'KeyC', ctrlKey: true }, 'selected source')).toBe(true);
+    expect(shouldPreserveNativeTextCopy({ code: 'KeyC', metaKey: true }, 'selected source')).toBe(true);
+    expect(shouldPreserveNativeTextCopy({ code: 'KeyC', ctrlKey: true }, '')).toBe(false);
+    expect(shouldPreserveNativeTextCopy({ code: 'KeyD', ctrlKey: true }, 'selected source')).toBe(false);
   });
 
   it('identifies system keys that must not skip the round presentation', () => {
