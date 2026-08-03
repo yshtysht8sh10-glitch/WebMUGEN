@@ -77,7 +77,7 @@ clear at the beginning of the next CNS tick unless asserted again. `noautoturn` 
 grounded stage-facing rule. `invisible`, the three guard-prohibition flags, attacker-local
 `unguardable`, `nojugglecheck`, `noBG`, and `nobardisplay` are consumed by Canvas, guard, juggle,
 stage, and HUD paths without deleting the entity or forcing a State. `noBG` intentionally suppresses
-the Stage pass and is independent of `BGPalFX`, which filters but retains external Stage imagery. `intro` synchronizes character
+the Stage pass and exposes a black Canvas backing rather than a presentation-theme gradient; it is independent of `BGPalFX`, which filters but retains external Stage imagery. `intro` synchronizes character
 intros, and `roundnotover` delays the automatic next-round restart while a victory State asserts it.
 Timer/audio/shadow/noFG/nowalk consumers and exact hitpause persistence remain Partial.
 

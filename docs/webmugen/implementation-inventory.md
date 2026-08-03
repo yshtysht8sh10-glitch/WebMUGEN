@@ -4,6 +4,10 @@ Updated: 2026-07-23
 
 This document is a high-level inventory of WebMUGEN implementation areas. It is not the source of truth for exact compatibility status; use the compatibility matrix for that.
 
+- Content catalog and classification: `src/app/ContentCatalog.ts`, `public/content/catalog.json`, and `docs/webmugen/content-catalog.md`.
+- URL content selection: `src/app/UrlContentSelection.ts` and `docs/webmugen/url-settings.md`.
+- Separated Stage/LifeBar presentation runtimes: `src/stage/{winmugen,webmugen}`, `src/lifebar/{winmugen,webmugen}`, and `docs/webmugen/native-presentation.md`.
+
 ## Parser layer
 
 | Area | Status summary |
@@ -41,7 +45,8 @@ This document is a high-level inventory of WebMUGEN implementation areas. It is 
 | Hit effects | Contact envelopes feed same-frame shared Explod sparks, shared Browser Audio cues, and envshake offsets once per HitEvent. Character `S` scope is production-connected; bundled common fightfx/SND assets are absent and remain diagnosed Partial. |
 | Browser audio | Shared lazy AudioContext adapter supports user-gesture unlock, decode cache, owner/channel gain and pan, a ramped persistent 0-100 master/mute UI (default 50%), stop/cleanup, and safe diagnostics. Common SND and advanced ownership remain incomplete. |
 | Static debug | Character load, StateDef list, command routes, and coverage are visible. |
-| Runtime settings | Persistent Game time, frame interval, hit diagnostics, root-player Power Infinite, Practice Mode zero-Life recovery/timer freeze, and four independent opt-in Debug/Logging sinks exist. Human/AI logs, collision boxes, lower-left history, and Practice Mode default OFF; a rolling 600-frame performance snapshot supports A-F comparisons. |
+| Runtime settings | Publisher defaults, versioned per-origin browser settings, legacy-key migration, field validation, and full Settings reset are unified under `webmugen.settings.v1`; live match state is excluded. Persistent Game time, frame interval, hit diagnostics, root-player Power Infinite, Practice Mode zero-Life recovery/timer freeze, and four independent opt-in Debug/Logging sinks exist. Human/AI logs, collision boxes, lower-left history, and Practice Mode default OFF; a rolling 600-frame performance snapshot supports A-F comparisons. |
+| Build mode | One explicit Development/Public mode derives editor, loader, default-export, Runtime Debug, trace, log, collision, history, and diagnostic features. Production defaults fail closed to Public; saved development-only values are ignored there. |
 
 ## Documentation layer
 
@@ -59,6 +64,8 @@ This document is a high-level inventory of WebMUGEN implementation areas. It is 
 | Debug Overlay | `debug-overlay.md` |
 | Runtime History | `runtime-history.md` |
 | Performance/debug settings | `performance-debug-settings.md` |
+| Publisher/user settings | `settings.md` |
+| Development/Public builds | `build-mode.md` |
 | Power Infinite setting | `infinite-power-settings.md` |
 | Matrix maintenance | `matrix-maintenance.md` |
 | StateDef header notes | `state-def-header-notes.md` |

@@ -100,6 +100,10 @@ describe('HUD and stage appearance settings', () => {
       stageArchivePath: '/stages/custom.zip',
     });
   });
+
+  it.each(['fresh-clasic', 'cyber-clasic'] as const)('preserves native legacy presentation %s', (stageTheme) => {
+    expect(normalizeRuntimeSettings({ stageTheme }).stageTheme).toBe(stageTheme);
+  });
 });
 
 describe('Issue #75 debug and logging settings', () => {

@@ -4,6 +4,7 @@ import type { MugenStage } from '../stage/MugenStage';
 
 export const MUGEN_WORLD_ORIGIN_X = 480;
 export const MUGEN_GROUND_Y = 285;
+const WINMUGEN_STAGE_VIEWPORT_WIDTH = 320;
 
 export type ScreenSizeMode = 'winmugen-800x480' | 'winmugen-classic-640x480' | 'wide-960x540';
 
@@ -94,7 +95,14 @@ function resolveStageCamera(state: GameState, width: number, height: number, sta
   if (minimumX < leftEdge + tension) stageX -= leftEdge + tension - minimumX;
   leftEdge = MUGEN_WORLD_ORIGIN_X + stageX - width / 2;
   if (maximumX > leftEdge + width - tension) stageX += maximumX - (leftEdge + width - tension);
-  stageX = clamp(stageX, stage.camera.boundLeft, stage.camera.boundRight);
+  const horizontalViewportInset = Math.max(0, (width - WINMUGEN_STAGE_VIEWPORT_WIDTH) / 2);
+  const adjustedBoundLeft = stage.camera.boundLeft + horizontalViewportInset;
+  const adjustedBoundRight = stage.camera.boundRight - horizontalViewportInset;
+  if (adjustedBoundLeft <= adjustedBoundRight) {
+    stageX = clamp(stageX, adjustedBoundLeft, adjustedBoundRight);
+  } else {
+    stageX = (stage.camera.boundLeft + stage.camera.boundRight) / 2;
+  }
 
   const highestY = Math.min(...ySources.map((player) => player.y));
   const heightAboveFloor = Math.max(0, MUGEN_GROUND_Y - highestY);

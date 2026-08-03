@@ -31,14 +31,14 @@ const prototype = CanvasRenderer.prototype as unknown as PatchableRenderer;
 const originalRender = prototype.render;
 const cachedOffsets = new WeakMap<object, number>();
 
-prototype.render = function renderWithResponsiveFreshPlacement(
+prototype.render = function renderWithResponsiveBuiltInStagePlacement(
   state,
   hitFeedback,
   roundState,
   roundScore,
   options = {},
 ): string[] {
-  if ((options.stageTheme ?? 'fresh') !== 'fresh') {
+  if (!usesResponsiveBuiltInStagePlacement(options.stageTheme ?? 'fresh')) {
     return originalRender.call(this, state, hitFeedback, roundState, roundScore, options);
   }
 
@@ -48,13 +48,11 @@ prototype.render = function renderWithResponsiveFreshPlacement(
 
   let visualOffset = cachedOffsets.get(this) ?? 0;
   if (grounded.length > 0) {
-    const currentGround = Math.max(...grounded.map((player) => player.y - camera.y));
-    const existingFreshOffset = Math.max(0, 285 - camera.y - viewport.logicalHeight * 0.78);
-    const bottomMargin = viewport.logicalHeight <= 240
-      ? 18
-      : Math.max(28, Math.round(viewport.logicalHeight * 0.055));
-    const desiredGround = viewport.logicalHeight - bottomMargin;
-    visualOffset = clamp(desiredGround - currentGround - existingFreshOffset, -180, 180);
+    visualOffset = resolveBuiltInStageWorldVisualOffset(
+      grounded.map((player) => player.y),
+      camera.y,
+      viewport.logicalHeight,
+    );
     cachedOffsets.set(this, visualOffset);
   }
 
@@ -63,14 +61,21 @@ prototype.render = function renderWithResponsiveFreshPlacement(
   }
 
   const adjustedState = {
-    ...shiftFreshWorldVisuals(state, visualOffset),
+    ...shiftBuiltInStageWorldVisuals(state, visualOffset),
     camera: { ...camera, viewportWidth: viewport.logicalWidth, viewportHeight: viewport.logicalHeight },
   };
 
   return originalRender.call(this, adjustedState, hitFeedback ? shiftHitFeedback(hitFeedback, visualOffset) : undefined, roundState, roundScore, options);
 };
 
-export function shiftFreshWorldVisuals(state: GameState, offsetY: number): GameState {
+export function usesResponsiveBuiltInStagePlacement(stageTheme: StageTheme): boolean {
+  return stageTheme === 'fresh'
+    || stageTheme === 'cyber'
+    || stageTheme === 'fresh-clasic'
+    || stageTheme === 'cyber-clasic';
+}
+
+export function shiftBuiltInStageWorldVisuals(state: GameState, offsetY: number): GameState {
   return {
     ...state,
     players: state.players.map((player) => shiftPlayer(player, offsetY)) as GameState['players'],
@@ -89,6 +94,19 @@ export function shiftFreshWorldVisuals(state: GameState, offsetY: number): GameS
         : entry),
     },
   };
+}
+
+export function resolveBuiltInStageWorldVisualOffset(
+  groundedPlayerYs: readonly number[],
+  cameraY: number,
+  viewportHeight: number,
+): number {
+  if (groundedPlayerYs.length === 0) return 0;
+  const currentGround = Math.max(...groundedPlayerYs.map((y) => y - cameraY));
+  const bottomMargin = viewportHeight <= 240
+    ? 18
+    : Math.max(28, Math.round(viewportHeight * 0.055));
+  return clamp(viewportHeight - bottomMargin - currentGround, -180, 180);
 }
 
 function shiftHitFeedback(feedback: HitFeedbackState, offsetY: number): HitFeedbackState {

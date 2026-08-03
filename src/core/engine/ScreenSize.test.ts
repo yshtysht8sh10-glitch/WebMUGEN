@@ -78,7 +78,7 @@ describe('screen size profiles', () => {
     expect(resolveViewportCamera(next, 400, 240)).toEqual({ x: 280, y: 65 });
   });
 
-  it('uses Stage tension, horizontal bounds, and vertical follow', () => {
+  it('uses Stage tension, viewport-adjusted horizontal bounds, and vertical follow', () => {
     const state = createInitialGameState(undefined, {}, [380, 700]);
     state.players[0] = { ...state.players[0], y: 125, stateType: 'A', physics: 'A' };
     const next = applyViewportCameraRules(state, 400, 240, beachStage());
@@ -87,7 +87,10 @@ describe('screen size profiles', () => {
 
     const beyond = createInitialGameState(undefined, {}, [380, 1000]);
     const bounded = applyViewportCameraRules(beyond, 400, 240, beachStage());
-    expect(resolveViewportCamera(bounded, 400, 240).x).toBe(440);
+    expect(resolveViewportCamera(bounded, 400, 240).x).toBe(400);
+
+    const classicBounded = applyViewportCameraRules(beyond, 320, 240, beachStage());
+    expect(resolveViewportCamera(classicBounded, 320, 240).x).toBe(480);
   });
 });
 

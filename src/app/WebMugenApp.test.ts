@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { MutableRefObject } from 'react';
 import type { CnsRuntimeTrace } from '../core/cns/CnsStateRuntime';
-import { AudioStartOverlay, CHARACTER_PATH_OPTIONS, CharacterSourceEditorLines, CharacterSourceFilesViewer, HumanRuntimePanel, ManualPanel, RuntimeFrameIndexList, RuntimeSettingsPanel, WebMugenApp, appendRuntimeHistoryIfNeeded, appendSourceViewHistory, createActPreviewImage, createReadableRuntimeTriggerChangeSignature, createRuntimeFrameIndexGridTemplate, createSourceNavigationTargets, createSourceOutline, createSourceViewHistoryEntry, drawAirPreview, findAirActionForLine, findAirActionSourceSelection, findStateDefSourceSelection, formatSatisfiedStateDefTriggers, parseControllerValueText, shouldEvaluateHumanLogFrame, stripReadableRuntimeValueSummaries } from './WebMugenApp';
+import { AudioStartOverlay, CHARACTER_PATH_OPTIONS, CharacterSourceEditorLines, CharacterSourceFilesViewer, ContentCatalogPanel, HumanRuntimePanel, ManualPanel, RuntimeFrameIndexList, RuntimeSettingsPanel, WebMugenApp, appendRuntimeHistoryIfNeeded, appendSourceViewHistory, createActPreviewImage, createReadableRuntimeTriggerChangeSignature, createRuntimeFrameIndexGridTemplate, createSourceNavigationTargets, createSourceOutline, createSourceViewHistoryEntry, drawAirPreview, findAirActionForLine, findAirActionSourceSelection, findStateDefSourceSelection, formatSatisfiedStateDefTriggers, parseControllerValueText, shouldEvaluateHumanLogFrame, stripReadableRuntimeValueSummaries } from './WebMugenApp';
 import { DEFAULT_RUNTIME_SETTINGS } from './RuntimeSettings';
 import type { ImageDataSpritePack } from '../core/sprite/ImageDataSpriteTypes';
 import { parseCnsText } from '../parser/cns/CnsParser';
@@ -205,11 +205,71 @@ describe('WebMugenApp runtime history', () => {
     expect(settingsHtml).toContain('aria-label="Practice Mode"');
     expect(settingsHtml).toContain('Recover at 0 life and remove the round time limit.');
     expect(settingsHtml).toContain('aria-label="Logical screen size"');
+    expect(settingsHtml).toContain('[WinMUGEN] Stage ZIP');
     expect(settingsHtml).toContain('Extended Hi-Res 800×480 (400×240 coordinates)');
     expect(settingsHtml).toContain('WinMUGEN Classic 640×480 (320×240 coordinates)');
     expect(settingsHtml).toContain('Wide 960×540 (16:9)');
     const appHtml = renderToStaticMarkup(createElement(WebMugenApp, { initialPage: 'play' }));
     expect(appHtml).toContain('width="800" height="480"');
+    expect(appHtml).toContain('DEVELOPMENT MODE');
+  });
+
+  it('keeps normal Settings while omitting developer settings in public presentation', () => {
+    const html = renderToStaticMarkup(createElement(RuntimeSettingsPanel, {
+      settings: { ...DEFAULT_RUNTIME_SETTINGS, humanLogEnabled: true, aiLogEnabled: true },
+      onChange: () => undefined,
+      showDeveloperSettings: false,
+      canEditStageSource: false,
+    }));
+    expect(html).toContain('Game time');
+    expect(html).toContain('Practice mode');
+    expect(html).toContain('Gauge design');
+    expect(html).toContain('[WebMUGEN] Fresh Clasic');
+    expect(html).toContain('[WebMUGEN] Cyber Clasic');
+    expect(html).not.toContain('Human log');
+    expect(html).not.toContain('AI log');
+    expect(html).not.toContain('Collision boxes');
+    expect(html).not.toContain('State history');
+    expect(html).not.toContain('Frame duration');
+    expect(html).not.toContain('Stage ZIP path');
+    expect(html).not.toContain('MUGEN Stage ZIP');
+  });
+
+  it('identifies the engine in Stage and LifeBar catalog options', () => {
+    const catalog = { version: 1 as const, totalEntries: 5, rejectedEntries: 0, issues: [], entries: [
+      { id: 'hero', name: 'Hero', kind: 'character' as const, engine: 'winmugen' as const, path: '/chars/hero.def' },
+      { id: 'fresh', name: 'Fresh', kind: 'stage' as const, engine: 'webmugen' as const, path: 'builtin:stage:fresh' },
+      { id: 'arena', name: 'Arena', kind: 'stage' as const, engine: 'winmugen' as const, path: '/stages/arena.def' },
+      { id: 'fresh-hud', name: 'Fresh HUD', kind: 'lifebar' as const, engine: 'webmugen' as const, path: 'builtin:lifebar:fresh-hud' },
+      { id: 'classic-hud', name: 'Classic HUD', kind: 'lifebar' as const, engine: 'winmugen' as const, path: '/lifebars/winmugen/classic.def' },
+    ] };
+    const html = renderToStaticMarkup(createElement(ContentCatalogPanel, {
+      catalog,
+      settings: { catalogPath: '/content/catalog.json', characterId: 'hero', stageId: 'fresh', lifeBarId: 'fresh-hud', characterPath: '/chars/hero.def' },
+      readResult: null, selectionSource: { character: 'settings', stage: 'settings' }, canManage: false, canGenerate: false,
+      onSelect: () => undefined, onPathChange: () => undefined, onReload: () => undefined,
+    }));
+
+    expect(html).toContain('[WinMUGEN] Hero (hero)');
+    expect(html).toContain('[WebMUGEN] Fresh (fresh)');
+    expect(html).toContain('[WinMUGEN] Arena (arena)');
+    expect(html).toContain('[WebMUGEN] Fresh HUD (fresh-hud)');
+    expect(html).toContain('[WinMUGEN] Classic HUD (classic-hud)');
+    expect(html).not.toContain('Content management');
+    expect(html).not.toContain('Selected by settings');
+
+    const developmentHtml = renderToStaticMarkup(createElement(ContentCatalogPanel, {
+      catalog,
+      settings: { catalogPath: '/content/catalog.json', characterId: 'hero', stageId: 'fresh', lifeBarId: 'fresh-hud', characterPath: '/chars/hero.def' },
+      readResult: { catalog, status: 'success', sourcePath: '/content/catalog.json', fallbackUsed: false, issues: [] },
+      selectionSource: { character: 'settings', stage: 'settings' }, canManage: true, canGenerate: true,
+      onSelect: () => undefined, onPathChange: () => undefined, onReload: () => undefined,
+    }));
+    expect(developmentHtml).toContain('Content management');
+    expect(developmentHtml).toContain('Content list file');
+    expect(developmentHtml).toContain('Catalog Generator');
+    expect(developmentHtml).toContain('>1</strong>');
+    expect(developmentHtml).toContain('>2</strong>');
   });
 
   it('keeps the game panel mounted while leaving hidden static and Settings content unmounted', () => {
@@ -237,6 +297,8 @@ describe('WebMugenApp runtime history', () => {
     expect(inputConfigStart).toBeGreaterThan(-1);
     expect(controlSummaryStart).toBeGreaterThan(inputConfigStart);
     expect(html).toContain('class="input-config-card control-summary-card"');
+    expect(html).toContain('Use current settings as publisher defaults');
+    expect(html).toContain('Restore publisher defaults');
   });
 
   it('renders the user gesture and explicit no-audio start controls without tab navigation', () => {
@@ -341,6 +403,24 @@ describe('WebMugenApp runtime history', () => {
     expect(textHtml).toContain('source-syntax-plain');
     expect(textHtml).toContain('ordinary notes');
     expect(textHtml).not.toContain('outline=-');
+  });
+
+  it('keeps Character Files browsable without exposing editing when no save capability is provided', () => {
+    const html = renderToStaticMarkup(createElement(CharacterSourceFilesViewer, {
+      files: [{
+        path: 'Demo/Demo.cns', label: 'Demo.cns', text: '[StateDef 100]\ntype = S', kind: 'cns', editable: true,
+      }],
+      selection: { path: 'Demo/Demo.cns', line: 1 },
+      onSelect: () => undefined,
+    }));
+
+    expect(html).toContain('<h2>Character Files</h2>');
+    expect(html).toContain('Demo.cns');
+    expect(html).toContain('StateDef');
+    expect(html).toContain('aria-label="Highlight line 1"');
+    expect(html).not.toContain('>Edit<');
+    expect(html).not.toContain('>Save<');
+    expect(html).not.toContain('aria-label="Character file editor"');
   });
 
   it('links constant Anim, ChangeState value, and stateno assignments while browsing', () => {

@@ -26,13 +26,20 @@ import {
 } from './ExplodRender';
 import { resolveBgPalFxFilter } from '../../core/palfx/BgPalFxSystem';
 import {
-  MUGEN_GROUND_Y,
-  MUGEN_WORLD_ORIGIN_X,
   resolveCanvasViewport,
   resolveViewportCamera,
 } from '../../core/engine/ScreenSize';
 import type { HudTheme, StageTheme } from '../../app/RuntimeSettings';
 import type { MugenStage } from '../../core/stage/MugenStage';
+import type { StageRuntime } from '../../stage/StageRuntime';
+import type { LifeBarRuntime } from '../../lifebar/LifeBarRuntime';
+import { WinMugenStageRuntime } from '../../stage/winmugen/WinMugenStageRuntime';
+export { resolveStageCameraPosition, resolveStageLayerPosition } from '../../stage/winmugen/WinMugenStageRenderer';
+
+export type CanvasPresentationRuntimes = {
+  stageRuntime: StageRuntime;
+  lifeBarRuntime: LifeBarRuntime;
+};
 
 export class CanvasRenderer {
   private readonly context: CanvasRenderingContext2D;
@@ -43,6 +50,8 @@ export class CanvasRenderer {
   private lastPowerHudSignature = '';
   private reportedInitialPower = false;
   private lastTimings = { normalMs: 0, debugMs: 0 };
+  private readonly stageRuntime?: StageRuntime;
+  private readonly lifeBarRuntime?: LifeBarRuntime;
 
   getLastTimings(): Readonly<{ normalMs: number; debugMs: number }> {
     return this.lastTimings;
@@ -56,11 +65,14 @@ export class CanvasRenderer {
     private readonly ownerAssets: Partial<Record<1 | 2, CharacterRenderAssets>> = {},
     private readonly fightFxAssets?: CharacterRenderAssets,
     private readonly stage?: MugenStage | null,
+    presentation?: Partial<CanvasPresentationRuntimes>,
   ) {
     const context = canvas.getContext('2d');
     if (!context) throw new Error('CanvasRenderingContext2D is not available.');
     this.context = context;
     this.context.imageSmoothingEnabled = false;
+    this.stageRuntime = presentation?.stageRuntime ?? (stage ? new WinMugenStageRuntime(stage) : undefined);
+    this.lifeBarRuntime = presentation?.lifeBarRuntime;
   }
 
   render(
@@ -80,7 +92,8 @@ export class CanvasRenderer {
     const hudScale = winMugenViewport ? 0.5 : 1;
     const hudViewportWidth = winMugenViewport ? this.canvas.width : viewport.logicalWidth;
     const stageTheme = options.stageTheme ?? 'fresh';
-    const freshPlayerVisualOffsetY = stageTheme === 'fresh' ? Math.max(0, 285 - camera.y - viewport.logicalHeight * 0.78) : 0;
+    this.stageRuntime?.update(state);
+    this.lifeBarRuntime?.update(state, roundState, roundScore);
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     const shake = getScreenShakeOffset(hitFeedback);
     ctx.save();
@@ -91,16 +104,26 @@ export class CanvasRenderer {
     if (!globalFlags.has('nobg')) {
       ctx.save();
       ctx.filter = bgPalFxFilter;
-      this.drawStage(ctx, viewport.logicalWidth, viewport.logicalHeight, camera.x, camera.y, stageTheme);
+      if (this.stageRuntime) {
+        this.stageRuntime.render({ ctx, viewportWidth: viewport.logicalWidth, viewportHeight: viewport.logicalHeight, cameraX: camera.x, cameraY: camera.y });
+      } else {
+        this.drawStage(ctx, viewport.logicalWidth, viewport.logicalHeight, camera.x, camera.y, stageTheme);
+      }
       ctx.restore();
     }
     if (state.envColor?.under) this.drawEnvironmentColor(ctx, state.envColor.color, viewport.logicalWidth, viewport.logicalHeight);
     const hideBars = options.hudVisible === false || globalFlags.has('nobardisplay');
     ctx.save();
     ctx.scale(hudScale, hudScale);
-    if (!hideBars) this.drawLifeBars(ctx, state, hudViewportWidth, options.hudTheme ?? 'fresh');
-    const powerDiagnostics = hideBars ? [] : this.drawPowerBars(ctx, state, diagnosticsEnabled, hudViewportWidth, options.hudTheme ?? 'fresh');
-    if (roundState && !hideBars) this.roundStateRenderer.render(ctx, roundState, roundScore, hudViewportWidth, options.hudTheme ?? 'fresh');
+    const lifeBarContext = { ctx, state, roundState, roundScore, viewportWidth: hudViewportWidth, diagnosticsEnabled };
+    let powerDiagnostics: string[] = [];
+    if (!hideBars && this.lifeBarRuntime) {
+      powerDiagnostics = this.lifeBarRuntime.renderBehindPlayers(lifeBarContext);
+    } else if (!hideBars) {
+      this.drawLifeBars(ctx, state, hudViewportWidth, options.hudTheme ?? 'fresh');
+      powerDiagnostics = this.drawPowerBars(ctx, state, diagnosticsEnabled, hudViewportWidth, options.hudTheme ?? 'fresh');
+      if (roundState) this.roundStateRenderer.renderHud(ctx, roundState, roundScore, hudViewportWidth, options.hudTheme ?? 'fresh');
+    }
     ctx.restore();
     ctx.save();
     ctx.translate(-camera.x, -camera.y);
@@ -150,7 +173,7 @@ export class CanvasRenderer {
     for (const drawable of regularDrawables) {
       if (drawable.kind === 'player') {
         ctx.save();
-        ctx.translate(-camera.x, -camera.y + freshPlayerVisualOffsetY);
+        ctx.translate(-camera.x, -camera.y);
         renderDiagnostics.push(...this.drawAfterImages(ctx, drawable.player, diagnosticsEnabled, drawable.scaleX, drawable.scaleY));
         const palFxFilter = resolveBgPalFxFilter(drawable.player.palFx);
         ctx.save();
@@ -187,11 +210,18 @@ export class CanvasRenderer {
       const diagnostic = this.drawExplod(ctx, frame, diagnosticsEnabled);
       if (diagnostic) renderDiagnostics.push(diagnostic);
     }
+    if (roundState && !hideBars) {
+      ctx.save();
+      ctx.scale(hudScale, hudScale);
+      if (this.lifeBarRuntime) this.lifeBarRuntime.renderForeground({ ...lifeBarContext, ctx });
+      else this.roundStateRenderer.renderPresentation(ctx, roundState, hudViewportWidth);
+      ctx.restore();
+    }
     const normalFinishedAt = performance.now();
     const debugStartedAt = normalFinishedAt;
     if (collisionBoxesVisible) {
       ctx.save();
-      ctx.translate(-camera.x, -camera.y + freshPlayerVisualOffsetY);
+      ctx.translate(-camera.x, -camera.y);
       this.drawDebugBoxes(ctx, state.players[0]);
       this.drawDebugBoxes(ctx, state.players[1]);
       state.helpers.entries.forEach((helper) => this.drawDebugBoxes(ctx, helper.player));
@@ -206,6 +236,11 @@ export class CanvasRenderer {
     return [...powerDiagnostics, ...renderDiagnostics];
   }
 
+  dispose(): void {
+    this.stageRuntime?.dispose();
+    this.lifeBarRuntime?.dispose();
+  }
+
   private defaultAssets(): CharacterRenderAssets {
     return {
       airDocument: this.airDocument,
@@ -215,10 +250,6 @@ export class CanvasRenderer {
   }
 
   private drawStage(ctx: CanvasRenderingContext2D, viewportWidth: number, viewportHeight: number, cameraX: number, cameraY: number, theme: StageTheme): void {
-    if (theme === 'external' && this.stage) {
-      this.drawExternalStage(ctx, viewportWidth, cameraX, cameraY);
-      return;
-    }
     if (theme === 'cyber') {
       const cameraOffsetY = 65 - cameraY;
       const horizonY = viewportHeight * 0.48 + cameraOffsetY;
@@ -264,35 +295,6 @@ export class CanvasRenderer {
     ctx.fillStyle = '#26351e';
     const groundY = viewportWidth === 320 && viewportHeight === 240 ? 220 : 285;
     ctx.fillRect(0, groundY, viewportWidth, Math.max(0, viewportHeight - groundY));
-  }
-
-  private drawExternalStage(ctx: CanvasRenderingContext2D, viewportWidth: number, cameraX: number, cameraY: number): void {
-    const stage = this.stage;
-    if (!stage) return;
-    const scale = stage.hiRes ? 0.5 : 1;
-    ctx.save();
-    ctx.scale(scale, scale);
-    const sourceViewportWidth = viewportWidth / scale;
-    const stageCamera = resolveStageCameraPosition({ viewportWidth, zOffset: stage.zOffset, cameraX, cameraY });
-    for (const layer of stage.layers) {
-      const sprite = stage.sprites.sprites.get(spriteKey(layer.groupNo, layer.imageNo));
-      const image = this.imageDataSpriteRenderer.findCanvas(stage.sprites, layer.groupNo, layer.imageNo);
-      if (!sprite || !image) continue;
-      const { x, y } = resolveStageLayerPosition({
-        viewportWidth: sourceViewportWidth,
-        zOffset: stage.zOffset,
-        startX: layer.startX,
-        startY: layer.startY,
-        spriteAxisX: sprite.xAxis,
-        spriteAxisY: sprite.yAxis,
-        cameraX: stageCamera.x,
-        cameraY: stageCamera.y,
-        deltaX: layer.deltaX,
-        deltaY: layer.deltaY,
-      });
-      ctx.drawImage(image, Math.round(x), Math.round(y));
-    }
-    ctx.restore();
   }
 
   private drawEnvironmentColor(ctx: CanvasRenderingContext2D, color: { red: number; green: number; blue: number }, viewportWidth: number, viewportHeight: number): void {
@@ -503,11 +505,11 @@ export class CanvasRenderer {
     ctx.textBaseline = 'middle';
     if (p1.infinitePower) {
       ctx.textAlign = 'right';
-      ctx.fillText('∞', 14 + offsetX, 41);
+      ctx.fillText('∞', 154 + offsetX, 45);
     }
     if (p2.infinitePower) {
       ctx.textAlign = 'left';
-      ctx.fillText('∞', 626 + offsetX, 41);
+      ctx.fillText('∞', 476 + offsetX, 45);
     }
 
     const p1Power = p1.power ?? 0;
@@ -831,34 +833,4 @@ function linearGradient(
 
 export function getPlayersInSpritePriorityOrder(state: GameState): PlayerState[] {
   return [...state.players].sort((a, b) => (a.sprPriority ?? 0) - (b.sprPriority ?? 0) || a.id - b.id);
-}
-
-export function resolveStageLayerPosition(input: {
-  viewportWidth: number;
-  zOffset: number;
-  startX: number;
-  startY: number;
-  spriteAxisX: number;
-  spriteAxisY: number;
-  cameraX: number;
-  cameraY: number;
-  deltaX: number;
-  deltaY: number;
-}): { x: number; y: number } {
-  return {
-    x: input.viewportWidth / 2 + input.startX - input.spriteAxisX - input.cameraX * input.deltaX,
-    y: input.zOffset + input.startY - input.spriteAxisY - input.cameraY * input.deltaY,
-  };
-}
-
-export function resolveStageCameraPosition(input: {
-  viewportWidth: number;
-  zOffset: number;
-  cameraX: number;
-  cameraY: number;
-}): { x: number; y: number } {
-  return {
-    x: input.cameraX + input.viewportWidth / 2 - MUGEN_WORLD_ORIGIN_X,
-    y: input.cameraY + input.zOffset - MUGEN_GROUND_Y,
-  };
 }

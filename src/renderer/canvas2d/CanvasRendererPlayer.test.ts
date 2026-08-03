@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createInitialGameState } from '../../core/engine/GameState';
+import { createInitialRoundState } from '../../core/engine/RoundState';
 import type { AirDocument } from '../../parser/air/AirTypes';
 import type { SpritePack } from '../../core/sprite/SpriteTypes';
 import { CanvasRenderer } from './CanvasRenderer';
@@ -24,6 +25,23 @@ describe('CanvasRenderer player sprite fallback', () => {
     expect(drawImage).toHaveBeenCalledTimes(2);
     expect(fillText.mock.calls.some(([text]) => String(text).startsWith('push '))).toBe(false);
     expect(diagnostics).toEqual([]);
+  });
+
+  it('draws the FIGHT presentation after both player sprites', () => {
+    const order: string[] = [];
+    const drawImage = vi.fn(() => order.push('player'));
+    const context = {
+      ...fakeContext(vi.fn(), vi.fn(), drawImage),
+      fillText: vi.fn((text: string) => { if (text === 'FIGHT!') order.push(text); }),
+    } as unknown as CanvasRenderingContext2D;
+    const canvas = { width: 800, height: 480, getContext: () => context } as unknown as HTMLCanvasElement;
+    const assets = { airDocument: air(0, 10, 0), spritePack: spritePack(10, 0) };
+    const round = { ...createInitialRoundState(), introPresentationFrame: 45 };
+
+    new CanvasRenderer(canvas, undefined, null, null, { 1: assets, 2: assets })
+      .render(createInitialGameState(), undefined, round, undefined, { collisionBoxesVisible: false });
+
+    expect(order).toEqual(['player', 'player', 'FIGHT!']);
   });
 
   it('draws Push and AIR collision labels when collision boxes are enabled', () => {

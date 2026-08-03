@@ -4,6 +4,11 @@ import type { HudTheme } from '../../app/RuntimeSettings';
 
 export class RoundStateRenderer {
   render(ctx: CanvasRenderingContext2D, round: RoundState, score?: RoundScore, viewportWidth = 640, theme: HudTheme = 'fresh'): void {
+    this.renderHud(ctx, round, score, viewportWidth, theme);
+    this.renderPresentation(ctx, round, viewportWidth);
+  }
+
+  renderHud(ctx: CanvasRenderingContext2D, round: RoundState, score?: RoundScore, viewportWidth = 640, theme: HudTheme = 'fresh'): void {
     ctx.save();
     const centerX = viewportWidth / 2;
     ctx.textAlign = 'center';
@@ -24,9 +29,19 @@ export class RoundStateRenderer {
       this.drawScore(ctx, score, viewportWidth, theme);
     }
 
-    if (round.phase === 'intro') {
-      this.drawIntro(ctx, round, centerX);
-    }
+    ctx.restore();
+  }
+
+  renderPresentation(ctx: CanvasRenderingContext2D, round: RoundState, viewportWidth = 640): void {
+    if (round.phase === 'intro' && round.introPresentationFrame === null) return;
+    if (round.phase !== 'intro' && round.phase !== 'ko' && round.phase !== 'timeOver') return;
+
+    ctx.save();
+    const centerX = viewportWidth / 2;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    if (round.phase === 'intro') this.drawIntro(ctx, round, centerX);
 
     if (round.phase === 'ko' || round.phase === 'timeOver') {
       const text = round.phase === 'ko' ? 'K.O.' : 'TIME OVER';

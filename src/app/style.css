@@ -1,3 +1,9 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
   background: #111827;
@@ -38,8 +44,24 @@ canvas {
   display: block;
   width: 100%;
   height: auto;
-  background: linear-gradient(#5c7898 0 65%, #3d612f 65%);
+  background: #000000;
   image-rendering: pixelated;
+}
+
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.development-mode-badge {
+  border: 1px solid #f59e0b;
+  border-radius: 999px;
+  color: #fbbf24;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  padding: 0.35rem 0.65rem;
+  white-space: nowrap;
 }
 
 .stage-viewport {
@@ -2392,6 +2414,156 @@ button.readable-state-badge:disabled {
   margin: 0 0 12px;
 }
 
+.content-selection-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.content-selection-card {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 7px;
+  color: #cbd5e1;
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.content-selection-card > span {
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.content-selection-card select,
+.catalog-management-row input {
+  background: #0f172a;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  color: #f8fafc;
+  min-height: 36px;
+  min-width: 0;
+  padding: 7px;
+  width: 100%;
+}
+
+.content-selection-card small {
+  color: #93c5fd;
+  line-height: 1.4;
+}
+
+.content-count-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.content-count-grid > div {
+  align-items: center;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.content-count-grid span {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.content-count-grid strong {
+  color: #f8fafc;
+  font-size: 18px;
+}
+
+.catalog-read-status {
+  background: #0f172a;
+  border-left: 3px solid #38bdf8;
+  display: grid;
+  gap: 3px;
+  margin-top: 10px;
+  padding: 10px 12px;
+}
+
+.catalog-read-status.status-error,
+.catalog-read-status.status-fallback {
+  border-left-color: #f59e0b;
+}
+
+.catalog-read-status span,
+.catalog-read-issues,
+.catalog-generator-results {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.catalog-management-row {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(220px, 1fr) auto;
+}
+
+.catalog-generator {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 7px;
+  margin-top: 12px;
+  padding: 14px;
+}
+
+.catalog-generator-heading p {
+  margin: 0;
+}
+
+.catalog-generator-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.catalog-generator-actions button {
+  min-height: 34px;
+}
+
+.catalog-generator-warning {
+  color: #fbbf24 !important;
+}
+
+.catalog-generator-status {
+  background: #020617;
+  border-radius: 5px;
+  margin-top: 10px !important;
+  padding: 8px 10px;
+}
+
+.catalog-generator-results dl {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.catalog-generator-results dl > div {
+  background: #020617;
+  border-radius: 5px;
+  padding: 8px;
+}
+
+.catalog-generator-results dt {
+  color: #94a3b8;
+}
+
+.catalog-generator-results dd {
+  color: #f8fafc;
+  font-size: 16px;
+  margin: 4px 0 0;
+}
+
 .settings-field-grid {
   display: grid;
   gap: 12px;
@@ -2801,6 +2973,10 @@ button.readable-state-badge:disabled {
 @media (max-width: 860px) {
   .runtime-core-settings,
   .audio-settings-grid,
+  .content-selection-grid,
+  .content-count-grid,
+  .catalog-generator-results dl,
+  .catalog-management-row,
   .settings-field-grid,
   .live-input-grid {
     grid-template-columns: 1fr;
@@ -2817,6 +2993,41 @@ button.readable-state-badge:disabled {
 
   .live-gamepad-row {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .app-shell {
+    padding: 16px;
+  }
+
+  .app-header {
+    gap: 8px;
+  }
+
+  .app-header h1 {
+    font-size: 28px;
+  }
+
+  .language-toggle {
+    margin-left: 0;
+  }
+
+  .page-tabs {
+    gap: 4px;
+  }
+
+  .page-tabs button {
+    flex: 1;
+    font-size: 12px;
+    min-width: 0;
+    padding: 10px 6px;
+  }
+
+  .settings-page-panel,
+  .settings-section,
+  .content-selection-card {
+    padding: 10px;
   }
 }
 
