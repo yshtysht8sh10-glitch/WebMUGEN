@@ -1,5 +1,6 @@
 export type ContentKind = 'character' | 'stage' | 'lifebar';
 export type ContentEngine = 'winmugen' | 'webmugen';
+export type ContentSource = 'builtin' | 'external';
 
 export type ContentCatalogEntry = {
   id: string;
@@ -7,6 +8,7 @@ export type ContentCatalogEntry = {
   kind: ContentKind;
   engine: ContentEngine;
   path: string;
+  source?: ContentSource;
 };
 
 export type ContentCatalogIssue = {

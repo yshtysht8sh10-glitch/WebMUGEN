@@ -72,6 +72,7 @@ describe('AppCharacterLoader', () => {
       expect(readCharacterRuntimeMetadata(result.character!)).toEqual({
         name: 'Metadata Fighter', authorName: 'Metadata Author', palNo: 3,
       });
+      expect(readCharacterRuntimeMetadata(result.character!, 9).palNo).toBe(9);
       expect(result.character?.cnsSourceFiles?.map((file) => file.path)).toEqual(expect.arrayContaining([
         'Demo/Demo.def',
         'Demo/Demo.cns',
@@ -204,7 +205,7 @@ describe('AppCharacterLoader', () => {
     }
   });
 
-  it('applies T-H-M-A jump startup velocity instead of sticking in air state at ground level', async () => {
+  it('applies T-H-M-A jump startup velocity and palette-specific p9 logic', async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (path: RequestInfo | URL) => {
       const url = String(path);
@@ -224,8 +225,25 @@ describe('AppCharacterLoader', () => {
       const result = await loadAppCharacter('/chars/T-H-M-A.zip');
       const character = result.character;
       expect(character).not.toBeNull();
+      const p9Character = (await loadAppCharacter('/chars/T-H-M-A.zip', 9)).character;
+      expect(p9Character).not.toBeNull();
+
+      const sharedSpriteEntry = [...character!.sprites!.sprites.entries()].find(([, sprite]) => sprite.paletteMetadata?.externalActApplied);
+      expect(sharedSpriteEntry).toBeDefined();
+      const [sharedSpriteKey, p1SharedSprite] = sharedSpriteEntry!;
+      const p9SharedSprite = p9Character!.sprites!.sprites.get(sharedSpriteKey);
+      expect(p9SharedSprite?.paletteMetadata).toMatchObject({ externalActApplied: true });
+      expect(p9SharedSprite?.imageData.data).not.toEqual(p1SharedSprite.imageData.data);
 
       const state = createInitialGameState();
+      const p9State = createInitialGameState(undefined, readCharacterRuntimeMetadata(character!, 9));
+      const p9Result = stepCnsStateRuntime(p9State, character!.cns, {
+        p1Commands: new Set(),
+        p2Commands: new Set(),
+        getAnimationDuration: (animNo) => getAnimationDuration(character!.air, animNo),
+      });
+      expect(p9Result.state.players[0]).toMatchObject({ palNo: 9, power: 2000 });
+
       const jumpStartupDuration = getAnimationDuration(character!.air, 40) ?? 0;
       const runtimeResult = stepCnsStateRuntime(
         {

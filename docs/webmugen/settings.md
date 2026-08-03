@@ -4,7 +4,7 @@ Updated: 2026-08-02
 
 WebMUGEN separates publisher defaults, browser-owned user settings, and live match state.
 
-Content settings store the publisher catalog path plus stable character and stage IDs. Runtime paths are derived from the validated catalog at startup. Public builds lock the source to the published catalog while still allowing selection among its valid entries; development builds can edit and reload the source. See [content-catalog.md](content-catalog.md).
+Content settings store the publisher catalog path, stable Character/Stage/LifeBar IDs, and the selected character palette number (`p1`-`p12`). Runtime paths are derived from the validated catalog at startup. Public builds lock the source to the published catalog while still allowing selection among its valid entries; development builds can edit and reload the source. See [content-catalog.md](content-catalog.md).
 
 The `character` and `stage` URL parameters provide non-persistent, catalog-validated session overrides. Their precedence and fallback rules are documented in [url-settings.md](url-settings.md).
 
@@ -27,7 +27,7 @@ The version 1 object contains only configuration:
 
 - audio volume and mute;
 - match, presentation, and diagnostic runtime settings shown by Settings;
-- selected character path;
+- selected character path and palette number;
 - keyboard and gamepad mappings;
 - Japanese/English UI language.
 
@@ -61,6 +61,6 @@ Edit `public/config/default-settings.json` to change defaults for first-time use
 
 In Development Mode, Settings also exposes **Use current settings as publisher defaults**. After confirmation, the browser sends the normalized complete settings object to the local Vite-only `/__webmugen/default-settings` endpoint, which overwrites the fixed `public/config/default-settings.json` target. Public builds neither render the button nor provide the development middleware endpoint, and the client handler checks the same feature flag before making a request.
 
-Character file selection, arbitrary `/chars/` path entry, Load, and the Character Files editor are Development Mode features. Public Mode omits those controls and source page, rejects their handlers, ignores a previously saved Development Mode character selection, and loads the character selected by the publisher defaults. This is a distribution boundary rather than authentication; only publisher-catalog content should be deployed with a public build.
+Arbitrary Character source loading and source editing are Development Mode features. Public Mode keeps the Character Files page read-only, rejects edit handlers, and loads characters through the publisher catalog. This is a distribution boundary rather than authentication; only publisher-catalog content should be deployed with a public build.
 
 Public Mode also strips saved diagnostic flags and does not persist newly attempted developer-only values. See `build-mode.md` for the complete feature table and deployment checklist.

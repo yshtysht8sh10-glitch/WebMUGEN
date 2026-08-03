@@ -76,15 +76,17 @@ function validateCatalogEntry(
   const kind = readKind(value.kind);
   const engine = readEngine(value.engine);
   const rawPath = typeof value.path === 'string' ? value.path : '';
+  const source = value.source === 'builtin' || value.source === 'external' ? value.source : undefined;
   if (!/^[a-z0-9][a-z0-9_-]{0,63}$/i.test(id)) return reject('Catalog item has an invalid ID.', 'item.id');
   if (!name || name.length > 120) return reject(`Catalog item ${id} has an invalid name.`, 'item.name');
   if (!kind) return reject(`Catalog item ${id} has an unknown kind.`, 'item.kind');
   if (!engine) return reject(`Catalog item ${id} has an unknown engine.`, 'item.engine');
+  if (value.source !== undefined && !source) return reject(`Catalog item ${id} has an unknown source.`, 'item.source');
   const path = resolveCatalogEntryPath(rawPath, sourcePath);
   if (!path || !isPathCompatible(path, kind, engine)) {
     return reject(`Catalog item ${id} has an invalid ${engine} ${kind} path.`, 'item.path');
   }
-  return { entry: { id, name, kind, engine, path } };
+  return { entry: { id, name, kind, engine, path, ...(source ? { source } : {}) } };
 }
 
 function readKind(value: unknown): ContentKind | null {

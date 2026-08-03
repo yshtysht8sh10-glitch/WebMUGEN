@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadCharacterFromDef, resolveAssetPath, type CharacterAssetFetcher } from './CharacterLoader';
+import { loadCharacterFromDef, resolveAssetPath, selectCharacterPalette, type CharacterAssetFetcher } from './CharacterLoader';
 
 describe('CharacterLoader', () => {
   it('resolves relative asset paths from def path', () => {
@@ -171,6 +171,12 @@ describe('CharacterLoader', () => {
       { slot: 2, file: 'kfm4.act' },
     ]);
     expect(Array.from(character.palettes[0].bytes)).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  it('selects the requested DEF palette and falls back to the first available slot', () => {
+    const palettes = [{ slot: 1, file: 'p1.act' }, { slot: 9, file: 'p9.act' }];
+    expect(selectCharacterPalette(palettes, 9)?.file).toBe('p9.act');
+    expect(selectCharacterPalette(palettes, 12)?.file).toBe('p1.act');
   });
 
   it('loads DEF sound through the binary fetcher and exposes group/index bytes', async () => {

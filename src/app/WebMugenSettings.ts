@@ -28,6 +28,7 @@ export type WebMugenSettings = {
     stageId: string;
     lifeBarId: string;
     characterPath: string;
+    paletteNo: number;
   };
   input: InputConfig;
   ui: {
@@ -48,6 +49,7 @@ export const FALLBACK_WEBMUGEN_SETTINGS: WebMugenSettings = {
     stageId: 'cyber',
     lifeBarId: 'default-cyber',
     characterPath: '/chars/T-H-M-A.zip',
+    paletteNo: 1,
   },
   input: cloneInputConfig(DEFAULT_INPUT_CONFIG),
   ui: { language: 'en' },
@@ -108,12 +110,18 @@ export function normalizeWebMugenSettings(value: unknown, base: WebMugenSettings
       stageId: normalizeContentId(contentSource.stageId, base.content.stageId),
       lifeBarId: normalizeContentId(contentSource.lifeBarId, base.content.lifeBarId),
       characterPath: normalizeContentPath(contentSource.characterPath, '/', base.content.characterPath, ['.def', '.zip']),
+      paletteNo: normalizePaletteNo(contentSource.paletteNo, base.content.paletteNo),
     },
     input: normalizeInputConfig(source.input, base.input),
     ui: {
       language: uiSource.language === 'ja' || uiSource.language === 'en' ? uiSource.language : base.ui.language,
     },
   };
+}
+
+function normalizePaletteNo(value: unknown, fallback: number): number {
+  const paletteNo = Number(value);
+  return Number.isInteger(paletteNo) && paletteNo >= 1 && paletteNo <= 12 ? paletteNo : fallback;
 }
 
 export function migrateWebMugenSettings(value: unknown): unknown {

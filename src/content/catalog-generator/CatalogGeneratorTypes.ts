@@ -16,7 +16,11 @@ export type CatalogSourceFile = {
   path: string;
   name: string;
   bytes: Uint8Array;
+  catalogPath?: string;
+  expectedKind?: ContentKind;
 };
+
+export type CatalogDirectoryRole = ContentKind | 'output';
 
 export type CatalogGeneratedItem = ContentCatalogEntry & {
   sourcePath: string;

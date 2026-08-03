@@ -9,9 +9,12 @@ The application-level content list is defined by the validated catalog described
 The loader must preserve WinMUGEN compatibility. Do not compensate for loader/runtime bugs by editing `public/chars/common1.cns`.
 
 Character DEF metadata is also carried into runtime state. `[Info] name` and `author` supply the
-matching string triggers, while the selected first resolved `palN` asset supplies `PalNo`; characters
-without an external palette use slot 1. A future character-select palette choice must update both the
-selected palette asset and this runtime number together.
+matching string triggers. The Settings character palette selector supplies `PalNo` and selects the
+matching DEF `palN` ACT for SFF v1 rendering. The selector accepts `p1` through `p12`; when the
+requested ACT is absent, rendering falls back to the first resolved palette while `PalNo` retains the
+requested number so character CNS palette branches remain observable. For SFF v1, the selected ACT
+overrides the first shared palette owner and propagates through its `samePalette` chain; later
+sprite-specific palettes, such as effect palettes, remain independent.
 
 ## Loaded asset types
 

@@ -1,17 +1,18 @@
-import type { CatalogDirectoryHandle } from './CatalogGeneratorTypes';
+import type { CatalogDirectoryHandle, CatalogDirectoryRole } from './CatalogGeneratorTypes';
 
 const DATABASE_NAME = 'webmugen.catalog-generator';
 const STORE_NAME = 'handles';
-const ROOT_KEY = 'content-root';
+const LEGACY_ROOT_KEY = 'content-root';
 
 export async function saveCatalogDirectoryHandle(
   handle: CatalogDirectoryHandle,
+  role: CatalogDirectoryRole = 'output',
   factory: IDBFactory | undefined = readIndexedDb(),
 ): Promise<boolean> {
   if (!factory) return false;
   const database = await openDatabase(factory);
   try {
-    await requestResult(database.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).put(handle, ROOT_KEY));
+    await requestResult(database.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).put(handle, role));
     return true;
   } finally {
     database.close();
@@ -19,12 +20,16 @@ export async function saveCatalogDirectoryHandle(
 }
 
 export async function loadCatalogDirectoryHandle(
+  role: CatalogDirectoryRole = 'output',
   factory: IDBFactory | undefined = readIndexedDb(),
 ): Promise<CatalogDirectoryHandle | null> {
   if (!factory) return null;
   const database = await openDatabase(factory);
   try {
-    return await requestResult(database.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).get(ROOT_KEY)) as CatalogDirectoryHandle | null;
+    const store = database.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME);
+    const stored = await requestResult(store.get(role)) as CatalogDirectoryHandle | null;
+    if (stored || role !== 'output') return stored;
+    return await requestResult(store.get(LEGACY_ROOT_KEY)) as CatalogDirectoryHandle | null;
   } finally {
     database.close();
   }

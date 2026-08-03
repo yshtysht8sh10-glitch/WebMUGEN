@@ -1,6 +1,6 @@
 # Development and Public Build Modes
 
-Updated: 2026-08-02
+Updated: 2026-08-04
 
 WebMUGEN derives all developer-facing capabilities from one `WebMugenBuildMode`: `development` or `public`. Components must consume the feature set from `BuildMode.ts`; hostname checks and independent feature booleans are not mode authorities.
 
@@ -16,7 +16,7 @@ An explicit valid value wins independently of Vite's DEV/PROD flag. If the value
 
 ## Feature policy
 
-Development Mode enables Character Files editing, arbitrary character loading, Stage source controls, publisher-default export, Runtime Debug, CNS Trace, Human/AI logs, collision boxes, state/input history, internal diagnostics, and Compatibility Matrix links. A persistent `DEVELOPMENT MODE` badge appears in the header.
+Development Mode enables Character Files editing, Catalog source management, separate Character/Stage/LifeBar folder generation, direct Catalog file paths, Stage source controls, publisher-default export, Runtime Debug, CNS Trace, Human/AI logs, collision boxes, state/input history, internal diagnostics, and Compatibility Matrix links. A persistent `DEVELOPMENT MODE` badge appears in the header. Runtime Character selection remains the single Catalog-backed selector shared with Public Mode.
 
 Public Mode retains game play, read-only Character Files browsing, normal audio/input/language/gameplay Settings, and restore-to-publisher-defaults. Character source text, palettes, sprites, sounds, maps, and navigation remain viewable, but Edit/Save controls and the save handler are not provided. Public Mode does not render the other developer pages or controls. It also rejects their handlers, disables trace/log/box/history collection, and normalizes previously saved developer settings to safe values. Publisher-selected character and Stage sources override saved development-only paths.
 
@@ -27,7 +27,7 @@ The mode is a distribution safety boundary, not authentication. Never deploy pri
 - [ ] Run `npm run build:public` (or otherwise set `VITE_WEBMUGEN_MODE=public`).
 - [ ] Confirm there is no `DEVELOPMENT MODE` badge.
 - [ ] Confirm Character Files can be browsed but have no Edit/Save controls.
-- [ ] Confirm arbitrary character path input and publisher-default export are absent.
+- [ ] Confirm Catalog Generator, folder/direct-path inputs, and publisher-default export are absent.
 - [ ] Confirm Runtime Debug, CNS Trace, detailed logs, collision boxes, and state history are absent and not collected.
 - [ ] Confirm gameplay, audio, language, input configuration, settings persistence, and reset work.
 - [ ] Deploy only the intended public catalog and `default-settings.json`.

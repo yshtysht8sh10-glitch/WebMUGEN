@@ -6,6 +6,7 @@ import { spriteKey } from './SpritePackLoader';
 
 export type SffSpritePackConverterOptions = {
   externalPalette?: Uint8Array;
+  externalPaletteSlot?: number;
   preferExternalPalette?: boolean;
   paletteIndexOrder?: 'normal' | 'reversed';
 };
@@ -50,6 +51,7 @@ export function convertSffDocumentToImageDataSpritePack(
       sharedPalette,
       sourcePaletteMetadata,
       externalPaletteSelected: options.externalPalette !== undefined,
+      externalPaletteKey: options.externalPaletteSlot === undefined ? 'external-act' : `external-act:p${options.externalPaletteSlot}`,
       externalPaletteIndexOrder: options.paletteIndexOrder ?? 'normal',
     });
     if (paletteResolution.palette && !palettes.has(paletteResolution.key)) {
@@ -128,7 +130,7 @@ export function convertSffDocumentToImageDataSpritePack(
   return {
     sprites: sprites as ImageDataSpritePack['sprites'],
     palettes,
-    cacheKey: `sffv1:${document.header.imageCount}:${document.header.firstSubfileOffset}:${options.externalPalette ? 'act' : 'embedded'}`,
+    cacheKey: `sffv1:${document.header.imageCount}:${document.header.firstSubfileOffset}:${options.externalPalette ? `act:p${options.externalPaletteSlot ?? 'selected'}` : 'embedded'}`,
   };
 }
 
@@ -149,6 +151,7 @@ function resolveSpritePalette({
   sharedPalette,
   sourcePaletteMetadata,
   externalPaletteSelected,
+  externalPaletteKey,
   externalPaletteIndexOrder,
 }: {
   sprite: SffSpriteNode;
@@ -158,8 +161,20 @@ function resolveSpritePalette({
   sharedPalette: Uint8Array | null;
   sourcePaletteMetadata: ReadonlyMap<number, PaletteResolution>;
   externalPaletteSelected: boolean;
+  externalPaletteKey: string;
   externalPaletteIndexOrder: 'normal' | 'reversed';
 }): PaletteResolution {
+  if (externalPaletteSelected && previousPalette === null && sharedPalette) {
+    return {
+      palette: sharedPalette,
+      paletteIndexOrder: externalPaletteIndexOrder,
+      key: externalPaletteKey,
+      source: 'external-act',
+      owner: sprite,
+      externalActApplied: true,
+    };
+  }
+
   if (!sprite.samePalette && !sprite.isLinked && embeddedPalette) {
     return {
       palette: embeddedPalette,
@@ -204,7 +219,7 @@ function resolveSpritePalette({
   return {
     palette: sharedPalette,
     paletteIndexOrder: externalPaletteSelected ? externalPaletteIndexOrder : 'normal',
-    key: externalPaletteSelected ? 'external-act' : 'shared-embedded',
+    key: externalPaletteSelected ? externalPaletteKey : 'shared-embedded',
     source: externalPaletteSelected ? 'external-act' : 'shared-embedded',
     externalActApplied: externalPaletteSelected,
   };

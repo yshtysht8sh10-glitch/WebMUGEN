@@ -25,19 +25,19 @@ export type CharacterRuntimeMetadata = {
 export function readCharacterRuntimeMetadata(character: {
   def?: DefDocument;
   palettes?: readonly { slot: number }[];
-}): CharacterRuntimeMetadata {
+}, paletteNo = character.palettes?.[0]?.slot ?? 1): CharacterRuntimeMetadata {
   return {
     name: getDefValue(character.def, 'Info', 'name') ?? '',
     authorName: getDefValue(character.def, 'Info', 'author') ?? '',
-    palNo: character.palettes?.[0]?.slot ?? 1,
+    palNo: paletteNo,
   };
 }
 
-export async function loadAppCharacter(defPath: string): Promise<AppCharacterLoadResult> {
+export async function loadAppCharacter(defPath: string, paletteNo = 1): Promise<AppCharacterLoadResult> {
   try {
     const character = defPath.toLowerCase().endsWith('.zip')
-      ? await loadCharacterFromZip(defPath)
-      : await attachHttpCharacterFileInventory(defPath, await loadCharacterFromDef(defPath));
+      ? await loadCharacterFromZip(defPath, paletteNo)
+      : await attachHttpCharacterFileInventory(defPath, await loadCharacterFromDef(defPath, undefined, { paletteNo }));
     return {
       character,
       source: 'def',
@@ -68,9 +68,9 @@ export function createSampleCharacterAssets(): Pick<CharacterAssets, 'cns' | 'ai
   };
 }
 
-async function loadCharacterFromZip(zipPath: string): Promise<CharacterAssets> {
+async function loadCharacterFromZip(zipPath: string, paletteNo: number): Promise<CharacterAssets> {
   const fetcher = await createZipCharacterAssetFetcher(zipPath);
-  const character = await loadCharacterFromDef(fetcher.defPath, fetcher);
+  const character = await loadCharacterFromDef(fetcher.defPath, fetcher, { paletteNo });
   return {
     ...character,
     cnsSourceFiles: mergeCharacterFileInventory(

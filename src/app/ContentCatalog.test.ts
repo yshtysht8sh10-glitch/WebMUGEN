@@ -11,7 +11,7 @@ import {
 const validDocument = {
   version: 1,
   items: [
-    { id: 'hero', name: 'Hero', kind: 'character', engine: 'winmugen', path: 'chars/hero.zip' },
+    { id: 'hero', name: 'Hero', kind: 'character', engine: 'winmugen', path: 'chars/hero.zip', source: 'builtin' },
     { id: 'arena', name: 'Arena', kind: 'stage', engine: 'winmugen', path: 'stages/arena.def' },
     { id: 'hud', name: 'HUD', kind: 'lifebar', engine: 'webmugen', path: 'lifebars/hud.json' },
   ],
@@ -32,6 +32,7 @@ describe('Content Catalog Reader and Validator', () => {
       ['lifebar', '/packs/lifebars/hud.json'],
     ]);
     expect(catalog).toMatchObject({ totalEntries: 3, rejectedEntries: 0, sourcePath: '/packs/catalog.json' });
+    expect(catalog.entries[0].source).toBe('builtin');
   });
 
   it.each([
@@ -96,5 +97,13 @@ describe('Content Catalog Reader and Validator', () => {
       .toBe('[WebMUGEN] Fresh (fresh)');
     expect(formatCatalogEntryLabel({ id: 'arena', name: 'Arena', kind: 'stage', engine: 'winmugen', path: '/stages/arena.def' }))
       .toBe('[WinMUGEN] Arena (arena)');
+  });
+
+  it('rejects an unknown built-in/external source marker', () => {
+    const catalog = validateContentCatalog({ version: 1, items: [
+      { id: 'hero', name: 'Hero', kind: 'character', engine: 'winmugen', path: '/chars/hero.zip', source: 'private' },
+    ] }, '/content/catalog.json');
+    expect(catalog.entries).toEqual([]);
+    expect(catalog.issues[0].code).toBe('item.source');
   });
 });

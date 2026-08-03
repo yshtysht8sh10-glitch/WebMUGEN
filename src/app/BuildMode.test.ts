@@ -18,7 +18,6 @@ describe('WebMUGEN build mode', () => {
       buildMode: 'public',
       characterFiles: true,
       characterEditor: false,
-      characterLoader: false,
       catalogManagement: false,
       catalogGenerator: false,
       publishDefaultsButton: false,

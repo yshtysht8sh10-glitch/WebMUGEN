@@ -6,6 +6,7 @@
       "name": "T-H-M-A",
       "kind": "character",
       "engine": "winmugen",
+      "source": "builtin",
       "path": "/chars/T-H-M-A.zip"
     },
     {
@@ -13,6 +14,7 @@
       "name": "KFM",
       "kind": "character",
       "engine": "winmugen",
+      "source": "builtin",
       "path": "/chars/kfm/kfm.def"
     },
     {
@@ -20,6 +22,7 @@
       "name": "Fresh Training",
       "kind": "stage",
       "engine": "webmugen",
+      "source": "builtin",
       "path": "builtin:stage:fresh"
     },
     {
@@ -27,6 +30,7 @@
       "name": "Cyber",
       "kind": "stage",
       "engine": "webmugen",
+      "source": "builtin",
       "path": "builtin:stage:cyber"
     },
     {
@@ -34,6 +38,7 @@
       "name": "Fresh Clasic",
       "kind": "stage",
       "engine": "webmugen",
+      "source": "builtin",
       "path": "builtin:stage:fresh-clasic"
     },
     {
@@ -41,6 +46,7 @@
       "name": "Cyber Clasic",
       "kind": "stage",
       "engine": "webmugen",
+      "source": "builtin",
       "path": "builtin:stage:cyber-clasic"
     },
     {
@@ -48,6 +54,7 @@
       "name": "Material 22",
       "kind": "stage",
       "engine": "winmugen",
+      "source": "external",
       "path": "/stages/material-22-archive.zip"
     },
     {
@@ -55,6 +62,7 @@
       "name": "Fresh HUD",
       "kind": "lifebar",
       "engine": "webmugen",
+      "source": "builtin",
       "path": "builtin:lifebar:fresh-hud"
     },
     {
@@ -62,6 +70,7 @@
       "name": "Default Cyber HUD",
       "kind": "lifebar",
       "engine": "webmugen",
+      "source": "builtin",
       "path": "builtin:lifebar:default-cyber"
     }
   ]

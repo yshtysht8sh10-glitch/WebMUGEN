@@ -486,7 +486,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
       characterSoundsRef.current = null;
       setStateTransitionLogLines(['StateNoが変化すると、ここに遷移だけが残ります。']);
 
-      const loadResult = await loadAppCharacter(characterPath);
+      const paletteNo = webMugenSettingsRef.current.content.paletteNo;
+      const loadResult = await loadAppCharacter(characterPath, paletteNo);
       if (disposed) return;
       let loadedStage = null;
       let loadedStageRuntime: StageRuntime | undefined;
@@ -527,6 +528,9 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
       if (disposed) return;
 
       const loadedCharacter = loadResult.character ?? createSampleCharacterAssets();
+      const characterMetadata = loadResult.character
+        ? readCharacterRuntimeMetadata(loadResult.character, paletteNo)
+        : { name: '', authorName: '', palNo: paletteNo };
       const character = {
         ...loadedCharacter,
         cns: ENABLE_RUNTIME_FALLBACKS
@@ -534,7 +538,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
           : loadedCharacter.cns,
       };
       const characterPowerMax = readCnsConst(character.cns, 'data.power');
-      gameStateRef.current = createInitialGameState(characterPowerMax, readCharacterRuntimeMetadata(character), APP_PLAYER_START_X);
+      gameStateRef.current = createInitialGameState(characterPowerMax, characterMetadata, APP_PLAYER_START_X);
       setCnsSourceFiles(character.cnsSourceFiles ?? []);
       setLoadedAir(character.air);
       setLoadedSprites(character.sprites);
@@ -1313,17 +1317,6 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
     if (screenSizeChanged || appearanceSourceChanged) setCharacterReloadVersion((version) => version + 1);
   };
 
-  const setCharacterPath = (nextPath: string) => {
-    if (!WEBMUGEN_FEATURES.characterLoader) return;
-    const trimmed = nextPath.trim();
-    if (!trimmed || trimmed === characterPath) return;
-    const persisted = persistUnifiedSettings({
-      ...webMugenSettingsRef.current,
-      content: { ...webMugenSettingsRef.current.content, characterPath: trimmed },
-    });
-    if (persisted.content.characterPath !== characterPath) setCharacterPathState(persisted.content.characterPath);
-  };
-
   const applyContentSettings = (nextSettings: WebMugenSettings, catalog = contentCatalogRef.current) => {
     const selected = applyCatalogSelectionToSettings(nextSettings, catalog);
     const previousRuntime = runtimeSettingsRef.current;
@@ -1335,6 +1328,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
     setContentSelectionSource({ character: 'settings', stage: 'settings' });
     if (persisted.content.characterPath !== characterPath) setCharacterPathState(persisted.content.characterPath);
     if (persisted.content.characterPath !== characterPath
+      || persisted.content.paletteNo !== previousContent.paletteNo
       || persisted.runtime.stageTheme !== previousRuntime.stageTheme
       || persisted.runtime.stageArchivePath !== previousRuntime.stageArchivePath
       || persisted.content.lifeBarId !== previousContent.lifeBarId) {
@@ -1349,6 +1343,13 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
         ...webMugenSettingsRef.current.content,
         [kind === 'character' ? 'characterId' : kind === 'stage' ? 'stageId' : 'lifeBarId']: id,
       },
+    });
+  };
+
+  const selectCharacterPalette = (paletteNo: number) => {
+    applyContentSettings({
+      ...webMugenSettingsRef.current,
+      content: { ...webMugenSettingsRef.current.content, paletteNo },
     });
   };
 
@@ -1599,15 +1600,14 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
         {activePage === 'settings' ? (
           <section className="debug-panel page-debug-panel settings-page-panel">
             <SettingsPanel
-              characterPath={characterPath}
               contentCatalog={contentCatalog}
               contentSettings={contentSettings}
               contentCatalogReadResult={contentCatalogReadResult}
               contentSelectionSource={contentSelectionSource}
               inputConfig={inputConfig}
               runtimeSettings={runtimeSettings}
-              onCharacterPathChange={setCharacterPath}
               onCatalogSelectionChange={selectCatalogContent}
+              onCharacterPaletteChange={selectCharacterPalette}
               onCatalogPathChange={setCatalogPath}
               onCatalogReload={reloadContentCatalog}
               onInputConfigChange={setInputConfig}
@@ -1626,7 +1626,6 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
               canPublishDefaults={WEBMUGEN_FEATURES.publishDefaultsButton}
               onPublishDefaults={publishCurrentSettingsAsDefaults}
               publishDefaultsStatus={publishDefaultsStatus}
-              canChangeCharacter={WEBMUGEN_FEATURES.characterLoader}
               showDeveloperRuntimeSettings={WEBMUGEN_FEATURES.runtimeDebug}
               canManageCatalog={WEBMUGEN_FEATURES.catalogManagement}
               canGenerateCatalog={WEBMUGEN_FEATURES.catalogGenerator}
@@ -1707,15 +1706,14 @@ const INPUT_ACTIONS = [
 type InputAction = typeof INPUT_ACTIONS[number]['key'];
 
 function SettingsPanel({
-  characterPath,
   contentCatalog,
   contentSettings,
   contentCatalogReadResult,
   contentSelectionSource,
   inputConfig,
   runtimeSettings,
-  onCharacterPathChange,
   onCatalogSelectionChange,
+  onCharacterPaletteChange,
   onCatalogPathChange,
   onCatalogReload,
   onInputConfigChange,
@@ -1734,21 +1732,19 @@ function SettingsPanel({
   canPublishDefaults,
   onPublishDefaults,
   publishDefaultsStatus,
-  canChangeCharacter,
   showDeveloperRuntimeSettings,
   canManageCatalog,
   canGenerateCatalog,
   canEditStageSource,
 }: {
-  characterPath: string;
   contentCatalog: ContentCatalog;
   contentSettings: WebMugenSettings['content'];
   contentCatalogReadResult: ContentCatalogReadResult | null;
   contentSelectionSource: { character: ContentSelectionSource; stage: ContentSelectionSource };
   inputConfig: InputConfig;
   runtimeSettings: RuntimeSettings;
-  onCharacterPathChange: (path: string) => void;
   onCatalogSelectionChange: (kind: 'character' | 'stage' | 'lifebar', id: string) => void;
+  onCharacterPaletteChange: (paletteNo: number) => void;
   onCatalogPathChange: (path: string) => void;
   onCatalogReload: () => void;
   onInputConfigChange: (config: InputConfig) => void;
@@ -1767,7 +1763,6 @@ function SettingsPanel({
   canPublishDefaults: boolean;
   onPublishDefaults: () => void;
   publishDefaultsStatus: string;
-  canChangeCharacter: boolean;
   showDeveloperRuntimeSettings: boolean;
   canManageCatalog: boolean;
   canGenerateCatalog: boolean;
@@ -1806,10 +1801,10 @@ function SettingsPanel({
         canManage={canManageCatalog}
         canGenerate={canGenerateCatalog}
         onSelect={onCatalogSelectionChange}
+        onPaletteChange={onCharacterPaletteChange}
         onPathChange={onCatalogPathChange}
         onReload={onCatalogReload}
       />
-      {canChangeCharacter ? <CharacterConfigPanel characterPath={characterPath} onChange={onCharacterPathChange} /> : null}
       <RuntimeSettingsPanel
         settings={runtimeSettings}
         onChange={onRuntimeSettingsChange}
@@ -1844,6 +1839,7 @@ export function ContentCatalogPanel({
   canManage,
   canGenerate,
   onSelect,
+  onPaletteChange,
   onPathChange,
   onReload,
 }: {
@@ -1854,6 +1850,7 @@ export function ContentCatalogPanel({
   canManage: boolean;
   canGenerate: boolean;
   onSelect: (kind: 'character' | 'stage' | 'lifebar', id: string) => void;
+  onPaletteChange: (paletteNo: number) => void;
   onPathChange: (path: string) => void;
   onReload: () => void;
 }) {
@@ -1874,7 +1871,7 @@ export function ContentCatalogPanel({
       </div>
       <h3>{text('Content in use', '使用するコンテンツ')}</h3>
       <div className="content-selection-grid">
-        <label className="content-selection-card">
+        <div className="content-selection-card">
           <span>{text('Character', 'キャラクター')}</span>
           <select
             aria-label="Catalog character"
@@ -1885,9 +1882,19 @@ export function ContentCatalogPanel({
             {characters.length === 0 ? <option value="">{text('No valid characters', '有効なキャラクターなし')}</option> : null}
             {characters.map((entry) => <option key={entry.id} value={entry.id}>{formatCatalogEntryLabel(entry)}</option>)}
           </select>
+          <span>{text('Color / Palette', 'カラー / パレット')}</span>
+          <select
+            aria-label="Character palette"
+            value={settings.paletteNo}
+            onChange={(event) => onPaletteChange(Number(event.target.value))}
+          >
+            {Array.from({ length: 12 }, (_, index) => index + 1).map((paletteNo) => (
+              <option key={paletteNo} value={paletteNo}>p{paletteNo}</option>
+            ))}
+          </select>
           {selectionSource.character === 'url' ? <small>{text('Selected by URL', 'URL指定')}</small> : null}
           {characters.length === 0 ? <small>{text('The published fallback character remains active.', '公開者のfallbackキャラクターを継続使用します。')}</small> : null}
-        </label>
+        </div>
         <label className="content-selection-card">
           <span>{text('Stage', 'ステージ')}</span>
           <select
@@ -2040,52 +2047,6 @@ export function AudioSettingsPanel({
         </section>
       </div>
       <p className="settings-diagnostic">{diagnostic}</p>
-    </section>
-  );
-}
-
-function CharacterConfigPanel({
-  characterPath,
-  onChange,
-}: {
-  characterPath: string;
-  onChange: (path: string) => void;
-}) {
-  const { text } = useUiLanguage();
-  const [draft, setDraft] = useState(characterPath);
-
-  useEffect(() => {
-    setDraft(characterPath);
-  }, [characterPath]);
-
-  return (
-    <section className="settings-section">
-      <h2>{text('Character', 'キャラクター')}</h2>
-      <p>{text('Place character files under public/chars/, then select or enter the DEF/ZIP path here.', 'キャラクターファイルを public/chars/ に置き、DEFまたはZIPのパスを選択・入力してください。')}</p>
-      <div className="character-picker">
-        <select value={characterPath} onChange={(event) => onChange(event.currentTarget.value)}>
-          {CHARACTER_PATH_OPTIONS.map((path) => (
-            <option key={path} value={path}>{path}</option>
-          ))}
-          {!CHARACTER_PATH_OPTIONS.includes(characterPath as typeof CHARACTER_PATH_OPTIONS[number]) && (
-            <option value={characterPath}>{characterPath}</option>
-          )}
-        </select>
-        <input
-          list="character-path-options"
-          onChange={(event) => setDraft(event.currentTarget.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') onChange(draft);
-          }}
-          value={draft}
-        />
-        <datalist id="character-path-options">
-          {CHARACTER_PATH_OPTIONS.map((path) => (
-            <option key={path} value={path} />
-          ))}
-        </datalist>
-        <button type="button" onClick={() => onChange(draft)}>{text('Load', '読み込み')}</button>
-      </div>
     </section>
   );
 }

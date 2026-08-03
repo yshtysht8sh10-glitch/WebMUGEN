@@ -25,7 +25,8 @@
     "characterId": "t-h-m-a",
     "stageId": "cyber",
     "lifeBarId": "default-cyber",
-    "characterPath": "/chars/T-H-M-A.zip"
+    "characterPath": "/chars/T-H-M-A.zip",
+    "paletteNo": 1
   },
   "input": {
     "players": [

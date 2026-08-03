@@ -60,7 +60,7 @@ describe('WebMugenSettings', () => {
     const normalized = normalizeWebMugenSettings({
       audio: { masterVolumePercent: 200, muted: 'yes' },
       runtime: { roundTime: -4, frameIntervalMs: 0, stageArchivePath: 'https://evil.example/stage.zip' },
-      content: { characterPath: '../secret.def' },
+      content: { characterPath: '../secret.def', paletteNo: 13 },
       life: 1,
       stateNo: 9000,
       projectiles: [{}],
@@ -70,6 +70,7 @@ describe('WebMugenSettings', () => {
     expect(normalized.runtime.frameIntervalMs).toBe(1);
     expect(normalized.runtime.stageArchivePath).toBe(FALLBACK_WEBMUGEN_SETTINGS.runtime.stageArchivePath);
     expect(normalized.content.characterPath).toBe(FALLBACK_WEBMUGEN_SETTINGS.content.characterPath);
+    expect(normalized.content.paletteNo).toBe(1);
     expect(normalized).not.toHaveProperty('life');
     expect(normalized).not.toHaveProperty('stateNo');
     expect(normalized).not.toHaveProperty('projectiles');
@@ -111,11 +112,11 @@ describe('WebMugenSettings', () => {
   it('persists the Catalog URL and Character, Stage, and LifeBar selections together', async () => {
     const storage = memoryStorage();
     saveWebMugenSettings(normalizeWebMugenSettings({ content: {
-      catalogPath: '/content/alternate.json', characterId: 'hero', stageId: 'arena', lifeBarId: 'hud', characterPath: '/content/chars/hero.zip',
+      catalogPath: '/content/alternate.json', characterId: 'hero', stageId: 'arena', lifeBarId: 'hud', characterPath: '/content/chars/hero.zip', paletteNo: 9,
     } }), storage);
     const loaded = await loadWebMugenSettings({ storage, fetcher: published({}) });
     expect(loaded.settings.content).toMatchObject({
-      catalogPath: '/content/alternate.json', characterId: 'hero', stageId: 'arena', lifeBarId: 'hud', characterPath: '/content/chars/hero.zip',
+      catalogPath: '/content/alternate.json', characterId: 'hero', stageId: 'arena', lifeBarId: 'hud', characterPath: '/content/chars/hero.zip', paletteNo: 9,
     });
   });
 

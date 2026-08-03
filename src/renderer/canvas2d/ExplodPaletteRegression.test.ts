@@ -36,8 +36,8 @@ describe('Explod indexed palette regression', () => {
       preferExternalPalette: true,
     });
 
-    expect(rgba(pack, '10,0')).toEqual([0, 0, 0, 0, 180, 20, 30, 255]);
-    expect(rgba(pack, '10,1')).toEqual([0, 0, 0, 0, 180, 20, 30, 255]);
+    expect(rgba(pack, '10,0')).toEqual([0, 0, 0, 0, 20, 80, 220, 255]);
+    expect(rgba(pack, '10,1')).toEqual([0, 0, 0, 0, 20, 80, 220, 255]);
     expect(rgba(pack, '10,2')).toEqual([0, 0, 0, 0, 20, 210, 70, 255]);
     expect(rgba(pack, '10,3')).toEqual([0, 0, 0, 0, 20, 210, 70, 255]);
     expect(pack.sprites.get('10,3')?.paletteMetadata).toMatchObject({
@@ -45,6 +45,10 @@ describe('Explod indexed palette regression', () => {
       externalActApplied: false,
       sampleIndex: 1,
       sampleRgba: [20, 210, 70, 255],
+    });
+    expect(pack.sprites.get('10,0')?.paletteMetadata).toMatchObject({
+      source: 'external-act',
+      externalActApplied: true,
     });
   });
 

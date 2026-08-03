@@ -2,9 +2,9 @@ import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it, vi } from 'vitest';
 import { loadCatalogDirectoryHandle, saveCatalogDirectoryHandle } from './CatalogDirectoryStore';
 import { classifyDefText, classifyWebMugenJson, classifyZipBytes } from './CatalogContentClassifier';
-import { generateContentCatalog } from './CatalogGenerator';
+import { generateContentCatalog, resolveCatalogPublicPath } from './CatalogGenerator';
 import type { CatalogDirectoryHandle, CatalogFileHandle, CatalogSourceFile } from './CatalogGeneratorTypes';
-import { readCatalogSourceFiles } from './LocalFolderCatalogSource';
+import { readCatalogSourceFiles, readCatalogSourcePath } from './LocalFolderCatalogSource';
 import { downloadCatalogJson, ensureDirectoryPermission, serializeContentCatalog, writeCatalogToDirectory } from './CatalogWriter';
 
 const characterDef = '[Info]\nname = Hero\n[Files]\ncmd = hero.cmd\ncns = hero.cns\nsprite = hero.sff\nanim = hero.air';
@@ -51,6 +51,26 @@ describe('Catalog Generator classification', () => {
     expect(result.diff).toEqual({ added: ['hero', 'native'], removed: ['old'], changed: ['arena'] });
     expect(JSON.parse(serializeContentCatalog(result.catalog))).toEqual(result.catalog);
   });
+
+  it('merges three typed external sources with retained built-in items and public URL bases', () => {
+    const builtIn = { id: 'cyber', name: 'Cyber', kind: 'stage' as const, engine: 'webmugen' as const, path: 'builtin:stage:cyber', source: 'builtin' as const };
+    const files: CatalogSourceFile[] = [
+      { ...sourceFile('hero.def', characterDef), expectedKind: 'character', catalogPath: resolveCatalogPublicPath('/external/chars', 'hero.def') },
+      { ...sourceFile('arena.def', stageDef), expectedKind: 'stage', catalogPath: resolveCatalogPublicPath('/external/stages', 'arena.def') },
+      { ...sourceFile('fight.def', lifeBarDef), expectedKind: 'lifebar', catalogPath: resolveCatalogPublicPath('/external/lifebars', 'fight.def') },
+      { ...sourceFile('wrong.def', characterDef), expectedKind: 'stage', catalogPath: '/external/stages/wrong.def' },
+    ];
+    const result = generateContentCatalog(files, { version: 1, items: [builtIn] }, [builtIn]);
+    expect(result.catalog.items).toEqual(expect.arrayContaining([
+      builtIn,
+      expect.objectContaining({ id: 'hero', kind: 'character', path: '/external/chars/hero.def', source: 'external' }),
+      expect.objectContaining({ id: 'arena', kind: 'stage', path: '/external/stages/arena.def', source: 'external' }),
+      expect.objectContaining({ id: 'fight', kind: 'lifebar', path: '/external/lifebars/fight.def', source: 'external' }),
+    ]));
+    expect(result.excluded[0].result.errors).toContain('Expected stage, but detected character.');
+    expect(resolveCatalogPublicPath('/', 'chars/hero.def')).toBe('/chars/hero.def');
+    expect(() => resolveCatalogPublicPath('https://evil.example', 'hero.def')).toThrow('Unsafe public base path');
+  });
 });
 
 describe('Catalog Generator folder and permission support', () => {
@@ -58,6 +78,14 @@ describe('Catalog Generator folder and permission support', () => {
     const nested = directory('chars', [file('hero.def', characterDef), file('readme.txt', 'ignored')]);
     const root = directory('content', [nested, file('catalog.json', '{}'), file('arena.def', stageDef)]);
     expect((await readCatalogSourceFiles(root)).map((entry) => entry.path)).toEqual(['arena.def', 'chars/hero.def']);
+  });
+
+  it('loads a directly specified same-origin file and rejects unsafe paths', async () => {
+    const bytes = strToU8(characterDef);
+    const loaded = await readCatalogSourcePath('/external/chars/hero.def', async () => ({ ok: true, status: 200, arrayBuffer: async () => bytes.slice().buffer }));
+    expect(loaded).toMatchObject({ path: '/external/chars/hero.def', catalogPath: '/external/chars/hero.def', name: 'hero.def' });
+    await expect(readCatalogSourcePath('https://evil.example/hero.def')).rejects.toThrow('same-origin');
+    await expect(readCatalogSourcePath('/external/../hero.def')).rejects.toThrow('same-origin');
   });
 
   it('requests expired permissions, writes when granted, and reports denied write access', async () => {
@@ -92,12 +120,15 @@ describe('Catalog Generator folder and permission support', () => {
   });
 
   it('persists and restores a DirectoryHandle through the IndexedDB adapter and degrades safely without it', async () => {
-    const root = directory('content', []);
+    const root = directory('characters', []);
+    const output = directory('catalog-output', []);
     const factory = createMemoryIdbFactory();
-    expect(await saveCatalogDirectoryHandle(root, factory)).toBe(true);
-    expect(await loadCatalogDirectoryHandle(factory)).toBe(root);
-    expect(await saveCatalogDirectoryHandle(root, undefined)).toBe(false);
-    expect(await loadCatalogDirectoryHandle(undefined)).toBeNull();
+    expect(await saveCatalogDirectoryHandle(root, 'character', factory)).toBe(true);
+    expect(await saveCatalogDirectoryHandle(output, 'output', factory)).toBe(true);
+    expect(await loadCatalogDirectoryHandle('character', factory)).toBe(root);
+    expect(await loadCatalogDirectoryHandle('output', factory)).toBe(output);
+    expect(await saveCatalogDirectoryHandle(root, 'character', undefined)).toBe(false);
+    expect(await loadCatalogDirectoryHandle('character', undefined)).toBeNull();
   });
 });
 
@@ -119,10 +150,10 @@ function directory(name: string, handles: Array<CatalogFileHandle | CatalogDirec
 }
 
 function createMemoryIdbFactory(): IDBFactory {
-  let stored: unknown;
+  const stored = new Map<IDBValidKey, unknown>();
   const objectStore = {
-    put(value: unknown) { stored = value; return completeRequest('content-root'); },
-    get() { return completeRequest(stored ?? null); },
+    put(value: unknown, key: IDBValidKey) { stored.set(key, value); return completeRequest(key); },
+    get(key: IDBValidKey) { return completeRequest(stored.get(key) ?? null); },
   };
   const database = {
     objectStoreNames: { contains: () => true },

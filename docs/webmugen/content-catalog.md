@@ -1,6 +1,6 @@
 # Content Catalog
 
-Updated: 2026-08-03
+Updated: 2026-08-04
 
 ## Purpose and architecture
 
@@ -12,7 +12,7 @@ Responsibilities are deliberately separated:
 - **Catalog Validator** checks the schema, version, individual items, duplicate IDs, kind/engine values, safe paths, and resolves relative paths against the Catalog directory.
 - **Content Selection** exposes only entries of the requested kind and resolves a removed selection to the first allowed entry of that kind.
 - **Content Loader** remains the final authority for the selected Character, Stage, or LifeBar. A declared `kind` never bypasses its normal Loader validation.
-- **Catalog Generator** is a separate Development Mode tool. It scans a user-selected local folder, classifies DEF/ZIP/JSON candidates, and creates `catalog.json`.
+- **Catalog Generator** is a separate Development Mode tool. It scans independently selected Character, Stage, and LifeBar folders, validates directly specified files, and creates `catalog.json` in an independent output folder or download.
 
 The Generator is optional. A missing or unsupported Generator must never prevent normal game startup. Server deployments may generate the same schema through PHP, Node.js, a CLI, a management application, deployment automation, or manual authoring; WebMUGEN has no dependency on any one of those systems.
 
@@ -28,6 +28,7 @@ The canonical version 1 document uses `items`:
       "id": "t-h-m-a",
       "kind": "character",
       "engine": "winmugen",
+      "source": "builtin",
       "name": "T-H-M-A",
       "path": "/chars/T-H-M-A.zip"
     },
@@ -35,6 +36,7 @@ The canonical version 1 document uses `items`:
       "id": "cyber",
       "kind": "stage",
       "engine": "webmugen",
+      "source": "builtin",
       "name": "Cyber Training",
       "path": "stages/cyber/stage.json"
     },
@@ -42,6 +44,7 @@ The canonical version 1 document uses `items`:
       "id": "default-cyber",
       "kind": "lifebar",
       "engine": "webmugen",
+      "source": "builtin",
       "name": "Default Cyber HUD",
       "path": "lifebars/default-cyber/lifebar.json"
     }
@@ -49,7 +52,7 @@ The canonical version 1 document uses `items`:
 }
 ```
 
-Each item has a stable `id`, display `name`, `kind` (`character`, `stage`, or `lifebar`), execution `engine` (`winmugen` or `webmugen`), and path. Relative paths are resolved from the directory containing `catalog.json`; absolute same-origin paths remain absolute. Built-in native content may use `builtin:<kind>:<id>`.
+Each item has a stable `id`, display `name`, `kind` (`character`, `stage`, or `lifebar`), execution `engine` (`winmugen` or `webmugen`), and path. The optional `source` field distinguishes publisher-shipped `builtin` items from generated `external` items. Relative paths are resolved from the directory containing `catalog.json`; absolute same-origin paths remain absolute. Built-in native content may use `builtin:<kind>:<id>`.
 
 Unknown kinds/engines, unsafe paths, duplicate IDs, invalid item shapes, and incompatible extensions are excluded individually and reported. A missing `items` array or unsupported top-level version rejects the whole document. An empty `items` array is valid and leaves the publisher's safe game fallbacks active.
 
@@ -71,14 +74,16 @@ URL Character and Stage IDs are accepted only when an entry of the correct kind 
 
 The Development Mode Generator uses `showDirectoryPicker()` when supported:
 
-1. Choose the content root containing `chars/`, `stages/`, and/or `lifebars/`.
-2. The Generator recursively reads supported DEF, ZIP, and JSON candidates.
-3. Structured classification results record kind, engine, confidence, entry file, warnings, and errors.
-4. Recognized entries form a version 1 Catalog. Unknown/corrupt/ambiguous entries and duplicate generated IDs are listed with reasons.
-5. The UI shows additions, removals, and changes compared with the currently loaded Catalog.
-6. With read/write permission, `catalog.json` can be written to the selected root. Otherwise it can be downloaded.
+1. Independently choose external Character, Stage, and LifeBar folders. Any source may remain unset.
+2. Set the published same-origin URL base for each folder, such as `/chars`, `/stages`, or `/lifebars`. A local filesystem path is never treated as a Runtime URL.
+3. Add same-origin direct file paths when a desired DEF, ZIP, or JSON file is not obtained from folder scanning.
+4. The Generator recursively reads candidates and requires each result to match the source slot's expected kind.
+5. Publisher-shipped `source: "builtin"` items are always retained; generated items receive `source: "external"`. An unset source kind retains its currently loaded external items instead of silently deleting them.
+6. Structured classification results record kind, engine, confidence, entry file, warnings, and errors.
+7. Unknown/corrupt/ambiguous/wrong-kind entries, unsafe direct paths, and duplicate generated IDs are listed with reasons.
+8. Independently choose an optional Catalog output folder. With write permission, `catalog.json` is written there; without an output folder or permission it can be downloaded.
 
-The selected `FileSystemDirectoryHandle` is stored in IndexedDB when supported. A restored handle is used only after checking its current permission. Expired permission requests reauthorization; failure returns to explicit folder selection. Browsers without the File System Access API show a clear compatibility message and can still run the game or use a server/CLI-generated Catalog.
+The four `FileSystemDirectoryHandle` values are stored separately in IndexedDB when supported. A restored handle is used only after checking its current permission. Expired permission requests reauthorization; failure returns to explicit folder selection. Browsers without the File System Access API can still use same-origin direct paths, download a generated Catalog, run the game, or use a server/CLI-generated Catalog.
 
 ### Classification rules
 
@@ -92,7 +97,7 @@ Classification lives under `src/content/catalog-generator/`. The Runtime Reader 
 
 ## Local and server generation
 
-For local authoring, use the Development Mode folder picker and write/download actions. A generated relative path assumes the Catalog will be served from the selected content root.
+For local authoring, use the three Development Mode source pickers and the separate output picker. Folder scanning combines the configured public URL base with each relative file path. Direct paths must already be absolute same-origin Runtime URLs. This separation is required because a local `FileSystemDirectoryHandle` does not reveal or define the URL used after deployment.
 
 For a server or rental-hosting environment, create or update `catalog.json` outside the runtime using any suitable tool:
 
@@ -115,10 +120,14 @@ Development Mode additionally shows:
 - total, valid, and excluded counts;
 - item-level exclusion reasons;
 - editable **Content list file** path and reload;
-- local folder generation, rescan, write, and download controls;
+- three independent external source folders and URL bases;
+- same-origin direct file path additions per kind;
+- an independent Catalog output folder plus generate, write, and download controls;
 - Generator exclusions and Catalog diff counts.
 
 Public Mode hides the Catalog path, reload, Generator, folder picker, detailed errors, and all management actions. It shows only the allowed content selectors and cannot switch to a user-saved Catalog path that differs from the publisher default.
+
+The Character selector in **Content in use** is the only runtime Character selection UI. The former separate Character path selector was removed. Development authors add missing Character paths through the Generator, validate them, regenerate the Catalog, and then select them from the same Catalog-backed control used in Public Mode.
 
 ## Security notes
 
