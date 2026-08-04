@@ -74,7 +74,7 @@ next held direction into State 20 or 11.
 `AssertSpecial` retains all values supplied through `flag`, `flag2`, and `flag3` as case-insensitive,
 per-game-tick player flags. They survive later Controllers and ChangeState in the same CNS pass, then
 clear at the beginning of the next CNS tick unless asserted again. `noautoturn` is connected to the
-state-number-independent Stage AutoTurn rule for grounded and airborne root players; it also remains
+state-number-independent Stage AutoTurn rule for grounded root players; airborne roots preserve Facing until landing. The flag also remains
 effective across a same-tick ChangeState. `invisible`, the three guard-prohibition flags, attacker-local
 `unguardable`, `nojugglecheck`, `noBG`, and `nobardisplay` are consumed by Canvas, guard, juggle,
 stage, and HUD paths without deleting the entity or forcing a State. `noBG` intentionally suppresses

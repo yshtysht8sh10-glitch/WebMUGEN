@@ -132,7 +132,7 @@ describe('FallbackStageRules', () => {
     expect(next.players[1].x).toBe(300);
   });
 
-  it('auto-turns both players after an aerial cross-over', () => {
+  it('preserves the airborne player facing after an aerial cross-over', () => {
     const state = createInitialGameState();
     const next = applyFallbackStageRules({
       ...state,
@@ -144,7 +144,7 @@ describe('FallbackStageRules', () => {
 
     expect(next.players[0].x).toBe(340);
     expect(next.players[1].x).toBe(300);
-    expect(next.players[0].facing).toBe(-1);
+    expect(next.players[0].facing).toBe(1);
     expect(next.players[1].facing).toBe(1);
     expect(next.hitDiagnosticLines?.join('\n')).toContain('raw.cross airborne=1');
   });
@@ -197,7 +197,7 @@ describe('FallbackStageRules', () => {
     });
   });
 
-  it('switches to Size air front/back and auto-turns both airborne players', () => {
+  it('switches to Size air front/back and preserves both airborne facings', () => {
     const state = createInitialGameState();
     const widths = {
       groundFront: 20, groundBack: 10, airFront: 7, airBack: 5,
@@ -212,19 +212,19 @@ describe('FallbackStageRules', () => {
     });
 
     expect(buildPushBox(next.players[0])).toMatchObject({ front: 14, back: 10, mode: 'air' });
-    expect(next.players[0].facing).toBe(-1);
-    expect(next.players[1].facing).toBe(1);
+    expect(next.players[0].facing).toBe(1);
+    expect(next.players[1].facing).toBe(-1);
     expect(next.hitDiagnosticLines?.join('\n')).toContain('source=character_size mode=air');
   });
 
   it('is state-number independent for idle, attack, hit, air, and landing states', () => {
     const state = createInitialGameState();
     for (const player of [
-      { stateNo: 0, stateType: 'S' as const, moveType: 'I' as const, physics: 'S' as const },
-      { stateNo: 200, stateType: 'S' as const, moveType: 'A' as const, physics: 'S' as const },
-      { stateNo: 5000, stateType: 'S' as const, moveType: 'H' as const, physics: 'N' as const },
-      { stateNo: 50, stateType: 'A' as const, moveType: 'I' as const, physics: 'A' as const },
-      { stateNo: 52, stateType: 'S' as const, moveType: 'I' as const, physics: 'S' as const },
+      { stateNo: 0, stateType: 'S' as const, moveType: 'I' as const, physics: 'S' as const, expected: [-1, 1] },
+      { stateNo: 200, stateType: 'S' as const, moveType: 'A' as const, physics: 'S' as const, expected: [-1, 1] },
+      { stateNo: 5000, stateType: 'S' as const, moveType: 'H' as const, physics: 'N' as const, expected: [-1, 1] },
+      { stateNo: 50, stateType: 'A' as const, moveType: 'I' as const, physics: 'A' as const, expected: [1, 1] },
+      { stateNo: 52, stateType: 'S' as const, moveType: 'I' as const, physics: 'S' as const, expected: [-1, 1] },
     ]) {
       const next = applyFallbackStageRules({
         ...state,
@@ -233,7 +233,7 @@ describe('FallbackStageRules', () => {
           { ...state.players[1], x: 300, facing: -1 },
         ],
       });
-      expect(next.players.map(({ facing }) => facing), `state ${player.stateNo}`).toEqual([-1, 1]);
+      expect(next.players.map(({ facing }) => facing), `state ${player.stateNo}`).toEqual(player.expected);
     }
   });
 

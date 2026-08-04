@@ -75,7 +75,7 @@ function applyFacing(p1: PlayerState, p2: PlayerState, state: GameState, autoTur
 }
 
 function facePlayer(player: PlayerState, opponent: PlayerState, state: GameState): PlayerState {
-  if (player.noAutoTurn === true || player.hitPause > 0 || isFrozenByGlobalPause(player, state)) return player;
+  if (isAirborne(player) || player.noAutoTurn === true || player.hitPause > 0 || isFrozenByGlobalPause(player, state)) return player;
   return { ...player, facing: player.x < opponent.x ? 1 : -1 };
 }
 

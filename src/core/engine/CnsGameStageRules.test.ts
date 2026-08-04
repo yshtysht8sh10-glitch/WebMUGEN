@@ -108,7 +108,7 @@ value = 0
     expect(Math.abs(next.players[1].x - next.players[0].x)).toBeGreaterThanOrEqual(32);
   });
 
-  it('auto-turns both airborne players after they cross', () => {
+  it('keeps both airborne facings after the players cross', () => {
     const airCns = parseCnsText(`
 [Size]
 air.front = 7
@@ -136,7 +136,7 @@ ctrl = 0
       { p1: { left: false, right: false, up: false, down: false, attack: false } },
     );
 
-    expect(next.players[0].facing).toBe(-1);
-    expect(next.players[1].facing).toBe(1);
+    expect(next.players[0].facing).toBe(1);
+    expect(next.players[1].facing).toBe(-1);
   });
 });
