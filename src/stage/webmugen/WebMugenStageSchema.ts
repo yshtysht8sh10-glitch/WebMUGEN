@@ -19,6 +19,7 @@ export type WebMugenStageDefinition = {
   name: string;
   presentation: WebMugenStagePresentation;
   groundY: number;
+  autoTurn: boolean;
   players: { p1Start: [number, number]; p2Start: [number, number] };
   camera: { boundLeft: number; boundRight: number; boundHigh: number; boundLow: number; verticalFollow: number; tension: number };
   layers: WebMugenStageLayer[];

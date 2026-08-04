@@ -26,6 +26,7 @@ export function parseWebMugenStage(value: unknown, sourcePath = '/stages/webmuge
   return {
     format: 'webmugen-stage', version: 1, id, name, presentation,
     groundY: readNumber(value.groundY, -1000, 1000, 'groundY'),
+    autoTurn: value.autoTurn !== false,
     players: { p1Start: readPair(players.p1Start, 'p1Start'), p2Start: readPair(players.p2Start, 'p2Start') },
     camera: {
       boundLeft: readNumber(camera.boundLeft, -10000, 0, 'boundLeft'),

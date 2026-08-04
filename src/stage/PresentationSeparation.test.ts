@@ -110,6 +110,7 @@ describe('WinMUGEN and WebMUGEN presentation separation', () => {
 
   it('normalizes legacy image layers to background and validates optional foreground camera factors', () => {
     const legacy = parseWebMugenStage(nativeStage);
+    expect(legacy.autoTurn).toBe(true);
     expect(legacy.layers[0]).toMatchObject({ id: 'layer-0', pass: 'background', cameraFactor: [0.03, 0], parallax: 0.03, parallaxY: 0 });
     const layered = parseWebMugenStage({
       ...nativeStage,
@@ -120,6 +121,7 @@ describe('WinMUGEN and WebMUGEN presentation separation', () => {
       ...nativeStage,
       layers: [{ type: 'image', src: 'factor.png', cameraFactor: [0.7, 0.25] }],
     }).layers[0].cameraFactor).toEqual([0.7, 0.25]);
+    expect(parseWebMugenStage({ ...nativeStage, autoTurn: false }).autoTurn).toBe(false);
   });
 
   it('keeps WinMUGEN fight.def and WebMUGEN lifebar JSON in distinct loaders', async () => {

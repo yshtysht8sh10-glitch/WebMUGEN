@@ -836,7 +836,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
             nextState = restorePausedEntityPhysics(beforePhysicsState, nextState, pauseDuringFrame);
           }
 
-          nextState = applyFallbackStageRules(nextState);
+          nextState = applyFallbackStageRules(nextState, { autoTurn: loadedStageRuntime?.isAutoTurnEnabled() ?? true });
           const activeScreenProfile = getScreenSizeProfile(runtimeSettingsRef.current.screenSizeMode);
           nextState = applyViewportCameraRules(
             nextState,

@@ -44,13 +44,26 @@ describe('FallbackStageRules', () => {
     expect(next.players[1].x - next.players[0].x).toBeGreaterThanOrEqual(32);
   });
 
-  it('does not auto-turn an attacking wall-carry state when TargetBind places P2 behind P1', () => {
+  it('resolves facing again after equal-position push separation', () => {
     const state = createInitialGameState();
     const next = applyFallbackStageRules({
       ...state,
       players: [
-        { ...state.players[0], x: 400, facing: 1, moveType: 'A', ctrl: false },
-        { ...state.players[1], x: 380, facing: 1, moveType: 'H', ctrl: false },
+        { ...state.players[0], x: 320, facing: 1 },
+        { ...state.players[1], x: 320, facing: 1 },
+      ],
+    });
+    expect(next.players[0].x).toBeLessThan(next.players[1].x);
+    expect(next.players.map(({ facing }) => facing)).toEqual([1, -1]);
+  });
+
+  it('honors noautoturn in an attacking wall-carry state when TargetBind places P2 behind P1', () => {
+    const state = createInitialGameState();
+    const next = applyFallbackStageRules({
+      ...state,
+      players: [
+        { ...state.players[0], x: 400, facing: 1, moveType: 'A', ctrl: false, noAutoTurn: true },
+        { ...state.players[1], x: 380, facing: 1, moveType: 'H', ctrl: false, noAutoTurn: true },
       ],
     });
 
@@ -119,7 +132,7 @@ describe('FallbackStageRules', () => {
     expect(next.players[1].x).toBe(300);
   });
 
-  it('allows an aerial cross-over without automatically turning the airborne player', () => {
+  it('auto-turns both players after an aerial cross-over', () => {
     const state = createInitialGameState();
     const next = applyFallbackStageRules({
       ...state,
@@ -131,7 +144,7 @@ describe('FallbackStageRules', () => {
 
     expect(next.players[0].x).toBe(340);
     expect(next.players[1].x).toBe(300);
-    expect(next.players[0].facing).toBe(1);
+    expect(next.players[0].facing).toBe(-1);
     expect(next.players[1].facing).toBe(1);
     expect(next.hitDiagnosticLines?.join('\n')).toContain('raw.cross airborne=1');
   });
@@ -184,7 +197,7 @@ describe('FallbackStageRules', () => {
     });
   });
 
-  it('switches to Size air front/back and preserves both airborne facings', () => {
+  it('switches to Size air front/back and auto-turns both airborne players', () => {
     const state = createInitialGameState();
     const widths = {
       groundFront: 20, groundBack: 10, airFront: 7, airBack: 5,
@@ -199,8 +212,58 @@ describe('FallbackStageRules', () => {
     });
 
     expect(buildPushBox(next.players[0])).toMatchObject({ front: 14, back: 10, mode: 'air' });
-    expect(next.players[0].facing).toBe(1);
-    expect(next.players[1].facing).toBe(-1);
+    expect(next.players[0].facing).toBe(-1);
+    expect(next.players[1].facing).toBe(1);
     expect(next.hitDiagnosticLines?.join('\n')).toContain('source=character_size mode=air');
+  });
+
+  it('is state-number independent for idle, attack, hit, air, and landing states', () => {
+    const state = createInitialGameState();
+    for (const player of [
+      { stateNo: 0, stateType: 'S' as const, moveType: 'I' as const, physics: 'S' as const },
+      { stateNo: 200, stateType: 'S' as const, moveType: 'A' as const, physics: 'S' as const },
+      { stateNo: 5000, stateType: 'S' as const, moveType: 'H' as const, physics: 'N' as const },
+      { stateNo: 50, stateType: 'A' as const, moveType: 'I' as const, physics: 'A' as const },
+      { stateNo: 52, stateType: 'S' as const, moveType: 'I' as const, physics: 'S' as const },
+    ]) {
+      const next = applyFallbackStageRules({
+        ...state,
+        players: [
+          { ...state.players[0], ...player, x: 500, facing: 1 },
+          { ...state.players[1], x: 300, facing: -1 },
+        ],
+      });
+      expect(next.players.map(({ facing }) => facing), `state ${player.stateNo}`).toEqual([-1, 1]);
+    }
+  });
+
+  it('preserves facing when stage autoturn is disabled or noautoturn is asserted', () => {
+    const state = createInitialGameState();
+    const crossed = { ...state, players: [
+      { ...state.players[0], x: 500, facing: 1 },
+      { ...state.players[1], x: 300, facing: -1 },
+    ] as typeof state.players };
+    expect(applyFallbackStageRules(crossed, { autoTurn: false }).players.map(({ facing }) => facing)).toEqual([1, -1]);
+    expect(applyFallbackStageRules({
+      ...crossed,
+      players: crossed.players.map((player) => ({ ...player, noAutoTurn: true })) as typeof state.players,
+    }).players.map(({ facing }) => facing)).toEqual([1, -1]);
+  });
+
+  it('defers auto-turn for hitpause and globally frozen players', () => {
+    const state = createInitialGameState();
+    const crossed = { ...state, players: [
+      { ...state.players[0], x: 500, facing: 1, hitPause: 2 },
+      { ...state.players[1], x: 300, facing: -1 },
+    ] as typeof state.players };
+    const hitPaused = applyFallbackStageRules(crossed);
+    expect(hitPaused.players.map(({ facing }) => facing)).toEqual([1, 1]);
+
+    const paused = applyFallbackStageRules({
+      ...crossed,
+      players: crossed.players.map((player) => ({ ...player, hitPause: 0 })) as typeof state.players,
+      pause: { pauseTime: 2, superPauseTime: 0, darken: false, moveTime: 0, ownerEntityId: 1, kind: 'pause', resumeGuard: false },
+    });
+    expect(paused.players.map(({ facing }) => facing)).toEqual([1, -1]);
   });
 });

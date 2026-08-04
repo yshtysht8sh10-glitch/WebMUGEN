@@ -243,7 +243,7 @@ MoveContact/MoveHit/MoveGuarded use an elapsed value: contact records value 1, a
 
 `raw.target_controller` records the owner, controller, optional HitDef id filter, selected player ids, and whether the operation was queued, dropped, or safely skipped because no target matched.
 
-`raw.cross` records airborne state, both players' current `AssertSpecial noautoturn` values, Facing before/after, and whether stage auto-turn changed either player. This distinguishes an AIR/rendering flip from a stage-facing change and verifies that a same-tick State transition retains the asserted flag.
+`raw.cross` records airborne state, both players' current `AssertSpecial noautoturn` values, Facing before/after, whether the selected Stage enables AutoTurn, and whether AutoTurn changed either player. This distinguishes an AIR/rendering flip from a stage-facing change and verifies that a same-tick State transition retains the asserted flag.
 
 ## Real-character trace audit
 

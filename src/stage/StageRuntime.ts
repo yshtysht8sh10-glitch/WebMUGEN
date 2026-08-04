@@ -20,5 +20,6 @@ export interface StageRuntime {
   getBounds(): StageBounds;
   getCameraConfig(): StageCameraConfig;
   getGroundY(): number;
+  isAutoTurnEnabled(): boolean;
   dispose(): void;
 }

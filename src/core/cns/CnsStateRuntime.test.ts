@@ -119,6 +119,30 @@ physics = N
 });
 
 describe('CnsStateRuntime AnimTime', () => {
+  it('preserves facing on StateDef entry when facep2 is zero', () => {
+    const cns = parseCnsText(`
+[Statedef -1]
+[State -1, Enter]
+type = ChangeState
+trigger1 = command = "x"
+value = 199
+[Statedef 199]
+type = S
+movetype = I
+physics = S
+facep2 = 0
+`);
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime({
+      ...state,
+      players: [
+        { ...state.players[0], x: 420, facing: 1 },
+        { ...state.players[1], x: 220, facing: -1 },
+      ],
+    }, cns, { p1Commands: new Set(['x']) });
+    expect(result.state.players[0]).toMatchObject({ stateNo: 199, facing: 1 });
+  });
+
   it('faces the opponent when entering a StateDef with facep2', () => {
     const cns = parseCnsText(`
 [Statedef -1]

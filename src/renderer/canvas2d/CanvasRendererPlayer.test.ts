@@ -60,7 +60,7 @@ describe('CanvasRenderer player sprite fallback', () => {
       renderForeground: () => order.push('foreground'),
       getBounds: () => ({ left: -400, right: 400, high: -120, low: 0 }),
       getCameraConfig: () => ({ left: -400, right: 400, high: -120, low: 0, verticalFollow: 0.2, tension: 50 }),
-      getGroundY: () => 0, dispose: vi.fn(),
+      getGroundY: () => 0, isAutoTurnEnabled: () => true, dispose: vi.fn(),
     };
     const round = { ...createInitialRoundState(), introPresentationFrame: 45 };
 

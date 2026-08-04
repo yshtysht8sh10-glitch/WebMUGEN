@@ -17,5 +17,6 @@ export class WebMugenStageRuntime implements StageRuntime {
   getBounds() { const c = this.definition.camera; return { left: c.boundLeft, right: c.boundRight, high: c.boundHigh, low: c.boundLow }; }
   getCameraConfig(): StageCameraConfig { return { ...this.getBounds(), verticalFollow: this.definition.camera.verticalFollow, tension: this.definition.camera.tension }; }
   getGroundY(): number { return this.definition.groundY; }
+  isAutoTurnEnabled(): boolean { return this.definition.autoTurn; }
   dispose(): void { this.renderer.dispose(); }
 }
