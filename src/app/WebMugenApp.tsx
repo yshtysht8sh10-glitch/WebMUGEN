@@ -176,8 +176,9 @@ import {
   type ContentCatalog,
   type ContentCatalogReadResult,
 } from './ContentCatalog';
-import { applyUrlContentSelection, type ContentSelectionSource } from './UrlContentSelection';
+import { applyUrlContentOverrides, applyUrlContentSelection, getUrlContentOverrides, type ContentSelectionSource, type UrlContentOverrides } from './UrlContentSelection';
 import { CatalogGeneratorPanel } from '../content/catalog-generator/CatalogGeneratorPanel';
+import { resolveRuntimeFrameTick } from './RuntimeFrameScheduler';
 
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/T-H-M-A.zip';
 const NATIVE_STAGE_PATHS: Record<Exclude<StageTheme, 'external'>, string> = {
@@ -232,6 +233,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
   const webMugenSettingsRef = useRef<WebMugenSettings>(normalizeWebMugenSettings(FALLBACK_WEBMUGEN_SETTINGS));
   const publishedSettingsRef = useRef<WebMugenSettings>(normalizeWebMugenSettings(FALLBACK_WEBMUGEN_SETTINGS));
   const contentCatalogRef = useRef<ContentCatalog>(createEmptyContentCatalog());
+  const urlContentOverridesRef = useRef<UrlContentOverrides>({});
+  const contentSelectionSourceRef = useRef<{ character: ContentSelectionSource; stage: ContentSelectionSource }>({ character: 'settings', stage: 'settings' });
   const [settingsReady, setSettingsReady] = useState(false);
   const [uiLanguage, setUiLanguage] = useState(webMugenSettingsRef.current.ui.language);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -346,6 +349,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
           typeof window === 'undefined' ? '' : window.location.search,
         );
         liveSettings = urlSelection.settings;
+        urlContentOverridesRef.current = getUrlContentOverrides(urlSelection);
+        contentSelectionSourceRef.current = urlSelection.source;
         setContentSelectionSource(urlSelection.source);
       }
       webMugenSettingsRef.current = settings;
@@ -574,12 +579,13 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
         const tick = (timestamp: number) => {
         const frameIntervalMs = winMugenFastForwardRef.current ? 1 : runtimeSettingsRef.current.frameIntervalMs;
         const lastTickTime = lastFrameTickTimeRef.current;
-        if (lastTickTime !== null && timestamp - lastTickTime < frameIntervalMs) {
+        const frameTick = resolveRuntimeFrameTick(lastTickTime, timestamp, frameIntervalMs);
+        if (!frameTick.advance) {
           frameId = requestAnimationFrame(tick);
           return;
         }
-        lastFrameTickTimeRef.current = timestamp;
-        const measuredFrameTimeMs = lastTickTime === null ? frameIntervalMs : timestamp - lastTickTime;
+        lastFrameTickTimeRef.current = frameTick.nextTickTime;
+        const measuredFrameTimeMs = frameTick.measuredFrameTimeMs;
         const performanceFrameStartedAt = performance.now();
         const aiSignatureBefore = lastRuntimeSignatureRef.current;
         const humanBufferEntriesBefore = readableEntryStoreRef.current.size;
@@ -1210,6 +1216,20 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
     return normalized;
   };
 
+  const applyCurrentUrlContentOverrides = (
+    settings: WebMugenSettings,
+    catalog = contentCatalogRef.current,
+  ) => applyUrlContentOverrides(settings, catalog, urlContentOverridesRef.current);
+
+  const clearUrlContentOverride = (kind: 'character' | 'stage') => {
+    const nextOverrides = { ...urlContentOverridesRef.current };
+    delete nextOverrides[kind === 'character' ? 'characterId' : 'stageId'];
+    urlContentOverridesRef.current = nextOverrides;
+    const nextSource = { ...contentSelectionSourceRef.current, [kind]: 'settings' as const };
+    contentSelectionSourceRef.current = nextSource;
+    setContentSelectionSource(nextSource);
+  };
+
   const setInputConfig = (nextConfig: InputConfig) => {
     inputConfigRef.current = nextConfig;
     setInputConfigState(nextConfig);
@@ -1277,6 +1297,10 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
       ...webMugenSettingsRef.current,
       runtime: normalizeRuntimeSettings(nextSettings),
     }, publishedSettingsRef.current, WEBMUGEN_FEATURES).runtime;
+    const urlStageActive = contentSelectionSourceRef.current.stage === 'url';
+    const stageSelectionChanged = normalized.stageTheme !== runtimeSettingsRef.current.stageTheme
+      || normalized.stageArchivePath !== runtimeSettingsRef.current.stageArchivePath;
+    if (urlStageActive && stageSelectionChanged) clearUrlContentOverride('stage');
     const screenSizeChanged = normalized.screenSizeMode !== runtimeSettingsRef.current.screenSizeMode;
     const appearanceSourceChanged = normalized.stageTheme !== runtimeSettingsRef.current.stageTheme
       || normalized.stageArchivePath !== runtimeSettingsRef.current.stageArchivePath
@@ -1307,31 +1331,45 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
       lastStateHistoryRenderTimeRef.current = 0;
       setStageDebugLines([]);
     }
-    runtimeSettingsRef.current = normalized;
-    setRuntimeSettingsState(normalized);
+    const runtimeToPersist = urlStageActive && !stageSelectionChanged
+      ? {
+          ...normalized,
+          stageTheme: webMugenSettingsRef.current.runtime.stageTheme,
+          stageArchivePath: webMugenSettingsRef.current.runtime.stageArchivePath,
+        }
+      : normalized;
     const persisted = persistUnifiedSettings(synchronizeContentIdsFromRuntime({
       ...webMugenSettingsRef.current,
-      runtime: normalized,
+      runtime: runtimeToPersist,
     }));
-    setContentSettings(persisted.content);
+    const live = applyCurrentUrlContentOverrides(persisted);
+    runtimeSettingsRef.current = live.runtime;
+    setRuntimeSettingsState(live.runtime);
+    setContentSettings(live.content);
+    if (live.content.characterPath !== characterPath) setCharacterPathState(live.content.characterPath);
     if (screenSizeChanged || appearanceSourceChanged) setCharacterReloadVersion((version) => version + 1);
   };
 
-  const applyContentSettings = (nextSettings: WebMugenSettings, catalog = contentCatalogRef.current) => {
+  const applyContentSettings = (
+    nextSettings: WebMugenSettings,
+    catalog = contentCatalogRef.current,
+    explicitKind?: 'character' | 'stage',
+  ) => {
+    if (explicitKind) clearUrlContentOverride(explicitKind);
     const selected = applyCatalogSelectionToSettings(nextSettings, catalog);
     const previousRuntime = runtimeSettingsRef.current;
     const previousContent = contentSettings;
     const persisted = persistUnifiedSettings(selected);
-    runtimeSettingsRef.current = persisted.runtime;
-    setRuntimeSettingsState(persisted.runtime);
-    setContentSettings(persisted.content);
-    setContentSelectionSource({ character: 'settings', stage: 'settings' });
-    if (persisted.content.characterPath !== characterPath) setCharacterPathState(persisted.content.characterPath);
-    if (persisted.content.characterPath !== characterPath
-      || persisted.content.paletteNo !== previousContent.paletteNo
-      || persisted.runtime.stageTheme !== previousRuntime.stageTheme
-      || persisted.runtime.stageArchivePath !== previousRuntime.stageArchivePath
-      || persisted.content.lifeBarId !== previousContent.lifeBarId) {
+    const live = applyCurrentUrlContentOverrides(persisted, catalog);
+    runtimeSettingsRef.current = live.runtime;
+    setRuntimeSettingsState(live.runtime);
+    setContentSettings(live.content);
+    if (live.content.characterPath !== characterPath) setCharacterPathState(live.content.characterPath);
+    if (live.content.characterPath !== characterPath
+      || live.content.paletteNo !== previousContent.paletteNo
+      || live.runtime.stageTheme !== previousRuntime.stageTheme
+      || live.runtime.stageArchivePath !== previousRuntime.stageArchivePath
+      || live.content.lifeBarId !== previousContent.lifeBarId) {
       setCharacterReloadVersion((version) => version + 1);
     }
   };
@@ -1343,7 +1381,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
         ...webMugenSettingsRef.current.content,
         [kind === 'character' ? 'characterId' : kind === 'stage' ? 'stageId' : 'lifeBarId']: id,
       },
-    });
+    }, contentCatalogRef.current, kind === 'lifebar' ? undefined : kind);
   };
 
   const selectCharacterPalette = (paletteNo: number) => {
@@ -1359,7 +1397,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
       ...webMugenSettingsRef.current,
       content: { ...webMugenSettingsRef.current.content, catalogPath },
     });
-    setContentSettings(persisted.content);
+    setContentSettings(applyCurrentUrlContentOverrides(persisted).content);
   };
 
   const reloadContentCatalog = async () => {
@@ -1434,20 +1472,20 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
       : 'Delete this browser\'s WebMUGEN settings, including input mappings, and restore the publisher defaults?';
     if (typeof window !== 'undefined' && !window.confirm(message)) return;
     const next = resetWebMugenSettings(publishedSettingsRef.current);
+    const live = applyCurrentUrlContentOverrides(next);
     webMugenSettingsRef.current = next;
-    inputConfigRef.current = next.input;
-    runtimeSettingsRef.current = next.runtime;
-    audioSettingsRef.current = next.audio;
-    setInputConfigState(next.input);
-    setRuntimeSettingsState(next.runtime);
-    setAudioMasterVolume(next.audio.masterVolumePercent);
-    setAudioMuted(next.audio.muted);
-    audioRuntimeRef.current?.setMasterVolume(next.audio.masterVolumePercent / 100);
-    audioRuntimeRef.current?.setMuted(next.audio.muted);
-    setUiLanguage(next.ui.language);
-    setCharacterPathState(next.content.characterPath);
-    setContentSettings(next.content);
-    setContentSelectionSource({ character: 'settings', stage: 'settings' });
+    inputConfigRef.current = live.input;
+    runtimeSettingsRef.current = live.runtime;
+    audioSettingsRef.current = live.audio;
+    setInputConfigState(live.input);
+    setRuntimeSettingsState(live.runtime);
+    setAudioMasterVolume(live.audio.masterVolumePercent);
+    setAudioMuted(live.audio.muted);
+    audioRuntimeRef.current?.setMasterVolume(live.audio.masterVolumePercent / 100);
+    audioRuntimeRef.current?.setMuted(live.audio.muted);
+    setUiLanguage(live.ui.language);
+    setCharacterPathState(live.content.characterPath);
+    setContentSettings(live.content);
     setCharacterReloadVersion((version) => version + 1);
   };
 

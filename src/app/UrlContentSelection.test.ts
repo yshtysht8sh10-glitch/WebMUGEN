@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ContentCatalog } from './ContentCatalog';
 import { FALLBACK_WEBMUGEN_SETTINGS, normalizeWebMugenSettings } from './WebMugenSettings';
-import { applyUrlContentSelection } from './UrlContentSelection';
+import { applyUrlContentOverrides, applyUrlContentSelection, getUrlContentOverrides } from './UrlContentSelection';
 
 const catalog: ContentCatalog = { version: 1, totalEntries: 4, rejectedEntries: 0, issues: [], entries: [
   { id: 'saved-char', name: 'Saved', kind: 'character', engine: 'winmugen', path: '/chars/saved.def' },
@@ -51,5 +51,19 @@ describe('URL content selection', () => {
     const before = JSON.stringify(saved);
     applyUrlContentSelection(saved, catalog, '?stage=url-stage');
     expect(JSON.stringify(saved)).toBe(before);
+  });
+
+  it('reapplies session URL content over later persisted setting changes', () => {
+    const selected = applyUrlContentSelection(saved, catalog, '?character=url%20char&stage=url-stage');
+    const overrides = getUrlContentOverrides(selected);
+    const changed = normalizeWebMugenSettings({
+      ...saved,
+      audio: { ...saved.audio, muted: !saved.audio.muted },
+    }, saved);
+    const live = applyUrlContentOverrides(changed, catalog, overrides);
+
+    expect(changed.content).toMatchObject({ characterId: 'saved-char', stageId: 'saved-stage' });
+    expect(live.content).toMatchObject({ characterId: 'url char', stageId: 'url-stage' });
+    expect(live.audio.muted).toBe(!saved.audio.muted);
   });
 });

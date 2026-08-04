@@ -9,6 +9,27 @@ export type UrlContentSelectionResult = {
   diagnostics: string[];
 };
 
+export type UrlContentOverrides = Partial<Pick<WebMugenSettings['content'], 'characterId' | 'stageId'>>;
+
+export function getUrlContentOverrides(result: UrlContentSelectionResult): UrlContentOverrides {
+  return {
+    ...(result.source.character === 'url' ? { characterId: result.settings.content.characterId } : {}),
+    ...(result.source.stage === 'url' ? { stageId: result.settings.content.stageId } : {}),
+  };
+}
+
+export function applyUrlContentOverrides(
+  settings: WebMugenSettings,
+  catalog: ContentCatalog,
+  overrides: UrlContentOverrides,
+): WebMugenSettings {
+  if (overrides.characterId === undefined && overrides.stageId === undefined) return settings;
+  return applyCatalogSelectionToSettings({
+    ...settings,
+    content: { ...settings.content, ...overrides },
+  }, catalog);
+}
+
 export function applyUrlContentSelection(
   settings: WebMugenSettings,
   catalog: ContentCatalog,
