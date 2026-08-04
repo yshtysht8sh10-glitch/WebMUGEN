@@ -16,6 +16,7 @@ export interface StageRuntime {
   readonly id: string;
   update(state: GameState): void;
   render(context: StageRenderContext): void;
+  renderForeground?(context: StageRenderContext): void;
   getBounds(): StageBounds;
   getCameraConfig(): StageCameraConfig;
   getGroundY(): number;

@@ -49,7 +49,26 @@ function readLayer(value: unknown, sourcePath: string, index: number): WebMugenS
   const src = readText(value.src, `layer ${index} src`).replace(/\\/g, '/');
   if (src.includes('..') || src.includes('://') || src.startsWith('/')) throw new Error(`Layer ${index} has an unsafe image source.`);
   const base = sourcePath.slice(0, sourcePath.lastIndexOf('/') + 1);
-  return { type: 'image', src: `${base}${src}`, zIndex: readNumber(value.zIndex ?? 0, -10000, 10000, 'zIndex'), fit: 'cover', parallax: readNumber(value.parallax ?? 0, -2, 2, 'parallax') };
+  const pass = value.pass === 'foreground' ? 'foreground' : 'background';
+  const cameraFactor = readCameraFactor(value.cameraFactor, value.parallax, value.parallaxY);
+  return {
+    type: 'image',
+    id: typeof value.id === 'string' && /^[a-z0-9][a-z0-9_-]{0,63}$/i.test(value.id) ? value.id : `layer-${index}`,
+    src: `${base}${src}`,
+    zIndex: readNumber(value.zIndex ?? 0, -10000, 10000, 'zIndex'),
+    fit: 'cover',
+    cameraFactor,
+    parallax: cameraFactor[0],
+    parallaxY: cameraFactor[1],
+    pass,
+  };
+}
+
+function readCameraFactor(value: unknown, legacyX: unknown, legacyY: unknown): [number, number] {
+  if (Array.isArray(value) && value.length === 2) {
+    return [readNumber(value[0], -2, 2, 'cameraFactor X'), readNumber(value[1], -2, 2, 'cameraFactor Y')];
+  }
+  return [readNumber(legacyX ?? 0, -2, 2, 'parallax'), readNumber(legacyY ?? 0, -2, 2, 'parallaxY')];
 }
 
 function readId(value: unknown): string { const id = readText(value, 'id'); if (!/^[a-z0-9][a-z0-9_-]{0,63}$/i.test(id)) throw new Error('Invalid stage ID.'); return id; }

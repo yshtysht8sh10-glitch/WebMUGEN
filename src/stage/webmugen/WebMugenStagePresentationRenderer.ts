@@ -6,6 +6,7 @@ import type { WebMugenStageDefinition, WebMugenStagePresentation } from './WebMu
 
 export interface WebMugenStagePresentationRenderer {
   render(stage: WebMugenStageDefinition, context: StageRenderContext): void;
+  renderForeground?(stage: WebMugenStageDefinition, context: StageRenderContext): void;
   dispose(): void;
 }
 

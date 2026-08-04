@@ -1,9 +1,13 @@
 export type WebMugenStageLayer = {
   type: 'image';
+  id: string;
   src: string;
   zIndex: number;
   fit: 'cover';
+  cameraFactor: [number, number];
   parallax: number;
+  parallaxY: number;
+  pass: 'background' | 'foreground';
 };
 
 export type WebMugenStagePresentation = 'image' | 'fresh-clasic' | 'cyber-clasic';

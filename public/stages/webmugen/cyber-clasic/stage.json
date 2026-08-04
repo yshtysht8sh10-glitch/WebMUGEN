@@ -3,7 +3,7 @@
   "version": 1,
   "id": "cyber-clasic",
   "name": "Cyber Clasic",
-  "presentation": "cyber-clasic",
+  "presentation": "image",
   "groundY": 0,
   "players": { "p1Start": [-70, 0], "p2Start": [70, 0] },
   "camera": {
@@ -13,5 +13,11 @@
     "boundLow": 0,
     "verticalFollow": 0.2,
     "tension": 50
-  }
+  },
+  "layers": [
+    { "type": "image", "id": "sky", "src": "sky.webp", "zIndex": -400, "fit": "cover", "cameraFactor": [0.03, 0.02], "pass": "background" },
+    { "type": "image", "id": "distant-structures", "src": "background.webp", "zIndex": -300, "fit": "cover", "cameraFactor": [0.08, 0.03], "pass": "background" },
+    { "type": "image", "id": "perspective-floor", "src": "floor.webp", "zIndex": -200, "fit": "cover", "cameraFactor": [0.22, 0.1], "pass": "background" },
+    { "type": "image", "id": "near-glow", "src": "front.png", "zIndex": 100, "fit": "cover", "cameraFactor": [0.38, 0.14], "pass": "foreground" }
+  ]
 }

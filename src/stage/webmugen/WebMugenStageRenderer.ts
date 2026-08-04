@@ -7,15 +7,23 @@ export class WebMugenStageRenderer {
   private readonly images = new Map<string, ImageState>();
 
   render(stage: WebMugenStageDefinition, context: StageRenderContext): void {
-    const { ctx, viewportWidth, viewportHeight, cameraX } = context;
+    this.renderPass(stage, context, 'background');
+  }
+
+  renderForeground(stage: WebMugenStageDefinition, context: StageRenderContext): void {
+    this.renderPass(stage, context, 'foreground');
+  }
+
+  private renderPass(stage: WebMugenStageDefinition, context: StageRenderContext, pass: 'background' | 'foreground'): void {
+    const { ctx, viewportWidth, viewportHeight, cameraX, cameraY } = context;
     let drewImage = false;
-    for (const layer of stage.layers) {
+    for (const layer of stage.layers.filter((candidate) => candidate.pass === pass)) {
       const state = this.getImage(layer.src);
       if (!state.image || !state.image.complete || state.image.naturalWidth === 0) continue;
-      drawCover(ctx, state.image, viewportWidth, viewportHeight, cameraX * layer.parallax);
+      drawCover(ctx, state.image, viewportWidth, viewportHeight, cameraX * layer.cameraFactor[0], cameraY * layer.cameraFactor[1]);
       drewImage = true;
     }
-    if (!drewImage) {
+    if (pass === 'background' && !drewImage) {
       ctx.fillStyle = '#030816';
       ctx.fillRect(0, 0, viewportWidth, viewportHeight);
     }
@@ -39,12 +47,12 @@ export class WebMugenStageRenderer {
   }
 }
 
-function drawCover(ctx: CanvasRenderingContext2D, image: HTMLImageElement, width: number, height: number, offsetX: number): void {
+function drawCover(ctx: CanvasRenderingContext2D, image: HTMLImageElement, width: number, height: number, offsetX: number, offsetY: number): void {
   const overscan = Math.max(36, Math.ceil(Math.hypot(width, height) * 0.06));
   const targetWidth = width + overscan * 2;
   const targetHeight = height + overscan * 2;
   const scale = Math.max(targetWidth / image.naturalWidth, targetHeight / image.naturalHeight);
   const drawWidth = image.naturalWidth * scale;
   const drawHeight = image.naturalHeight * scale;
-  ctx.drawImage(image, (width - drawWidth) / 2 - offsetX, (height - drawHeight) / 2, drawWidth, drawHeight);
+  ctx.drawImage(image, (width - drawWidth) / 2 - offsetX, (height - drawHeight) / 2 - offsetY, drawWidth, drawHeight);
 }

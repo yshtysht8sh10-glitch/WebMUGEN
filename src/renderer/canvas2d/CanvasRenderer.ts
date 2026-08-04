@@ -194,6 +194,12 @@ export class CanvasRenderer {
         if (diagnostic) renderDiagnostics.push(diagnostic);
       }
     }
+    if (!globalFlags.has('nobg') && this.stageRuntime?.renderForeground) {
+      ctx.save();
+      ctx.filter = bgPalFxFilter;
+      this.stageRuntime.renderForeground({ ctx, viewportWidth: viewport.logicalWidth, viewportHeight: viewport.logicalHeight, cameraX: camera.x, cameraY: camera.y });
+      ctx.restore();
+    }
     if (state.envColor && !state.envColor.under) this.drawEnvironmentColor(ctx, state.envColor.color, viewport.logicalWidth, viewport.logicalHeight);
     if (diagnosticsEnabled && state.envColor) {
       renderDiagnostics.push(`raw.envcolor_draw owner=${state.envColor.ownerEntityId} remaining=${state.envColor.remainingTime} color=(${state.envColor.color.red},${state.envColor.color.green},${state.envColor.color.blue}) under=${state.envColor.under ? 1 : 0} result=drawn`);
