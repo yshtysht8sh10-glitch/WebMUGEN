@@ -50,7 +50,7 @@ anim = 102
     expect(nextRuntime.players[0].noAutoTurn).toBe(false);
 
     const nextStage = applyFallbackStageRules(nextRuntime);
-    expect(nextStage.players[0].facing).toBe(-1);
+    expect(nextStage.players[0]).toMatchObject({ stateNo: 102, facing: 1, animNo: 102 });
   });
 
   it('keeps the bundled T-H-M-A State 101 facing when it enters State 102', () => {

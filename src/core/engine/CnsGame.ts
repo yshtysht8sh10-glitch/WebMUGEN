@@ -26,7 +26,7 @@ export function stepGameByCns(
   const controlledState = applyFallbackControls(current, p1CommandInput.input, p2CommandInput.input);
 
   const p1Result = stepPlayerByCnsWithEvents(
-    faceOpponent(controlledState.players[0], controlledState.players[1]),
+    controlledState.players[0],
     document,
     {
       input: p1CommandInput.input,
@@ -36,7 +36,7 @@ export function stepGameByCns(
   );
 
   const p2Result = stepPlayerByCnsWithEvents(
-    faceOpponent(controlledState.players[1], controlledState.players[0]),
+    controlledState.players[1],
     document,
     {
       input: p2CommandInput.input,
@@ -125,14 +125,6 @@ function createLegacyCommandNames(input: PlayerInput, facing: PlayerState['facin
 function readButtons(buttons: PlayerInput['buttons']): string[] {
   if (!buttons) return [];
   return Array.from(buttons, (button) => String(button).toLowerCase());
-}
-
-function faceOpponent(player: PlayerState, opponent: PlayerState): PlayerState {
-  if (player.stateType === 'A' || player.physics === 'A') return player;
-  return {
-    ...player,
-    facing: player.x <= opponent.x ? 1 : -1,
-  };
 }
 
 function getAnimLength(player: PlayerState, airDocument?: AirDocument): number {

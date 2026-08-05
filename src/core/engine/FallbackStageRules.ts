@@ -75,8 +75,22 @@ function applyFacing(p1: PlayerState, p2: PlayerState, state: GameState, autoTur
 }
 
 function facePlayer(player: PlayerState, opponent: PlayerState, state: GameState): PlayerState {
-  if (isAirborne(player) || player.noAutoTurn === true || player.hitPause > 0 || isFrozenByGlobalPause(player, state)) return player;
-  return { ...player, facing: player.x < opponent.x ? 1 : -1 };
+  if (!isAutoTurnState(player) || player.noAutoTurn === true || player.hitPause > 0 || isFrozenByGlobalPause(player, state)) return player;
+  const facing = player.x < opponent.x ? 1 : -1;
+  if (facing === player.facing) return player;
+  return {
+    ...player,
+    facing,
+    // WinMUGEN completes AutoTurn immediately. AIR 5/6 uses its H flags to
+    // present the old direction first and the new direction at animation end.
+    animNo: player.stateNo === 0 ? 5 : 6,
+    animTime: 0,
+    ctrl: true,
+  };
+}
+
+function isAutoTurnState(player: PlayerState): boolean {
+  return !isAirborne(player) && player.moveType === 'I' && (player.stateNo === 0 || player.stateNo === 11);
 }
 
 function isFrozenByGlobalPause(player: PlayerState, state: GameState): boolean {

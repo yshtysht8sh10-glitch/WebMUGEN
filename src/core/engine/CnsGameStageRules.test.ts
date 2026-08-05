@@ -29,8 +29,8 @@ ctrl = 1
       },
     );
 
-    expect(next.players[0].facing).toBe(-1);
-    expect(next.players[1].facing).toBe(1);
+    expect(next.players[0]).toMatchObject({ stateNo: 0, facing: -1, animNo: 5, animTime: 0, ctrl: true });
+    expect(next.players[1]).toMatchObject({ stateNo: 0, facing: 1, animNo: 5, animTime: 0, ctrl: true });
   });
 
   it('pushes overlapping players apart after CNS movement', () => {
