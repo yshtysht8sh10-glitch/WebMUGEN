@@ -15,6 +15,6 @@
     "tension": 50
   },
   "layers": [
-    { "id": "background", "type": "image", "src": "background.png", "zIndex": -100, "fit": "cover", "cameraFactor": [1, 1], "pass": "background" }
+    { "type": "image", "src": "background.png", "zIndex": -100, "fit": "cover", "parallax": 0.03 }
   ]
 }
