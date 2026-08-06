@@ -1,3 +1,4 @@
+import { MUGEN_WORLD_ORIGIN_X } from '../../core/engine/ScreenSize';
 import type { StageRenderContext } from '../StageRuntime';
 import type { WebMugenStageDefinition } from './WebMugenStageSchema';
 
@@ -79,9 +80,11 @@ export class FreshClasicStageRenderer {
       ctx.stroke();
     }
 
-    // Floor markings use the same world-space camera offset as the fighters.
-    // This keeps the ground fixed under their feet in camera-enabled 800x480 mode.
-    const floorCameraX = cameraX;
+    // Track camera movement relative to the centered initial viewport, not the
+    // absolute world-space camera origin. This keeps the perspective centered
+    // at match start while still locking floor markings to the fighters.
+    const initialCameraX = MUGEN_WORLD_ORIGIN_X - viewportWidth / 2;
+    const floorCameraX = cameraX - initialCameraX;
     const floorVanishingX = viewportWidth / 2 - floorCameraX;
     for (let x = -viewportWidth; x < viewportWidth * 2; x += 92) {
       ctx.beginPath();
