@@ -49,20 +49,27 @@ export function applyViewportCameraRules(state: GameState, width: number, height
     return { ...state, camera: { x: 0, y: 0, viewportWidth: width, viewportHeight: height } };
   }
 
-  // Resolve the camera from the unmodified world state, then clamp only the
-  // player whose Push Box is outside that fixed viewport. Recomputing the
-  // camera after moving one player makes the viewport chase the correction and
-  // can pull the other player along when someone keeps walking into a stage edge.
-  const camera = stage
+  const leftInset = stage?.screenBound.left ?? 4;
+  const rightInset = stage?.screenBound.right ?? 4;
+  const desiredCamera = stage
     ? resolveStageCamera(state, width, height, stage)
     : resolveDesiredCamera(state, width, height);
-  const result = keepPlayersInsideCamera(
+
+  // Prefer moving the camera so every enabled root remains visible. Moving a
+  // stationary opponent's world X merely to preserve the viewport makes it
+  // look as though the retreating player drags the opponent across the stage.
+  const camera = constrainCameraToPlayers(
     state,
-    camera.x,
+    desiredCamera,
     width,
-    stage?.screenBound.left ?? 4,
-    stage?.screenBound.right ?? 4,
+    leftInset,
+    rightInset,
+    stage ? resolveStageCameraXBounds(width, stage) : { minimum: 0, maximum: Math.max(0, 960 - width) },
   );
+
+  // Only when the stage/camera bounds make it impossible to fit every player
+  // do we clamp the root that is actually outside the final fixed viewport.
+  const result = keepPlayersInsideCamera(state, camera.x, width, leftInset, rightInset);
 
   return {
     ...state,
@@ -70,7 +77,7 @@ export function applyViewportCameraRules(state: GameState, width: number, height
     camera: { ...camera, viewportWidth: width, viewportHeight: height },
     hitDiagnosticLines: [
       ...(state.hitDiagnosticLines ?? []),
-      `raw.camera viewport=${width}x${height} pos=(${formatNumber(camera.x)},${formatNumber(camera.y)}) clamped=${result.clampedPlayers.length > 0 ? result.clampedPlayers.join(',') : 'none'}`,
+      `raw.camera viewport=${width}x${height} desired=(${formatNumber(desiredCamera.x)},${formatNumber(desiredCamera.y)}) pos=(${formatNumber(camera.x)},${formatNumber(camera.y)}) clamped=${result.clampedPlayers.length > 0 ? result.clampedPlayers.join(',') : 'none'}`,
     ],
   };
 }
@@ -91,14 +98,8 @@ function resolveStageCamera(state: GameState, width: number, height: number, sta
   if (minimumX < leftEdge + tension) stageX -= leftEdge + tension - minimumX;
   leftEdge = MUGEN_WORLD_ORIGIN_X + stageX - width / 2;
   if (maximumX > leftEdge + width - tension) stageX += maximumX - (leftEdge + width - tension);
-  const horizontalViewportInset = Math.max(0, (width - WINMUGEN_STAGE_VIEWPORT_WIDTH) / 2);
-  const adjustedBoundLeft = stage.camera.boundLeft + horizontalViewportInset;
-  const adjustedBoundRight = stage.camera.boundRight - horizontalViewportInset;
-  if (adjustedBoundLeft <= adjustedBoundRight) {
-    stageX = clamp(stageX, adjustedBoundLeft, adjustedBoundRight);
-  } else {
-    stageX = (stage.camera.boundLeft + stage.camera.boundRight) / 2;
-  }
+  const stageCameraBounds = resolveStageCameraXBounds(width, stage);
+  const cameraX = clamp(MUGEN_WORLD_ORIGIN_X + stageX - width / 2, stageCameraBounds.minimum, stageCameraBounds.maximum);
 
   const highestY = Math.min(...ySources.map((player) => player.y));
   const heightAboveFloor = Math.max(0, MUGEN_GROUND_Y - highestY);
@@ -107,9 +108,53 @@ function resolveStageCamera(state: GameState, width: number, height: number, sta
     : stage.camera.startY;
   const stageY = clamp(desiredStageY, stage.camera.boundHigh, stage.camera.boundLow);
   return {
-    x: MUGEN_WORLD_ORIGIN_X + stageX - width / 2,
+    x: cameraX,
     y: MUGEN_GROUND_Y - stage.zOffset + stageY,
   };
+}
+
+function resolveStageCameraXBounds(width: number, stage: MugenStage): { minimum: number; maximum: number } {
+  const horizontalViewportInset = Math.max(0, (width - WINMUGEN_STAGE_VIEWPORT_WIDTH) / 2);
+  const adjustedBoundLeft = stage.camera.boundLeft + horizontalViewportInset;
+  const adjustedBoundRight = stage.camera.boundRight - horizontalViewportInset;
+  if (adjustedBoundLeft > adjustedBoundRight) {
+    const centeredStageX = (stage.camera.boundLeft + stage.camera.boundRight) / 2;
+    const centeredCameraX = MUGEN_WORLD_ORIGIN_X + centeredStageX - width / 2;
+    return { minimum: centeredCameraX, maximum: centeredCameraX };
+  }
+  return {
+    minimum: MUGEN_WORLD_ORIGIN_X + adjustedBoundLeft - width / 2,
+    maximum: MUGEN_WORLD_ORIGIN_X + adjustedBoundRight - width / 2,
+  };
+}
+
+function constrainCameraToPlayers(
+  state: GameState,
+  camera: { x: number; y: number },
+  width: number,
+  leftInset: number,
+  rightInset: number,
+  cameraBounds: { minimum: number; maximum: number },
+): { x: number; y: number } {
+  const visiblePlayers = state.players.filter((player) => player.screenBound?.value !== false);
+  if (visiblePlayers.length === 0) return camera;
+
+  const boxes = visiblePlayers.map(buildPushBox);
+  const minimumPlayerLeft = Math.min(...boxes.map((box) => box.left));
+  const maximumPlayerRight = Math.max(...boxes.map((box) => box.right));
+  const minimumCameraForPlayers = maximumPlayerRight - (width - Math.max(0, rightInset));
+  const maximumCameraForPlayers = minimumPlayerLeft - Math.max(0, leftInset);
+  const allowedMinimum = Math.max(cameraBounds.minimum, minimumCameraForPlayers);
+  const allowedMaximum = Math.min(cameraBounds.maximum, maximumCameraForPlayers);
+
+  if (allowedMinimum <= allowedMaximum) {
+    return { ...camera, x: clamp(camera.x, allowedMinimum, allowedMaximum) };
+  }
+
+  // The player span is wider than the usable viewport, or a stage bound makes
+  // simultaneous containment impossible. Keep the legal camera position and
+  // let the subsequent root-only clamp handle the actual offender.
+  return { ...camera, x: clamp(camera.x, cameraBounds.minimum, cameraBounds.maximum) };
 }
 
 function resolveDesiredCamera(state: GameState, width: number, height: number): { x: number; y: number } {
