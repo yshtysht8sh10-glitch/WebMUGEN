@@ -29,9 +29,11 @@ export function stepCnsPhysicsMotion(state: GameState, cns?: CnsDocument | null)
     applyCommonDownRecovery(landedPlayers[1], cns, state.players[1].hitPause > 0),
   ] as [PlayerState, PlayerState];
   const finalPlayers = applyTargetBindMaintenance(recoveredPlayers, state.players);
+  const nextFrame = state.frame + 1;
+
   return {
     ...state,
-    frame: state.frame + 1,
+    frame: nextFrame,
     helpers: {
       ...state.helpers,
       entries: state.helpers.entries.map((helper) => ({
@@ -40,24 +42,28 @@ export function stepCnsPhysicsMotion(state: GameState, cns?: CnsDocument | null)
       })),
     },
     players: finalPlayers,
+    // These diagnostics describe one game tick. Replacing instead of appending
+    // prevents old frame-position records from being mixed into a later
+    // AI_RUNTIME snapshot. Stage, push, facing and camera diagnostics append to
+    // this fresh list later in the same tick.
     hitDiagnosticLines: [
-      ...(state.hitDiagnosticLines ?? []),
-      formatPhysicsPositionDiagnostic('before', beforePlayers),
-      formatPhysicsPositionDiagnostic('moved', movedPlayers),
-      formatPhysicsPositionDiagnostic('clamped', clampedPlayers),
-      formatPhysicsPositionDiagnostic('landed', landedPlayers),
-      formatPhysicsPositionDiagnostic('recovered', recoveredPlayers),
-      formatPhysicsPositionDiagnostic('targetbind', finalPlayers),
+      formatPhysicsPositionDiagnostic(nextFrame, 'before', beforePlayers),
+      formatPhysicsPositionDiagnostic(nextFrame, 'moved', movedPlayers),
+      formatPhysicsPositionDiagnostic(nextFrame, 'clamped', clampedPlayers),
+      formatPhysicsPositionDiagnostic(nextFrame, 'landed', landedPlayers),
+      formatPhysicsPositionDiagnostic(nextFrame, 'recovered', recoveredPlayers),
+      formatPhysicsPositionDiagnostic(nextFrame, 'targetbind', finalPlayers),
     ],
   };
 }
 
 function formatPhysicsPositionDiagnostic(
+  frame: number,
   phase: string,
   players: [PlayerState, PlayerState],
 ): string {
   const [p1, p2] = players;
-  return `raw.framepos phase=${phase} p1=(${formatNumber(p1.x)},${formatNumber(p1.y)}) v=(${formatNumber(p1.vx)},${formatNumber(p1.vy)}) state=${p1.stateNo} p2=(${formatNumber(p2.x)},${formatNumber(p2.y)}) v=(${formatNumber(p2.vx)},${formatNumber(p2.vy)}) state=${p2.stateNo}`;
+  return `raw.framepos frame=${frame} phase=${phase} p1=(${formatNumber(p1.x)},${formatNumber(p1.y)}) v=(${formatNumber(p1.vx)},${formatNumber(p1.vy)}) state=${p1.stateNo} p2=(${formatNumber(p2.x)},${formatNumber(p2.y)}) v=(${formatNumber(p2.vx)},${formatNumber(p2.vy)}) state=${p2.stateNo}`;
 }
 
 function applyTargetBindMaintenance(
