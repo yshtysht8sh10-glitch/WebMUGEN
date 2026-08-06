@@ -49,32 +49,28 @@ export function applyViewportCameraRules(state: GameState, width: number, height
     return { ...state, camera: { x: 0, y: 0, viewportWidth: width, viewportHeight: height } };
   }
 
-  let nextState = state;
-  let clampedPlayers: string[] = [];
-  for (let pass = 0; pass < 2; pass += 1) {
-    const camera = stage
-      ? resolveStageCamera(nextState, width, height, stage)
-      : resolveDesiredCamera(nextState, width, height);
-    const result = keepPlayersInsideCamera(
-      nextState,
-      camera.x,
-      width,
-      stage?.screenBound.left ?? 4,
-      stage?.screenBound.right ?? 4,
-    );
-    nextState = { ...nextState, players: result.players };
-    clampedPlayers = [...clampedPlayers, ...result.clampedPlayers];
-  }
+  // Resolve the camera from the unmodified world state, then clamp only the
+  // player whose Push Box is outside that fixed viewport. Recomputing the
+  // camera after moving one player makes the viewport chase the correction and
+  // can pull the other player along when someone keeps walking into a stage edge.
   const camera = stage
-    ? resolveStageCamera(nextState, width, height, stage)
-    : resolveDesiredCamera(nextState, width, height);
-  const uniqueClampedPlayers = [...new Set(clampedPlayers)];
+    ? resolveStageCamera(state, width, height, stage)
+    : resolveDesiredCamera(state, width, height);
+  const result = keepPlayersInsideCamera(
+    state,
+    camera.x,
+    width,
+    stage?.screenBound.left ?? 4,
+    stage?.screenBound.right ?? 4,
+  );
+
   return {
-    ...nextState,
+    ...state,
+    players: result.players,
     camera: { ...camera, viewportWidth: width, viewportHeight: height },
     hitDiagnosticLines: [
-      ...(nextState.hitDiagnosticLines ?? []),
-      `raw.camera viewport=${width}x${height} pos=(${formatNumber(camera.x)},${formatNumber(camera.y)}) clamped=${uniqueClampedPlayers.length > 0 ? uniqueClampedPlayers.join(',') : 'none'}`,
+      ...(state.hitDiagnosticLines ?? []),
+      `raw.camera viewport=${width}x${height} pos=(${formatNumber(camera.x)},${formatNumber(camera.y)}) clamped=${result.clampedPlayers.length > 0 ? result.clampedPlayers.join(',') : 'none'}`,
     ],
   };
 }
