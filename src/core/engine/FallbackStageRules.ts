@@ -43,6 +43,7 @@ export function applyFallbackStageRules(state: GameState, options: FallbackStage
       ...(state.hitDiagnosticLines ?? []),
       formatPushBoxDiagnostic('p1', pushResult.before[0]),
       formatPushBoxDiagnostic('p2', pushResult.before[1]),
+      `raw.stagepos before=${formatNumber(p1.x)},${formatNumber(p2.x)} afterClampPushBind=${formatNumber(nextP1.x)},${formatNumber(nextP2.x)} delta=${formatNumber(nextP1.x - p1.x)},${formatNumber(nextP2.x - p2.x)} targetBind=${Number(Boolean(nextP1.targetBind))},${Number(Boolean(nextP2.targetBind))}`,
       `raw.push result=${pushResult.result} overlapX=${formatNumber(pushResult.overlapX)} overlapY=${formatNumber(pushResult.overlapY)} playerPush=${nextP1.playerPush === false || nextP2.playerPush === false ? 0 : 1}`,
       `raw.cross airborne=${Number(isAirborne(nextP1) || isAirborne(nextP2))} noAutoTurn=${Number(nextP1.noAutoTurn === true)},${Number(nextP2.noAutoTurn === true)} facingBefore=${beforeFacing.join(',')} facingAfter=${nextP1.facing},${nextP2.facing} autoTurnEnabled=${Number(options.autoTurn ?? true)} autoTurn=${Number(beforeFacing[0] !== nextP1.facing || beforeFacing[1] !== nextP2.facing)}`,
     ],
@@ -81,8 +82,6 @@ function facePlayer(player: PlayerState, opponent: PlayerState, state: GameState
   return {
     ...player,
     facing,
-    // WinMUGEN completes AutoTurn immediately. AIR 5/6 uses its H flags to
-    // present the old direction first and the new direction at animation end.
     animNo: player.stateNo === 0 ? 5 : 6,
     animTime: 0,
     ctrl: true,
