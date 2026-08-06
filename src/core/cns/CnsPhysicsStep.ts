@@ -10,6 +10,7 @@ const GROUND_FRICTION = 0.82;
 const COMMON_JUMP_LAND_STATE = 52;
 
 export function stepCnsPhysicsMotion(state: GameState, cns?: CnsDocument | null): GameState {
+  const beforePlayers = state.players;
   const movedPlayers = [
     stepPlayerCnsPhysics(state.players[0], cns),
     stepPlayerCnsPhysics(state.players[1], cns),
@@ -27,6 +28,7 @@ export function stepCnsPhysicsMotion(state: GameState, cns?: CnsDocument | null)
     applyCommonDownRecovery(landedPlayers[0], cns, state.players[0].hitPause > 0),
     applyCommonDownRecovery(landedPlayers[1], cns, state.players[1].hitPause > 0),
   ] as [PlayerState, PlayerState];
+  const finalPlayers = applyTargetBindMaintenance(recoveredPlayers, state.players);
   return {
     ...state,
     frame: state.frame + 1,
@@ -37,8 +39,25 @@ export function stepCnsPhysicsMotion(state: GameState, cns?: CnsDocument | null)
         player: helper.spawnFrame === state.frame ? helper.player : stepPlayerCnsPhysics(helper.player, cns),
       })),
     },
-    players: applyTargetBindMaintenance(recoveredPlayers, state.players),
+    players: finalPlayers,
+    hitDiagnosticLines: [
+      ...(state.hitDiagnosticLines ?? []),
+      formatPhysicsPositionDiagnostic('before', beforePlayers),
+      formatPhysicsPositionDiagnostic('moved', movedPlayers),
+      formatPhysicsPositionDiagnostic('clamped', clampedPlayers),
+      formatPhysicsPositionDiagnostic('landed', landedPlayers),
+      formatPhysicsPositionDiagnostic('recovered', recoveredPlayers),
+      formatPhysicsPositionDiagnostic('targetbind', finalPlayers),
+    ],
   };
+}
+
+function formatPhysicsPositionDiagnostic(
+  phase: string,
+  players: [PlayerState, PlayerState],
+): string {
+  const [p1, p2] = players;
+  return `raw.framepos phase=${phase} p1=(${formatNumber(p1.x)},${formatNumber(p1.y)}) v=(${formatNumber(p1.vx)},${formatNumber(p1.vy)}) state=${p1.stateNo} p2=(${formatNumber(p2.x)},${formatNumber(p2.y)}) v=(${formatNumber(p2.vx)},${formatNumber(p2.vy)}) state=${p2.stateNo}`;
 }
 
 function applyTargetBindMaintenance(
@@ -64,8 +83,6 @@ function applyTargetBindMaintenance(
       y: owner.y + bind.offsetY,
       vx: owner.vx,
       vy: owner.vy,
-      // Keep the zero-duration marker through stage correction. Stage rules
-      // perform the final snap and then remove it before the next game tick.
       targetBind: { ...bind, remaining },
     };
   }) as [PlayerState, PlayerState];
@@ -153,8 +170,6 @@ export function stepPlayerCnsPhysics(player: PlayerState, cns?: CnsDocument | nu
     };
   }
 
-  // Physics=N disables the built-in gravity/friction, but explicit velocity
-  // controllers still move the player on both axes.
   return {
     ...advanced,
     palFx,
@@ -248,4 +263,8 @@ function toMoveType(value: string | undefined): PlayerState['moveType'] | null {
 function toPhysics(value: string | undefined): PlayerState['physics'] | null {
   const normalized = value?.trim().toUpperCase();
   return normalized === 'S' || normalized === 'C' || normalized === 'A' || normalized === 'N' ? normalized : null;
+}
+
+function formatNumber(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
 }
