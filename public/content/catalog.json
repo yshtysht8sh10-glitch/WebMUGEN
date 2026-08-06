@@ -19,7 +19,7 @@
     },
     {
       "id": "fresh",
-      "name": "Fresh Training",
+      "name": "Fresh",
       "kind": "stage",
       "engine": "webmugen",
       "source": "builtin",
@@ -35,7 +35,7 @@
     },
     {
       "id": "fresh-clasic",
-      "name": "Fresh Clasic",
+      "name": "Fresh Classic",
       "kind": "stage",
       "engine": "webmugen",
       "source": "builtin",
@@ -43,7 +43,7 @@
     },
     {
       "id": "cyber-clasic",
-      "name": "Cyber Clasic",
+      "name": "Cyber Classic",
       "kind": "stage",
       "engine": "webmugen",
       "source": "builtin",
