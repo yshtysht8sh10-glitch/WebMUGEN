@@ -2,7 +2,7 @@
   "format": "webmugen-stage",
   "version": 1,
   "id": "fresh-training",
-  "name": "Fresh Training",
+  "name": "Fresh",
   "presentation": "image",
   "groundY": 0,
   "players": { "p1Start": [-70, 0], "p2Start": [70, 0] },
@@ -15,6 +15,6 @@
     "tension": 50
   },
   "layers": [
-    { "type": "image", "src": "background.png", "zIndex": -100, "fit": "cover", "parallax": 0.03 }
+    { "id": "background", "type": "image", "src": "background.png", "zIndex": -100, "fit": "cover", "cameraFactor": [1, 1], "pass": "background" }
   ]
 }
