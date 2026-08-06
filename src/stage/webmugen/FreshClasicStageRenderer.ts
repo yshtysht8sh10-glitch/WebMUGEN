@@ -78,17 +78,22 @@ export class FreshClasicStageRenderer {
       ctx.lineTo(viewportWidth, y);
       ctx.stroke();
     }
+
+    // Floor markings use the same world-space camera offset as the fighters.
+    // This keeps the ground fixed under their feet in camera-enabled 800x480 mode.
+    const floorCameraX = cameraX;
+    const floorVanishingX = viewportWidth / 2 - floorCameraX;
     for (let x = -viewportWidth; x < viewportWidth * 2; x += 92) {
       ctx.beginPath();
-      ctx.moveTo(viewportWidth / 2 - cameraX * 0.03, floorTopY + 3);
-      ctx.lineTo(x - cameraX * 0.16, viewportHeight);
+      ctx.moveTo(floorVanishingX, floorTopY + 3);
+      ctx.lineTo(x - floorCameraX, viewportHeight);
       ctx.stroke();
     }
 
     ctx.fillStyle = 'rgba(241, 247, 229, 0.07)';
     const floorHeight = Math.max(1, viewportHeight - floorTopY - 10);
     for (let index = 0; index < 36; index += 1) {
-      const x = positiveMod(index * 79 + 23 - Math.round(cameraX * 0.15), Math.max(1, Math.round(viewportWidth)));
+      const x = positiveMod(index * 79 + 23 - Math.round(floorCameraX), Math.max(1, Math.round(viewportWidth)));
       const y = floorTopY + 8 + positiveMod(index * 43 + 5, Math.max(1, Math.round(floorHeight)));
       ctx.fillRect(x, y, 1 + index % 2, 1);
     }
