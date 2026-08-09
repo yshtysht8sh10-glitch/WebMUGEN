@@ -109,9 +109,9 @@ When adding expression support, update Expression rows in the matrix, not unrela
 
 ## Edge body distance
 
-`BackEdgeDist`/`FrontEdgeDist` select the viewport edge behind/in front from current Facing. Their Body variants measure from the character Size-derived ground/air push box, not the old fixed X=48/912 center approximation. The runtime viewport width is supplied by the app. Scrolling camera origin/tension and dynamic Width overrides remain Partial.
+`BackEdgeDist`/`FrontEdgeDist` select the current viewport edge behind/in front from current Facing. Their Body variants measure from the character Size-derived ground/air push box. Imported WinMUGEN stages and built-in WebMUGEN stages both supply the current scrolling viewport edges; built-in camera limits are constrained so that viewport edges coincide with the fallback arena limits where player physics stops. `ScreenPos X` independently uses the same camera origin. Dynamic Width overrides remain Partial.
 
-The result remains a fallback approximation: it uses fixed stage limits and the player center rather than a camera-relative screen edge and exact body-width adjustment.
+The remaining approximation is dynamic `Width` controller consumption; static character Size is included in Body-distance calculations.
 
 ## Player body distance
 
@@ -151,9 +151,11 @@ paths remains Partial.
 The production character load copies DEF `[Info] name` and `author` into both root-player runtime
 records. `Name`, `AuthorName`, and the WinMUGEN `P1Name` alias read that metadata; `P2Name` reads the
 primary opponent. In the current versus-only runtime, `P3Name` and `P4Name` implement the specified
-absent-player comparison behavior. `PalNo` reports the slot of the palette actually selected by the
-loader (the first resolved DEF palette, or 1 when no external palette is selected). Team slots and a
-character-select palette chooser remain Partial.
+absent-player comparison behavior. `PalNo` reports the `p1` through `p12` value selected beside the
+character in Settings. The loader uses the same number to select the matching DEF `palN` ACT. If that
+ACT is missing, the sprite palette falls back to the first available ACT but `PalNo` keeps the requested
+value for CNS compatibility. Independent per-player palette selection and in-match palette remapping
+remain Partial.
 
 Safe defaults are useful but should not be overclaimed.
 
@@ -177,7 +179,7 @@ For `GetHitVar(yvel)`, contact StateType S/C selects `ground.velocity.y` and A s
 
 ## Real-character audit findings
 
-The three-character HitDef audit observed `BackEdgeBodyDist`, `FrontEdgeBodyDist`, `ScreenPos`, `StateTime`, and `TimeMod`. Body-edge distance now uses runtime viewport and Size geometry. ScreenPos X/Y uses runtime player coordinates and remains Partial until scrolling camera origin exists. `StateTime` aliases current `Time`, and `TimeMod = divisor, remainder` evaluates State-time modulo for a positive divisor; both remain Partial pending broader WinMUGEN-version syntax audit. These names have separate Matrix rows so their presence in real CNS files is not hidden by a generic safe default.
+The three-character HitDef audit observed `BackEdgeBodyDist`, `FrontEdgeBodyDist`, `ScreenPos`, `StateTime`, and `TimeMod`. Body-edge distance now uses the current horizontal viewport wall and Size geometry. `ScreenPos X` subtracts the same camera origin; `ScreenPos Y` remains an internal-coordinate approximation. T-H-M-A Darkness Finger verifies that State 3420 reaches its `FrontEdgeBodyDist <= 20` wall transition on both the scrolling Material 22 viewport and built-in WebMUGEN stages without accelerating indefinitely or changing to its wall state away from the rendered edge. `StateTime` aliases current `Time`, and `TimeMod = divisor, remainder` evaluates State-time modulo for a positive divisor; both remain Partial pending broader WinMUGEN-version syntax audit. These names have separate Matrix rows so their presence in real CNS files is not hidden by a generic safe default.
 
 ## AnimElem timing
 

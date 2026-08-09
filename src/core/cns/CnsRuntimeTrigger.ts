@@ -35,6 +35,9 @@ export type CnsRuntimeTriggerContext = {
   random?: number;
   screenWidth?: number;
   screenHeight?: number;
+  cameraX?: number;
+  screenLeft?: number;
+  screenRight?: number;
   animationExists?: (animNo: number) => boolean;
   constants?: CnsDocument;
   isHelper?: boolean;
@@ -765,7 +768,7 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'posy':
     case 'pos y': return (context) => internalYToMugenY(context.player.y);
     case 'screenposx':
-    case 'screenpos x': return (context) => context.player.x;
+    case 'screenpos x': return (context) => context.player.x - (context.cameraX ?? 0);
     case 'screenposy':
     case 'screenpos y': return (context) => context.player.y;
     case 'velx':
@@ -791,10 +794,10 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'numcommand': return (context) => context.commands?.size ?? 0;
     case 'ishelper': return (context) => context.isHelper ? 1 : 0;
     case 'id': return (context) => context.entityId ?? context.player.id;
-    case 'backedgedist': return (context) => readEdgeDistance(context.player, context.screenWidth ?? 960, 'back');
-    case 'frontedgedist': return (context) => readEdgeDistance(context.player, context.screenWidth ?? 960, 'front');
-    case 'backedgebodydist': return (context) => readEdgeBodyDistance(context.player, context.screenWidth, 'back');
-    case 'frontedgebodydist': return (context) => readEdgeBodyDistance(context.player, context.screenWidth, 'front');
+    case 'backedgedist': return (context) => readEdgeDistance(context.player, resolveScreenEdges(context, false), 'back');
+    case 'frontedgedist': return (context) => readEdgeDistance(context.player, resolveScreenEdges(context, false), 'front');
+    case 'backedgebodydist': return (context) => readEdgeBodyDistance(context.player, resolveScreenEdges(context, true), 'back');
+    case 'frontedgebodydist': return (context) => readEdgeBodyDistance(context.player, resolveScreenEdges(context, true), 'front');
     case 'p2life': return (context) => context.opponent?.life ?? 1000;
     case 'p2stateno': return (context) => context.opponent?.stateNo ?? 0;
     case 'p2facing': return (context) => context.opponent?.facing ?? -context.player.facing;
@@ -841,17 +844,34 @@ function readP2BodyDistX(player: PlayerState, opponent: PlayerState | undefined)
   return player.facing * (opponentFront - playerFront);
 }
 
-function readEdgeDistance(player: PlayerState, screenWidth: number, edge: 'back' | 'front'): number {
-  const leftDistance = player.x;
-  const rightDistance = screenWidth - player.x;
+function resolveScreenEdges(context: CnsRuntimeTriggerContext, bodyDistance: boolean): { left: number; right: number } {
+  if (context.screenLeft !== undefined && context.screenRight !== undefined) {
+    return { left: context.screenLeft, right: context.screenRight };
+  }
+  if (context.screenWidth !== undefined) {
+    const left = context.cameraX ?? 0;
+    return { left, right: left + context.screenWidth };
+  }
+  return bodyDistance
+    ? { left: FALLBACK_STAGE_LEFT, right: FALLBACK_STAGE_RIGHT }
+    : { left: 0, right: 960 };
+}
+
+function readEdgeDistance(player: PlayerState, screen: { left: number; right: number }, edge: 'back' | 'front'): number {
+  const leftDistance = player.x - screen.left;
+  const rightDistance = screen.right - player.x;
   if (edge === 'back') return player.facing === 1 ? leftDistance : rightDistance;
   return player.facing === 1 ? rightDistance : leftDistance;
 }
 
-function readEdgeBodyDistance(player: PlayerState, screenWidth: number | undefined, edge: 'back' | 'front'): number {
+function readEdgeBodyDistance(
+  player: PlayerState,
+  screen: { left: number; right: number },
+  edge: 'back' | 'front',
+): number {
   const box = buildPushBox(player);
-  const leftDistance = box.left - (screenWidth === undefined ? FALLBACK_STAGE_LEFT : 0);
-  const rightDistance = (screenWidth ?? FALLBACK_STAGE_RIGHT) - box.right;
+  const leftDistance = box.left - screen.left;
+  const rightDistance = screen.right - box.right;
   if (edge === 'back') return player.facing === 1 ? leftDistance : rightDistance;
   return player.facing === 1 ? rightDistance : leftDistance;
 }

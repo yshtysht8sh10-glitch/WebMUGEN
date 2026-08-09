@@ -561,6 +561,30 @@ describe('T-H-M-A crouching and jumping Y collision regression', () => {
 });
 
 describe('T-H-M-A State 3430 TargetBind regression', () => {
+  it.each([
+    { stage: 'Material22', x: 525, cameraX: 160, screenLeft: 160, screenRight: 560 },
+    { stage: 'WebMUGEN', x: 876, cameraX: 512, screenLeft: 512, screenRight: 912 },
+  ])('leaves Darkness Finger carry State 3420 at the $stage wall', async ({ x, cameraX, screenLeft, screenRight }) => {
+    const assets = await loadCharacterFromDef('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.def', createFileSystemFetcher());
+    const states = assets.cns.states.filter((state) => state.stateNo === 3420 || state.stateNo === 3430);
+    expect(states.map((state) => state.stateNo)).toEqual([3420, 3430]);
+    const focusedCns: CnsDocument = { metadataSections: assets.cns.metadataSections, states };
+    const initial = createInitialGameState();
+    const state: GameState = {
+      ...initial,
+      camera: { x: cameraX, y: 65, viewportWidth: 400, viewportHeight: 240 },
+      players: [{
+        ...initial.players[0],
+        x, facing: 1, stateNo: 3420, stateHeaderAppliedStateNo: 3420,
+        stateTime: 8, stateType: 'S', moveType: 'A', physics: 'N', ctrl: false,
+        animNo: 3410, animTime: 8,
+      }, initial.players[1]],
+    };
+
+    const next = stepCnsStateRuntime(state, focusedCns, { screenWidth: 400, cameraX, screenLeft, screenRight }).state;
+    expect(next.players[0]).toMatchObject({ stateNo: 3430, stateTime: 0 });
+  });
+
   it('carries the target at AnimElem 2 with the attacker position and velocity', async () => {
     const assets = await loadCharacterFromDef('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.def', createFileSystemFetcher());
     const state3430 = assets.cns.states.find((state) => state.stateNo === 3430);

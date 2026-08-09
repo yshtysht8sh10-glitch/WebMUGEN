@@ -20,18 +20,21 @@ export type PushBox = {
   source: 'character_size' | 'winmugen_defaults';
 };
 
-export function applyFallbackStageRules(state: GameState): GameState {
+export type FallbackStageRuleOptions = { autoTurn?: boolean };
+
+export function applyFallbackStageRules(state: GameState, options: FallbackStageRuleOptions = {}): GameState {
   const [p1, p2] = state.players;
   let nextP1 = clampToStage(p1);
   let nextP2 = clampToStage(p2);
 
   const beforeFacing: [PlayerState['facing'], PlayerState['facing']] = [nextP1.facing, nextP2.facing];
-  [nextP1, nextP2] = applyFacing(nextP1, nextP2);
+  [nextP1, nextP2] = applyFacing(nextP1, nextP2, state, options.autoTurn ?? true);
   const pushResult = applyPushApart(nextP1, nextP2);
   [nextP1, nextP2] = pushResult.players;
   nextP1 = clampToStage(nextP1);
   nextP2 = clampToStage(nextP2);
   [nextP1, nextP2] = finalizeTargetBinds([nextP1, nextP2]);
+  [nextP1, nextP2] = applyFacing(nextP1, nextP2, state, options.autoTurn ?? true);
 
   return {
     ...state,
@@ -40,8 +43,9 @@ export function applyFallbackStageRules(state: GameState): GameState {
       ...(state.hitDiagnosticLines ?? []),
       formatPushBoxDiagnostic('p1', pushResult.before[0]),
       formatPushBoxDiagnostic('p2', pushResult.before[1]),
+      `raw.stagepos before=${formatNumber(p1.x)},${formatNumber(p2.x)} afterClampPushBind=${formatNumber(nextP1.x)},${formatNumber(nextP2.x)} delta=${formatNumber(nextP1.x - p1.x)},${formatNumber(nextP2.x - p2.x)} targetBind=${Number(Boolean(nextP1.targetBind))},${Number(Boolean(nextP2.targetBind))}`,
       `raw.push result=${pushResult.result} overlapX=${formatNumber(pushResult.overlapX)} overlapY=${formatNumber(pushResult.overlapY)} playerPush=${nextP1.playerPush === false || nextP2.playerPush === false ? 0 : 1}`,
-      `raw.cross airborne=${Number(isAirborne(nextP1) || isAirborne(nextP2))} noAutoTurn=${Number(nextP1.noAutoTurn === true)},${Number(nextP2.noAutoTurn === true)} facingBefore=${beforeFacing.join(',')} facingAfter=${nextP1.facing},${nextP2.facing} autoTurn=${Number(beforeFacing[0] !== nextP1.facing || beforeFacing[1] !== nextP2.facing)}`,
+      `raw.cross airborne=${Number(isAirborne(nextP1) || isAirborne(nextP2))} noAutoTurn=${Number(nextP1.noAutoTurn === true)},${Number(nextP2.noAutoTurn === true)} facingBefore=${beforeFacing.join(',')} facingAfter=${nextP1.facing},${nextP2.facing} autoTurnEnabled=${Number(options.autoTurn ?? true)} autoTurn=${Number(beforeFacing[0] !== nextP1.facing || beforeFacing[1] !== nextP2.facing)}`,
     ],
   };
 }
@@ -63,17 +67,35 @@ function finalizeTargetBinds(players: [PlayerState, PlayerState]): [PlayerState,
   }) as [PlayerState, PlayerState];
 }
 
-function applyFacing(p1: PlayerState, p2: PlayerState): [PlayerState, PlayerState] {
-  if (p1.x === p2.x) {
+function applyFacing(p1: PlayerState, p2: PlayerState, state: GameState, autoTurn: boolean): [PlayerState, PlayerState] {
+  if (!autoTurn || p1.x === p2.x) {
     return [p1, p2];
   }
 
-  return [faceGroundedPlayer(p1, p2), faceGroundedPlayer(p2, p1)];
+  return [facePlayer(p1, p2, state), facePlayer(p2, p1, state)];
 }
 
-function faceGroundedPlayer(player: PlayerState, opponent: PlayerState): PlayerState {
-  if (isAirborne(player) || player.moveType !== 'I' || player.noAutoTurn === true) return player;
-  return { ...player, facing: player.x < opponent.x ? 1 : -1 };
+function facePlayer(player: PlayerState, opponent: PlayerState, state: GameState): PlayerState {
+  if (!isAutoTurnState(player) || player.noAutoTurn === true || player.hitPause > 0 || isFrozenByGlobalPause(player, state)) return player;
+  const facing = player.x < opponent.x ? 1 : -1;
+  if (facing === player.facing) return player;
+  return {
+    ...player,
+    facing,
+    animNo: player.stateNo === 0 ? 5 : 6,
+    animTime: 0,
+    ctrl: true,
+  };
+}
+
+function isAutoTurnState(player: PlayerState): boolean {
+  return !isAirborne(player) && player.moveType === 'I' && (player.stateNo === 0 || player.stateNo === 11);
+}
+
+function isFrozenByGlobalPause(player: PlayerState, state: GameState): boolean {
+  const pause = state.pause;
+  if (!pause || pause.pauseTime <= 0 && pause.superPauseTime <= 0) return false;
+  return pause.ownerEntityId !== player.id || pause.moveTime <= 0;
 }
 
 type PushResult = {

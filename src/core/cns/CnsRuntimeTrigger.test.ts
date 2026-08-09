@@ -269,6 +269,22 @@ describe('CnsRuntimeTrigger', () => {
     expect(evaluateCnsRuntimeTrigger('FrontEdgeBodyDist <= 20', {
       player: { ...player, x: 500, facing: 1 },
     })).toBe(false);
+    expect(evaluateCnsRuntimeTrigger('FrontEdgeBodyDist = 20', {
+      player: { ...player, x: 524, facing: 1 }, screenWidth: 400, cameraX: 160,
+    })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('BackEdgeBodyDist = 20', {
+      player: { ...player, x: 195, facing: 1 }, screenWidth: 400, cameraX: 160,
+    })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('ScreenPos X = 365', {
+      player: { ...player, x: 525 }, screenWidth: 400, cameraX: 160,
+    })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('FrontEdgeBodyDist <= 20', {
+      player: { ...player, x: 876, facing: 1 },
+      screenWidth: 400,
+      cameraX: 512,
+      screenLeft: 512,
+      screenRight: 912,
+    })).toBe(true);
   });
 
   it('evaluates constants and misc numeric triggers', () => {

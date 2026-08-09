@@ -1,0 +1,16 @@
+{
+  "format": "webmugen-lifebar",
+  "version": 1,
+  "id": "default-cyber",
+  "name": "Default Cyber HUD",
+  "layout": "responsive",
+  "palette": {
+    "panel": "#020817",
+    "life": "#22d3ee",
+    "danger": "#fb7185",
+    "power": "#c026d3",
+    "accent": "#67e8f9",
+    "text": "#ecfeff"
+  },
+  "show": { "life": true, "power": true, "timer": true, "round": true, "wins": true }
+}

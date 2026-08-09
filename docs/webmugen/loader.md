@@ -4,12 +4,17 @@ Updated: 2026-07-27
 
 This document describes how WebMUGEN loads and merges character files.
 
+The application-level content list is defined by the validated catalog described in [content-catalog.md](content-catalog.md). Character and stage categories are determined from DEF structure, not merely from `.def` or `.zip` extensions. Public builds load only the publisher's same-origin catalog; development builds may edit and reload its source from Settings.
+
 The loader must preserve WinMUGEN compatibility. Do not compensate for loader/runtime bugs by editing `public/chars/common1.cns`.
 
 Character DEF metadata is also carried into runtime state. `[Info] name` and `author` supply the
-matching string triggers, while the selected first resolved `palN` asset supplies `PalNo`; characters
-without an external palette use slot 1. A future character-select palette choice must update both the
-selected palette asset and this runtime number together.
+matching string triggers. The Settings character palette selector supplies `PalNo` and selects the
+matching DEF `palN` ACT for SFF v1 rendering. The selector accepts `p1` through `p12`; when the
+requested ACT is absent, rendering falls back to the first resolved palette while `PalNo` retains the
+requested number so character CNS palette branches remain observable. For SFF v1, the selected ACT
+overrides the first shared palette owner and propagates through its `samePalette` chain; later
+sprite-specific palettes, such as effect palettes, remain independent.
 
 ## Loaded asset types
 
@@ -32,6 +37,8 @@ After the runtime-required assets have loaded, the app builds a separate file-br
 The inventory does not alter parser input, runtime merge order, or compatibility behavior. Runtime-referenced files outside the character DEF directory are merged into the inventory and marked external so common CNS/CMD sources remain inspectable without appearing to belong to the character package.
 
 Local editing uses the development-only `/__webmugen/character-files` endpoint. It accepts only files rooted under `public/chars`; direct text files are written as Shift-JIS and ZIP entries are saved by rebuilding the containing archive. Archive entry names containing parent traversal are rejected. Production static hosting intentionally has no write path.
+
+Development/Public feature flags also gate the browser entry points. Public Mode does not render Character Files or character path/select/Load controls, its handlers reject direct calls, and startup ignores a saved Development Mode character path in favor of the publisher's normalized default selection.
 
 ## CNS loading policy
 
@@ -169,6 +176,6 @@ When loader behavior changes, update:
 
 ## MUGEN stage ZIPs
 
-The application can select an external ZIP URL independently from the HUD design. `AppStageLoader` normalizes archive paths, decodes WinMUGEN-era Shift-JIS DEF text, selects the first DEF deterministically, resolves its sibling `[BGDef] spr` entry, and converts the referenced SFF v1 into the existing RGBA sprite pack. The supported static slice covers normal BG layers (`spriteno`, `start`, `delta`, and `layerno`), `StageInfo hires/zoffset`, the Camera start/bounds/tension/verticalfollow/floortension fields, PlayerInfo starts/facings/bounds, and Bound screenleft/screenright. Missing DEF/SFF data or an archive without supported layers fails visibly and falls back to the selected built-in stage rather than silently producing a blank arena.
+The application can select an external ZIP URL independently from the HUD design. `AppStageLoader` normalizes archive paths, decodes WinMUGEN-era Shift-JIS DEF text, selects the first DEF deterministically, resolves its sibling `[BGDef] spr` entry, and converts the referenced SFF v1 into the existing RGBA sprite pack. The supported static slice covers normal BG layers (`spriteno`, `start`, `delta`, and `layerno`), `StageInfo hires/zoffset/autoturn`, the Camera start/bounds/tension/verticalfollow/floortension fields, PlayerInfo starts/facings/bounds, and Bound screenleft/screenright. Omitted `autoturn` defaults to enabled; zero disables the common Facing update. For WinMUGEN D4 stages, `HiRes = 1` keeps BG `start` and SFF axes in the Hi-Res source coordinate space while low-resolution camera movement is multiplied by the authored BG `delta`. Stage `zoffset` maps the gameplay floor to the camera but is not added to BG `start`, which is relative to the screen's top center. The bundled beach sky therefore moves from Y -220 at camera Y 0 to Y 0 at `boundhigh = -110` with `delta.y = 2`, retaining full vertical coverage. Parsed horizontal camera bounds retain WinMUGEN's 320-coordinate viewport meaning: runtime insets them by 40 per side only for the extended 400-wide profile, while the classic profile consumes the DEF values unchanged. Missing DEF/SFF data or an archive without supported layers fails visibly and falls back to the selected built-in stage rather than silently producing a blank arena.
 
 This is not yet a complete stage loader. BG animations/controllers, tiling, window clipping, foreground `layerno = 1`, exact PlayerInfo spawn/bound integration, shadow/reflection, and stage audio still require separate compatibility work.

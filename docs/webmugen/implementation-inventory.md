@@ -1,8 +1,13 @@
 # Implementation Inventory
 
-Updated: 2026-07-23
+Updated: 2026-08-04
 
 This document is a high-level inventory of WebMUGEN implementation areas. It is not the source of truth for exact compatibility status; use the compatibility matrix for that.
+
+- Content catalog Reader/Validator/Selection: `src/content/catalog/`, the `src/app/ContentCatalog.ts` facade, `public/content/catalog.json`, and `docs/webmugen/content-catalog.md`.
+- Development Catalog generation: `src/content/catalog-generator/`; separate Character/Stage/LifeBar source handles and one output handle, direct same-origin paths, kind validation, and built-in/external merging.
+- URL content selection: `src/app/UrlContentSelection.ts` and `docs/webmugen/url-settings.md`.
+- Separated Stage/LifeBar presentation runtimes: `src/stage/{winmugen,webmugen}`, `src/lifebar/{winmugen,webmugen}`, and `docs/webmugen/native-presentation.md`.
 
 ## Parser layer
 
@@ -12,7 +17,7 @@ This document is a high-level inventory of WebMUGEN implementation areas. It is 
 | CNS | StateDef, State Controllers, triggers, and many parameters are parsed. CNS punctuation and syntax whitespace remain ASCII-compatible; full-width punctuation/spacing is retained as data rather than promoted to syntax or silently trimmed from tokens. Other syntax remains incomplete. |
 | CMD | Commands, hold prefixes, simple sequences, and buffer time exist. The production matcher prevents one unchanged diagonal hold from manufacturing alternating cardinal steps, with T-H-M-A-style normal/super conflict coverage. WinMUGEN timing still needs audit. |
 | AIR | Actions, elements, timing, loop handling, Clsn blocks, and optional seventh-field blend values exist. Destination-alpha and subtractive Canvas rendering remain approximate. |
-| SFF/Sprites | SpritePack renderer prototype exists; full SFF compatibility may require further work. |
+| SFF/Sprites | SpritePack renderer applies the Settings `p1`-`p12` choice to the first SFF v1 shared palette owner and its chain while preserving later effect-specific palettes, with first-ACT visual fallback for missing slots; full SFF compatibility may require further work. |
 | SND | SND v1 header/subfile parsing, group/index lookup, WAV byte retention, HTTP/ZIP CharacterLoader integration, and non-fatal load diagnostics exist. Browser decoding/playback begins with Issues #27/#28. |
 
 ## Runtime layer
@@ -41,7 +46,8 @@ This document is a high-level inventory of WebMUGEN implementation areas. It is 
 | Hit effects | Contact envelopes feed same-frame shared Explod sparks, shared Browser Audio cues, and envshake offsets once per HitEvent. Character `S` scope is production-connected; bundled common fightfx/SND assets are absent and remain diagnosed Partial. |
 | Browser audio | Shared lazy AudioContext adapter supports user-gesture unlock, decode cache, owner/channel gain and pan, a ramped persistent 0-100 master/mute UI (default 50%), stop/cleanup, and safe diagnostics. Common SND and advanced ownership remain incomplete. |
 | Static debug | Character load, StateDef list, command routes, and coverage are visible. |
-| Runtime settings | Persistent Game time, frame interval, hit diagnostics, root-player Power Infinite, Practice Mode zero-Life recovery/timer freeze, and four independent opt-in Debug/Logging sinks exist. Human/AI logs, collision boxes, lower-left history, and Practice Mode default OFF; a rolling 600-frame performance snapshot supports A-F comparisons. |
+| Runtime settings | Publisher defaults, versioned per-origin browser settings, legacy-key migration, field validation, and full Settings reset are unified under `webmugen.settings.v1`; live match state is excluded. URL Character/Stage overrides remain session-only across unrelated setting changes. Persistent Character palette (`p1`-`p12`), Game time, fractional-cursor frame scheduling, hit diagnostics, root-player Power Infinite, Practice Mode zero-Life recovery/timer freeze, and four independent opt-in Debug/Logging sinks exist. Human/AI logs, collision boxes, lower-left history, and Practice Mode default OFF; a rolling 600-frame performance snapshot supports A-F comparisons. |
+| Build mode | One explicit Development/Public mode derives editor, loader, default-export, Runtime Debug, trace, log, collision, history, and diagnostic features. Production defaults fail closed to Public; saved development-only values are ignored there. |
 
 ## Documentation layer
 
@@ -59,6 +65,8 @@ This document is a high-level inventory of WebMUGEN implementation areas. It is 
 | Debug Overlay | `debug-overlay.md` |
 | Runtime History | `runtime-history.md` |
 | Performance/debug settings | `performance-debug-settings.md` |
+| Publisher/user settings | `settings.md` |
+| Development/Public builds | `build-mode.md` |
 | Power Infinite setting | `infinite-power-settings.md` |
 | Matrix maintenance | `matrix-maintenance.md` |
 | StateDef header notes | `state-def-header-notes.md` |

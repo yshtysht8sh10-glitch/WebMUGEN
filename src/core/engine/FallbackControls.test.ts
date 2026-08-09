@@ -29,6 +29,17 @@ describe('FallbackControls', () => {
     expect(next.players[0].vx).toBeLessThan(0);
   });
 
+  it('keeps P2 facing left and uses back-walk when physical right is backward', () => {
+    const state = createInitialGameState();
+    const next = applyFallbackControls(
+      state,
+      { left: false, right: false, up: false, down: false, attack: false },
+      { left: false, right: true, up: false, down: false, attack: false },
+    );
+
+    expect(next.players[1]).toMatchObject({ stateNo: 20, animNo: 21, facing: -1, vx: 2.5 });
+  });
+
   it('crouches while holding down', () => {
     const state = createInitialGameState();
     const next = applyFallbackControls(

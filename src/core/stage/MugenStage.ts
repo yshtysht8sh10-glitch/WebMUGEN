@@ -37,6 +37,7 @@ export type MugenStage = {
   name: string;
   defPath: string;
   hiRes: boolean;
+  autoTurn?: boolean;
   zOffset: number;
   camera: MugenStageCamera;
   playerInfo: MugenStagePlayerInfo;

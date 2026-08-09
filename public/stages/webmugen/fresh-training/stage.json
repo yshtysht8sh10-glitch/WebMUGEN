@@ -1,0 +1,20 @@
+{
+  "format": "webmugen-stage",
+  "version": 1,
+  "id": "fresh-training",
+  "name": "Fresh",
+  "presentation": "fresh",
+  "groundY": 0,
+  "players": { "p1Start": [-70, 0], "p2Start": [70, 0] },
+  "camera": {
+    "boundLeft": -400,
+    "boundRight": 400,
+    "boundHigh": -120,
+    "boundLow": 0,
+    "verticalFollow": 0,
+    "tension": 50
+  },
+  "layers": [
+    { "type": "image", "id": "panorama", "src": "background-panorama-v2.png", "zIndex": -100, "fit": "cover", "cameraFactor": [1, 0] }
+  ]
+}

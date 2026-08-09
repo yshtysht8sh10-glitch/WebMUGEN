@@ -36,7 +36,7 @@ describe('RoundStateRenderer', () => {
       ...createInitialRoundScore(),
       p1Wins: 2,
       p2Wins: 1,
-    }, 960);
+    }, 960, 'cyber');
 
     expect(calls).toContain('P1 WINS 2');
     expect(calls).toContain('P2 WINS 1');
@@ -106,6 +106,30 @@ describe('RoundStateRenderer', () => {
       introPresentationFrame: 45,
     });
 
+    expect(calls).toContain('FIGHT!');
+  });
+
+  it('keeps FIGHT out of the behind-player HUD pass and in the foreground presentation pass', () => {
+    const calls: string[] = [];
+    const ctx = {
+      save: () => undefined,
+      restore: () => undefined,
+      fillRect: () => undefined,
+      strokeRect: () => undefined,
+      fillText: (text: string) => calls.push(text),
+      set fillStyle(_value: string) {},
+      set strokeStyle(_value: string) {},
+      set font(_value: string) {},
+      set textAlign(_value: string) {},
+      set textBaseline(_value: string) {},
+    } as unknown as CanvasRenderingContext2D;
+    const round = { ...createInitialRoundState(), introPresentationFrame: 45 };
+
+    const renderer = new RoundStateRenderer();
+    renderer.renderHud(ctx, round);
+    expect(calls).not.toContain('FIGHT!');
+
+    renderer.renderPresentation(ctx, round);
     expect(calls).toContain('FIGHT!');
   });
 

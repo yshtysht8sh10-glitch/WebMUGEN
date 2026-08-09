@@ -29,8 +29,8 @@ ctrl = 1
       },
     );
 
-    expect(next.players[0].facing).toBe(-1);
-    expect(next.players[1].facing).toBe(1);
+    expect(next.players[0]).toMatchObject({ stateNo: 0, facing: -1, animNo: 5, animTime: 0, ctrl: true });
+    expect(next.players[1]).toMatchObject({ stateNo: 0, facing: 1, animNo: 5, animTime: 0, ctrl: true });
   });
 
   it('pushes overlapping players apart after CNS movement', () => {
@@ -108,7 +108,7 @@ value = 0
     expect(Math.abs(next.players[1].x - next.players[0].x)).toBeGreaterThanOrEqual(32);
   });
 
-  it('keeps airborne facing after the players cross', () => {
+  it('keeps both airborne facings after the players cross', () => {
     const airCns = parseCnsText(`
 [Size]
 air.front = 7

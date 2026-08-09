@@ -34,6 +34,9 @@ describe('WinMUGEN compatibility Matrix', () => {
     expect(html).toContain('function kindOf(');
     expect(html).toContain('function parse(');
     expect(html).toContain('function render(');
+    expect(html).toContain('function localizedText(');
+    expect(html).toContain("values[requested]||values.en||''");
+    expect(html).toContain('localizedText({ja:localizedRemarks[r[0]]?.ja||r[4],en:r[5]})');
     expect(html).toContain('class="progress"');
     expect(html).not.toMatch(/\b(?:stateRows|headerRows|controllerRows|triggerRows)\b/);
     expect(html).not.toContain('s-unsupported');

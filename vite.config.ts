@@ -12,6 +12,8 @@ const resolvedVirtualCharacterManifestId = `\0${virtualCharacterManifestId}`;
 const projectRoot = fileURLToPath(new URL('.', import.meta.url));
 const publicCharsRoot = resolve(projectRoot, 'public/chars');
 const characterFilesApiPath = '/__webmugen/character-files';
+const defaultSettingsPath = resolve(projectRoot, 'public/config/default-settings.json');
+const defaultSettingsApiPath = '/__webmugen/default-settings';
 const textExtensions = new Set(['.air', '.cns', '.cmd', '.def', '.zss', '.ini', '.json', '.md', '.txt', '.cfg', '.log']);
 const testTimeoutMs = calculateTestTimeoutMs({
   dataCount: countSffImageEntries(publicCharsRoot),
@@ -157,6 +159,28 @@ function webMugenCharacterManifestPlugin() {
     configureServer(server) {
       server.middlewares.use(async (request, response, next) => {
         const requestUrl = new URL(request.url ?? '/', 'http://localhost');
+        if (requestUrl.pathname === defaultSettingsApiPath) {
+          try {
+            if (request.method !== 'POST') {
+              sendJson(response, 405, { error: 'Method not allowed.' });
+              return;
+            }
+            const settings = JSON.parse(await readRequestBody(request)) as Record<string, unknown>;
+            if (!settings || typeof settings !== 'object' || Array.isArray(settings) || settings.version !== 1) {
+              throw new Error('A version 1 WebMUGEN settings object is required.');
+            }
+            for (const group of ['audio', 'runtime', 'content', 'input', 'ui']) {
+              const value = settings[group];
+              if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`settings.${group} is required.`);
+            }
+            writeFileSync(defaultSettingsPath, `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
+            sendJson(response, 200, { saved: true, path: '/config/default-settings.json' });
+          } catch (error) {
+            sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) });
+          }
+          return;
+        }
+
         if (requestUrl.pathname !== characterFilesApiPath) {
           next();
           return;

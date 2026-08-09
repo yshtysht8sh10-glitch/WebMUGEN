@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "audio": {
+    "masterVolumePercent": 7,
+    "muted": false
+  },
+  "runtime": {
+    "roundTime": 999,
+    "frameIntervalMs": 10,
+    "hitDiagnostics": false,
+    "infinitePower": "both",
+    "practiceMode": false,
+    "humanLogEnabled": false,
+    "humanLogCaptureMode": "state-transition",
+    "aiLogEnabled": false,
+    "collisionBoxesVisible": false,
+    "stateHistoryVisible": false,
+    "screenSizeMode": "winmugen-800x480",
+    "hudTheme": "cyber",
+    "stageTheme": "cyber",
+    "stageArchivePath": "/stages/material-22-archive.zip"
+  },
+  "content": {
+    "catalogPath": "/content/catalog.json",
+    "characterId": "t-h-m-a",
+    "stageId": "cyber",
+    "lifeBarId": "default-cyber",
+    "characterPath": "/chars/T-H-M-A.zip",
+    "paletteNo": 1
+  },
+  "input": {
+    "players": [
+      {
+        "keyboard": {
+          "left": "Numpad4",
+          "right": "Numpad6",
+          "up": "Numpad8",
+          "down": "Numpad2",
+          "a": "KeyA",
+          "b": "KeyS",
+          "c": "KeyD",
+          "x": "KeyQ",
+          "y": "KeyW",
+          "z": "KeyE",
+          "start": "Enter"
+        },
+        "gamepad": {
+          "left": 14,
+          "right": 15,
+          "up": 12,
+          "down": 13,
+          "x": 3,
+          "y": 0,
+          "z": 7,
+          "a": 2,
+          "b": 1,
+          "c": 6,
+          "start": 5
+        }
+      },
+      {
+        "keyboard": {
+          "left": "KeyJ",
+          "right": "KeyL",
+          "up": "KeyI",
+          "down": "KeyK",
+          "a": "KeyF",
+          "b": "KeyG",
+          "c": "KeyH",
+          "x": "KeyU",
+          "y": "KeyO",
+          "z": "KeyP",
+          "start": "NumpadEnter"
+        },
+        "gamepad": {
+          "left": 14,
+          "right": 15,
+          "up": 12,
+          "down": 13,
+          "x": 0,
+          "y": 1,
+          "z": 4,
+          "a": 2,
+          "b": 3,
+          "c": 5,
+          "start": 9
+        }
+      }
+    ]
+  },
+  "ui": {
+    "language": "ja"
+  }
+}

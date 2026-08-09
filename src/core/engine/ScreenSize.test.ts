@@ -46,6 +46,59 @@ describe('screen size profiles', () => {
     expect(diagnostics[diagnostics.length - 1]).toContain('clamped=p1,p2');
   });
 
+  it.each([
+    { label: 'P1 retreats left', mover: 0 as const, velocity: -2.4, stationary: 1 as const },
+    { label: 'P2 retreats right', mover: 1 as const, velocity: 2.4, stationary: 0 as const },
+  ])('keeps the stationary opponent world X fixed when $label on a built-in stage', ({ mover, velocity, stationary }) => {
+    const initial = createInitialGameState(undefined, {}, [380, 580]);
+    initial.players[mover] = { ...initial.players[mover], stateNo: 21, animNo: 21, vx: velocity };
+    let state = applyViewportCameraRules(initial, 400, 240);
+    const stationaryX = state.players[stationary].x;
+
+    for (let frame = 0; frame < 120; frame += 1) {
+      state = {
+        ...state,
+        players: state.players.map((player, index) => index === mover
+          ? { ...player, x: player.x + velocity, vx: velocity }
+          : player) as typeof state.players,
+      };
+      state = applyViewportCameraRules(state, 400, 240);
+      expect(state.players[stationary].x).toBe(stationaryX);
+    }
+
+    expect(state.players[mover].vx).toBe(velocity);
+    expect(state.players[mover]).toMatchObject({ stateNo: 21, animNo: 21 });
+    expect(state.players[stationary].vx).toBe(0);
+    expect(state.hitDiagnosticLines?.at(-1)).toContain(`clamped=p${state.players[mover].id}`);
+  });
+
+  it.each([
+    { label: 'P1 retreats left', mover: 0 as const, velocity: -2.4, stationary: 1 as const },
+    { label: 'P2 retreats right', mover: 1 as const, velocity: 2.4, stationary: 0 as const },
+  ])('keeps the stationary opponent world X fixed when $label on an external stage', ({ mover, velocity, stationary }) => {
+    const stage = beachStage();
+    const initial = createInitialGameState(undefined, {}, [380, 580]);
+    initial.players[mover] = { ...initial.players[mover], stateNo: 21, animNo: 21, vx: velocity };
+    let state = applyViewportCameraRules(initial, 400, 240, stage);
+    const stationaryX = state.players[stationary].x;
+
+    for (let frame = 0; frame < 120; frame += 1) {
+      state = {
+        ...state,
+        players: state.players.map((player, index) => index === mover
+          ? { ...player, x: player.x + velocity, vx: velocity }
+          : player) as typeof state.players,
+      };
+      state = applyViewportCameraRules(state, 400, 240, stage);
+      expect(state.players[stationary].x).toBe(stationaryX);
+    }
+
+    expect(state.players[mover].vx).toBe(velocity);
+    expect(state.players[mover]).toMatchObject({ stateNo: 21, animNo: 21 });
+    expect(state.players[stationary].vx).toBe(0);
+    expect(state.hitDiagnosticLines?.at(-1)).toContain(`clamped=p${state.players[mover].id}`);
+  });
+
   it('follows an airborne player vertically while retaining the grounded player near the floor', () => {
     const state = createInitialGameState(undefined, {}, [380, 580]);
     state.players = [
@@ -57,6 +110,58 @@ describe('screen size profiles', () => {
     expect(resolveViewportCamera(next, 400, 240).y).toBe(53);
     expect(next.players[0].y - 53).toBe(92);
     expect(next.players[1].y - 53).toBe(232);
+  });
+
+  it('honors a native Stage vertical-follow lock during a jump', () => {
+    const state = createInitialGameState(undefined, {}, [380, 580]);
+    state.players = [
+      { ...state.players[0], y: 145, stateType: 'A', physics: 'A' },
+      state.players[1],
+    ];
+
+    const next = applyViewportCameraRules(state, 400, 240, undefined, { left: -400, right: 400, verticalFollow: 0 });
+    expect(resolveViewportCamera(next, 400, 240).y).toBe(65);
+    expect(next.players[1].y - 65).toBe(220);
+  });
+
+  it('honors a native single-screen Stage horizontal camera lock', () => {
+    const state = createInitialGameState(undefined, {}, [240, 580]);
+    const camera = { left: 0, right: 0, verticalFollow: 0 };
+
+    const next = applyViewportCameraRules(state, 400, 240, undefined, camera);
+    expect(resolveViewportCamera(next, 400, 240).x).toBe(280);
+  });
+
+  it('keeps the native viewport edge aligned with the fallback arena during a wall carry', () => {
+    const camera = { left: -400, right: 400, verticalFollow: 0 };
+    let state = createInitialGameState(undefined, {}, [876, 856]);
+    state.camera = { x: 512, y: 65, viewportWidth: 400, viewportHeight: 240 };
+    state.players[1] = {
+      ...state.players[1],
+      screenBound: { value: false, moveCameraX: false, moveCameraY: false },
+    };
+
+    state = applyViewportCameraRules(state, 400, 240, undefined, camera);
+    expect(resolveViewportCamera(state, 400, 240).x).toBe(512);
+    expect(resolveViewportCamera(state, 400, 240).x + 400).toBe(912);
+
+    state = {
+      ...state,
+      players: [state.players[0], { ...state.players[1], x: 956 }],
+    };
+    state = applyViewportCameraRules(state, 400, 240, undefined, camera);
+    expect(resolveViewportCamera(state, 400, 240).x).toBe(512);
+
+    state = {
+      ...state,
+      players: [state.players[0], {
+        ...state.players[1],
+        x: 912,
+        screenBound: { value: true, moveCameraX: true, moveCameraY: true },
+      }],
+    };
+    state = applyViewportCameraRules(state, 400, 240, undefined, camera);
+    expect(resolveViewportCamera(state, 400, 240).x).toBe(512);
   });
 
   it('does not clamp a player whose ScreenBound value is disabled', () => {
@@ -78,7 +183,7 @@ describe('screen size profiles', () => {
     expect(resolveViewportCamera(next, 400, 240)).toEqual({ x: 280, y: 65 });
   });
 
-  it('uses Stage tension, horizontal bounds, and vertical follow', () => {
+  it('uses Stage tension, viewport-adjusted horizontal bounds, and vertical follow', () => {
     const state = createInitialGameState(undefined, {}, [380, 700]);
     state.players[0] = { ...state.players[0], y: 125, stateType: 'A', physics: 'A' };
     const next = applyViewportCameraRules(state, 400, 240, beachStage());
@@ -87,7 +192,20 @@ describe('screen size profiles', () => {
 
     const beyond = createInitialGameState(undefined, {}, [380, 1000]);
     const bounded = applyViewportCameraRules(beyond, 400, 240, beachStage());
-    expect(resolveViewportCamera(bounded, 400, 240).x).toBe(440);
+    expect(resolveViewportCamera(bounded, 400, 240).x).toBe(400);
+
+    const classicBounded = applyViewportCameraRules(beyond, 320, 240, beachStage());
+    expect(resolveViewportCamera(classicBounded, 320, 240).x).toBe(480);
+  });
+
+  it('applies external Stage screen bounds to the player axis so sprites may protrude to the viewport edge', () => {
+    const state = createInitialGameState(undefined, {}, [100, 400]);
+    const next = applyViewportCameraRules(state, 400, 240, beachStage());
+    const camera = resolveViewportCamera(next, 400, 240);
+
+    expect(camera.x).toBe(160);
+    expect(next.players[0].x).toBe(camera.x + 15);
+    expect(next.players[0].x - 15).toBe(camera.x);
   });
 });
 

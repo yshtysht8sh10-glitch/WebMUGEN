@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:public": "tsc && vite build --mode public",
+    "build:development": "tsc && vite build --mode development",
     "preview": "vite preview",
     "test": "vitest",
     "matrix:check": "node scripts/compatibility-matrix.mjs",

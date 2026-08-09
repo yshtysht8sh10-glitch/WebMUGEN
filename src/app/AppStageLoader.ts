@@ -51,6 +51,7 @@ export async function loadMugenStageZip(zipPath: string): Promise<MugenStage> {
     name: getDefValue(def, 'Info', 'name') ?? defPath,
     defPath,
     hiRes: parseNumber(getDefSection(def, 'StageInfo')?.values.get('hires'), 0) !== 0,
+    autoTurn: parseNumber(getDefSection(def, 'StageInfo')?.values.get('autoturn'), 1) !== 0,
     zOffset: parseNumber(getDefSection(def, 'StageInfo')?.values.get('zoffset'), 220),
     camera: {
       startX: parseNumber(camera?.values.get('startx'), 0),

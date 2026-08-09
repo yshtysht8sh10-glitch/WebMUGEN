@@ -1,5 +1,7 @@
 # Runtime Pipeline
 
+Stage and LifeBar presentation is selected before the render loop and consumed through the common contracts documented in [native-presentation.md](native-presentation.md). The loop does not choose between WinMUGEN and WebMUGEN implementations frame by frame.
+
 Updated: 2026-07-26
 
 This document describes the WebMUGEN frame pipeline. It is the first document to read when a character does not move, does not enter a state, or visually appears wrong even though the input is recognized.
@@ -108,7 +110,7 @@ Match-level Pause/SuperPause is checked before State -3/-2/-1 and the current St
 
 The App requestAnimationFrame loop synchronizes its monotonic frame counter into `GameState.frame` before CNS and subsystem stepping. Explod creation/lifecycle and `GameTime` therefore observe the real game tick; the frame must not remain at the initial zero or be incremented independently by each subsystem.
 
-Round presentation uses the same CNS pipeline. RoundState 0 enters both roots into engine Initialize State 5900; on round one, character/common CNS continues through State 190 into the character-owned 191-199 Intro family. States 190-199 and `AssertSpecial intro` keep RoundState 1 active until both characters finish; a newly pressed mapped game input routes both roots to State 0 to skip only that character Intro portion. The HUD then presents `ROUND N` followed by `FIGHT!` while commands and collision remain gated; RoundState 2 begins only after that presentation. Later-round initialization restores controllable State 0 even when its StateDef omits `ctrl`. KO disables winner control and command input, lets CNS/physics return the winner through landing/recovery to State 0, then dispatches State 180 and starts the result timer; the defeated player finishes the common route to State 5150. A new input during the active result State advances the result timer to its completion boundary and overrides `roundnotover`; held KO input cannot trigger it. Time-over still dispatches State 180/170, or 175 to both on a draw. A two-win MatchOver automatically resets the score and starts a new Round 1 match. See `../mugen-spec/winmugen/round-flow.md`.
+Round presentation uses the same CNS pipeline. RoundState 0 enters both roots into engine Initialize State 5900; on round one, character/common CNS continues through State 190 into the character-owned 191-199 Intro family. States 190-199 and `AssertSpecial intro` keep RoundState 1 active until both characters finish; a newly pressed mapped game input routes both roots to State 0 to skip only that character Intro portion. The HUD then presents `ROUND N` followed by `FIGHT!` while commands and collision remain gated; the announcement uses the foreground presentation pass so character sprites cannot cover it. RoundState 2 begins only after that presentation. Later-round initialization restores controllable State 0 even when its StateDef omits `ctrl`. KO disables winner control and command input, lets CNS/physics return the winner through landing/recovery to State 0, then dispatches State 180 and starts the result timer; the defeated player finishes the common route to State 5150. A new input during the active result State advances the result timer to its completion boundary and overrides `roundnotover`; held KO input cannot trigger it. Time-over still dispatches State 180/170, or 175 to both on a draw. A two-win MatchOver automatically resets the score and starts a new Round 1 match. See `../mugen-spec/winmugen/round-flow.md`.
 
 Each player carries `stateOwnerId` and `selfStateOwnerId`. CNS execution resolves the current document by owner id before scanning negative/current States. HitDef `p2stateno` borrows the attacker document by default, matching WinMUGEN's omitted `p2getp1state = 1`; explicit `p2getp1state = 0` keeps the target document. TargetState borrows the controller document; ChangeState remains in the current document; SelfState returns to the self owner document. An explicit owner lookup failure uses an empty document and a diagnostic, never another player's or common CNS as a silent fallback.
 
@@ -125,7 +127,17 @@ physics steps, active finite or indefinite binds reapply the owner's resulting p
 velocity. Stage clamp/push performs a final bind correction, then the selected WinMUGEN viewport
 updates its shared camera and applies horizontal ScreenBound correction before rendering. External
 stages use their parsed DEF camera bounds/tension/vertical-follow settings and screen insets; built-in
-stages retain the fallback camera. Expiry clears only the bind
+stages retain the fallback camera. Because WinMUGEN camera bounds describe a 320-coordinate-wide
+viewport, the extended 400-wide profile insets both horizontal bounds by 40; the classic profile uses
+the DEF values unchanged. This prevents extended rendering from exposing BG image edges at a camera
+limit without stretching the stage art. When the two root Push Boxes no longer fit together, the
+camera remains at the preceding legal containment boundary and ScreenBound corrects only the root
+continuing beyond its edge. A stationary opponent therefore retains its world X while the retreating
+root keeps its velocity and walk animation at the viewport edge. A WinMUGEN `HiRes = 1` external Stage composes BG `start`
+and SFF axes directly in the Hi-Res source coordinate space. `zoffset` participates only in the
+gameplay-ground-to-camera conversion; BG `start` remains relative to the screen's top center. This
+lets the bundled sky's `start.y = -220`, `boundhigh = -110`, and `delta.y = 2` meet exactly at the
+viewport top during maximum upward camera travel. Expiry clears only the bind
 metadata, leaving the last synchronized velocity in place; `TargetDrop` clears matching bind metadata.
 
 ## Controller execution flow

@@ -10,6 +10,8 @@ This document defines how to maintain the WebMUGEN compatibility matrix.
 
 `docs/webmugen/winmugen-compatibility-matrix.html` is the browser viewer. It fetches and parses the Markdown inventory at runtime instead of embedding a second copy of every row. Every Markdown row stores the explicit canonical status, progress, and evidence shown by the HTML.
 
+The viewer resolves Matrix remarks through the same live Japanese/English language state used by headings, statuses, and table labels. English is the canonical source and fallback. Japanese remarks are prepared when the Markdown is parsed, with explicit per-item Japanese text taking precedence when an item needs terminology that cannot be translated safely by the shared Matrix glossary. Switching languages re-renders the current filtered rows without a page reload.
+
 Update the Markdown inventory whenever compatibility behavior changes. Update the HTML in the same work cycle only when viewer behavior, labels, filters, or presentation change.
 
 Run `npm run matrix:check` after every Matrix edit. `node scripts/compatibility-matrix.mjs --write` refreshes the Markdown status summary; normal edits must state the canonical status directly in the Markdown row.

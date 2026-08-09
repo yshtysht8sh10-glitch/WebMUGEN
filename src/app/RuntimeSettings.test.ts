@@ -4,6 +4,7 @@ import {
   RUNTIME_SETTINGS_STORAGE_KEY,
   loadRuntimeSettings,
   normalizeRuntimeSettings,
+  resetRuntimeBehaviorSettings,
   saveRuntimeSettings,
 } from './RuntimeSettings';
 
@@ -98,6 +99,27 @@ describe('HUD and stage appearance settings', () => {
       hudTheme: 'cyber',
       stageTheme: 'external',
       stageArchivePath: '/stages/custom.zip',
+    });
+  });
+
+  it.each(['fresh-clasic', 'cyber-clasic'] as const)('preserves native legacy presentation %s', (stageTheme) => {
+    expect(normalizeRuntimeSettings({ stageTheme }).stageTheme).toBe(stageTheme);
+  });
+
+  it('keeps catalog-derived presentation fields when runtime behavior is reset', () => {
+    expect(resetRuntimeBehaviorSettings({
+      ...DEFAULT_RUNTIME_SETTINGS,
+      roundTime: 12,
+      practiceMode: true,
+      hudTheme: 'fresh',
+      stageTheme: 'external',
+      stageArchivePath: '/stages/catalog-stage.zip',
+    })).toMatchObject({
+      roundTime: DEFAULT_RUNTIME_SETTINGS.roundTime,
+      practiceMode: false,
+      hudTheme: 'fresh',
+      stageTheme: 'external',
+      stageArchivePath: '/stages/catalog-stage.zip',
     });
   });
 });

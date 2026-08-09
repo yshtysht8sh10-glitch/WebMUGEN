@@ -1,0 +1,112 @@
+import { MUGEN_WORLD_ORIGIN_X } from '../../core/engine/ScreenSize';
+import type { StageRenderContext } from '../StageRuntime';
+import type { WebMugenStageDefinition } from './WebMugenStageSchema';
+
+export class CyberClasicStageRenderer {
+  render(_stage: WebMugenStageDefinition, context: StageRenderContext): void {
+    const { ctx, viewportWidth, viewportHeight, cameraX, cameraY } = context;
+    const cameraOffsetY = 65 - cameraY;
+    const horizonY = viewportHeight * 0.49 + cameraOffsetY;
+    const floorCameraX = resolveCyberClasicCameraDeltaX(cameraX, viewportWidth);
+    const centerX = resolveCyberClasicVanishingPointX(viewportWidth, floorCameraX);
+    const overscan = Math.max(48, Math.ceil(Math.hypot(viewportWidth, viewportHeight) * 0.08));
+    const drawX = -overscan;
+    const drawY = -overscan;
+    const drawWidth = viewportWidth + overscan * 2;
+    const drawHeight = viewportHeight + overscan * 2;
+
+    ctx.fillStyle = verticalGradient(ctx, drawY, drawY + drawHeight, '#030816', '#10284a');
+    ctx.fillRect(drawX, drawY, drawWidth, drawHeight);
+
+    const horizonGlow = ctx.createRadialGradient(centerX, horizonY, 0, centerX, horizonY, Math.max(viewportWidth * 0.28, viewportHeight * 0.42));
+    horizonGlow.addColorStop(0, 'rgba(34, 211, 238, 0.28)');
+    horizonGlow.addColorStop(0.35, 'rgba(56, 189, 248, 0.09)');
+    horizonGlow.addColorStop(1, 'rgba(56, 189, 248, 0)');
+    ctx.fillStyle = horizonGlow;
+    ctx.fillRect(drawX, drawY, drawWidth, drawHeight);
+
+    ctx.fillStyle = 'rgba(34, 211, 238, 0.2)';
+    ctx.fillRect(drawX, Math.round(horizonY), drawWidth, 2);
+    ctx.fillStyle = 'rgba(125, 211, 252, 0.22)';
+    ctx.fillRect(drawX, Math.round(horizonY + 4), drawWidth, 1);
+
+    const floorTop = horizonY + 2;
+    ctx.fillStyle = verticalGradient(ctx, floorTop, drawY + drawHeight, 'rgba(8, 24, 50, 0.68)', '#020713');
+    ctx.fillRect(drawX, floorTop, drawWidth, drawY + drawHeight - floorTop);
+    drawPerspectiveGrid(ctx, viewportWidth, viewportHeight, centerX, floorTop, floorCameraX, cameraOffsetY, overscan);
+
+    const edgeGlow = ctx.createLinearGradient(drawX, 0, drawX + drawWidth, 0);
+    edgeGlow.addColorStop(0, 'rgba(217, 70, 239, 0.1)');
+    edgeGlow.addColorStop(0.18, 'rgba(217, 70, 239, 0)');
+    edgeGlow.addColorStop(0.82, 'rgba(34, 211, 238, 0)');
+    edgeGlow.addColorStop(1, 'rgba(34, 211, 238, 0.1)');
+    ctx.fillStyle = edgeGlow;
+    ctx.fillRect(drawX, drawY, drawWidth, drawHeight);
+
+    const vignette = ctx.createRadialGradient(
+      viewportWidth / 2, viewportHeight * 0.5, viewportHeight * 0.16,
+      viewportWidth / 2, viewportHeight * 0.5, viewportWidth * 0.78,
+    );
+    vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    vignette.addColorStop(1, 'rgba(0, 3, 12, 0.34)');
+    ctx.fillStyle = vignette;
+    ctx.fillRect(drawX, drawY, drawWidth, drawHeight);
+  }
+
+  dispose(): void {}
+}
+
+function drawPerspectiveGrid(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  centerX: number,
+  floorTop: number,
+  floorCameraX: number,
+  cameraOffsetY: number,
+  overscan: number,
+): void {
+  ctx.save();
+  const verticalSpacing = Math.max(30, width / 18);
+  const floorBottom = height + overscan + cameraOffsetY;
+  ctx.strokeStyle = 'rgba(56, 189, 248, 0.26)';
+  ctx.lineWidth = 1;
+  for (let x = -width - overscan; x < width * 2 + overscan; x += verticalSpacing) {
+    ctx.beginPath();
+    ctx.moveTo(centerX, floorTop);
+    ctx.lineTo(x - floorCameraX, floorBottom);
+    ctx.stroke();
+  }
+  let normalized = 0;
+  let row = 0;
+  while (normalized < 1.15) {
+    const y = floorTop + (floorBottom - floorTop) * normalized;
+    const alpha = 0.12 + Math.min(1, normalized) * 0.23;
+    ctx.strokeStyle = `rgba(34, 211, 238, ${alpha})`;
+    ctx.lineWidth = normalized > 0.72 ? 1.35 : 1;
+    ctx.beginPath();
+    ctx.moveTo(-overscan, Math.round(y) + 0.5);
+    ctx.lineTo(width + overscan, Math.round(y) + 0.5);
+    ctx.stroke();
+    row += 1;
+    normalized += Math.min(0.19, 0.035 + row * 0.012);
+  }
+  ctx.restore();
+}
+
+export function resolveCyberClasicVanishingPointX(viewportWidth: number, floorCameraX = 0): number {
+  return viewportWidth / 2 - floorCameraX;
+}
+
+export function resolveCyberClasicCameraDeltaX(cameraX: number, viewportWidth: number): number {
+  const initialCameraX = MUGEN_WORLD_ORIGIN_X - viewportWidth / 2;
+  return cameraX - initialCameraX;
+}
+
+function verticalGradient(ctx: CanvasRenderingContext2D, y0: number, y1: number, start: string, end: string): CanvasGradient | string {
+  if (typeof ctx.createLinearGradient !== 'function') return start;
+  const gradient = ctx.createLinearGradient(0, y0, 0, y1);
+  gradient.addColorStop(0, start);
+  gradient.addColorStop(1, end);
+  return gradient;
+}

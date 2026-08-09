@@ -41,6 +41,7 @@ describe('MUGEN stage ZIP loader', () => {
     expect(stage).toMatchObject({
       name: 'Beach in summer A',
       hiRes: true,
+      autoTurn: true,
       zOffset: 220,
       camera: {
         startX: 0, startY: 0, boundLeft: -160, boundRight: 160,

@@ -7,7 +7,7 @@ export const RUNTIME_SETTINGS_STORAGE_KEY = 'webmugen.runtimeSettings.v1';
 
 export type HumanLogCaptureMode = 'all-frames' | 'trigger-changes' | 'state-transition' | 'controller-activated';
 export type HudTheme = 'fresh' | 'cyber';
-export type StageTheme = 'fresh' | 'cyber' | 'external';
+export type StageTheme = 'fresh' | 'cyber' | 'fresh-clasic' | 'cyber-clasic' | 'external';
 
 export type RuntimeSettings = {
   roundTime: number;
@@ -38,10 +38,19 @@ export const DEFAULT_RUNTIME_SETTINGS: RuntimeSettings = {
   collisionBoxesVisible: false,
   stateHistoryVisible: false,
   screenSizeMode: 'winmugen-800x480',
-  hudTheme: 'fresh',
-  stageTheme: 'fresh',
+  hudTheme: 'cyber',
+  stageTheme: 'cyber',
   stageArchivePath: '/stages/material-22-archive.zip',
 };
+
+export function resetRuntimeBehaviorSettings(settings: RuntimeSettings): RuntimeSettings {
+  return {
+    ...DEFAULT_RUNTIME_SETTINGS,
+    hudTheme: settings.hudTheme,
+    stageTheme: settings.stageTheme,
+    stageArchivePath: settings.stageArchivePath,
+  };
+}
 
 export function loadRuntimeSettings(storage: Pick<Storage, 'getItem'> | undefined = readLocalStorage()): RuntimeSettings {
   if (!storage) return { ...DEFAULT_RUNTIME_SETTINGS };
@@ -80,7 +89,12 @@ export function normalizeRuntimeSettings(value: unknown): RuntimeSettings {
     stateHistoryVisible: normalizeBoolean(source.stateHistoryVisible),
     screenSizeMode: normalizeScreenSizeMode(source.screenSizeMode),
     hudTheme: source.hudTheme === 'cyber' ? 'cyber' : 'fresh',
-    stageTheme: source.stageTheme === 'cyber' || source.stageTheme === 'external' ? source.stageTheme : 'fresh',
+    stageTheme: source.stageTheme === 'cyber'
+      || source.stageTheme === 'fresh-clasic'
+      || source.stageTheme === 'cyber-clasic'
+      || source.stageTheme === 'external'
+      ? source.stageTheme
+      : 'fresh',
     stageArchivePath: normalizeStageArchivePath(source.stageArchivePath),
   };
 }

@@ -79,7 +79,8 @@ function applyPlayerFallbackControl(player: PlayerState, input: FallbackControlI
   }
 
   if (horizontal !== 0 && player.stateType !== 'A') {
-    const animNo = horizontal > 0 ? 20 : 21;
+    const movingForward = horizontal * player.facing > 0;
+    const animNo = movingForward ? 20 : 21;
 
     return {
       ...player,
@@ -91,7 +92,6 @@ function applyPlayerFallbackControl(player: PlayerState, input: FallbackControlI
       moveType: 'I',
       physics: 'S',
       ctrl: true,
-      facing: horizontal > 0 ? 1 : -1,
       vx: horizontal * 2.5,
       hitDefUsed: false,
     };

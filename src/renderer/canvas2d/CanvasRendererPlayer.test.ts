@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createInitialGameState } from '../../core/engine/GameState';
+import { createInitialRoundState } from '../../core/engine/RoundState';
 import type { AirDocument } from '../../parser/air/AirTypes';
 import type { SpritePack } from '../../core/sprite/SpriteTypes';
 import { CanvasRenderer } from './CanvasRenderer';
+import type { StageRuntime } from '../../stage/StageRuntime';
 
 describe('CanvasRenderer player sprite fallback', () => {
   it('skips every debug rectangle path while keeping normal sprite rendering enabled', () => {
@@ -24,6 +26,48 @@ describe('CanvasRenderer player sprite fallback', () => {
     expect(drawImage).toHaveBeenCalledTimes(2);
     expect(fillText.mock.calls.some(([text]) => String(text).startsWith('push '))).toBe(false);
     expect(diagnostics).toEqual([]);
+  });
+
+  it('draws the FIGHT presentation after both player sprites', () => {
+    const order: string[] = [];
+    const drawImage = vi.fn(() => order.push('player'));
+    const context = {
+      ...fakeContext(vi.fn(), vi.fn(), drawImage),
+      fillText: vi.fn((text: string) => { if (text === 'FIGHT!') order.push(text); }),
+    } as unknown as CanvasRenderingContext2D;
+    const canvas = { width: 800, height: 480, getContext: () => context } as unknown as HTMLCanvasElement;
+    const assets = { airDocument: air(0, 10, 0), spritePack: spritePack(10, 0) };
+    const round = { ...createInitialRoundState(), introPresentationFrame: 45 };
+
+    new CanvasRenderer(canvas, undefined, null, null, { 1: assets, 2: assets })
+      .render(createInitialGameState(), undefined, round, undefined, { collisionBoxesVisible: false });
+
+    expect(order).toEqual(['player', 'player', 'FIGHT!']);
+  });
+
+  it('draws a stage foreground after players and before the HUD presentation', () => {
+    const order: string[] = [];
+    const drawImage = vi.fn(() => order.push('player'));
+    const context = {
+      ...fakeContext(vi.fn(), vi.fn(), drawImage),
+      fillText: vi.fn((value: string) => { if (value === 'FIGHT!') order.push('hud'); }),
+    } as unknown as CanvasRenderingContext2D;
+    const canvas = { width: 800, height: 480, getContext: () => context } as unknown as HTMLCanvasElement;
+    const assets = { airDocument: air(0, 10, 0), spritePack: spritePack(10, 0) };
+    const stageRuntime: StageRuntime = {
+      engine: 'webmugen', id: 'layer-order', update: vi.fn(),
+      render: () => order.push('background'),
+      renderForeground: () => order.push('foreground'),
+      getBounds: () => ({ left: -400, right: 400, high: -120, low: 0 }),
+      getCameraConfig: () => ({ left: -400, right: 400, high: -120, low: 0, verticalFollow: 0.2, tension: 50 }),
+      getGroundY: () => 0, isAutoTurnEnabled: () => true, dispose: vi.fn(),
+    };
+    const round = { ...createInitialRoundState(), introPresentationFrame: 45 };
+
+    new CanvasRenderer(canvas, undefined, null, null, { 1: assets, 2: assets }, undefined, undefined, { stageRuntime })
+      .render(createInitialGameState(), undefined, round, undefined, { collisionBoxesVisible: false });
+
+    expect(order).toEqual(['background', 'player', 'player', 'foreground', 'hud']);
   });
 
   it('draws Push and AIR collision labels when collision boxes are enabled', () => {

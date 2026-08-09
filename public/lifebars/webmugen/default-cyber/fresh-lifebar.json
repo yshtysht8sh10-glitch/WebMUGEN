@@ -1,0 +1,16 @@
+{
+  "format": "webmugen-lifebar",
+  "version": 1,
+  "id": "fresh-hud",
+  "name": "Fresh HUD",
+  "layout": "responsive",
+  "palette": {
+    "panel": "#1f4250",
+    "life": "#55b85a",
+    "danger": "#d9573f",
+    "power": "#2aaed0",
+    "accent": "#d9edf0",
+    "text": "#f8fafc"
+  },
+  "show": { "life": true, "power": true, "timer": true, "round": true, "wins": true }
+}

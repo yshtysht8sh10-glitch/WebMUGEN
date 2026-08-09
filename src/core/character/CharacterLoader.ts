@@ -123,9 +123,14 @@ export type CharacterAssetFetcher = {
   arrayBuffer(path: string): Promise<ArrayBuffer>;
 };
 
+export type CharacterLoadOptions = {
+  paletteNo?: number;
+};
+
 export async function loadCharacterFromDef(
   defPath: string,
   fetcher: CharacterAssetFetcher = createHttpCharacterAssetFetcher(),
+  options: CharacterLoadOptions = {},
 ): Promise<CharacterAssets> {
   const defText = await fetcher.text(defPath);
   const def = parseDefText(defText);
@@ -155,10 +160,12 @@ export async function loadCharacterFromDef(
     soundPath ? loadCharacterSounds(soundPath, fetcher) : Promise.resolve({ sounds: null, diagnostics: [] }),
   ]);
 
-  const selectedPalette = palettes[0]?.bytes;
+  const selectedPaletteAsset = selectCharacterPalette(palettes, options.paletteNo ?? 1);
+  const selectedPalette = selectedPaletteAsset?.bytes;
   const sprites = files.sprite !== undefined
     ? convertSffV1ToImageDataSpritePack(await fetcher.arrayBuffer(resolveAssetPath(basePath, files.sprite)), {
         externalPalette: selectedPalette,
+        externalPaletteSlot: selectedPaletteAsset?.slot,
         preferExternalPalette: selectedPalette !== undefined,
         paletteIndexOrder: selectedPalette !== undefined ? 'reversed' : 'normal',
       })
@@ -324,6 +331,13 @@ function isBaselineMovementController(controller: CnsStateController): boolean {
     const match = trigger.expression.match(/^\s*stateno\s*=\s*(-?\d+)\s*$/i);
     return match ? BASELINE_MOVEMENT_STATE_VALUES.has(Number(match[1])) : false;
   });
+}
+
+export function selectCharacterPalette<T extends { slot: number }>(
+  palettes: readonly T[],
+  requestedSlot: number,
+): T | undefined {
+  return palettes.find((palette) => palette.slot === requestedSlot) ?? palettes[0];
 }
 
 function isOverriddenByCharacterPrimaryCommand(

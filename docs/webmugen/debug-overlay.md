@@ -6,6 +6,8 @@ The Debug Overlay is part of the compatibility workflow. It is not only a UI con
 
 The top-level `Settings` page controls Human log capture, AI log capture, Canvas collision boxes, and the lower-left state history independently. All four default to OFF, and OFF stops the corresponding upstream capture/format/render path rather than only hiding markup. See `performance-debug-settings.md`.
 
+These diagnostic controls and their Runtime UI exist only in Development Mode. Public Mode forces their persisted values off and does not request CNS traces, serialize detailed logs, draw collision boxes, or maintain the lower-left diagnostic history. See `build-mode.md`.
+
 ## Purpose
 
 The overlay should make the current frame observable across the runtime pipeline:
@@ -81,6 +83,8 @@ ACT files show their MUGEN-index-order palette and apply the selected ACT to ret
 ## Settings page
 
 `Settings` is a top-level page beside `Game / Runtime` and `Character Files`; it is not part of the runtime-log tab row. Character loading, runtime behavior, audio, and input configuration remain on this page. Runtime and audio controls are grouped into labeled cards so checkboxes, descriptions, selectors, and action buttons retain a consistent relationship at wide and narrow viewport sizes. The control summary is a child card of `Input Config`, alongside the live input monitor and per-player mappings.
+
+Settings are loaded through the unified `webmugen.settings.v1` model after publisher defaults from `public/config/default-settings.json`. The Settings page can reset every browser-owned setting, including input mappings, to the latest publisher defaults after confirmation. Live Life, Power, State, round, entity, and log data never enters the persisted model. See `settings.md`.
 
 `Logical screen size` selects the persisted Canvas profile. `WinMUGEN Hi-Res 640x480 (320x240 coordinates)` is the default compatibility-oriented view: the Canvas is physically 640x480 while CNS screen coordinates remain 320x240 and render at 2x. `Wide 960x540 (16:9)` preserves the former broad 1x view. A change reloads the current match because the logical dimensions are also supplied to CNS screen-relative evaluation. Stored values from the former `winmugen-320x240` option migrate to the Hi-Res profile.
 
@@ -206,7 +210,7 @@ Canvas collision debug uses the same AIR world-coordinate boxes as the hit resol
 
 When `Collision boxes` is OFF, Canvas never enters the player/helper/projectile debug rectangle path. The lower-left history has its own setting and remains a separate 5 Hz lightweight stream.
 
-Issue #57 adds a blue Push Box using the same `[Size]`-derived rectangle as the stage solver. `raw.push` exposes owner, ground/air mode, character/default source, resolved edges, front/back/height, overlap, `PlayerPush`, and apply/skip result. `raw.cross` exposes airborne state, both players' per-tick `noAutoTurn` flags, and Facing before/after so an unintended auto-turn is visible in the copied runtime history.
+Issue #57 adds a blue Push Box using the same `[Size]`-derived rectangle as the stage solver. `raw.push` exposes owner, ground/air mode, character/default source, resolved edges, front/back/height, overlap, `PlayerPush`, and apply/skip result. `raw.cross` exposes airborne state, both players' per-tick `noAutoTurn` flags, and Facing before/after so an unintended auto-turn is visible in the copied runtime history. AutoTurn is eligible only while grounded in State 0/11 with `MoveType = I`; an executed turn also appears as Anim 5/6 in the normal State/Anim trace while Ctrl remains enabled.
 
 Runtime Settings `Power Infinite` is separate from CNS compatibility. The Canvas power gauge displays `∞` for each selected root player, while `raw.power_hud infinite=off|p1|p2|both` exposes the current selection. An actual refill or mode transition produces `raw.power_infinite timing=frame_start` with the real before/after and `powerMax`; normal controller and HitDef power diagnostics continue to show later mutations in that frame.
 

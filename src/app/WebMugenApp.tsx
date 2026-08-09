@@ -5,7 +5,16 @@ import type { GameState, PlayerState, ProjectileState, Rect } from '../core/engi
 import { applyInfinitePowerAtFrameStart } from '../core/power/InfinitePower';
 import { applyPracticeModeRecovery } from '../core/training/PracticeMode';
 import { createSampleCharacterAssets, loadAppCharacter, readCharacterRuntimeMetadata, saveCharacterSourceFile } from './AppCharacterLoader';
-import { loadMugenStageZip } from './AppStageLoader';
+import { loadWinMugenStage } from '../stage/winmugen/WinMugenStageLoader';
+import { WinMugenStageRuntime } from '../stage/winmugen/WinMugenStageRuntime';
+import { loadWebMugenStage } from '../stage/webmugen/WebMugenStageLoader';
+import { WebMugenStageRuntime } from '../stage/webmugen/WebMugenStageRuntime';
+import { loadWebMugenLifeBar } from '../lifebar/webmugen/WebMugenLifeBarLoader';
+import { WebMugenLifeBarRuntime } from '../lifebar/webmugen/WebMugenLifeBarRuntime';
+import { loadWinMugenLifeBar } from '../lifebar/winmugen/WinMugenLifeBarLoader';
+import { WinMugenLifeBarRuntime } from '../lifebar/winmugen/WinMugenLifeBarRuntime';
+import type { StageRuntime } from '../stage/StageRuntime';
+import type { LifeBarRuntime } from '../lifebar/LifeBarRuntime';
 import type { CharacterSourceFile } from '../core/character/CharacterTypes';
 import type { SndDocument, SndSample } from '../parser/snd/SndTypes';
 import { sndSampleKey } from '../parser/snd/SndTypes';
@@ -14,7 +23,7 @@ import { BrowserAudioRuntime, formatAudioRuntimeDiagnostic, type AudioRuntimeDia
 import { createAudioStartGate, type AudioStartGate, type AudioStartGateGesture, type RuntimeStartState } from './AudioStartGate';
 import type { SoundRuntimeEvent } from '../core/audio/SoundEvent';
 import { processSoundRuntimeEvents } from '../core/audio/SoundRuntimeBridge';
-import { adjustMasterVolumeFromKey, loadAudioSettings, normalizeAudioSettings, saveAudioSettings, type AudioSettings } from './AudioSettings';
+import { adjustMasterVolumeFromKey, normalizeAudioSettings, type AudioSettings } from './AudioSettings';
 import { applyExplodControllerEvents, removeExplodsOnOwnerHit, stepExplodRuntime, type ExplodControllerEvent } from '../core/explod/ExplodSystem';
 import type { AirAction, AirDocument, AirElement } from '../parser/air/AirTypes';
 import type { ImageDataSprite, ImageDataSpritePack } from '../core/sprite/ImageDataSpriteTypes';
@@ -81,10 +90,10 @@ import {
 import {
   DEFAULT_FRAME_INTERVAL_MS,
   DEFAULT_RUNTIME_SETTINGS,
-  loadRuntimeSettings,
   normalizeRuntimeSettings,
-  saveRuntimeSettings,
+  resetRuntimeBehaviorSettings,
   type RuntimeSettings,
+  type StageTheme,
 } from './RuntimeSettings';
 import { calculateMugenAnimTime, getMugenAnimEndTime } from '../core/animation/AnimationDuration';
 import { getAnimationTriggerInfo, getCurrentAnimationElement } from '../core/animation/AnimationPlayer';
@@ -145,14 +154,42 @@ import {
 } from './RuntimeLogIndex';
 import { RuntimePerformanceMetrics } from './RuntimePerformanceMetrics';
 import { CHARACTER_PATH_OPTIONS as DISCOVERED_CHARACTER_PATH_OPTIONS } from 'virtual:webmugen-character-manifest';
-import { loadUiLanguage, saveUiLanguage, UiLanguageProvider, useUiLanguage } from './UiLanguage';
-import { applyViewportCameraRules, getScreenSizeProfile } from '../core/engine/ScreenSize';
+import { UiLanguageProvider, useUiLanguage } from './UiLanguage';
+import { applyViewportCameraRules, getScreenSizeProfile, resolveViewportCamera } from '../core/engine/ScreenSize';
+import {
+  FALLBACK_WEBMUGEN_SETTINGS,
+  applyCatalogSelectionToSettings,
+  applyFeaturePolicyToSettings,
+  loadWebMugenSettings,
+  normalizeWebMugenSettings,
+  publishWebMugenDefaults,
+  resetWebMugenSettings,
+  saveWebMugenSettings,
+  synchronizeContentIdsFromRuntime,
+  type WebMugenSettings,
+} from './WebMugenSettings';
+import { WEBMUGEN_FEATURES } from './BuildMode';
+import {
+  createEmptyContentCatalog,
+  entriesOfKind,
+  formatCatalogEntryLabel,
+  readContentCatalog,
+  type ContentCatalog,
+  type ContentCatalogReadResult,
+} from './ContentCatalog';
+import { applyUrlContentOverrides, applyUrlContentSelection, getUrlContentOverrides, type ContentSelectionSource, type UrlContentOverrides } from './UrlContentSelection';
+import { CatalogGeneratorPanel } from '../content/catalog-generator/CatalogGeneratorPanel';
+import { resolveRuntimeFrameTick } from './RuntimeFrameScheduler';
 
 const DEFAULT_CHARACTER_DEF_PATH = '/chars/T-H-M-A.zip';
+const NATIVE_STAGE_PATHS: Record<Exclude<StageTheme, 'external'>, string> = {
+  fresh: '/stages/webmugen/fresh-training/stage.json',
+  cyber: '/stages/webmugen/cyber-training/stage.json',
+  'fresh-clasic': '/stages/webmugen/fresh-clasic/stage.json',
+  'cyber-clasic': '/stages/webmugen/cyber-clasic/stage.json',
+};
 const ENABLE_RUNTIME_FALLBACKS = false;
 const APP_PLAYER_START_X = [380, 580] as const;
-const INPUT_CONFIG_STORAGE_KEY = 'webmugen.inputConfig.v1';
-const CHARACTER_PATH_STORAGE_KEY = 'webmugen.characterPath.v1';
 export const CHARACTER_PATH_OPTIONS = uniqueCharacterPathOptions([
   DEFAULT_CHARACTER_DEF_PATH,
   ...DISCOVERED_CHARACTER_PATH_OPTIONS,
@@ -194,7 +231,13 @@ const EMPTY_STATIC_DEBUG_INFO: StaticDebugInfo = {
 };
 
 export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage }) {
-  const [uiLanguage, setUiLanguage] = useState(loadUiLanguage);
+  const webMugenSettingsRef = useRef<WebMugenSettings>(normalizeWebMugenSettings(FALLBACK_WEBMUGEN_SETTINGS));
+  const publishedSettingsRef = useRef<WebMugenSettings>(normalizeWebMugenSettings(FALLBACK_WEBMUGEN_SETTINGS));
+  const contentCatalogRef = useRef<ContentCatalog>(createEmptyContentCatalog());
+  const urlContentOverridesRef = useRef<UrlContentOverrides>({});
+  const contentSelectionSourceRef = useRef<{ character: ContentSelectionSource; stage: ContentSelectionSource }>({ character: 'settings', stage: 'settings' });
+  const [settingsReady, setSettingsReady] = useState(false);
+  const [uiLanguage, setUiLanguage] = useState(webMugenSettingsRef.current.ui.language);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
   const gameStateRef = useRef<GameState>(createInitialGameState(undefined, {}, APP_PLAYER_START_X));
@@ -214,9 +257,9 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
   const winMugenHudVisibleRef = useRef(true);
   const winMugenFastForwardRef = useRef(false);
   const inputRef = useRef<BrowserInput | null>(null);
-  const inputConfigRef = useRef<InputConfig>(loadInputConfig());
-  const runtimeSettingsRef = useRef<RuntimeSettings>(loadRuntimeSettings());
-  const audioSettingsRef = useRef<AudioSettings>(loadAudioSettings());
+  const inputConfigRef = useRef<InputConfig>(webMugenSettingsRef.current.input);
+  const runtimeSettingsRef = useRef<RuntimeSettings>(webMugenSettingsRef.current.runtime);
+  const audioSettingsRef = useRef<AudioSettings>(webMugenSettingsRef.current.audio);
   const audioRuntimeRef = useRef<BrowserAudioRuntime | null>(null);
   const audioStartGateRef = useRef<AudioStartGate | null>(null);
   const characterSoundsRef = useRef<SndDocument | null>(null);
@@ -256,10 +299,20 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
   const [runtimeFrameIndexAutoScroll, setRuntimeFrameIndexAutoScroll] = useState(true);
   const [stateTransitionLogLines, setStateTransitionLogLines] = useState<string[]>(['StateNoが変化すると、ここに遷移だけが残ります。']);
   const [stageDebugLines, setStageDebugLines] = useState<string[]>(['State: -']);
-  const [activePage, setActivePage] = useState<AppPage>(initialPage);
+  const [activePage, setActivePage] = useState<AppPage>(
+    initialPage === 'static-files' && !WEBMUGEN_FEATURES.characterFiles ? 'play' : initialPage,
+  );
   const [activeDebugTab, setActiveDebugTab] = useState<DebugTab>('runtime-human');
   const [aiHistoryWindow, setAiHistoryWindow] = useState<RuntimeHistoryWindow>({ mode: 'latest' });
   const [copyStatus, setCopyStatus] = useState('');
+  const [publishDefaultsStatus, setPublishDefaultsStatus] = useState('');
+  const [contentCatalog, setContentCatalog] = useState<ContentCatalog>(contentCatalogRef.current);
+  const [contentCatalogReadResult, setContentCatalogReadResult] = useState<ContentCatalogReadResult | null>(null);
+  const [contentSettings, setContentSettings] = useState(webMugenSettingsRef.current.content);
+  const [contentSelectionSource, setContentSelectionSource] = useState<{
+    character: ContentSelectionSource;
+    stage: ContentSelectionSource;
+  }>({ character: 'settings', stage: 'settings' });
   const [inputConfig, setInputConfigState] = useState<InputConfig>(inputConfigRef.current);
   const [runtimeSettings, setRuntimeSettingsState] = useState<RuntimeSettings>(runtimeSettingsRef.current);
   const screenSizeProfile = getScreenSizeProfile(runtimeSettings.screenSizeMode);
@@ -268,7 +321,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
   const [audioMasterVolume, setAudioMasterVolume] = useState(audioSettingsRef.current.masterVolumePercent);
   const [audioDiagnostic, setAudioDiagnostic] = useState('audio=-');
   const [runtimeStartState, setRuntimeStartState] = useState<RuntimeStartState>('loading');
-  const [characterPath, setCharacterPathState] = useState(loadCharacterPath());
+  const [characterPath, setCharacterPathState] = useState(webMugenSettingsRef.current.content.characterPath);
   const [cnsSourceFiles, setCnsSourceFiles] = useState<CharacterSourceFile[]>([]);
   const [loadedAir, setLoadedAir] = useState<AirDocument | null>(null);
   const [loadedSprites, setLoadedSprites] = useState<ImageDataSpritePack | null>(null);
@@ -276,6 +329,49 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
   const [sourceViewHistory, setSourceViewHistory] = useState<SourceViewHistoryEntry[]>([]);
   const [characterReloadVersion, setCharacterReloadVersion] = useState(0);
   const cnsSourceScrollPositionsRef = useRef<Record<string, number>>({});
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      const loaded = await loadWebMugenSettings();
+      let settings = applyFeaturePolicyToSettings(loaded.settings, loaded.publishedDefaults, WEBMUGEN_FEATURES);
+      let liveSettings = settings;
+      const catalogResult = await readContentCatalog(settings.content.catalogPath);
+      if (!active) return;
+      setContentCatalogReadResult(catalogResult);
+      if (catalogResult.status === 'success' || catalogResult.status === 'partial') {
+        const catalog = catalogResult.catalog;
+        contentCatalogRef.current = catalog;
+        setContentCatalog(catalog);
+        settings = applyCatalogSelectionToSettings(settings, catalog);
+        const urlSelection = applyUrlContentSelection(
+          settings,
+          catalog,
+          typeof window === 'undefined' ? '' : window.location.search,
+        );
+        liveSettings = urlSelection.settings;
+        urlContentOverridesRef.current = getUrlContentOverrides(urlSelection);
+        contentSelectionSourceRef.current = urlSelection.source;
+        setContentSelectionSource(urlSelection.source);
+      }
+      webMugenSettingsRef.current = settings;
+      publishedSettingsRef.current = loaded.publishedDefaults;
+      inputConfigRef.current = liveSettings.input;
+      runtimeSettingsRef.current = liveSettings.runtime;
+      audioSettingsRef.current = liveSettings.audio;
+      setInputConfigState(liveSettings.input);
+      setRuntimeSettingsState(liveSettings.runtime);
+      setAudioMasterVolume(liveSettings.audio.masterVolumePercent);
+      setAudioMuted(liveSettings.audio.muted);
+      setCharacterPathState(liveSettings.content.characterPath);
+      setContentSettings(liveSettings.content);
+      setUiLanguage(liveSettings.ui.language);
+      audioRuntimeRef.current?.setMasterVolume(liveSettings.audio.masterVolumePercent / 100);
+      audioRuntimeRef.current?.setMuted(liveSettings.audio.muted);
+      setSettingsReady(true);
+    })();
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     const handleWinMugenHotkey = (event: KeyboardEvent) => {
@@ -347,6 +443,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
   }, []);
 
   useEffect(() => {
+    if (!settingsReady) return;
     let disposed = false;
     let frameId = 0;
     let gate: AudioStartGate | null = null;
@@ -390,23 +487,56 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
       const audioRuntime = audioRuntimeRef.current;
       recordAudioHistory(`raw.audio_lifecycle event=character_path_effect_stop_all runtimeInstanceId=${audioRuntime?.runtimeInstanceId ?? '-'} characterPath=${characterPath}`);
       audioRuntime?.stopAll();
+      rendererRef.current?.dispose();
+      rendererRef.current = null;
       characterSoundsRef.current = null;
       setStateTransitionLogLines(['StateNoが変化すると、ここに遷移だけが残ります。']);
 
-      const loadResult = await loadAppCharacter(characterPath);
+      const paletteNo = webMugenSettingsRef.current.content.paletteNo;
+      const loadResult = await loadAppCharacter(characterPath, paletteNo);
       if (disposed) return;
       let loadedStage = null;
+      let loadedStageRuntime: StageRuntime | undefined;
+      let loadedLifeBarRuntime: LifeBarRuntime | undefined;
       let stageLoadError: string | null = null;
-      if (runtimeSettingsRef.current.stageTheme === 'external') {
-        try {
-          loadedStage = await loadMugenStageZip(runtimeSettingsRef.current.stageArchivePath);
-        } catch (error) {
-          stageLoadError = error instanceof Error ? error.message : String(error);
+      try {
+        const selectedStage = contentCatalogRef.current.entries.find((entry) => entry.kind === 'stage' && entry.id === webMugenSettingsRef.current.content.stageId);
+        const stageTheme = runtimeSettingsRef.current.stageTheme;
+        if (selectedStage?.engine === 'winmugen' || (!selectedStage && stageTheme === 'external')) {
+          const stagePath = selectedStage?.path ?? runtimeSettingsRef.current.stageArchivePath;
+          loadedStage = await loadWinMugenStage(stagePath);
+          loadedStageRuntime = new WinMugenStageRuntime(loadedStage);
+        } else {
+          const nativeStagePath = selectedStage?.engine === 'webmugen' && !selectedStage.path.startsWith('builtin:')
+            ? selectedStage.path
+            : NATIVE_STAGE_PATHS[stageTheme === 'external' ? 'cyber' : stageTheme];
+          const definition = await loadWebMugenStage(nativeStagePath);
+          loadedStageRuntime = new WebMugenStageRuntime(definition);
         }
+      } catch (error) {
+        stageLoadError = error instanceof Error ? error.message : String(error);
+      }
+      try {
+        const selectedLifeBar = contentCatalogRef.current.entries.find((entry) => entry.kind === 'lifebar' && entry.id === webMugenSettingsRef.current.content.lifeBarId);
+        if (selectedLifeBar?.engine === 'winmugen') {
+          loadedLifeBarRuntime = new WinMugenLifeBarRuntime(await loadWinMugenLifeBar(selectedLifeBar.path));
+        } else {
+          const lifeBarPath = selectedLifeBar?.engine === 'webmugen' && !selectedLifeBar.path.startsWith('builtin:')
+            ? selectedLifeBar.path
+            : runtimeSettingsRef.current.hudTheme === 'cyber'
+              ? '/lifebars/webmugen/default-cyber/lifebar.json'
+              : '/lifebars/webmugen/default-cyber/fresh-lifebar.json';
+          loadedLifeBarRuntime = new WebMugenLifeBarRuntime(await loadWebMugenLifeBar(lifeBarPath));
+        }
+      } catch (error) {
+        stageLoadError = `${stageLoadError ? `${stageLoadError}; ` : ''}LifeBar: ${error instanceof Error ? error.message : String(error)}`;
       }
       if (disposed) return;
 
       const loadedCharacter = loadResult.character ?? createSampleCharacterAssets();
+      const characterMetadata = loadResult.character
+        ? readCharacterRuntimeMetadata(loadResult.character, paletteNo)
+        : { name: '', authorName: '', palNo: paletteNo };
       const character = {
         ...loadedCharacter,
         cns: ENABLE_RUNTIME_FALLBACKS
@@ -414,7 +544,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
           : loadedCharacter.cns,
       };
       const characterPowerMax = readCnsConst(character.cns, 'data.power');
-      gameStateRef.current = createInitialGameState(characterPowerMax, readCharacterRuntimeMetadata(character), APP_PLAYER_START_X);
+      gameStateRef.current = createInitialGameState(characterPowerMax, characterMetadata, APP_PLAYER_START_X);
       setCnsSourceFiles(character.cnsSourceFiles ?? []);
       setLoadedAir(character.air);
       setLoadedSprites(character.sprites);
@@ -437,7 +567,10 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
         rendererRef.current = new CanvasRenderer(canvas, character.air, null, character.sprites, {
           1: characterRenderAssets,
           2: characterRenderAssets,
-        }, undefined, loadedStage);
+        }, undefined, loadedStage, {
+          ...(loadedStageRuntime ? { stageRuntime: loadedStageRuntime } : {}),
+          ...(loadedLifeBarRuntime ? { lifeBarRuntime: loadedLifeBarRuntime } : {}),
+        });
         inputRef.current = new BrowserInput(window);
         p1CommandBufferRef.current = new InputBuffer(60);
         p2CommandBufferRef.current = new InputBuffer(60);
@@ -447,12 +580,13 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
         const tick = (timestamp: number) => {
         const frameIntervalMs = winMugenFastForwardRef.current ? 1 : runtimeSettingsRef.current.frameIntervalMs;
         const lastTickTime = lastFrameTickTimeRef.current;
-        if (lastTickTime !== null && timestamp - lastTickTime < frameIntervalMs) {
+        const frameTick = resolveRuntimeFrameTick(lastTickTime, timestamp, frameIntervalMs);
+        if (!frameTick.advance) {
           frameId = requestAnimationFrame(tick);
           return;
         }
-        lastFrameTickTimeRef.current = timestamp;
-        const measuredFrameTimeMs = lastTickTime === null ? frameIntervalMs : timestamp - lastTickTime;
+        lastFrameTickTimeRef.current = frameTick.nextTickTime;
+        const measuredFrameTimeMs = frameTick.measuredFrameTimeMs;
         const performanceFrameStartedAt = performance.now();
         const aiSignatureBefore = lastRuntimeSignatureRef.current;
         const humanBufferEntriesBefore = readableEntryStoreRef.current.size;
@@ -467,17 +601,17 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
           else if (action === 'frame-step') frameStepRequested = winMugenPausedRef.current;
           else if (action === 'toggle-hud') winMugenHudVisibleRef.current = !winMugenHudVisibleRef.current;
           else if (action === 'toggle-fast-forward') winMugenFastForwardRef.current = !winMugenFastForwardRef.current;
-          else if (action === 'toggle-collision-boxes') {
+          else if (action === 'toggle-collision-boxes' && WEBMUGEN_FEATURES.hitboxDebug) {
             setRuntimeSettings({
               ...runtimeSettingsRef.current,
               collisionBoxesVisible: !runtimeSettingsRef.current.collisionBoxesVisible,
             });
-          } else if (action === 'toggle-debug-display') {
+          } else if (action === 'toggle-debug-display' && WEBMUGEN_FEATURES.inputHistoryDebug) {
             setRuntimeSettings({
               ...runtimeSettingsRef.current,
               stateHistoryVisible: !runtimeSettingsRef.current.stateHistoryVisible,
             });
-          } else if (action === 'clear-debug') clearRuntimeLogs();
+          } else if (action === 'clear-debug' && WEBMUGEN_FEATURES.detailedLogs) clearRuntimeLogs();
           else if (action === 'screenshot') captureCanvasScreenshot(canvas);
           else if (action === 'reload-match') reloadMatchRequested = true;
         }
@@ -517,9 +651,9 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
         const p1Commands = p1HitPauseCommandBufferRef.current?.resolve(resolvedP1Commands, currentPlayers[0].hitPause > 0) ?? resolvedP1Commands;
         const p2Commands = p2HitPauseCommandBufferRef.current?.resolve(resolvedP2Commands, currentPlayers[1].hitPause > 0) ?? resolvedP2Commands;
 
-        const humanLogEnabled = runtimeSettingsRef.current.humanLogEnabled;
-        const aiLogEnabled = runtimeSettingsRef.current.aiLogEnabled;
-        const traceDiagnosticsEnabled = humanLogEnabled || aiLogEnabled;
+        const humanLogEnabled = WEBMUGEN_FEATURES.detailedLogs && runtimeSettingsRef.current.humanLogEnabled;
+        const aiLogEnabled = WEBMUGEN_FEATURES.detailedLogs && runtimeSettingsRef.current.aiLogEnabled;
+        const traceDiagnosticsEnabled = WEBMUGEN_FEATURES.cnsTrace && (humanLogEnabled || aiLogEnabled);
         const nextInputDebugLines = traceDiagnosticsEnabled ? formatInputDebugOverlay(inputSnapshot) : [];
         const nextCommandDebugLines = traceDiagnosticsEnabled ? formatCnsCommandDebugOverlay(p1Commands, p2Commands) : [];
         if (humanLogEnabled) {
@@ -598,6 +732,10 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
           const projectileEvents: ProjectileState[] = [];
           const runtimeEventDiagnosticLines: string[] = [];
           const cnsStartedAt = performance.now();
+          const cnsScreenProfile = getScreenSizeProfile(runtimeSettingsRef.current.screenSizeMode);
+          const cnsCamera = resolveViewportCamera(nextState, cnsScreenProfile.logicalWidth, cnsScreenProfile.logicalHeight);
+          const cnsScreenLeft = cnsCamera.x;
+          const cnsScreenRight = cnsCamera.x + cnsScreenProfile.logicalWidth;
           const cnsResult = stepCnsStateRuntime(nextState, character.cns, {
             p1Commands: fightActive ? p1Commands : new Set(),
             p2Commands: fightActive ? p2Commands : new Set(),
@@ -627,7 +765,10 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
               hitBox: getProjectileHitBox(character.air, projectile.animNo) ?? projectile.hitBox,
             }),
             pauseState: pauseAtFrameStart,
-            screenWidth: getScreenSizeProfile(runtimeSettingsRef.current.screenSizeMode).logicalWidth,
+            screenWidth: cnsScreenProfile.logicalWidth,
+            cameraX: cnsCamera.x,
+            screenLeft: cnsScreenLeft,
+            screenRight: cnsScreenRight,
             roundState: winMugenRoundState(nextRoundState),
             roundNo: nextRoundState.roundNo,
             roundsExisted: Math.max(0, nextRoundState.roundNo - 1),
@@ -703,13 +844,14 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
             nextState = restorePausedEntityPhysics(beforePhysicsState, nextState, pauseDuringFrame);
           }
 
-          nextState = applyFallbackStageRules(nextState);
+          nextState = applyFallbackStageRules(nextState, { autoTurn: loadedStageRuntime?.isAutoTurnEnabled() ?? true });
           const activeScreenProfile = getScreenSizeProfile(runtimeSettingsRef.current.screenSizeMode);
           nextState = applyViewportCameraRules(
             nextState,
             activeScreenProfile.logicalWidth,
             activeScreenProfile.logicalHeight,
             loadedStage,
+            loadedStage ? undefined : loadedStageRuntime?.getCameraConfig(),
           );
           if (!fightActive) {
             nextState = { ...nextState, hitEvents: [] };
@@ -751,7 +893,10 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
                     hitBox: getProjectileHitBox(character.air, projectile.animNo) ?? projectile.hitBox,
                   }),
                   pauseState: pauseDuringFrame,
-                  screenWidth: getScreenSizeProfile(runtimeSettingsRef.current.screenSizeMode).logicalWidth,
+                  screenWidth: cnsScreenProfile.logicalWidth,
+                  cameraX: cnsCamera.x,
+                  screenLeft: cnsScreenLeft,
+                  screenRight: cnsScreenRight,
                   roundState: winMugenRoundState(nextRoundState),
                   roundNo: nextRoundState.roundNo,
                   matchOver: isMatchOver(nextScore),
@@ -1042,8 +1187,10 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
       clearRuntimeHistoryRenderTimer();
       inputRef.current?.dispose();
       inputRef.current = null;
+      rendererRef.current?.dispose();
+      rendererRef.current = null;
     };
-  }, [characterPath, characterReloadVersion]);
+  }, [characterPath, characterReloadVersion, settingsReady]);
 
   const liveDebugLines = [
     ...inputDebugLines,
@@ -1070,10 +1217,35 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
     }
   };
 
+  const persistUnifiedSettings = (nextSettings: WebMugenSettings) => {
+    const normalized = applyFeaturePolicyToSettings(
+      normalizeWebMugenSettings(nextSettings, publishedSettingsRef.current),
+      publishedSettingsRef.current,
+      WEBMUGEN_FEATURES,
+    );
+    webMugenSettingsRef.current = normalized;
+    saveWebMugenSettings(normalized);
+    return normalized;
+  };
+
+  const applyCurrentUrlContentOverrides = (
+    settings: WebMugenSettings,
+    catalog = contentCatalogRef.current,
+  ) => applyUrlContentOverrides(settings, catalog, urlContentOverridesRef.current);
+
+  const clearUrlContentOverride = (kind: 'character' | 'stage') => {
+    const nextOverrides = { ...urlContentOverridesRef.current };
+    delete nextOverrides[kind === 'character' ? 'characterId' : 'stageId'];
+    urlContentOverridesRef.current = nextOverrides;
+    const nextSource = { ...contentSelectionSourceRef.current, [kind]: 'settings' as const };
+    contentSelectionSourceRef.current = nextSource;
+    setContentSelectionSource(nextSource);
+  };
+
   const setInputConfig = (nextConfig: InputConfig) => {
     inputConfigRef.current = nextConfig;
     setInputConfigState(nextConfig);
-    saveInputConfig(nextConfig);
+    persistUnifiedSettings({ ...webMugenSettingsRef.current, input: nextConfig });
     p1CommandBufferRef.current.clear();
     p2CommandBufferRef.current.clear();
     p1HitPauseCommandBufferRef.current?.clear();
@@ -1081,6 +1253,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
   };
 
   const openCnsSource = (selection: CnsSourceSelection) => {
+    if (!WEBMUGEN_FEATURES.characterFiles) return;
     setSelectedCnsSource(selection);
     if (selection) {
       const historyEntry = createSourceViewHistoryEntry(cnsSourceFiles, selection);
@@ -1094,6 +1267,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
   };
 
   const handleSaveCharacterSource = async (file: CharacterSourceFile, sourceText: string) => {
+    if (!WEBMUGEN_FEATURES.characterEditor) return;
     await saveCharacterSourceFile(file, sourceText);
     setCnsSourceFiles((files) => files.map((candidate) => candidate.path === file.path
       ? { ...candidate, text: sourceText }
@@ -1131,10 +1305,18 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
   };
 
   const setRuntimeSettings = (nextSettings: RuntimeSettings) => {
-    const normalized = normalizeRuntimeSettings(nextSettings);
+    const normalized = applyFeaturePolicyToSettings({
+      ...webMugenSettingsRef.current,
+      runtime: normalizeRuntimeSettings(nextSettings),
+    }, publishedSettingsRef.current, WEBMUGEN_FEATURES).runtime;
+    const urlStageActive = contentSelectionSourceRef.current.stage === 'url';
+    const stageSelectionChanged = normalized.stageTheme !== runtimeSettingsRef.current.stageTheme
+      || normalized.stageArchivePath !== runtimeSettingsRef.current.stageArchivePath;
+    if (urlStageActive && stageSelectionChanged) clearUrlContentOverride('stage');
     const screenSizeChanged = normalized.screenSizeMode !== runtimeSettingsRef.current.screenSizeMode;
     const appearanceSourceChanged = normalized.stageTheme !== runtimeSettingsRef.current.stageTheme
-      || normalized.stageArchivePath !== runtimeSettingsRef.current.stageArchivePath;
+      || normalized.stageArchivePath !== runtimeSettingsRef.current.stageArchivePath
+      || normalized.hudTheme !== runtimeSettingsRef.current.hudTheme;
     if (normalized.humanLogCaptureMode !== runtimeSettingsRef.current.humanLogCaptureMode) {
       lastReadableRuntimeSignatureRef.current = '';
     }
@@ -1161,17 +1343,96 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
       lastStateHistoryRenderTimeRef.current = 0;
       setStageDebugLines([]);
     }
-    runtimeSettingsRef.current = normalized;
-    setRuntimeSettingsState(normalized);
-    saveRuntimeSettings(normalized);
+    const runtimeToPersist = urlStageActive && !stageSelectionChanged
+      ? {
+          ...normalized,
+          stageTheme: webMugenSettingsRef.current.runtime.stageTheme,
+          stageArchivePath: webMugenSettingsRef.current.runtime.stageArchivePath,
+        }
+      : normalized;
+    const persisted = persistUnifiedSettings(synchronizeContentIdsFromRuntime({
+      ...webMugenSettingsRef.current,
+      runtime: runtimeToPersist,
+    }));
+    const live = applyCurrentUrlContentOverrides(persisted);
+    runtimeSettingsRef.current = live.runtime;
+    setRuntimeSettingsState(live.runtime);
+    setContentSettings(live.content);
+    if (live.content.characterPath !== characterPath) setCharacterPathState(live.content.characterPath);
     if (screenSizeChanged || appearanceSourceChanged) setCharacterReloadVersion((version) => version + 1);
   };
 
-  const setCharacterPath = (nextPath: string) => {
-    const trimmed = nextPath.trim();
-    if (!trimmed || trimmed === characterPath) return;
-    saveCharacterPath(trimmed);
-    setCharacterPathState(trimmed);
+  const applyContentSettings = (
+    nextSettings: WebMugenSettings,
+    catalog = contentCatalogRef.current,
+    explicitKind?: 'character' | 'stage',
+  ) => {
+    if (explicitKind) clearUrlContentOverride(explicitKind);
+    const selected = applyCatalogSelectionToSettings(nextSettings, catalog);
+    const previousRuntime = runtimeSettingsRef.current;
+    const previousContent = contentSettings;
+    const persisted = persistUnifiedSettings(selected);
+    const live = applyCurrentUrlContentOverrides(persisted, catalog);
+    runtimeSettingsRef.current = live.runtime;
+    setRuntimeSettingsState(live.runtime);
+    setContentSettings(live.content);
+    if (live.content.characterPath !== characterPath) setCharacterPathState(live.content.characterPath);
+    if (live.content.characterPath !== characterPath
+      || live.content.paletteNo !== previousContent.paletteNo
+      || live.runtime.stageTheme !== previousRuntime.stageTheme
+      || live.runtime.stageArchivePath !== previousRuntime.stageArchivePath
+      || live.content.lifeBarId !== previousContent.lifeBarId) {
+      setCharacterReloadVersion((version) => version + 1);
+    }
+  };
+
+  const selectCatalogContent = (kind: 'character' | 'stage' | 'lifebar', id: string) => {
+    applyContentSettings({
+      ...webMugenSettingsRef.current,
+      content: {
+        ...webMugenSettingsRef.current.content,
+        [kind === 'character' ? 'characterId' : kind === 'stage' ? 'stageId' : 'lifeBarId']: id,
+      },
+    }, contentCatalogRef.current, kind === 'lifebar' ? undefined : kind);
+  };
+
+  const selectCharacterPalette = (paletteNo: number) => {
+    applyContentSettings({
+      ...webMugenSettingsRef.current,
+      content: { ...webMugenSettingsRef.current.content, paletteNo },
+    });
+  };
+
+  const setCatalogPath = (catalogPath: string) => {
+    if (!WEBMUGEN_FEATURES.catalogManagement) return;
+    const persisted = persistUnifiedSettings({
+      ...webMugenSettingsRef.current,
+      content: { ...webMugenSettingsRef.current.content, catalogPath },
+    });
+    setContentSettings(applyCurrentUrlContentOverrides(persisted).content);
+  };
+
+  const reloadContentCatalog = async () => {
+    if (!WEBMUGEN_FEATURES.catalogManagement) return;
+    try {
+      const result = await readContentCatalog(webMugenSettingsRef.current.content.catalogPath, {
+        previousCatalog: contentCatalogRef.current.entries.length > 0 ? contentCatalogRef.current : undefined,
+      });
+      setContentCatalogReadResult(result);
+      if (result.status !== 'success' && result.status !== 'partial') return;
+      const catalog = result.catalog;
+      contentCatalogRef.current = catalog;
+      setContentCatalog(catalog);
+      applyContentSettings(webMugenSettingsRef.current, catalog);
+    } catch (error) {
+      setContentCatalogReadResult({
+        catalog: contentCatalogRef.current,
+        status: contentCatalogRef.current.entries.length > 0 ? 'fallback' : 'error',
+        sourcePath: webMugenSettingsRef.current.content.catalogPath,
+        fallbackUsed: contentCatalogRef.current.entries.length > 0,
+        issues: [{ code: 'catalog.read', message: error instanceof Error ? error.message : String(error) }],
+      });
+    }
   };
 
   const unlockAudio = async () => {
@@ -1206,7 +1467,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
     audioSettingsRef.current = next;
     setAudioMuted(muted);
     audioRuntimeRef.current?.setMuted(muted);
-    saveAudioSettings(next);
+    persistUnifiedSettings({ ...webMugenSettingsRef.current, audio: next });
   };
 
   const setAudioVolume = (volume: number) => {
@@ -1214,7 +1475,46 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
     audioSettingsRef.current = next;
     setAudioMasterVolume(next.masterVolumePercent);
     audioRuntimeRef.current?.setMasterVolume(next.masterVolumePercent / 100);
-    saveAudioSettings(next);
+    persistUnifiedSettings({ ...webMugenSettingsRef.current, audio: next });
+  };
+
+  const resetAllSettings = () => {
+    const message = uiLanguage === 'ja'
+      ? '入力設定を含む、このブラウザーのWebMUGEN設定を削除し、公開者の最新初期設定へ戻します。続行しますか？'
+      : 'Delete this browser\'s WebMUGEN settings, including input mappings, and restore the publisher defaults?';
+    if (typeof window !== 'undefined' && !window.confirm(message)) return;
+    const next = resetWebMugenSettings(publishedSettingsRef.current);
+    const live = applyCurrentUrlContentOverrides(next);
+    webMugenSettingsRef.current = next;
+    inputConfigRef.current = live.input;
+    runtimeSettingsRef.current = live.runtime;
+    audioSettingsRef.current = live.audio;
+    setInputConfigState(live.input);
+    setRuntimeSettingsState(live.runtime);
+    setAudioMasterVolume(live.audio.masterVolumePercent);
+    setAudioMuted(live.audio.muted);
+    audioRuntimeRef.current?.setMasterVolume(live.audio.masterVolumePercent / 100);
+    audioRuntimeRef.current?.setMuted(live.audio.muted);
+    setUiLanguage(live.ui.language);
+    setCharacterPathState(live.content.characterPath);
+    setContentSettings(live.content);
+    setCharacterReloadVersion((version) => version + 1);
+  };
+
+  const publishCurrentSettingsAsDefaults = async () => {
+    if (!WEBMUGEN_FEATURES.publishDefaultsButton) return;
+    const message = uiLanguage === 'ja'
+      ? '現在のSettings内容で public/config/default-settings.json を上書きします。続行しますか？'
+      : 'Overwrite public/config/default-settings.json with the current Settings values?';
+    if (typeof window !== 'undefined' && !window.confirm(message)) return;
+    setPublishDefaultsStatus(uiLanguage === 'ja' ? '保存中…' : 'Saving…');
+    try {
+      await publishWebMugenDefaults(webMugenSettingsRef.current);
+      publishedSettingsRef.current = normalizeWebMugenSettings(webMugenSettingsRef.current);
+      setPublishDefaultsStatus(uiLanguage === 'ja' ? '公開用初期設定を更新しました。' : 'Publisher defaults updated.');
+    } catch (error) {
+      setPublishDefaultsStatus(`${uiLanguage === 'ja' ? '更新に失敗しました' : 'Update failed'}: ${error instanceof Error ? error.message : String(error)}`);
+    }
   };
 
   const handleAudioStartGesture = (gestureType: AudioStartGateGesture) => {
@@ -1241,14 +1541,18 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
           onClick={() => {
             const next = uiLanguage === 'ja' ? 'en' : 'ja';
             setUiLanguage(next);
-            saveUiLanguage(next);
+            persistUnifiedSettings({
+              ...webMugenSettingsRef.current,
+              ui: { ...webMugenSettingsRef.current.ui, language: next },
+            });
           }}
         >
           {uiLanguage === 'ja' ? 'English' : '日本語'}
         </button>
+        {WEBMUGEN_FEATURES.buildMode === 'development' ? <strong className="development-mode-badge">DEVELOPMENT MODE</strong> : null}
       </header>
 
-      <AppPageTabs activePage={activePage} onChange={setActivePage} />
+      <AppPageTabs activePage={activePage} onChange={setActivePage} showCharacterFiles={WEBMUGEN_FEATURES.characterFiles} />
 
       <section
         className={`top-panel ${activePage === 'play' ? 'active' : 'hidden'}`}
@@ -1269,7 +1573,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
                   onContinueWithoutAudio={continueWithoutAudio}
                 />
               )}
-              {runtimeSettings.stateHistoryVisible && <div className="stage-debug-overlay" aria-label="stage debug overlay">
+              {WEBMUGEN_FEATURES.inputHistoryDebug && runtimeSettings.stateHistoryVisible && <div className="stage-debug-overlay" aria-label="stage debug overlay">
                 {stageDebugLines.map((line, index) => (
                   <div key={`${line}-${index}`}>{line}</div>
                 ))}
@@ -1277,6 +1581,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
             </div>
           </section>
 
+          {WEBMUGEN_FEATURES.runtimeDebug ? <>
           <DebugTabsV2 activeTab={activeDebugTab} onChange={setActiveDebugTab} />
           <CopyToolbarV2
             activeTab={activeDebugTab}
@@ -1315,20 +1620,21 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
             {activeDebugTab === 'runtime-ai' && !runtimeSettings.aiLogEnabled && <p>{uiLanguage === 'ja' ? 'AI向けログは設定で無効になっています。' : 'AI log is disabled in Settings.'}</p>}
             {activeDebugTab === 'manual' && <ManualPanel />}
           </section>
+          </> : null}
       </section>
 
       <section
         className={`top-panel ${activePage === 'static-files' ? 'active' : 'hidden'}`}
         aria-hidden={activePage !== 'static-files'}
       >
-        {activePage === 'static-files' ? (
+        {WEBMUGEN_FEATURES.characterFiles && activePage === 'static-files' ? (
           <section className="debug-panel page-debug-panel">
             <StaticDebugPanel
               sourceFiles={cnsSourceFiles}
               sourceViewHistory={sourceViewHistory}
               selectedSource={selectedCnsSource}
               onOpenSource={openCnsSource}
-              onSaveSource={handleSaveCharacterSource}
+              onSaveSource={WEBMUGEN_FEATURES.characterEditor ? handleSaveCharacterSource : undefined}
               sourceScrollPositionsRef={cnsSourceScrollPositionsRef}
               air={loadedAir}
               sprites={loadedSprites}
@@ -1344,10 +1650,16 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
         {activePage === 'settings' ? (
           <section className="debug-panel page-debug-panel settings-page-panel">
             <SettingsPanel
-              characterPath={characterPath}
+              contentCatalog={contentCatalog}
+              contentSettings={contentSettings}
+              contentCatalogReadResult={contentCatalogReadResult}
+              contentSelectionSource={contentSelectionSource}
               inputConfig={inputConfig}
               runtimeSettings={runtimeSettings}
-              onCharacterPathChange={setCharacterPath}
+              onCatalogSelectionChange={selectCatalogContent}
+              onCharacterPaletteChange={selectCharacterPalette}
+              onCatalogPathChange={setCatalogPath}
+              onCatalogReload={reloadContentCatalog}
               onInputConfigChange={setInputConfig}
               onRuntimeSettingsChange={setRuntimeSettings}
               audioStatus={audioStatus}
@@ -1360,6 +1672,13 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
               onPanTestAudio={panTestAudio}
               onAudioMutedChange={setAudioMute}
               onAudioMasterVolumeChange={setAudioVolume}
+              onResetAllSettings={resetAllSettings}
+              canPublishDefaults={WEBMUGEN_FEATURES.publishDefaultsButton}
+              onPublishDefaults={publishCurrentSettingsAsDefaults}
+              publishDefaultsStatus={publishDefaultsStatus}
+              showDeveloperRuntimeSettings={WEBMUGEN_FEATURES.runtimeDebug}
+              canManageCatalog={WEBMUGEN_FEATURES.catalogManagement}
+              canGenerateCatalog={WEBMUGEN_FEATURES.catalogGenerator}
             />
           </section>
         ) : null}
@@ -1435,11 +1754,57 @@ const INPUT_ACTIONS = [
 
 type InputAction = typeof INPUT_ACTIONS[number]['key'];
 
+type SettingsPageId = 'publisher' | 'content' | 'general' | 'input' | 'audio' | 'display' | 'developer';
+
+export function SettingsSidebar({
+  activePage,
+  canPublishDefaults,
+  showDeveloperSettings,
+  onSelect,
+}: {
+  activePage: SettingsPageId;
+  canPublishDefaults: boolean;
+  showDeveloperSettings: boolean;
+  onSelect: (page: SettingsPageId) => void;
+}) {
+  const { text } = useUiLanguage();
+  const pages: Array<{ id: SettingsPageId; english: string; japanese: string }> = [
+    ...(canPublishDefaults ? [{ id: 'publisher' as const, english: 'Publisher settings', japanese: '公開設定' }] : []),
+    { id: 'content', english: 'Content', japanese: 'コンテンツ' },
+    { id: 'general', english: 'General', japanese: '一般' },
+    { id: 'input', english: 'Input', japanese: '入力' },
+    { id: 'audio', english: 'Audio', japanese: '音声' },
+    { id: 'display', english: 'Display', japanese: '表示' },
+    ...(showDeveloperSettings ? [{ id: 'developer' as const, english: 'Developer', japanese: '開発者' }] : []),
+  ];
+  return (
+    <nav className="settings-sidebar" aria-label={text('Settings pages', '設定ページ')}>
+      {pages.map((page) => (
+        <button
+          key={page.id}
+          type="button"
+          className={activePage === page.id ? 'active' : ''}
+          aria-current={activePage === page.id ? 'page' : undefined}
+          onClick={() => onSelect(page.id)}
+        >
+          {text(page.english, page.japanese)}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
 function SettingsPanel({
-  characterPath,
+  contentCatalog,
+  contentSettings,
+  contentCatalogReadResult,
+  contentSelectionSource,
   inputConfig,
   runtimeSettings,
-  onCharacterPathChange,
+  onCatalogSelectionChange,
+  onCharacterPaletteChange,
+  onCatalogPathChange,
+  onCatalogReload,
   onInputConfigChange,
   onRuntimeSettingsChange,
   audioStatus,
@@ -1452,11 +1817,24 @@ function SettingsPanel({
   onPanTestAudio,
   onAudioMutedChange,
   onAudioMasterVolumeChange,
+  onResetAllSettings,
+  canPublishDefaults,
+  onPublishDefaults,
+  publishDefaultsStatus,
+  showDeveloperRuntimeSettings,
+  canManageCatalog,
+  canGenerateCatalog,
 }: {
-  characterPath: string;
+  contentCatalog: ContentCatalog;
+  contentSettings: WebMugenSettings['content'];
+  contentCatalogReadResult: ContentCatalogReadResult | null;
+  contentSelectionSource: { character: ContentSelectionSource; stage: ContentSelectionSource };
   inputConfig: InputConfig;
   runtimeSettings: RuntimeSettings;
-  onCharacterPathChange: (path: string) => void;
+  onCatalogSelectionChange: (kind: 'character' | 'stage' | 'lifebar', id: string) => void;
+  onCharacterPaletteChange: (paletteNo: number) => void;
+  onCatalogPathChange: (path: string) => void;
+  onCatalogReload: () => void;
   onInputConfigChange: (config: InputConfig) => void;
   onRuntimeSettingsChange: (settings: RuntimeSettings) => void;
   audioStatus: 'locked' | 'unlocked' | 'unsupported';
@@ -1469,12 +1847,82 @@ function SettingsPanel({
   onPanTestAudio: () => void;
   onAudioMutedChange: (muted: boolean) => void;
   onAudioMasterVolumeChange: (volume: number) => void;
+  onResetAllSettings: () => void;
+  canPublishDefaults: boolean;
+  onPublishDefaults: () => void;
+  publishDefaultsStatus: string;
+  showDeveloperRuntimeSettings: boolean;
+  canManageCatalog: boolean;
+  canGenerateCatalog: boolean;
 }) {
+  const { text } = useUiLanguage();
+  const [activeSettingsPage, setActiveSettingsPage] = useState<SettingsPageId>(canPublishDefaults ? 'publisher' : 'content');
+  useEffect(() => {
+    if ((!canPublishDefaults && activeSettingsPage === 'publisher') || (!showDeveloperRuntimeSettings && activeSettingsPage === 'developer')) {
+      setActiveSettingsPage('content');
+    }
+  }, [activeSettingsPage, canPublishDefaults, showDeveloperRuntimeSettings]);
+
   return (
-    <div className="settings-stack">
-      <CharacterConfigPanel characterPath={characterPath} onChange={onCharacterPathChange} />
-      <RuntimeSettingsPanel settings={runtimeSettings} onChange={onRuntimeSettingsChange} />
-      <AudioSettingsPanel
+    <div className="settings-workspace">
+      <SettingsSidebar
+        activePage={activeSettingsPage}
+        canPublishDefaults={canPublishDefaults}
+        showDeveloperSettings={showDeveloperRuntimeSettings}
+        onSelect={setActiveSettingsPage}
+      />
+      <main className="settings-workspace-pane">
+      {activeSettingsPage === 'publisher' && canPublishDefaults ? <section className="settings-section settings-reset-section">
+        <div className="settings-section-header">
+          <div>
+            <h2>{text('Publisher settings', '公開設定')}</h2>
+            <p>{text(
+              'Define or restore the defaults distributed with the public game.',
+              '公開ゲームと一緒に配布する初期設定を定義・復元します。',
+            )}</p>
+          </div>
+          <button className="settings-secondary-button" type="button" onClick={onResetAllSettings}>
+            {text('Restore publisher defaults', '初期設定に戻す')}
+          </button>
+        </div>
+        <div className="settings-action-grid">
+          <button className="settings-primary-button" type="button" onClick={onPublishDefaults}>
+            {text('Use current settings as publisher defaults', '現在の設定を公開用初期設定にする')}
+          </button>
+          {publishDefaultsStatus ? <span role="status">{publishDefaultsStatus}</span> : null}
+        </div>
+      </section> : null}
+      {activeSettingsPage === 'content' ? <ContentCatalogPanel
+        catalog={contentCatalog}
+        settings={contentSettings}
+        readResult={contentCatalogReadResult}
+        selectionSource={contentSelectionSource}
+        canManage={canManageCatalog}
+        canGenerate={canGenerateCatalog}
+        onSelect={onCatalogSelectionChange}
+        onPaletteChange={onCharacterPaletteChange}
+        onPathChange={onCatalogPathChange}
+        onReload={onCatalogReload}
+      /> : null}
+      {activeSettingsPage === 'general' ? <RuntimeSettingsPanel
+        settings={runtimeSettings}
+        onChange={onRuntimeSettingsChange}
+        showDeveloperSettings={showDeveloperRuntimeSettings}
+        page="general"
+      /> : null}
+      {activeSettingsPage === 'display' ? <RuntimeSettingsPanel
+        settings={runtimeSettings}
+        onChange={onRuntimeSettingsChange}
+        showDeveloperSettings={showDeveloperRuntimeSettings}
+        page="display"
+      /> : null}
+      {activeSettingsPage === 'developer' && showDeveloperRuntimeSettings ? <RuntimeSettingsPanel
+        settings={runtimeSettings}
+        onChange={onRuntimeSettingsChange}
+        showDeveloperSettings
+        page="developer"
+      /> : null}
+      {activeSettingsPage === 'audio' ? <AudioSettingsPanel
         status={audioStatus}
         muted={audioMuted}
         masterVolume={audioMasterVolume}
@@ -1485,13 +1933,159 @@ function SettingsPanel({
         onPanTest={onPanTestAudio}
         onMutedChange={onAudioMutedChange}
         onMasterVolumeChange={onAudioMasterVolumeChange}
-      />
-      <InputConfigPanel
+      /> : null}
+      {activeSettingsPage === 'input' ? <InputConfigPanel
         config={inputConfig}
         onChange={onInputConfigChange}
-      />
+      /> : null}
+      </main>
     </div>
   );
+}
+
+export function ContentCatalogPanel({
+  catalog,
+  settings,
+  readResult,
+  selectionSource,
+  canManage,
+  canGenerate,
+  onSelect,
+  onPaletteChange,
+  onPathChange,
+  onReload,
+}: {
+  catalog: ContentCatalog;
+  settings: WebMugenSettings['content'];
+  readResult: ContentCatalogReadResult | null;
+  selectionSource: { character: ContentSelectionSource; stage: ContentSelectionSource };
+  canManage: boolean;
+  canGenerate: boolean;
+  onSelect: (kind: 'character' | 'stage' | 'lifebar', id: string) => void;
+  onPaletteChange: (paletteNo: number) => void;
+  onPathChange: (path: string) => void;
+  onReload: () => void;
+}) {
+  const { text } = useUiLanguage();
+  const characters = entriesOfKind(catalog, 'character');
+  const stages = entriesOfKind(catalog, 'stage');
+  const lifeBars = entriesOfKind(catalog, 'lifebar');
+  return (
+    <section className="settings-section content-catalog-panel">
+      <div className="settings-section-header">
+        <div>
+          <h2>{text('Content', 'コンテンツ')}</h2>
+          <p>{text(
+            'Choose the character, stage, and LifeBar used by the game.',
+            'ゲームで使用するキャラクター、ステージ、ライフバーを選択します。',
+          )}</p>
+        </div>
+      </div>
+      <h3>{text('Content in use', '使用するコンテンツ')}</h3>
+      <div className="content-selection-grid">
+        <div className="content-selection-card">
+          <span>{text('Character', 'キャラクター')}</span>
+          <select
+            aria-label="Catalog character"
+            disabled={characters.length === 0}
+            value={characters.some((entry) => entry.id === settings.characterId) ? settings.characterId : ''}
+            onChange={(event) => onSelect('character', event.target.value)}
+          >
+            {characters.length === 0 ? <option value="">{text('No valid characters', '有効なキャラクターなし')}</option> : null}
+            {characters.map((entry) => <option key={entry.id} value={entry.id}>{formatCatalogEntryLabel(entry)}</option>)}
+          </select>
+          <span>{text('Color / Palette', 'カラー / パレット')}</span>
+          <select
+            aria-label="Character palette"
+            value={settings.paletteNo}
+            onChange={(event) => onPaletteChange(Number(event.target.value))}
+          >
+            {Array.from({ length: 12 }, (_, index) => index + 1).map((paletteNo) => (
+              <option key={paletteNo} value={paletteNo}>p{paletteNo}</option>
+            ))}
+          </select>
+          {selectionSource.character === 'url' ? <small>{text('Selected by URL', 'URL指定')}</small> : null}
+          {characters.length === 0 ? <small>{text('The published fallback character remains active.', '公開者のfallbackキャラクターを継続使用します。')}</small> : null}
+        </div>
+        <label className="content-selection-card">
+          <span>{text('Stage', 'ステージ')}</span>
+          <select
+            aria-label="Catalog stage"
+            disabled={stages.length === 0}
+            value={stages.some((entry) => entry.id === settings.stageId) ? settings.stageId : ''}
+            onChange={(event) => onSelect('stage', event.target.value)}
+          >
+            {stages.length === 0 ? <option value="">{text('No valid stages', '有効なステージなし')}</option> : null}
+            {stages.map((entry) => <option key={entry.id} value={entry.id}>{formatCatalogEntryLabel(entry)}</option>)}
+          </select>
+          {selectionSource.stage === 'url' ? <small>{text('Selected by URL', 'URL指定')}</small> : null}
+          {stages.length === 0 ? <small>{text('The published fallback stage remains active.', '公開者のfallbackステージを継続使用します。')}</small> : null}
+        </label>
+        <label className="content-selection-card">
+          <span>{text('LifeBar / HUD', 'ライフバー / HUD')}</span>
+          <select
+            aria-label="Catalog lifebar"
+            disabled={lifeBars.length === 0}
+            value={lifeBars.some((entry) => entry.id === settings.lifeBarId) ? settings.lifeBarId : ''}
+            onChange={(event) => onSelect('lifebar', event.target.value)}
+          >
+            {lifeBars.length === 0 ? <option value="">{text('No valid lifebars', '有効なライフバーなし')}</option> : null}
+            {lifeBars.map((entry) => <option key={entry.id} value={entry.id}>{formatCatalogEntryLabel(entry)}</option>)}
+          </select>
+          {lifeBars.length === 0 ? <small>{text('The published fallback LifeBar remains active.', '公開者のfallbackライフバーを継続使用します。')}</small> : null}
+        </label>
+      </div>
+      {canManage ? <>
+        <div className="settings-subsection-header">
+          <h3>{text('Content list', 'コンテンツ一覧')}</h3>
+          <p>{text('Validated entries currently available to the selection controls.', '選択欄で利用できる検証済みコンテンツです。')}</p>
+        </div>
+        <div className="content-count-grid" aria-label="Catalog content counts">
+          <div><span>{text('Characters', 'キャラクター')}</span><strong>{characters.length}</strong></div>
+          <div><span>{text('Stages', 'ステージ')}</span><strong>{stages.length}</strong></div>
+          <div><span>{text('LifeBars', 'ライフバー')}</span><strong>{lifeBars.length}</strong></div>
+        </div>
+        <div className={`catalog-read-status status-${readResult?.status ?? 'loading'}`} role="status">
+          <strong>{formatCatalogReadStatus(readResult, text)}</strong>
+          {readResult ? <span>{text(
+            `${readResult.catalog.totalEntries} total, ${readResult.catalog.entries.length} valid, ${readResult.catalog.rejectedEntries} excluded.`,
+            `${readResult.catalog.totalEntries}件中${readResult.catalog.entries.length}件有効、${readResult.catalog.rejectedEntries}件除外。`,
+          )}</span> : null}
+        </div>
+        {readResult && readResult.issues.length > 0 ? <details className="catalog-read-issues">
+          <summary>{text('Read errors and exclusions', '読込エラーと除外理由')} ({readResult.issues.length})</summary>
+          <ul>{readResult.issues.map((issue, index) => <li key={`${issue.code}-${issue.itemIndex ?? index}`}>
+            {issue.itemIndex === undefined ? '' : `#${issue.itemIndex + 1} `}{issue.message}
+          </li>)}</ul>
+        </details> : null}
+        <div className="settings-subsection-header">
+          <h3>{text('Content management', 'コンテンツ管理')}</h3>
+          <p>{text('Development Mode only. Runtime reads this JSON file and never scans its folders.', 'Development Mode専用です。RuntimeはこのJSONを読み込むだけで、フォルダ走査は行いません。')}</p>
+        </div>
+        <div className="catalog-management-row">
+          <label className="settings-field">
+            <span>{text('Content list file', 'コンテンツ一覧ファイル')}</span>
+            <input aria-label="Content list file" value={settings.catalogPath} onChange={(event) => onPathChange(event.target.value)} />
+          </label>
+          <button className="settings-secondary-button" type="button" onClick={onReload}>
+            {text('Reload content list', 'コンテンツ一覧を再読込')}
+          </button>
+        </div>
+        {canGenerate ? <CatalogGeneratorPanel catalog={catalog} /> : null}
+      </> : null}
+    </section>
+  );
+}
+
+function formatCatalogReadStatus(
+  result: ContentCatalogReadResult | null,
+  text: (english: string, japanese: string) => string,
+): string {
+  if (!result) return text('Loading content list...', 'コンテンツ一覧を読み込んでいます…');
+  if (result.status === 'success') return text('Content list loaded successfully.', 'コンテンツ一覧の読込に成功しました。');
+  if (result.status === 'partial') return text('Content list loaded with excluded entries.', '一部を除外してコンテンツ一覧を読み込みました。');
+  if (result.status === 'fallback') return text('Reload failed; continuing with the previous successful list.', '再読込に失敗したため、前回成功した一覧を継続使用します。');
+  return text('Content list could not be loaded; published game fallbacks remain active.', 'コンテンツ一覧を読み込めませんでした。公開者のゲームfallbackを継続使用します。');
 }
 
 export function AudioSettingsPanel({
@@ -1569,52 +2163,6 @@ export function AudioSettingsPanel({
   );
 }
 
-function CharacterConfigPanel({
-  characterPath,
-  onChange,
-}: {
-  characterPath: string;
-  onChange: (path: string) => void;
-}) {
-  const { text } = useUiLanguage();
-  const [draft, setDraft] = useState(characterPath);
-
-  useEffect(() => {
-    setDraft(characterPath);
-  }, [characterPath]);
-
-  return (
-    <section className="settings-section">
-      <h2>{text('Character', 'キャラクター')}</h2>
-      <p>{text('Place character files under public/chars/, then select or enter the DEF/ZIP path here.', 'キャラクターファイルを public/chars/ に置き、DEFまたはZIPのパスを選択・入力してください。')}</p>
-      <div className="character-picker">
-        <select value={characterPath} onChange={(event) => onChange(event.currentTarget.value)}>
-          {CHARACTER_PATH_OPTIONS.map((path) => (
-            <option key={path} value={path}>{path}</option>
-          ))}
-          {!CHARACTER_PATH_OPTIONS.includes(characterPath as typeof CHARACTER_PATH_OPTIONS[number]) && (
-            <option value={characterPath}>{characterPath}</option>
-          )}
-        </select>
-        <input
-          list="character-path-options"
-          onChange={(event) => setDraft(event.currentTarget.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') onChange(draft);
-          }}
-          value={draft}
-        />
-        <datalist id="character-path-options">
-          {CHARACTER_PATH_OPTIONS.map((path) => (
-            <option key={path} value={path} />
-          ))}
-        </datalist>
-        <button type="button" onClick={() => onChange(draft)}>{text('Load', '読み込み')}</button>
-      </div>
-    </section>
-  );
-}
-
 function InputConfigPanel({
   config,
   onChange,
@@ -1624,7 +2172,7 @@ function InputConfigPanel({
 }) {
   const { text } = useUiLanguage();
   return (
-    <section className="input-config-panel">
+    <section className="input-config-panel settings-section">
       <div className="input-config-header">
         <h2>{text('Input Config', '入力設定')}</h2>
         <button type="button" onClick={() => onChange(cloneInputConfig(DEFAULT_INPUT_CONFIG))}>
@@ -1650,24 +2198,44 @@ function InputConfigPanel({
 export function RuntimeSettingsPanel({
   settings,
   onChange,
+  showDeveloperSettings = true,
+  page = 'all',
 }: {
   settings: RuntimeSettings;
   onChange: (settings: RuntimeSettings) => void;
+  showDeveloperSettings?: boolean;
+  page?: 'all' | 'general' | 'display' | 'developer';
 }) {
   const { text } = useUiLanguage();
+  const showGeneral = page === 'all' || page === 'general';
+  const showDisplay = page === 'all' || page === 'display';
+  const showDeveloper = showDeveloperSettings && (page === 'all' || page === 'developer');
+  const heading = page === 'general'
+    ? text('General', '一般')
+    : page === 'display'
+      ? text('Display', '表示')
+      : page === 'developer'
+        ? text('Developer', '開発者')
+        : text('Runtime', '実行設定');
   return (
     <section className="settings-section runtime-settings-section">
       <div className="settings-section-header">
         <div>
-          <h2>{text('Runtime', '実行設定')}</h2>
-          <p>{text('Adjust match behavior and choose only the diagnostics you need.', '対戦の動作と、必要な診断表示だけをまとめて設定します。')}</p>
+          <h2>{heading}</h2>
+          <p>{page === 'general'
+            ? text('Adjust how the current match plays.', '現在の対戦方法を設定します。')
+            : page === 'display'
+              ? text('Adjust the game viewport and optional overlays.', 'ゲーム画面と表示オーバーレイを設定します。')
+              : page === 'developer'
+                ? text('Configure compatibility diagnostics and runtime logging.', '互換性診断とRuntimeログを設定します。')
+                : text('Adjust match behavior and choose only the diagnostics you need.', '対戦の動作と、必要な診断表示だけをまとめて設定します。')}</p>
         </div>
-        <button className="settings-secondary-button" type="button" onClick={() => onChange(DEFAULT_RUNTIME_SETTINGS)}>
+        {showGeneral ? <button className="settings-secondary-button" type="button" onClick={() => onChange(resetRuntimeBehaviorSettings(settings))}>
           {text('MUGEN defaults', 'MUGEN既定値')}
-        </button>
+        </button> : null}
       </div>
 
-      <div className="settings-card-grid runtime-core-settings">
+      {showGeneral ? <div className="settings-card-grid runtime-core-settings">
         <section className="settings-card">
           <h3>{text('Match behavior', '対戦動作')}</h3>
           <div className="settings-field-grid">
@@ -1684,39 +2252,6 @@ export function RuntimeSettingsPanel({
                 <option value="both">P1 + P2</option>
               </select>
             </label>
-            <label className="settings-field">
-              <span>{text('Frame duration (ms)', 'フレーム間隔（ms）')}</span>
-              <input min={1} max={1000} step={1} type="number" value={Math.round(settings.frameIntervalMs)} onChange={(event) => onChange({ ...settings, frameIntervalMs: Number(event.currentTarget.value) })} />
-            </label>
-            <label className="settings-field">
-              <span>{text('Logical screen size', '論理画面サイズ')}</span>
-              <select aria-label="Logical screen size" value={settings.screenSizeMode} onChange={(event) => onChange({ ...settings, screenSizeMode: event.currentTarget.value as RuntimeSettings['screenSizeMode'] })}>
-                <option value="winmugen-800x480">Extended Hi-Res 800×480 (400×240 coordinates)</option>
-                <option value="winmugen-classic-640x480">WinMUGEN Classic 640×480 (320×240 coordinates)</option>
-                <option value="wide-960x540">Wide 960×540 (16:9)</option>
-              </select>
-              <small>{text('Changing this setting reloads the current match.', '変更すると現在の対戦を再読み込みします。')}</small>
-            </label>
-            <label className="settings-field">
-              <span>{text('Gauge design', 'ゲージデザイン')}</span>
-              <select aria-label="Gauge design" value={settings.hudTheme} onChange={(event) => onChange({ ...settings, hudTheme: event.currentTarget.value as RuntimeSettings['hudTheme'] })}>
-                <option value="fresh">Fresh</option>
-                <option value="cyber">Cyber</option>
-              </select>
-            </label>
-            <label className="settings-field">
-              <span>{text('Stage design', '背景・ステージ')}</span>
-              <select aria-label="Stage design" value={settings.stageTheme} onChange={(event) => onChange({ ...settings, stageTheme: event.currentTarget.value as RuntimeSettings['stageTheme'] })}>
-                <option value="fresh">Fresh</option>
-                <option value="cyber">Cyber</option>
-                <option value="external">MUGEN Stage ZIP</option>
-              </select>
-            </label>
-            <label className="settings-field">
-              <span>{text('Stage ZIP path', 'ステージZIPパス')}</span>
-              <input aria-label="Stage ZIP path" defaultValue={settings.stageArchivePath} key={settings.stageArchivePath} type="text" onBlur={(event) => onChange({ ...settings, stageArchivePath: event.currentTarget.value })} />
-              <small>{text('Use a URL served by WebMUGEN, such as /stages/example.zip.', 'public/stages 配下など、WebMUGENから配信されるURLを指定します。')}</small>
-            </label>
           </div>
         </section>
         <label className="settings-card settings-toggle-card">
@@ -1726,9 +2261,40 @@ export function RuntimeSettingsPanel({
             <small>{text('Recover at 0 life and remove the round time limit.', '体力0で全回復し、ラウンド時間を無制限にします。')}</small>
           </span>
         </label>
-      </div>
+      </div> : null}
 
-      <div className="settings-subsection-header">
+      {showDisplay ? <div className="settings-card-grid">
+        <section className="settings-card">
+          <h3>{text('Viewport', 'ゲーム画面')}</h3>
+          <label className="settings-field">
+            <span>{text('Logical screen size', '論理画面サイズ')}</span>
+            <select aria-label="Logical screen size" value={settings.screenSizeMode} onChange={(event) => onChange({ ...settings, screenSizeMode: event.currentTarget.value as RuntimeSettings['screenSizeMode'] })}>
+              <option value="winmugen-800x480">Extended Hi-Res 800×480 (400×240 coordinates)</option>
+              <option value="winmugen-classic-640x480">WinMUGEN Classic 640×480 (320×240 coordinates)</option>
+              <option value="wide-960x540">Wide 960×540 (16:9)</option>
+            </select>
+            <small>{text('Changing this setting reloads the current match.', '変更すると現在の対戦を再読み込みします。')}</small>
+          </label>
+        </section>
+        {showDeveloperSettings ? <label className="settings-card settings-toggle-card">
+          <input aria-label="Collision boxes visible" type="checkbox" checked={settings.collisionBoxesVisible} onChange={(event) => onChange({ ...settings, collisionBoxesVisible: event.currentTarget.checked })} />
+          <span><strong>{text('Collision boxes', '当たり判定枠')}</strong><small>{text('Draw Clsn1, Clsn2, Push, and projectile rectangles.', 'Clsn1、Clsn2、Push、Projectileの枠を描画します。')}</small></span>
+        </label> : null}
+        {showDeveloperSettings ? <label className="settings-card settings-toggle-card">
+          <input aria-label="State history visible" type="checkbox" checked={settings.stateHistoryVisible} onChange={(event) => onChange({ ...settings, stateHistoryVisible: event.currentTarget.checked })} />
+          <span><strong>{text('State history', 'ステート履歴')}</strong><small>{text('Show lightweight state, input, and damage history.', '軽量なステート・入力・ダメージ履歴を表示します。')}</small></span>
+        </label> : null}
+      </div> : null}
+
+      {showDeveloper ? <><div className="settings-card-grid">
+        <section className="settings-card">
+          <h3>{text('Runtime timing', 'Runtimeタイミング')}</h3>
+          <label className="settings-field">
+            <span>{text('Frame duration (ms)', 'フレーム間隔（ms）')}</span>
+            <input min={1} max={1000} step={1} type="number" value={Math.round(settings.frameIntervalMs)} onChange={(event) => onChange({ ...settings, frameIntervalMs: Number(event.currentTarget.value) })} />
+          </label>
+        </section>
+      </div><div className="settings-subsection-header">
         <h3>{text('Debug / Logging', 'デバッグ・ログ')}</h3>
         <p>{text('Enable only the information needed for the current investigation.', '現在の調査に必要な情報だけを有効にしてください。')}</p>
       </div>
@@ -1758,15 +2324,7 @@ export function RuntimeSettingsPanel({
             {text('Include hit lifecycle details', 'ヒット処理詳細を含める')}
           </label>
         </section>
-        <label className="settings-card settings-toggle-card">
-          <input aria-label="Collision boxes visible" type="checkbox" checked={settings.collisionBoxesVisible} onChange={(event) => onChange({ ...settings, collisionBoxesVisible: event.currentTarget.checked })} />
-          <span><strong>{text('Collision boxes', '当たり判定枠')}</strong><small>{text('Draw Clsn1, Clsn2, Push, and projectile rectangles.', 'Clsn1、Clsn2、Push、Projectileの枠を描画します。')}</small></span>
-        </label>
-        <label className="settings-card settings-toggle-card">
-          <input aria-label="State history visible" type="checkbox" checked={settings.stateHistoryVisible} onChange={(event) => onChange({ ...settings, stateHistoryVisible: event.currentTarget.checked })} />
-          <span><strong>{text('State history', 'ステート履歴')}</strong><small>{text('Show lightweight state, input, and damage history.', '軽量なステート・入力・ダメージ履歴を表示します。')}</small></span>
-        </label>
-      </div>
+      </div></> : null}
     </section>
   );
 }
@@ -1957,93 +2515,13 @@ function cloneInputConfig(config: InputConfig): InputConfig {
   };
 }
 
-function loadInputConfig(): InputConfig {
-  if (typeof localStorage === 'undefined') return cloneInputConfig(DEFAULT_INPUT_CONFIG);
-  try {
-    const raw = localStorage.getItem(INPUT_CONFIG_STORAGE_KEY);
-    if (!raw) return cloneInputConfig(DEFAULT_INPUT_CONFIG);
-    return normalizeInputConfig(JSON.parse(raw));
-  } catch {
-    return cloneInputConfig(DEFAULT_INPUT_CONFIG);
-  }
-}
-
-function saveInputConfig(config: InputConfig): void {
-  if (typeof localStorage === 'undefined') return;
-  localStorage.setItem(INPUT_CONFIG_STORAGE_KEY, JSON.stringify(config));
-}
-
-function loadCharacterPath(): string {
-  if (typeof localStorage === 'undefined') return DEFAULT_CHARACTER_DEF_PATH;
-  return localStorage.getItem(CHARACTER_PATH_STORAGE_KEY) || DEFAULT_CHARACTER_DEF_PATH;
-}
-
-function saveCharacterPath(path: string): void {
-  if (typeof localStorage === 'undefined') return;
-  localStorage.setItem(CHARACTER_PATH_STORAGE_KEY, path);
-}
-
 function uniqueCharacterPathOptions(paths: readonly string[]): readonly string[] {
   return Array.from(new Set(paths));
-}
-
-function normalizeInputConfig(value: unknown): InputConfig {
-  const fallback = cloneInputConfig(DEFAULT_INPUT_CONFIG);
-  if (!value || typeof value !== 'object' || !Array.isArray((value as { players?: unknown }).players)) {
-    return fallback;
-  }
-
-  const players = (value as { players: unknown[] }).players;
-  return {
-    players: [
-      normalizePlayerInputConfig(players[0], fallback.players[0]),
-      normalizePlayerInputConfig(players[1], fallback.players[1]),
-    ],
-  };
-}
-
-function normalizePlayerInputConfig(value: unknown, fallback: PlayerInputMapping): PlayerInputMapping {
-  const source = value && typeof value === 'object' ? value as Partial<PlayerInputMapping> : {};
-  const keyboard = source.keyboard && typeof source.keyboard === 'object' ? source.keyboard as Partial<Record<InputAction, unknown>> : {};
-  const gamepad = source.gamepad && typeof source.gamepad === 'object' ? source.gamepad as Partial<Record<InputAction, unknown>> : {};
-  const next = clonePlayerInputConfig(fallback);
-
-  for (const action of INPUT_ACTIONS) {
-    const keyValue = keyboard[action.key];
-    if (typeof keyValue === 'string' && keyValue.length > 0) {
-      next.keyboard[action.key] = keyValue;
-    }
-    const buttonValue = Number(gamepad[action.key]);
-    if (Number.isFinite(buttonValue)) {
-      next.gamepad[action.key] = clampGamepadButton(buttonValue);
-    }
-  }
-
-  return next;
-}
-
-function clonePlayerInputConfig(config: PlayerInputMapping): PlayerInputMapping {
-  return {
-    keyboard: { ...config.keyboard },
-    gamepad: { ...config.gamepad },
-  };
 }
 
 function clampGamepadButton(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(31, Math.trunc(value)));
-}
-
-function clampInteger(value: unknown, min: number, max: number, fallback: number): number {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return fallback;
-  return Math.max(min, Math.min(max, Math.trunc(parsed)));
-}
-
-function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return fallback;
-  return Math.max(min, Math.min(max, parsed));
 }
 
 function formatKeyCode(code: string): string {
@@ -2068,16 +2546,16 @@ function formatGamepadMapping(player: PlayerInputMapping): string {
   ].join(', ');
 }
 
-function AppPageTabs({ activePage, onChange }: { activePage: AppPage; onChange: (page: AppPage) => void }) {
+function AppPageTabs({ activePage, onChange, showCharacterFiles }: { activePage: AppPage; onChange: (page: AppPage) => void; showCharacterFiles: boolean }) {
   const { text } = useUiLanguage();
   return (
     <nav className="page-tabs" aria-label={text('main page tabs', 'メイン画面タブ')}>
       <button className={activePage === 'play' ? 'active' : ''} onClick={() => onChange('play')} type="button">
         {text('Game / Runtime', 'ゲーム・実行状況')}
       </button>
-      <button className={activePage === 'static-files' ? 'active' : ''} onClick={() => onChange('static-files')} type="button">
+      {showCharacterFiles ? <button className={activePage === 'static-files' ? 'active' : ''} onClick={() => onChange('static-files')} type="button">
         {text('Character Files', 'キャラクターファイル')}
-      </button>
+      </button> : null}
       <button className={activePage === 'settings' ? 'active' : ''} onClick={() => onChange('settings')} type="button">
         {text('Settings', '設定')}
       </button>
@@ -2282,7 +2760,7 @@ function StaticDebugPanel({
   sourceViewHistory: readonly SourceViewHistoryEntry[];
   selectedSource: CnsSourceSelection;
   onOpenSource: (selection: CnsSourceSelection) => void;
-  onSaveSource: (file: CharacterSourceFile, sourceText: string) => Promise<void>;
+  onSaveSource?: (file: CharacterSourceFile, sourceText: string) => Promise<void>;
   sourceScrollPositionsRef: MutableRefObject<Record<string, number>>;
   air: AirDocument | null;
   sprites: ImageDataSpritePack | null;

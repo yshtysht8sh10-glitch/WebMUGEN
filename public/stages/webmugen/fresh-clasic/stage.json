@@ -1,0 +1,17 @@
+{
+  "format": "webmugen-stage",
+  "version": 1,
+  "id": "fresh-clasic",
+  "name": "Fresh Clasic",
+  "presentation": "fresh-clasic",
+  "groundY": 0,
+  "players": { "p1Start": [-70, 0], "p2Start": [70, 0] },
+  "camera": {
+    "boundLeft": -400,
+    "boundRight": 400,
+    "boundHigh": -120,
+    "boundLow": 0,
+    "verticalFollow": 0.2,
+    "tension": 50
+  }
+}

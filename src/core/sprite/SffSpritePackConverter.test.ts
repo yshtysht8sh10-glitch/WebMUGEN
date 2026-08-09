@@ -206,6 +206,7 @@ describe('SffSpritePackConverter', () => {
 
   it('inherits the previous effective sprite-specific palette for samePalette sprites', () => {
     const doc = createPaletteChainDocument([
+      { groupNo: 0, imageNo: 0, samePalette: false, pcx: createFake8BitPcx(true, [30, 40, 50]) },
       { groupNo: 20, imageNo: 9, samePalette: false, pcx: createFake8BitPcx(true, [90, 10, 20]) },
       { groupNo: 10, imageNo: 1, samePalette: true, pcx: createFake8BitPcx(false) },
     ]);
@@ -223,9 +224,32 @@ describe('SffSpritePackConverter', () => {
       source: 'sprite-specific-chain',
       ownerGroupNo: 20,
       ownerImageNo: 9,
-      ownerSequence: 0,
+      ownerSequence: 1,
       externalActApplied: false,
     });
+  });
+
+  it('changes the shared character colors when a different external ACT is selected', () => {
+    const doc = createPaletteChainDocument([
+      { groupNo: 0, imageNo: 0, samePalette: false, pcx: createFake8BitPcx(true, [180, 20, 30]) },
+      { groupNo: 0, imageNo: 1, samePalette: true, pcx: createFake8BitPcx(false) },
+    ]);
+    const p1 = new Uint8Array(256 * 3);
+    const p9 = new Uint8Array(256 * 3);
+    p1.set([20, 80, 220], (255 - 1) * 3);
+    p9.set([240, 190, 20], (255 - 1) * 3);
+
+    const p1Pack = convertSffDocumentToImageDataSpritePack(doc, {
+      externalPalette: p1, externalPaletteSlot: 1, preferExternalPalette: true, paletteIndexOrder: 'reversed',
+    });
+    const p9Pack = convertSffDocumentToImageDataSpritePack(doc, {
+      externalPalette: p9, externalPaletteSlot: 9, preferExternalPalette: true, paletteIndexOrder: 'reversed',
+    });
+
+    expect(Array.from(p1Pack.sprites.get('0,1')!.imageData.data.slice(0, 4))).toEqual([20, 80, 220, 255]);
+    expect(Array.from(p9Pack.sprites.get('0,1')!.imageData.data.slice(0, 4))).toEqual([240, 190, 20, 255]);
+    expect(p1Pack.cacheKey).toContain('act:p1');
+    expect(p9Pack.cacheKey).toContain('act:p9');
   });
 
   it('lets linked sprites share source pixels while inheriting the linked node palette context', () => {
