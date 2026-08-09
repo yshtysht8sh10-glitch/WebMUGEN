@@ -20,7 +20,15 @@ export class WebMugenStageRenderer {
     for (const layer of stage.layers.filter((candidate) => candidate.pass === pass)) {
       const state = this.getImage(layer.src);
       if (!state.image || !state.image.complete || state.image.naturalWidth === 0) continue;
-      drawCover(ctx, state.image, viewportWidth, viewportHeight, cameraX * layer.cameraFactor[0], cameraY * layer.cameraFactor[1]);
+      drawCover(
+        ctx,
+        state.image,
+        viewportWidth,
+        viewportHeight,
+        cameraX * layer.cameraFactor[0],
+        cameraY * layer.cameraFactor[1],
+        layer.viewportBand,
+      );
       drewImage = true;
     }
     if (pass === 'background' && !drewImage) {
@@ -47,12 +55,25 @@ export class WebMugenStageRenderer {
   }
 }
 
-function drawCover(ctx: CanvasRenderingContext2D, image: HTMLImageElement, width: number, height: number, offsetX: number, offsetY: number): void {
+function drawCover(
+  ctx: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  width: number,
+  height: number,
+  offsetX: number,
+  offsetY: number,
+  viewportBand: readonly [number, number],
+): void {
   const overscan = Math.max(36, Math.ceil(Math.hypot(width, height) * 0.06));
   const targetWidth = width + overscan * 2;
   const targetHeight = height + overscan * 2;
   const scale = Math.max(targetWidth / image.naturalWidth, targetHeight / image.naturalHeight);
   const drawWidth = image.naturalWidth * scale;
   const drawHeight = image.naturalHeight * scale;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, height * viewportBand[0], width, height * (viewportBand[1] - viewportBand[0]));
+  ctx.clip();
   ctx.drawImage(image, (width - drawWidth) / 2 - offsetX, (height - drawHeight) / 2 - offsetY, drawWidth, drawHeight);
+  ctx.restore();
 }

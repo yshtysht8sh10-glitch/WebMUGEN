@@ -130,7 +130,10 @@ stages use their parsed DEF camera bounds/tension/vertical-follow settings and s
 stages retain the fallback camera. Because WinMUGEN camera bounds describe a 320-coordinate-wide
 viewport, the extended 400-wide profile insets both horizontal bounds by 40; the classic profile uses
 the DEF values unchanged. This prevents extended rendering from exposing BG image edges at a camera
-limit without stretching the stage art. A WinMUGEN `HiRes = 1` external Stage composes BG `start`
+limit without stretching the stage art. When the two root Push Boxes no longer fit together, the
+camera remains at the preceding legal containment boundary and ScreenBound corrects only the root
+continuing beyond its edge. A stationary opponent therefore retains its world X while the retreating
+root keeps its velocity and walk animation at the viewport edge. A WinMUGEN `HiRes = 1` external Stage composes BG `start`
 and SFF axes directly in the Hi-Res source coordinate space. `zoffset` participates only in the
 gameplay-ground-to-camera conversion; BG `start` remains relative to the screen's top center. This
 lets the bundled sky's `start.y = -220`, `boundhigh = -110`, and `delta.y = 2` meet exactly at the

@@ -1,10 +1,16 @@
 import type { GameState } from './types';
-import { buildPushBox } from './FallbackStageRules';
+import { buildPushBox, FALLBACK_STAGE_LEFT, FALLBACK_STAGE_RIGHT } from './FallbackStageRules';
 import type { MugenStage } from '../stage/MugenStage';
 
 export const MUGEN_WORLD_ORIGIN_X = 480;
 export const MUGEN_GROUND_Y = 285;
 const WINMUGEN_STAGE_VIEWPORT_WIDTH = 320;
+
+type NativeCameraRules = {
+  left: number;
+  right: number;
+  verticalFollow: number;
+};
 
 export type ScreenSizeMode = 'winmugen-800x480' | 'winmugen-classic-640x480' | 'wide-960x540';
 
@@ -44,16 +50,28 @@ export function resolveViewportCamera(state: GameState, width: number, height: n
   return resolveDesiredCamera(state, width, height);
 }
 
-export function applyViewportCameraRules(state: GameState, width: number, height: number, stage?: MugenStage | null): GameState {
+export function applyViewportCameraRules(
+  state: GameState,
+  width: number,
+  height: number,
+  stage?: MugenStage | null,
+  nativeCamera?: NativeCameraRules | null,
+): GameState {
   if ((width !== 320 && width !== 400) || height !== 240) {
     return { ...state, camera: { x: 0, y: 0, viewportWidth: width, viewportHeight: height } };
   }
 
   const leftInset = stage?.screenBound.left ?? 4;
   const rightInset = stage?.screenBound.right ?? 4;
-  const desiredCamera = stage
+  let desiredCamera = stage
     ? resolveStageCamera(state, width, height, stage)
-    : resolveDesiredCamera(state, width, height);
+    : resolveDesiredCamera(state, width, height, nativeCamera?.verticalFollow);
+  const nativeCameraBounds = !stage && nativeCamera
+    ? resolveNativeCameraXBounds(width, nativeCamera)
+    : undefined;
+  if (nativeCameraBounds) {
+    desiredCamera = { ...desiredCamera, x: clamp(desiredCamera.x, nativeCameraBounds.minimum, nativeCameraBounds.maximum) };
+  }
 
   // Prefer moving the camera so every enabled root remains visible. Moving a
   // stationary opponent's world X merely to preserve the viewport makes it
@@ -64,12 +82,16 @@ export function applyViewportCameraRules(state: GameState, width: number, height
     width,
     leftInset,
     rightInset,
-    stage ? resolveStageCameraXBounds(width, stage) : { minimum: 0, maximum: Math.max(0, 960 - width) },
+    stage ? resolveStageCameraXBounds(width, stage) : nativeCameraBounds ?? { minimum: 0, maximum: Math.max(0, 960 - width) },
+    state.camera?.viewportWidth === width && state.camera.viewportHeight === height
+      ? state.camera.x
+      : desiredCamera.x,
+    Boolean(stage),
   );
 
   // Only when the stage/camera bounds make it impossible to fit every player
   // do we clamp the root that is actually outside the final fixed viewport.
-  const result = keepPlayersInsideCamera(state, camera.x, width, leftInset, rightInset);
+  const result = keepPlayersInsideCamera(state, camera.x, width, leftInset, rightInset, Boolean(stage));
 
   return {
     ...state,
@@ -135,13 +157,19 @@ function constrainCameraToPlayers(
   leftInset: number,
   rightInset: number,
   cameraBounds: { minimum: number; maximum: number },
+  previousCameraX: number,
+  usePlayerAxis: boolean,
 ): { x: number; y: number } {
   const visiblePlayers = state.players.filter((player) => player.screenBound?.value !== false);
   if (visiblePlayers.length === 0) return camera;
 
   const boxes = visiblePlayers.map(buildPushBox);
-  const minimumPlayerLeft = Math.min(...boxes.map((box) => box.left));
-  const maximumPlayerRight = Math.max(...boxes.map((box) => box.right));
+  const minimumPlayerLeft = usePlayerAxis
+    ? Math.min(...visiblePlayers.map((player) => player.x))
+    : Math.min(...boxes.map((box) => box.left));
+  const maximumPlayerRight = usePlayerAxis
+    ? Math.max(...visiblePlayers.map((player) => player.x))
+    : Math.max(...boxes.map((box) => box.right));
   const minimumCameraForPlayers = maximumPlayerRight - (width - Math.max(0, rightInset));
   const maximumCameraForPlayers = minimumPlayerLeft - Math.max(0, leftInset);
   const allowedMinimum = Math.max(cameraBounds.minimum, minimumCameraForPlayers);
@@ -151,13 +179,27 @@ function constrainCameraToPlayers(
     return { ...camera, x: clamp(camera.x, allowedMinimum, allowedMaximum) };
   }
 
-  // The player span is wider than the usable viewport, or a stage bound makes
-  // simultaneous containment impossible. Keep the legal camera position and
-  // let the subsequent root-only clamp handle the actual offender.
-  return { ...camera, x: clamp(camera.x, cameraBounds.minimum, cameraBounds.maximum) };
+  // Once the roots no longer fit together, retain the preceding camera inside
+  // the gap between their incompatible containment limits. This stops the
+  // retreating root at its ScreenBound edge without moving the stationary root.
+  const retentionMinimum = Math.min(maximumCameraForPlayers, minimumCameraForPlayers);
+  const retentionMaximum = Math.max(maximumCameraForPlayers, minimumCameraForPlayers);
+  const retainedX = clamp(previousCameraX, retentionMinimum, retentionMaximum);
+  return { ...camera, x: clamp(retainedX, cameraBounds.minimum, cameraBounds.maximum) };
 }
 
-function resolveDesiredCamera(state: GameState, width: number, height: number): { x: number; y: number } {
+function resolveNativeCameraXBounds(width: number, camera: NativeCameraRules): { minimum: number; maximum: number } {
+  // Built-in stages stop roots at the fallback arena limits. Keep the native
+  // camera viewport inside those same limits so screen-edge triggers, player
+  // containment, and the rendered wall share one coordinate boundary.
+  const viewportMinimum = FALLBACK_STAGE_LEFT;
+  const viewportMaximum = Math.max(viewportMinimum, FALLBACK_STAGE_RIGHT - width);
+  const minimum = clamp(MUGEN_WORLD_ORIGIN_X + camera.left - width / 2, viewportMinimum, viewportMaximum);
+  const maximum = clamp(MUGEN_WORLD_ORIGIN_X + camera.right - width / 2, viewportMinimum, viewportMaximum);
+  return { minimum: Math.min(minimum, maximum), maximum: Math.max(minimum, maximum) };
+}
+
+function resolveDesiredCamera(state: GameState, width: number, height: number, verticalFollow = 0.25): { x: number; y: number } {
   const xFollowers = state.players.filter((player) => player.screenBound?.moveCameraX !== false);
   const yFollowers = state.players.filter((player) => player.screenBound?.moveCameraY !== false);
   const xSources = xFollowers.length > 0 ? xFollowers : state.players;
@@ -165,7 +207,7 @@ function resolveDesiredCamera(state: GameState, width: number, height: number): 
   const highestY = Math.min(...(yFollowers.length > 0 ? yFollowers : state.players).map((player) => player.y));
   const lowestY = Math.max(...(yFollowers.length > 0 ? yFollowers : state.players).map((player) => player.y));
   const verticalRise = Math.max(0, 285 - highestY);
-  const desiredY = 65 - verticalRise * 0.25;
+  const desiredY = 65 - verticalRise * clamp(verticalFollow, 0, 1);
   const minimumY = lowestY - (height - 8);
   const maximumY = highestY - 8;
   const y = minimumY <= maximumY
@@ -183,13 +225,14 @@ function keepPlayersInsideCamera(
   width: number,
   leftInset: number,
   rightInset: number,
+  usePlayerAxis: boolean,
 ): { players: GameState['players']; clampedPlayers: string[] } {
   const leftEdge = cameraX + Math.max(0, leftInset);
   const rightEdge = cameraX + width - Math.max(0, rightInset);
   const clampedPlayers: string[] = [];
   const players = state.players.map((player) => {
     if (player.screenBound?.value === false) return player;
-    const box = buildPushBox(player);
+    const box = usePlayerAxis ? { left: player.x, right: player.x } : buildPushBox(player);
     let offsetX = 0;
     if (box.left < leftEdge) offsetX = leftEdge - box.left;
     if (box.right + offsetX > rightEdge) offsetX -= box.right + offsetX - rightEdge;

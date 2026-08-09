@@ -43,6 +43,15 @@ export const DEFAULT_RUNTIME_SETTINGS: RuntimeSettings = {
   stageArchivePath: '/stages/material-22-archive.zip',
 };
 
+export function resetRuntimeBehaviorSettings(settings: RuntimeSettings): RuntimeSettings {
+  return {
+    ...DEFAULT_RUNTIME_SETTINGS,
+    hudTheme: settings.hudTheme,
+    stageTheme: settings.stageTheme,
+    stageArchivePath: settings.stageArchivePath,
+  };
+}
+
 export function loadRuntimeSettings(storage: Pick<Storage, 'getItem'> | undefined = readLocalStorage()): RuntimeSettings {
   if (!storage) return { ...DEFAULT_RUNTIME_SETTINGS };
   try {

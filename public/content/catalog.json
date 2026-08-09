@@ -47,7 +47,7 @@
       "kind": "stage",
       "engine": "webmugen",
       "source": "builtin",
-      "path": "/stages/webmugen/cyber-clasic/stage.json"
+      "path": "builtin:stage:cyber-clasic"
     },
     {
       "id": "material-22",

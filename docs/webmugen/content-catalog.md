@@ -111,7 +111,7 @@ Only the shared schema is part of the runtime contract. Do not add a required pr
 
 ## Development and Public Mode UI
 
-Both modes show a responsive **Content in use** section with separate Character, Stage, and LifeBar/HUD selectors. Options include `[WinMUGEN]` or `[WebMUGEN]`; display labels are distinct from stable IDs. Invalid and unknown entries never appear.
+Both modes show a responsive **Content in use** section with separate Character, Stage, and LifeBar/HUD selectors. Options include `[WinMUGEN]` or `[WebMUGEN]`; display labels are distinct from stable IDs. Invalid and unknown entries never appear. These are the only Stage and LifeBar/HUD selection controls; Runtime Settings does not duplicate them or expose a separate Stage ZIP path.
 
 Development Mode additionally shows:
 

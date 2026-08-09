@@ -42,7 +42,7 @@ export function parseWebMugenStage(value: unknown, sourcePath = '/stages/webmuge
 }
 
 function readPresentation(value: unknown): WebMugenStageDefinition['presentation'] {
-  return value === 'fresh-clasic' || value === 'cyber-clasic' ? value : 'image';
+  return value === 'fresh' || value === 'cyber' || value === 'fresh-clasic' || value === 'cyber-clasic' ? value : 'image';
 }
 
 function readLayer(value: unknown, sourcePath: string, index: number): WebMugenStageLayer {
@@ -59,10 +59,20 @@ function readLayer(value: unknown, sourcePath: string, index: number): WebMugenS
     zIndex: readNumber(value.zIndex ?? 0, -10000, 10000, 'zIndex'),
     fit: 'cover',
     cameraFactor,
+    viewportBand: readViewportBand(value.viewportBand),
     parallax: cameraFactor[0],
     parallaxY: cameraFactor[1],
     pass,
   };
+}
+
+function readViewportBand(value: unknown): [number, number] {
+  if (value === undefined) return [0, 1];
+  if (!Array.isArray(value) || value.length !== 2) throw new Error('Invalid viewportBand.');
+  const start = readNumber(value[0], 0, 1, 'viewportBand start');
+  const end = readNumber(value[1], 0, 1, 'viewportBand end');
+  if (start >= end) throw new Error('viewportBand start must be below end.');
+  return [start, end];
 }
 
 function readCameraFactor(value: unknown, legacyX: unknown, legacyY: unknown): [number, number] {

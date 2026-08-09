@@ -17,14 +17,20 @@ afterEach(() => vi.unstubAllGlobals());
 describe('WebMugenStageRenderer layered image passes', () => {
   it('draws sorted background layers with independent X/Y camera factors and foreground separately', () => {
     vi.stubGlobal('Image', LoadedImage);
-    const stage = parseWebMugenStage(
-      JSON.parse(readFileSync(resolve('public/stages/webmugen/cyber-clasic/stage.json'), 'utf8')),
-      '/stages/webmugen/cyber-clasic/stage.json',
-    );
+    const stage = parseWebMugenStage({
+      format: 'webmugen-stage', version: 1, id: 'layered', name: 'Layered', presentation: 'image', groundY: 0,
+      players: { p1Start: [-70, 0], p2Start: [70, 0] },
+      camera: { boundLeft: -400, boundRight: 400, boundHigh: -120, boundLow: 0 },
+      layers: [
+        { type: 'image', src: 'sky.webp', zIndex: -300, cameraFactor: [0.03, 0.02] },
+        { type: 'image', src: 'floor.webp', zIndex: -200, cameraFactor: [0.22, 0.1] },
+        { type: 'image', src: 'front.png', pass: 'foreground', zIndex: 100, cameraFactor: [0.38, 0.14] },
+      ],
+    }, '/stages/webmugen/layered/stage.json');
     const drawImage = vi.fn();
     const fillRect = vi.fn();
     const context = {
-      ctx: { drawImage, fillRect, fillStyle: '' } as unknown as CanvasRenderingContext2D,
+      ctx: clippingContext({ drawImage, fillRect }),
       viewportWidth: 800,
       viewportHeight: 480,
       cameraX: 100,
@@ -34,20 +40,40 @@ describe('WebMugenStageRenderer layered image passes', () => {
 
     renderer.render(stage, context);
     expect(drawImage.mock.calls.map((call) => (call[0] as LoadedImage).src)).toEqual([
-      '/stages/webmugen/cyber-clasic/sky.webp',
-      '/stages/webmugen/cyber-clasic/background.webp',
-      '/stages/webmugen/cyber-clasic/floor.webp',
+      '/stages/webmugen/layered/sky.webp',
+      '/stages/webmugen/layered/floor.webp',
     ]);
     const backgroundPositions = drawImage.mock.calls.map((call) => [call[1], call[2]]);
     expect(backgroundPositions[0][0]).toBeGreaterThan(backgroundPositions[1][0]);
-    expect(backgroundPositions[1][0]).toBeGreaterThan(backgroundPositions[2][0]);
-    expect(backgroundPositions[0][1]).toBeGreaterThan(backgroundPositions[2][1]);
+    expect(backgroundPositions[0][1]).toBeGreaterThan(backgroundPositions[1][1]);
     expect(fillRect).not.toHaveBeenCalled();
 
     drawImage.mockClear();
     renderer.renderForeground(stage, context);
     expect(drawImage).toHaveBeenCalledTimes(1);
-    expect((drawImage.mock.calls[0][0] as LoadedImage).src).toBe('/stages/webmugen/cyber-clasic/front.png');
+    expect((drawImage.mock.calls[0][0] as LoadedImage).src).toBe('/stages/webmugen/layered/front.png');
+  });
+
+  it('routes Fresh to its wide panorama with full Stage bounds and a fixed vertical camera', () => {
+    const stage = parseWebMugenStage(
+      JSON.parse(readFileSync(resolve('public/stages/webmugen/fresh-training/stage.json'), 'utf8')),
+      '/stages/webmugen/fresh-training/stage.json',
+    );
+    expect(stage).toMatchObject({ presentation: 'fresh' });
+    expect(stage.layers).toHaveLength(1);
+    expect(stage.layers[0]).toMatchObject({ id: 'panorama', cameraFactor: [1, 0], viewportBand: [0, 1] });
+    expect(stage.camera).toMatchObject({ boundLeft: -400, boundRight: 400, verticalFollow: 0 });
+  });
+
+  it('routes Cyber to its wide panorama with full Stage bounds and a fixed vertical camera', () => {
+    const stage = parseWebMugenStage(
+      JSON.parse(readFileSync(resolve('public/stages/webmugen/cyber-training/stage.json'), 'utf8')),
+      '/stages/webmugen/cyber-training/stage.json',
+    );
+    expect(stage).toMatchObject({ presentation: 'cyber' });
+    expect(stage.layers).toHaveLength(1);
+    expect(stage.layers[0]).toMatchObject({ id: 'panorama', cameraFactor: [1, 0], viewportBand: [0, 1] });
+    expect(stage.camera).toMatchObject({ boundLeft: -400, boundRight: 400, verticalFollow: 0 });
   });
 
   it('uses a solid fallback only for an unavailable background pass', () => {
@@ -61,7 +87,7 @@ describe('WebMugenStageRenderer layered image passes', () => {
     const fillRect = vi.fn();
     const renderer = new WebMugenStageRenderer();
     const context = {
-      ctx: { fillRect, fillStyle: '' } as unknown as CanvasRenderingContext2D,
+      ctx: clippingContext({ fillRect }),
       viewportWidth: 800, viewportHeight: 480, cameraX: 0, cameraY: 0,
     };
 
@@ -71,3 +97,17 @@ describe('WebMugenStageRenderer layered image passes', () => {
     expect(fillRect).toHaveBeenCalledWith(0, 0, 800, 480);
   });
 });
+
+function clippingContext(overrides: Record<string, unknown>): CanvasRenderingContext2D {
+  return {
+    beginPath: vi.fn(),
+    clip: vi.fn(),
+    drawImage: vi.fn(),
+    fillRect: vi.fn(),
+    fillStyle: '',
+    rect: vi.fn(),
+    restore: vi.fn(),
+    save: vi.fn(),
+    ...overrides,
+  } as unknown as CanvasRenderingContext2D;
+}

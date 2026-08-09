@@ -44,12 +44,12 @@ prototype.render = function renderWithResponsiveBuiltInStagePlacement(
 
   const viewport = resolveCanvasViewport(this.canvas.width, this.canvas.height);
   const camera = resolveViewportCamera(state, viewport.logicalWidth, viewport.logicalHeight);
-  const grounded = state.players.filter((player) => player.stateType !== 'A');
+  const groundedPlayerYs = resolveBuiltInStageGroundReferenceYs(state.players);
 
   let visualOffset = cachedOffsets.get(this) ?? 0;
-  if (grounded.length > 0) {
+  if (groundedPlayerYs.length > 0) {
     visualOffset = resolveBuiltInStageWorldVisualOffset(
-      grounded.map((player) => player.y),
+      groundedPlayerYs,
       camera.y,
       viewport.logicalHeight,
     );
@@ -73,6 +73,12 @@ export function usesResponsiveBuiltInStagePlacement(stageTheme: StageTheme): boo
     || stageTheme === 'cyber'
     || stageTheme === 'fresh-clasic'
     || stageTheme === 'cyber-clasic';
+}
+
+export function resolveBuiltInStageGroundReferenceYs(players: readonly PlayerState[]): number[] {
+  return players
+    .filter((player) => player.stateType === 'S' || player.stateType === 'C')
+    .map((player) => player.y);
 }
 
 export function shiftBuiltInStageWorldVisuals(state: GameState, offsetY: number): GameState {

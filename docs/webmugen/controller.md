@@ -91,7 +91,10 @@ the root players' X/Y flags in the 320x240 and extended 400x240 WinMUGEN viewpor
 permit both-axis camera movement; an executed Controller uses its explicit `movecamera` pair for that
 tick. A player with `value = 1` is shifted, without clearing velocity, until its Size-derived Push Box
 is inside the horizontal camera edges. `value = 0` bypasses both the fallback stage clamp and this
-viewport clamp. External stages supply their DEF camera bounds, tension, vertical-follow/floor-tension,
+viewport clamp. If the two root Push Boxes cannot fit simultaneously, the last legal camera position
+is retained within their incompatible containment limits and only the root beyond that fixed edge is
+shifted. This preserves a stationary opponent's world X while a retreating root continues its walk
+animation with unchanged velocity. External stages supply their DEF camera bounds, tension, vertical-follow/floor-tension,
 and Bound screen insets to this path. Helper/custom-state ownership, exact hysteresis, and PlayerInfo
 spawn/bound enforcement remain Partial.
 

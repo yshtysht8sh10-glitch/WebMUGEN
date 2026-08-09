@@ -87,6 +87,9 @@ export type CnsRuntimeInput = {
   pauseState?: PauseState;
   canMoveDuringPause?: boolean;
   screenWidth?: number;
+  cameraX?: number;
+  screenLeft?: number;
+  screenRight?: number;
   gameTime?: number;
   /** Stable 0..999 Random value for this runtime frame; injectable for replays and tests. */
   random?: number;
@@ -924,6 +927,10 @@ function createTriggerContext(
     animElemNoAtOffset: (offset) => input.getAnimationElementNo?.(player.animNo, player.animTime + offset) ?? null,
     animationExists: input.getAnimationDuration ? (animNo) => input.getAnimationDuration?.(animNo) !== null : undefined,
     constants: input.constants,
+    screenWidth: input.screenWidth,
+    cameraX: input.cameraX,
+    screenLeft: input.screenLeft,
+    screenRight: input.screenRight,
     gameTime: input.gameTime,
     random: input.random ?? stableCnsRandomValue(input.gameTime ?? player.stateTime, player),
     roundState: input.roundState,

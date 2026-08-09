@@ -2,15 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { createInitialGameState } from '../../core/engine/GameState';
 import { applyExplodCreateEvents, type ExplodCreateRequest } from '../../core/explod/ExplodSystem';
 import {
+  resolveBuiltInStageGroundReferenceYs,
   resolveBuiltInStageWorldVisualOffset,
   shiftBuiltInStageWorldVisuals,
   usesResponsiveBuiltInStagePlacement,
 } from './ResponsivePlayerPlacement';
 
 describe('responsive built-in stage world placement', () => {
-  it('applies to Fresh and Cyber while preserving external Stage DEF placement', () => {
-    expect(usesResponsiveBuiltInStagePlacement('fresh')).toBe(true);
-    expect(usesResponsiveBuiltInStagePlacement('cyber')).toBe(true);
+  it.each(['fresh', 'cyber', 'fresh-clasic', 'cyber-clasic'] as const)(
+    'applies the stable visual floor to %s',
+    (theme) => expect(usesResponsiveBuiltInStagePlacement(theme)).toBe(true),
+  );
+
+  it('preserves external Stage DEF placement', () => {
     expect(usesResponsiveBuiltInStagePlacement('external')).toBe(false);
   });
 
@@ -26,6 +30,30 @@ describe('responsive built-in stage world placement', () => {
 
     expect(offset).toBe(180);
     expect(285 + offset).toBe(465);
+  });
+
+  it('does not move a standing player when a lying opponent uses below-floor bounce coordinates', () => {
+    const state = createInitialGameState();
+    const players = [
+      { ...state.players[0], stateType: 'S' as const, y: 285 },
+      { ...state.players[1], stateType: 'L' as const, y: 305 },
+    ];
+
+    const groundReferenceYs = resolveBuiltInStageGroundReferenceYs(players);
+    const offset = resolveBuiltInStageWorldVisualOffset(groundReferenceYs, 65, 240);
+
+    expect(groundReferenceYs).toEqual([285]);
+    expect(offset).toBe(2);
+  });
+
+  it('retains the prior visual floor when every player is airborne or lying down', () => {
+    const state = createInitialGameState();
+    const players = [
+      { ...state.players[0], stateType: 'A' as const, y: 180 },
+      { ...state.players[1], stateType: 'L' as const, y: 305 },
+    ];
+
+    expect(resolveBuiltInStageGroundReferenceYs(players)).toEqual([]);
   });
 
   it('keeps stage-space p1/p2 Explods aligned while leaving screen-space Explods fixed', () => {

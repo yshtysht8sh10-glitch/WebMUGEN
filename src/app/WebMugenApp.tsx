@@ -91,6 +91,7 @@ import {
   DEFAULT_FRAME_INTERVAL_MS,
   DEFAULT_RUNTIME_SETTINGS,
   normalizeRuntimeSettings,
+  resetRuntimeBehaviorSettings,
   type RuntimeSettings,
   type StageTheme,
 } from './RuntimeSettings';
@@ -154,7 +155,7 @@ import {
 import { RuntimePerformanceMetrics } from './RuntimePerformanceMetrics';
 import { CHARACTER_PATH_OPTIONS as DISCOVERED_CHARACTER_PATH_OPTIONS } from 'virtual:webmugen-character-manifest';
 import { UiLanguageProvider, useUiLanguage } from './UiLanguage';
-import { applyViewportCameraRules, getScreenSizeProfile } from '../core/engine/ScreenSize';
+import { applyViewportCameraRules, getScreenSizeProfile, resolveViewportCamera } from '../core/engine/ScreenSize';
 import {
   FALLBACK_WEBMUGEN_SETTINGS,
   applyCatalogSelectionToSettings,
@@ -731,6 +732,10 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
           const projectileEvents: ProjectileState[] = [];
           const runtimeEventDiagnosticLines: string[] = [];
           const cnsStartedAt = performance.now();
+          const cnsScreenProfile = getScreenSizeProfile(runtimeSettingsRef.current.screenSizeMode);
+          const cnsCamera = resolveViewportCamera(nextState, cnsScreenProfile.logicalWidth, cnsScreenProfile.logicalHeight);
+          const cnsScreenLeft = cnsCamera.x;
+          const cnsScreenRight = cnsCamera.x + cnsScreenProfile.logicalWidth;
           const cnsResult = stepCnsStateRuntime(nextState, character.cns, {
             p1Commands: fightActive ? p1Commands : new Set(),
             p2Commands: fightActive ? p2Commands : new Set(),
@@ -760,7 +765,10 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
               hitBox: getProjectileHitBox(character.air, projectile.animNo) ?? projectile.hitBox,
             }),
             pauseState: pauseAtFrameStart,
-            screenWidth: getScreenSizeProfile(runtimeSettingsRef.current.screenSizeMode).logicalWidth,
+            screenWidth: cnsScreenProfile.logicalWidth,
+            cameraX: cnsCamera.x,
+            screenLeft: cnsScreenLeft,
+            screenRight: cnsScreenRight,
             roundState: winMugenRoundState(nextRoundState),
             roundNo: nextRoundState.roundNo,
             roundsExisted: Math.max(0, nextRoundState.roundNo - 1),
@@ -843,6 +851,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
             activeScreenProfile.logicalWidth,
             activeScreenProfile.logicalHeight,
             loadedStage,
+            loadedStage ? undefined : loadedStageRuntime?.getCameraConfig(),
           );
           if (!fightActive) {
             nextState = { ...nextState, hitEvents: [] };
@@ -884,7 +893,10 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
                     hitBox: getProjectileHitBox(character.air, projectile.animNo) ?? projectile.hitBox,
                   }),
                   pauseState: pauseDuringFrame,
-                  screenWidth: getScreenSizeProfile(runtimeSettingsRef.current.screenSizeMode).logicalWidth,
+                  screenWidth: cnsScreenProfile.logicalWidth,
+                  cameraX: cnsCamera.x,
+                  screenLeft: cnsScreenLeft,
+                  screenRight: cnsScreenRight,
                   roundState: winMugenRoundState(nextRoundState),
                   roundNo: nextRoundState.roundNo,
                   matchOver: isMatchOver(nextScore),
@@ -1667,7 +1679,6 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
               showDeveloperRuntimeSettings={WEBMUGEN_FEATURES.runtimeDebug}
               canManageCatalog={WEBMUGEN_FEATURES.catalogManagement}
               canGenerateCatalog={WEBMUGEN_FEATURES.catalogGenerator}
-              canEditStageSource={WEBMUGEN_FEATURES.stageEditor}
             />
           </section>
         ) : null}
@@ -1743,6 +1754,46 @@ const INPUT_ACTIONS = [
 
 type InputAction = typeof INPUT_ACTIONS[number]['key'];
 
+type SettingsPageId = 'publisher' | 'content' | 'general' | 'input' | 'audio' | 'display' | 'developer';
+
+export function SettingsSidebar({
+  activePage,
+  canPublishDefaults,
+  showDeveloperSettings,
+  onSelect,
+}: {
+  activePage: SettingsPageId;
+  canPublishDefaults: boolean;
+  showDeveloperSettings: boolean;
+  onSelect: (page: SettingsPageId) => void;
+}) {
+  const { text } = useUiLanguage();
+  const pages: Array<{ id: SettingsPageId; english: string; japanese: string }> = [
+    ...(canPublishDefaults ? [{ id: 'publisher' as const, english: 'Publisher settings', japanese: '公開設定' }] : []),
+    { id: 'content', english: 'Content', japanese: 'コンテンツ' },
+    { id: 'general', english: 'General', japanese: '一般' },
+    { id: 'input', english: 'Input', japanese: '入力' },
+    { id: 'audio', english: 'Audio', japanese: '音声' },
+    { id: 'display', english: 'Display', japanese: '表示' },
+    ...(showDeveloperSettings ? [{ id: 'developer' as const, english: 'Developer', japanese: '開発者' }] : []),
+  ];
+  return (
+    <nav className="settings-sidebar" aria-label={text('Settings pages', '設定ページ')}>
+      {pages.map((page) => (
+        <button
+          key={page.id}
+          type="button"
+          className={activePage === page.id ? 'active' : ''}
+          aria-current={activePage === page.id ? 'page' : undefined}
+          onClick={() => onSelect(page.id)}
+        >
+          {text(page.english, page.japanese)}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
 function SettingsPanel({
   contentCatalog,
   contentSettings,
@@ -1773,7 +1824,6 @@ function SettingsPanel({
   showDeveloperRuntimeSettings,
   canManageCatalog,
   canGenerateCatalog,
-  canEditStageSource,
 }: {
   contentCatalog: ContentCatalog;
   contentSettings: WebMugenSettings['content'];
@@ -1804,34 +1854,45 @@ function SettingsPanel({
   showDeveloperRuntimeSettings: boolean;
   canManageCatalog: boolean;
   canGenerateCatalog: boolean;
-  canEditStageSource: boolean;
 }) {
   const { text } = useUiLanguage();
+  const [activeSettingsPage, setActiveSettingsPage] = useState<SettingsPageId>(canPublishDefaults ? 'publisher' : 'content');
+  useEffect(() => {
+    if ((!canPublishDefaults && activeSettingsPage === 'publisher') || (!showDeveloperRuntimeSettings && activeSettingsPage === 'developer')) {
+      setActiveSettingsPage('content');
+    }
+  }, [activeSettingsPage, canPublishDefaults, showDeveloperRuntimeSettings]);
+
   return (
-    <div className="settings-stack">
-      <section className="settings-section settings-reset-section">
+    <div className="settings-workspace">
+      <SettingsSidebar
+        activePage={activeSettingsPage}
+        canPublishDefaults={canPublishDefaults}
+        showDeveloperSettings={showDeveloperRuntimeSettings}
+        onSelect={setActiveSettingsPage}
+      />
+      <main className="settings-workspace-pane">
+      {activeSettingsPage === 'publisher' && canPublishDefaults ? <section className="settings-section settings-reset-section">
         <div className="settings-section-header">
           <div>
-            <h2>{text('Publisher defaults', '公開者の初期設定')}</h2>
+            <h2>{text('Publisher settings', '公開設定')}</h2>
             <p>{text(
-              'Restore the latest published defaults. This removes saved audio, gameplay, display, content, language, and input settings for this browser.',
-              '公開者が配布している最新の初期設定へ戻します。このブラウザーに保存した音声、ゲーム、表示、コンテンツ、言語、キー・ゲームパッド設定が削除されます。',
+              'Define or restore the defaults distributed with the public game.',
+              '公開ゲームと一緒に配布する初期設定を定義・復元します。',
             )}</p>
           </div>
           <button className="settings-secondary-button" type="button" onClick={onResetAllSettings}>
             {text('Restore publisher defaults', '初期設定に戻す')}
           </button>
         </div>
-        {canPublishDefaults ? (
-          <div className="settings-action-grid">
-            <button className="settings-primary-button" type="button" onClick={onPublishDefaults}>
-              {text('Use current settings as publisher defaults', '現在の設定を公開用初期設定にする')}
-            </button>
-            {publishDefaultsStatus ? <span role="status">{publishDefaultsStatus}</span> : null}
-          </div>
-        ) : null}
-      </section>
-      <ContentCatalogPanel
+        <div className="settings-action-grid">
+          <button className="settings-primary-button" type="button" onClick={onPublishDefaults}>
+            {text('Use current settings as publisher defaults', '現在の設定を公開用初期設定にする')}
+          </button>
+          {publishDefaultsStatus ? <span role="status">{publishDefaultsStatus}</span> : null}
+        </div>
+      </section> : null}
+      {activeSettingsPage === 'content' ? <ContentCatalogPanel
         catalog={contentCatalog}
         settings={contentSettings}
         readResult={contentCatalogReadResult}
@@ -1842,14 +1903,26 @@ function SettingsPanel({
         onPaletteChange={onCharacterPaletteChange}
         onPathChange={onCatalogPathChange}
         onReload={onCatalogReload}
-      />
-      <RuntimeSettingsPanel
+      /> : null}
+      {activeSettingsPage === 'general' ? <RuntimeSettingsPanel
         settings={runtimeSettings}
         onChange={onRuntimeSettingsChange}
         showDeveloperSettings={showDeveloperRuntimeSettings}
-        canEditStageSource={canEditStageSource}
-      />
-      <AudioSettingsPanel
+        page="general"
+      /> : null}
+      {activeSettingsPage === 'display' ? <RuntimeSettingsPanel
+        settings={runtimeSettings}
+        onChange={onRuntimeSettingsChange}
+        showDeveloperSettings={showDeveloperRuntimeSettings}
+        page="display"
+      /> : null}
+      {activeSettingsPage === 'developer' && showDeveloperRuntimeSettings ? <RuntimeSettingsPanel
+        settings={runtimeSettings}
+        onChange={onRuntimeSettingsChange}
+        showDeveloperSettings
+        page="developer"
+      /> : null}
+      {activeSettingsPage === 'audio' ? <AudioSettingsPanel
         status={audioStatus}
         muted={audioMuted}
         masterVolume={audioMasterVolume}
@@ -1860,11 +1933,12 @@ function SettingsPanel({
         onPanTest={onPanTestAudio}
         onMutedChange={onAudioMutedChange}
         onMasterVolumeChange={onAudioMasterVolumeChange}
-      />
-      <InputConfigPanel
+      /> : null}
+      {activeSettingsPage === 'input' ? <InputConfigPanel
         config={inputConfig}
         onChange={onInputConfigChange}
-      />
+      /> : null}
+      </main>
     </div>
   );
 }
@@ -2098,7 +2172,7 @@ function InputConfigPanel({
 }) {
   const { text } = useUiLanguage();
   return (
-    <section className="input-config-panel">
+    <section className="input-config-panel settings-section">
       <div className="input-config-header">
         <h2>{text('Input Config', '入力設定')}</h2>
         <button type="button" onClick={() => onChange(cloneInputConfig(DEFAULT_INPUT_CONFIG))}>
@@ -2125,27 +2199,43 @@ export function RuntimeSettingsPanel({
   settings,
   onChange,
   showDeveloperSettings = true,
-  canEditStageSource = true,
+  page = 'all',
 }: {
   settings: RuntimeSettings;
   onChange: (settings: RuntimeSettings) => void;
   showDeveloperSettings?: boolean;
-  canEditStageSource?: boolean;
+  page?: 'all' | 'general' | 'display' | 'developer';
 }) {
   const { text } = useUiLanguage();
+  const showGeneral = page === 'all' || page === 'general';
+  const showDisplay = page === 'all' || page === 'display';
+  const showDeveloper = showDeveloperSettings && (page === 'all' || page === 'developer');
+  const heading = page === 'general'
+    ? text('General', '一般')
+    : page === 'display'
+      ? text('Display', '表示')
+      : page === 'developer'
+        ? text('Developer', '開発者')
+        : text('Runtime', '実行設定');
   return (
     <section className="settings-section runtime-settings-section">
       <div className="settings-section-header">
         <div>
-          <h2>{text('Runtime', '実行設定')}</h2>
-          <p>{text('Adjust match behavior and choose only the diagnostics you need.', '対戦の動作と、必要な診断表示だけをまとめて設定します。')}</p>
+          <h2>{heading}</h2>
+          <p>{page === 'general'
+            ? text('Adjust how the current match plays.', '現在の対戦方法を設定します。')
+            : page === 'display'
+              ? text('Adjust the game viewport and optional overlays.', 'ゲーム画面と表示オーバーレイを設定します。')
+              : page === 'developer'
+                ? text('Configure compatibility diagnostics and runtime logging.', '互換性診断とRuntimeログを設定します。')
+                : text('Adjust match behavior and choose only the diagnostics you need.', '対戦の動作と、必要な診断表示だけをまとめて設定します。')}</p>
         </div>
-        <button className="settings-secondary-button" type="button" onClick={() => onChange(DEFAULT_RUNTIME_SETTINGS)}>
+        {showGeneral ? <button className="settings-secondary-button" type="button" onClick={() => onChange(resetRuntimeBehaviorSettings(settings))}>
           {text('MUGEN defaults', 'MUGEN既定値')}
-        </button>
+        </button> : null}
       </div>
 
-      <div className="settings-card-grid runtime-core-settings">
+      {showGeneral ? <div className="settings-card-grid runtime-core-settings">
         <section className="settings-card">
           <h3>{text('Match behavior', '対戦動作')}</h3>
           <div className="settings-field-grid">
@@ -2162,41 +2252,6 @@ export function RuntimeSettingsPanel({
                 <option value="both">P1 + P2</option>
               </select>
             </label>
-            {showDeveloperSettings ? <label className="settings-field">
-              <span>{text('Frame duration (ms)', 'フレーム間隔（ms）')}</span>
-              <input min={1} max={1000} step={1} type="number" value={Math.round(settings.frameIntervalMs)} onChange={(event) => onChange({ ...settings, frameIntervalMs: Number(event.currentTarget.value) })} />
-            </label> : null}
-            <label className="settings-field">
-              <span>{text('Logical screen size', '論理画面サイズ')}</span>
-              <select aria-label="Logical screen size" value={settings.screenSizeMode} onChange={(event) => onChange({ ...settings, screenSizeMode: event.currentTarget.value as RuntimeSettings['screenSizeMode'] })}>
-                <option value="winmugen-800x480">Extended Hi-Res 800×480 (400×240 coordinates)</option>
-                <option value="winmugen-classic-640x480">WinMUGEN Classic 640×480 (320×240 coordinates)</option>
-                <option value="wide-960x540">Wide 960×540 (16:9)</option>
-              </select>
-              <small>{text('Changing this setting reloads the current match.', '変更すると現在の対戦を再読み込みします。')}</small>
-            </label>
-            <label className="settings-field">
-              <span>{text('Gauge design', 'ゲージデザイン')}</span>
-              <select aria-label="Gauge design" value={settings.hudTheme} onChange={(event) => onChange({ ...settings, hudTheme: event.currentTarget.value as RuntimeSettings['hudTheme'] })}>
-                <option value="fresh">[WebMUGEN] Fresh</option>
-                <option value="cyber">[WebMUGEN] Cyber</option>
-              </select>
-            </label>
-            <label className="settings-field">
-              <span>{text('Stage design', '背景・ステージ')}</span>
-              <select aria-label="Stage design" value={settings.stageTheme} onChange={(event) => onChange({ ...settings, stageTheme: event.currentTarget.value as RuntimeSettings['stageTheme'] })}>
-                <option value="fresh">[WebMUGEN] Fresh</option>
-                <option value="cyber">[WebMUGEN] Cyber</option>
-                <option value="fresh-clasic">[WebMUGEN] Fresh Clasic</option>
-                <option value="cyber-clasic">[WebMUGEN] Cyber Clasic</option>
-                {canEditStageSource ? <option value="external">[WinMUGEN] Stage ZIP</option> : null}
-              </select>
-            </label>
-            {canEditStageSource ? <label className="settings-field">
-              <span>{text('Stage ZIP path', 'ステージZIPパス')}</span>
-              <input aria-label="Stage ZIP path" defaultValue={settings.stageArchivePath} key={settings.stageArchivePath} type="text" onBlur={(event) => onChange({ ...settings, stageArchivePath: event.currentTarget.value })} />
-              <small>{text('Use a URL served by WebMUGEN, such as /stages/example.zip.', 'public/stages 配下など、WebMUGENから配信されるURLを指定します。')}</small>
-            </label> : null}
           </div>
         </section>
         <label className="settings-card settings-toggle-card">
@@ -2206,9 +2261,40 @@ export function RuntimeSettingsPanel({
             <small>{text('Recover at 0 life and remove the round time limit.', '体力0で全回復し、ラウンド時間を無制限にします。')}</small>
           </span>
         </label>
-      </div>
+      </div> : null}
 
-      {showDeveloperSettings ? <><div className="settings-subsection-header">
+      {showDisplay ? <div className="settings-card-grid">
+        <section className="settings-card">
+          <h3>{text('Viewport', 'ゲーム画面')}</h3>
+          <label className="settings-field">
+            <span>{text('Logical screen size', '論理画面サイズ')}</span>
+            <select aria-label="Logical screen size" value={settings.screenSizeMode} onChange={(event) => onChange({ ...settings, screenSizeMode: event.currentTarget.value as RuntimeSettings['screenSizeMode'] })}>
+              <option value="winmugen-800x480">Extended Hi-Res 800×480 (400×240 coordinates)</option>
+              <option value="winmugen-classic-640x480">WinMUGEN Classic 640×480 (320×240 coordinates)</option>
+              <option value="wide-960x540">Wide 960×540 (16:9)</option>
+            </select>
+            <small>{text('Changing this setting reloads the current match.', '変更すると現在の対戦を再読み込みします。')}</small>
+          </label>
+        </section>
+        {showDeveloperSettings ? <label className="settings-card settings-toggle-card">
+          <input aria-label="Collision boxes visible" type="checkbox" checked={settings.collisionBoxesVisible} onChange={(event) => onChange({ ...settings, collisionBoxesVisible: event.currentTarget.checked })} />
+          <span><strong>{text('Collision boxes', '当たり判定枠')}</strong><small>{text('Draw Clsn1, Clsn2, Push, and projectile rectangles.', 'Clsn1、Clsn2、Push、Projectileの枠を描画します。')}</small></span>
+        </label> : null}
+        {showDeveloperSettings ? <label className="settings-card settings-toggle-card">
+          <input aria-label="State history visible" type="checkbox" checked={settings.stateHistoryVisible} onChange={(event) => onChange({ ...settings, stateHistoryVisible: event.currentTarget.checked })} />
+          <span><strong>{text('State history', 'ステート履歴')}</strong><small>{text('Show lightweight state, input, and damage history.', '軽量なステート・入力・ダメージ履歴を表示します。')}</small></span>
+        </label> : null}
+      </div> : null}
+
+      {showDeveloper ? <><div className="settings-card-grid">
+        <section className="settings-card">
+          <h3>{text('Runtime timing', 'Runtimeタイミング')}</h3>
+          <label className="settings-field">
+            <span>{text('Frame duration (ms)', 'フレーム間隔（ms）')}</span>
+            <input min={1} max={1000} step={1} type="number" value={Math.round(settings.frameIntervalMs)} onChange={(event) => onChange({ ...settings, frameIntervalMs: Number(event.currentTarget.value) })} />
+          </label>
+        </section>
+      </div><div className="settings-subsection-header">
         <h3>{text('Debug / Logging', 'デバッグ・ログ')}</h3>
         <p>{text('Enable only the information needed for the current investigation.', '現在の調査に必要な情報だけを有効にしてください。')}</p>
       </div>
@@ -2238,14 +2324,6 @@ export function RuntimeSettingsPanel({
             {text('Include hit lifecycle details', 'ヒット処理詳細を含める')}
           </label>
         </section>
-        <label className="settings-card settings-toggle-card">
-          <input aria-label="Collision boxes visible" type="checkbox" checked={settings.collisionBoxesVisible} onChange={(event) => onChange({ ...settings, collisionBoxesVisible: event.currentTarget.checked })} />
-          <span><strong>{text('Collision boxes', '当たり判定枠')}</strong><small>{text('Draw Clsn1, Clsn2, Push, and projectile rectangles.', 'Clsn1、Clsn2、Push、Projectileの枠を描画します。')}</small></span>
-        </label>
-        <label className="settings-card settings-toggle-card">
-          <input aria-label="State history visible" type="checkbox" checked={settings.stateHistoryVisible} onChange={(event) => onChange({ ...settings, stateHistoryVisible: event.currentTarget.checked })} />
-          <span><strong>{text('State history', 'ステート履歴')}</strong><small>{text('Show lightweight state, input, and damage history.', '軽量なステート・入力・ダメージ履歴を表示します。')}</small></span>
-        </label>
       </div></> : null}
     </section>
   );

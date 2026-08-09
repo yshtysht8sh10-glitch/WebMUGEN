@@ -5,12 +5,13 @@ export type WebMugenStageLayer = {
   zIndex: number;
   fit: 'cover';
   cameraFactor: [number, number];
+  viewportBand: [number, number];
   parallax: number;
   parallaxY: number;
   pass: 'background' | 'foreground';
 };
 
-export type WebMugenStagePresentation = 'image' | 'fresh-clasic' | 'cyber-clasic';
+export type WebMugenStagePresentation = 'image' | 'fresh' | 'cyber' | 'fresh-clasic' | 'cyber-clasic';
 
 export type WebMugenStageDefinition = {
   format: 'webmugen-stage';

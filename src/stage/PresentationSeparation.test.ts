@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { createInitialGameState } from '../core/engine/GameState';
@@ -9,7 +9,13 @@ import { loadWebMugenStage, parseWebMugenStage } from './webmugen/WebMugenStageL
 import { WebMugenStageRuntime } from './webmugen/WebMugenStageRuntime';
 import { createWebMugenStagePresentationRenderer } from './webmugen/WebMugenStagePresentationRenderer';
 import { FreshClasicStageRenderer } from './webmugen/FreshClasicStageRenderer';
-import { WebMugenStageRenderer } from './webmugen/WebMugenStageRenderer';
+import { FreshStageRenderer, resolveFreshDepthCameraFactor } from './webmugen/FreshStageRenderer';
+import { CyberStageRenderer, resolveCyberDepthCameraFactor } from './webmugen/CyberStageRenderer';
+import {
+  CyberClasicStageRenderer,
+  resolveCyberClasicCameraDeltaX,
+  resolveCyberClasicVanishingPointX,
+} from './webmugen/CyberClasicStageRenderer';
 import { loadWinMugenLifeBar } from '../lifebar/winmugen/WinMugenLifeBarLoader';
 import { WinMugenLifeBarRuntime } from '../lifebar/winmugen/WinMugenLifeBarRuntime';
 import { loadWebMugenLifeBar, parseWebMugenLifeBar } from '../lifebar/webmugen/WebMugenLifeBarLoader';
@@ -64,29 +70,44 @@ describe('WinMUGEN and WebMUGEN presentation separation', () => {
     const cyber = parseWebMugenStage(JSON.parse(readFileSync(cyberPath, 'utf8')), '/stages/webmugen/cyber-training/stage.json');
     expect(fresh.id).toBe('fresh-training');
     expect(cyber.id).toBe('cyber-training');
-    expect(fresh.layers[0].src).toBe('/stages/webmugen/fresh-training/background.png');
-    expect(cyber.layers[0].src).toBe('/stages/webmugen/cyber-training/background.png');
+    expect(fresh.layers[0].src).toBe('/stages/webmugen/fresh-training/background-panorama-v2.png');
+    expect(cyber.layers[0].src).toBe('/stages/webmugen/cyber-training/background-panorama-v2.png');
     expect(fresh.layers[0].src).not.toBe(cyber.layers[0].src);
+    expect(createWebMugenStagePresentationRenderer(fresh.presentation)).toBeInstanceOf(FreshStageRenderer);
+    expect(createWebMugenStagePresentationRenderer(cyber.presentation)).toBeInstanceOf(CyberStageRenderer);
   });
 
-  it('keeps Fresh Clasic procedural and loads Cyber Clasic as a four-layer image stage', () => {
+  it('blends Fresh from distant parallax to world-locked ground without a hard depth seam', () => {
+    expect(resolveFreshDepthCameraFactor(0.3)).toBe(0.12);
+    expect(resolveFreshDepthCameraFactor(0.55)).toBeGreaterThan(0.12);
+    expect(resolveFreshDepthCameraFactor(0.55)).toBeLessThan(1);
+    expect(resolveFreshDepthCameraFactor(0.8)).toBe(1);
+  });
+
+  it('blends Cyber from distant parallax to world-locked ground without a hard depth seam', () => {
+    expect(resolveCyberDepthCameraFactor(0.3)).toBe(0.1);
+    expect(resolveCyberDepthCameraFactor(0.61)).toBeGreaterThan(0.1);
+    expect(resolveCyberDepthCameraFactor(0.61)).toBeLessThan(1);
+    expect(resolveCyberDepthCameraFactor(0.8)).toBe(1);
+  });
+
+  it('routes both Classic stages through their seam-free procedural presentations', () => {
     const fresh = parseWebMugenStage(JSON.parse(readFileSync(resolve('public/stages/webmugen/fresh-clasic/stage.json'), 'utf8')));
     const cyber = parseWebMugenStage(JSON.parse(readFileSync(resolve('public/stages/webmugen/cyber-clasic/stage.json'), 'utf8')), '/stages/webmugen/cyber-clasic/stage.json');
     expect(fresh).toMatchObject({ id: 'fresh-clasic', name: 'Fresh Clasic', presentation: 'fresh-clasic', layers: [] });
-    expect(cyber).toMatchObject({ id: 'cyber-clasic', name: 'Cyber Clasic', presentation: 'image' });
-    expect(cyber.layers).toHaveLength(4);
-    expect(cyber.layers.map((layer) => [layer.id, layer.pass, layer.cameraFactor])).toEqual([
-      ['sky', 'background', [0.03, 0.02]],
-      ['distant-structures', 'background', [0.08, 0.03]],
-      ['perspective-floor', 'background', [0.22, 0.1]],
-      ['near-glow', 'foreground', [0.38, 0.14]],
-    ]);
+    expect(cyber).toMatchObject({ id: 'cyber-clasic', name: 'Cyber Clasic', presentation: 'cyber-clasic', layers: [] });
     expect(createWebMugenStagePresentationRenderer(fresh.presentation)).toBeInstanceOf(FreshClasicStageRenderer);
-    expect(createWebMugenStagePresentationRenderer(cyber.presentation)).toBeInstanceOf(WebMugenStageRenderer);
-    for (const layer of cyber.layers) expect(statSync(resolve(`public${layer.src}`)).size).toBeGreaterThan(0);
+    expect(createWebMugenStagePresentationRenderer(cyber.presentation)).toBeInstanceOf(CyberClasicStageRenderer);
   });
 
-  it('renders Fresh Clasic procedurally while Cyber Clasic owns a separate foreground pass', () => {
+  it('centers Cyber Clasic at match start and converts later camera motion to a world-relative floor offset', () => {
+    expect(resolveCyberClasicVanishingPointX(400)).toBe(200);
+    expect(resolveCyberClasicCameraDeltaX(280, 400)).toBe(0);
+    expect(resolveCyberClasicCameraDeltaX(330, 400)).toBe(50);
+    expect(resolveCyberClasicVanishingPointX(400, 50)).toBe(150);
+  });
+
+  it('renders both Classic stages procedurally without image passes', () => {
     const gradient = () => ({ addColorStop: vi.fn() });
     const context = {
       arc: vi.fn(), beginPath: vi.fn(), closePath: vi.fn(), fill: vi.fn(), fillRect: vi.fn(),
@@ -99,9 +120,7 @@ describe('WinMUGEN and WebMUGEN presentation separation', () => {
     const cyber = parseWebMugenStage(JSON.parse(readFileSync(resolve('public/stages/webmugen/cyber-clasic/stage.json'), 'utf8')), '/stages/webmugen/cyber-clasic/stage.json');
 
     new WebMugenStageRuntime(fresh).render(renderContext);
-    const cyberRuntime = new WebMugenStageRuntime(cyber);
-    cyberRuntime.render(renderContext);
-    cyberRuntime.renderForeground(renderContext);
+    new WebMugenStageRuntime(cyber).render(renderContext);
 
     expect(context.fillRect).toHaveBeenCalled();
     expect(context.createLinearGradient).toHaveBeenCalled();
@@ -111,7 +130,7 @@ describe('WinMUGEN and WebMUGEN presentation separation', () => {
   it('normalizes legacy image layers to background and validates optional foreground camera factors', () => {
     const legacy = parseWebMugenStage(nativeStage);
     expect(legacy.autoTurn).toBe(true);
-    expect(legacy.layers[0]).toMatchObject({ id: 'layer-0', pass: 'background', cameraFactor: [0.03, 0], parallax: 0.03, parallaxY: 0 });
+    expect(legacy.layers[0]).toMatchObject({ id: 'layer-0', pass: 'background', cameraFactor: [0.03, 0], viewportBand: [0, 1], parallax: 0.03, parallaxY: 0 });
     const layered = parseWebMugenStage({
       ...nativeStage,
       layers: [{ type: 'image', id: 'front', src: 'front.png', pass: 'foreground', parallax: 0.4, parallaxY: 0.15 }],
@@ -122,6 +141,10 @@ describe('WinMUGEN and WebMUGEN presentation separation', () => {
       layers: [{ type: 'image', src: 'factor.png', cameraFactor: [0.7, 0.25] }],
     }).layers[0].cameraFactor).toEqual([0.7, 0.25]);
     expect(parseWebMugenStage({ ...nativeStage, autoTurn: false }).autoTurn).toBe(false);
+    expect(() => parseWebMugenStage({
+      ...nativeStage,
+      layers: [{ type: 'image', src: 'invalid.png', viewportBand: [0.8, 0.2] }],
+    })).toThrow('viewportBand start must be below end');
   });
 
   it('keeps WinMUGEN fight.def and WebMUGEN lifebar JSON in distinct loaders', async () => {

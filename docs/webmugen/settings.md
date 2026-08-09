@@ -1,6 +1,6 @@
 # WebMUGEN Settings
 
-Updated: 2026-08-02
+Updated: 2026-08-10
 
 WebMUGEN separates publisher defaults, browser-owned user settings, and live match state.
 
@@ -9,6 +9,30 @@ Content settings store the publisher catalog path, stable Character/Stage/LifeBa
 The `character` and `stage` URL parameters provide non-persistent, catalog-validated session overrides. Their precedence and fallback rules are documented in [url-settings.md](url-settings.md).
 
 Stage and LifeBar/HUD have independent catalog IDs. The publisher default uses the WebMUGEN-native Cyber Training stage and Default Cyber HUD; compatible and native implementations remain separated as described in [native-presentation.md](native-presentation.md).
+
+The Content section is the only user-facing selection surface for Character, palette, Stage, and
+LifeBar/HUD. Runtime Settings contains match, timing, display-size, and diagnostic behavior only;
+it does not repeat Stage, LifeBar/HUD, or direct Stage ZIP selectors. Legacy runtime presentation
+fields remain normalized and persisted for migration and catalog-to-loader integration.
+
+## Settings workspace
+
+Settings uses a left menu and renders only the selected page in the right pane. Development Mode
+provides Publisher settings, Content, General, Input, Audio, Display, and Developer pages. Public
+Mode omits the Publisher settings and Developer menu items entirely; they are not disabled or
+rendered as empty pages.
+
+- Publisher settings owns restoring and writing the complete distributed defaults.
+- Content owns Character, palette, Stage, LifeBar/HUD, and Development-only Catalog management.
+- General owns round time, Infinite Power, Practice Mode, and other match behavior.
+- Input owns the live monitor, control summary, keyboard/gamepad mappings, and reset action.
+- Audio owns browser audio activation, test controls, master volume, and mute.
+- Display owns logical viewport size and Development-only visual diagnostic overlays.
+- Developer owns frame timing, Human/AI logs, retention mode, and hit lifecycle diagnostics.
+
+Page selection is local UI state. The settings values remain owned by the existing parent state, so
+switching pages does not change persistence, immediate application, or the `URL > localStorage >
+publisher defaults` precedence.
 
 ## Sources and priority
 
@@ -49,7 +73,7 @@ After a successful unified write, legacy keys are removed. Future schema changes
 
 ## Reset behavior
 
-Settings provides **Restore publisher defaults** / **初期設定に戻す**. After confirmation it removes the unified user object, applies the latest fetched publisher defaults immediately to React state and the audio/runtime refs, resets input mappings, and reloads content when needed.
+The Development-only Publisher settings page provides **Restore publisher defaults** / **初期設定に戻す**. After confirmation it removes the unified user object, applies the latest fetched publisher defaults immediately to React state and the audio/runtime refs, resets input mappings, and reloads content when needed. Public Mode does not expose the Publisher settings page.
 
 ## Storage scope
 
@@ -59,7 +83,7 @@ Settings provides **Restore publisher defaults** / **初期設定に戻す**. Af
 
 Edit `public/config/default-settings.json` to change defaults for first-time users and newly added fields. Existing user values keep priority. A change that must override an existing user value requires an explicit versioned migration; it must not be disguised as an ordinary default change.
 
-In Development Mode, Settings also exposes **Use current settings as publisher defaults**. After confirmation, the browser sends the normalized complete settings object to the local Vite-only `/__webmugen/default-settings` endpoint, which overwrites the fixed `public/config/default-settings.json` target. Public builds neither render the button nor provide the development middleware endpoint, and the client handler checks the same feature flag before making a request.
+In Development Mode, the Publisher settings page exposes **Use current settings as publisher defaults**. After confirmation, the browser sends the normalized complete settings object to the local Vite-only `/__webmugen/default-settings` endpoint, which overwrites the fixed `public/config/default-settings.json` target. Public builds render neither the Publisher settings menu nor its actions, do not provide the development middleware endpoint, and the client handler checks the same feature flag before making a request.
 
 Arbitrary Character source loading and source editing are Development Mode features. Public Mode keeps the Character Files page read-only, rejects edit handlers, and loads characters through the publisher catalog. This is a distribution boundary rather than authentication; only publisher-catalog content should be deployed with a public build.
 
