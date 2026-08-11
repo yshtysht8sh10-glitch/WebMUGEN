@@ -45,6 +45,10 @@ export function spawnHelper(state: HelperRuntimeState, request: HelperSpawnReque
     moveType: normalizeMoveType(stateDef?.moveType) ?? 'I',
     physics: normalizePhysics(stateDef?.physics) ?? 'N',
     ctrl: stateDef?.ctrl ?? false,
+    // Helpers start as independent players in WinMUGEN. In particular, they
+    // do not inherit the parent's current sprite priority before entering
+    // their initial StateDef.
+    sprPriority: stateDef?.sprPriority ?? 0,
     animNo: stateDef?.initialAnim ?? request.stateNo,
     animTime: 0,
     hitPause: 0,

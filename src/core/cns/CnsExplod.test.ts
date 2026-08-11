@@ -57,15 +57,32 @@ supermovetime = 4
     ['front', 650, -5, 1, 'screen'],
     ['back', 10, -5, 1, 'screen'],
     ['left', 10, -5, 1, 'screen'],
-    ['right', 650, -5, 1, 'screen'],
+    ['right', 630, -5, -1, 'screen'],
     ['none', 10, -5, 1, 'stage'],
   ] as const)('resolves postype=%s once at creation', (postype, x, y, facing, coordinateSpace) => {
     const events: ExplodCreateEvent[] = [];
     const cns = parseCnsText(`[StateDef 0]\ntype=S\n[State 0, E]\ntype=Explod\ntrigger1=1\nanim=10\npos=10,-5\npostype=${postype}`);
     const initial = createInitialGameState();
-    stepCnsStateRuntime(initial, cns, { onExplodCreate: (event) => events.push(event) });
+    stepCnsStateRuntime(initial, cns, { cameraY: 45, onExplodCreate: (event) => events.push(event) });
     const event = events.find((item) => item.type === 'create' && item.request.owner.entityId === 1);
     expect(event).toMatchObject({ type: 'create', request: { position: { x, y }, facing, coordinateSpace } });
+  });
+
+  it.each([
+    ['front', -10, -1],
+    ['back', 630, -1],
+    ['right', 630, -1],
+  ] as const)('uses WinMUGEN screen-edge direction and facing for reversed postype=%s', (postype, x, facing) => {
+    const events: ExplodCreateEvent[] = [];
+    const cns = parseCnsText(`[StateDef 0]\ntype=S\n[State 0, E]\ntype=Explod\ntrigger1=1\nanim=10\npos=10,-5\npostype=${postype}`);
+    const initial = createInitialGameState();
+    const p1 = { ...initial.players[0], facing: -1 as const };
+    stepCnsStateRuntime({ ...initial, players: [p1, initial.players[1]] }, cns, {
+      cameraY: 45,
+      onExplodCreate: (event) => events.push(event),
+    });
+    const event = events.find((item) => item.type === 'create' && item.request.owner.entityId === 1);
+    expect(event).toMatchObject({ type: 'create', request: { position: { x }, facing } });
   });
 
   it('allows duplicate MUGEN ids, separates owners, honors false triggers, and rejects missing/invalid anim safely', () => {

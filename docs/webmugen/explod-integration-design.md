@@ -95,7 +95,7 @@ The request queue is frame-local output from CNS execution, not durable state. T
 ## Coordinate and animation rules
 
 - Controller `pos` is evaluated in CNS/MUGEN coordinates, then converted once according to `postype` and owner Facing.
-- Stage Y uses the same MUGEN-to-internal conversion as player position controllers; screen space must not reuse stage ground offsets.
+- P1/P2 Stage Y follows its referenced entity. Explod `front/back/left/right` Y starts at the viewport top; this intentionally differs from Helper screen-edge postypes, whose Y remains relative to P1's axis. Neither path reapplies the camera during rendering.
 - Owner binding stores an offset and duration. It does not overwrite the Explod's MUGEN id.
 - `animationOwner` selects AIR/SFF resources. Initially it equals the creating entity; common fightfx and custom-State animation ownership remain explicit later scopes.
 - Renderer receives an already resolved world/screen origin plus the AIR element offset. It must not mutate runtime position.
@@ -114,8 +114,9 @@ The request queue is frame-local output from CNS execution, not durable state. T
 - Round restart creates an empty Explod collection and resets `nextRuntimeId` deterministically.
 - A removed entry is absent before rendering in the same frame when removal is applied before the step/render pass.
 - Explicit RemoveExplod filters all exact owner/id matches immediately. Later same-frame modify/bind operations therefore cannot find removed entries; an earlier modify is observable before a later removal diagnostic.
-- ExplodBindTime replaces only bind duration/target metadata. Time 0 releases at the current world position; positive time follows for the finite lifecycle; negative time follows indefinitely. Rebinding resolves the stored postype/offset against the current owner/opponent.
+- ExplodBindTime replaces only bind duration/target metadata. Time 0 releases at the current world position; positive time follows for the finite lifecycle; negative time follows indefinitely. Rebinding resolves the stored postype/offset against the current owner/opponent. The app performs a non-counting final bind-position synchronization after physics and Stage correction so rendering does not trail a moving owner by one frame.
 - After hit collision resolves, `removeongethit=1` filters Explods owned by an actually hit defender before Canvas. Guarded contact does not trigger this path.
+- The 400-wide and 960-wide extension profiles retain authored WinMUGEN 320-wide tiling. When at least three same-frame, same-owner Explods use one sprite at an even interval matching its rendered width, Canvas adds render-only edge tiles if camera motion leaves an extension strip uncovered. The authored runtime entries, Classic 320 output, and ordinary/uneven Explods are unchanged.
 
 ## Issue boundaries
 

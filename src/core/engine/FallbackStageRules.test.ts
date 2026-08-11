@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialGameState } from './GameState';
-import { applyFallbackStageRules, buildPushBox } from './FallbackStageRules';
+import { applyFallbackStageRules, buildPushBox, buildScreenEdgeBox } from './FallbackStageRules';
 
 describe('FallbackStageRules', () => {
   it('makes players face each other', () => {
@@ -196,6 +196,22 @@ describe('FallbackStageRules', () => {
       front: 30, back: 15, height: 140,
       mode: 'ground', source: 'character_size',
     });
+  });
+
+  it('uses the Width controller edge and player pairs for their separate bars', () => {
+    const state = createInitialGameState();
+    const player = {
+      ...state.players[0],
+      x: 300,
+      facing: 1 as const,
+      widthOverride: {
+        edge: { front: 70, back: 0 },
+        player: { front: 8, back: 6 },
+      },
+    };
+
+    expect(buildScreenEdgeBox(player)).toMatchObject({ left: 300, right: 370, front: 70, back: 0, source: 'width_controller' });
+    expect(buildPushBox(player)).toMatchObject({ left: 294, right: 308, front: 8, back: 6, source: 'width_controller' });
   });
 
   it('switches to Size air front/back and preserves both airborne facings', () => {

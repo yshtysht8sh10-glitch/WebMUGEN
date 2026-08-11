@@ -89,6 +89,7 @@ export type ExplodModifyEvent = {
   patch: ExplodModifyPatch;
   changedFields: string[];
   screenWidth: number;
+  cameraY?: number;
 };
 
 export type ExplodRemoveEvent = {
@@ -103,6 +104,7 @@ export type ExplodBindTimeEvent = {
   mugenId: number | null;
   time: number | null;
   screenWidth: number;
+  cameraY?: number;
 };
 
 export type ExplodControllerEvent = ExplodCreateEvent | ExplodModifyEvent | ExplodRemoveEvent | ExplodBindTimeEvent;
@@ -251,7 +253,7 @@ export function applyExplodBindTimeEvents(gameState: GameState, events: readonly
       if (!isControllerExplod(entry) || !sameRuntimeOwner(entry.owner, event.owner) || entry.mugenId !== event.mugenId) return entry;
       const oldTime = entry.bind?.remaining ?? 0;
       const resolved = owner
-        ? resolveExplodOrigin(entry.postype, owner, opponent, entry.offset.x, entry.offset.y, event.screenWidth, event.owner.entityId)
+        ? resolveExplodOrigin(entry.postype, owner, opponent, entry.offset.x, entry.offset.y, event.screenWidth, event.owner.entityId, event.cameraY ?? 0)
         : null;
       const bind = event.time !== 0 && resolved?.bindTargetEntityId !== null && resolved?.bindTargetEntityId !== undefined
         ? { targetEntityId: resolved.bindTargetEntityId, remaining: event.time, offsetX: entry.offset.x, offsetY: entry.offset.y }
@@ -283,7 +285,7 @@ function applyExplodModifyPatch(entry: ExplodRuntimeEntry, event: ExplodModifyEv
   const opponent = gameState.players.find((player) => player.id !== event.owner.rootPlayerId) ?? gameState.players[1];
   const postype = patch.postype ?? entry.postype;
   const offset = patch.offset ?? entry.offset;
-  const resolved = owner ? resolveExplodOrigin(postype, owner, opponent, offset.x, offset.y, event.screenWidth, event.owner.entityId) : null;
+  const resolved = owner ? resolveExplodOrigin(postype, owner, opponent, offset.x, offset.y, event.screenWidth, event.owner.entityId, event.cameraY ?? 0) : null;
   const facing = patch.facingParameter === undefined
     ? entry.facing
     : normalizeExplodFacing((resolved?.baseFacing ?? 1) * patch.facingParameter);
@@ -350,14 +352,49 @@ export function resolveExplodOrigin(
   offsetY: number,
   screenWidth: number,
   ownerEntityId: number = player.id,
+  _cameraY: number = 0,
 ): { x: number; y: number; baseFacing: 1 | -1; coordinateSpace: ExplodCoordinateSpace; bindTargetEntityId: number | null } {
   if (postype === 'p1') return { x: player.x + offsetX * player.facing, y: player.y + offsetY, baseFacing: player.facing, coordinateSpace: 'stage', bindTargetEntityId: ownerEntityId };
   if (postype === 'p2') return { x: opponent.x + offsetX * opponent.facing, y: opponent.y + offsetY, baseFacing: opponent.facing, coordinateSpace: 'stage', bindTargetEntityId: opponent.id };
-  if (postype === 'front') return { x: (player.facing === 1 ? screenWidth : 0) + offsetX, y: offsetY, baseFacing: 1, coordinateSpace: 'screen', bindTargetEntityId: null };
+  if (postype === 'front') return { x: (player.facing === 1 ? screenWidth : 0) + offsetX * player.facing, y: offsetY, baseFacing: player.facing, coordinateSpace: 'screen', bindTargetEntityId: null };
   if (postype === 'back') return { x: (player.facing === 1 ? 0 : screenWidth) + offsetX * player.facing, y: offsetY, baseFacing: player.facing, coordinateSpace: 'screen', bindTargetEntityId: null };
   if (postype === 'left') return { x: offsetX, y: offsetY, baseFacing: 1, coordinateSpace: 'screen', bindTargetEntityId: null };
-  if (postype === 'right') return { x: screenWidth + offsetX, y: offsetY, baseFacing: 1, coordinateSpace: 'screen', bindTargetEntityId: null };
+  if (postype === 'right') return { x: screenWidth - offsetX, y: offsetY, baseFacing: -1, coordinateSpace: 'screen', bindTargetEntityId: null };
   return { x: offsetX, y: offsetY, baseFacing: 1, coordinateSpace: 'stage', bindTargetEntityId: null };
+}
+
+export function resolveHelperOrigin(
+  postype: ExplodPostype,
+  player: Pick<PlayerState, 'id' | 'x' | 'y' | 'facing'>,
+  opponent: Pick<PlayerState, 'id' | 'x' | 'y' | 'facing'>,
+  offsetX: number,
+  offsetY: number,
+  screenWidth: number,
+  ownerEntityId: number = player.id,
+  cameraY: number = 0,
+): ReturnType<typeof resolveExplodOrigin> {
+  if (postype === 'p1' || postype === 'p2' || postype === 'none') {
+    return resolveExplodOrigin(postype, player, opponent, offsetX, offsetY, screenWidth, ownerEntityId, cameraY);
+  }
+  const horizontal = resolveExplodOrigin(postype, player, opponent, offsetX, 0, screenWidth, ownerEntityId, cameraY);
+  return { ...horizontal, y: player.y - cameraY + offsetY };
+}
+
+export function synchronizeBoundExplodPositions(gameState: GameState): GameState {
+  let changed = false;
+  const entries = gameState.explods.entries.map((entry) => {
+    if (!entry.bind) return entry;
+    const target = findRuntimePlayer(gameState, entry.bind.targetEntityId);
+    if (!target) return entry;
+    const position = {
+      x: target.x + entry.bind.offsetX * target.facing,
+      y: target.y + entry.bind.offsetY,
+    };
+    if (position.x === entry.position.x && position.y === entry.position.y) return entry;
+    changed = true;
+    return { ...entry, position };
+  });
+  return changed ? { ...gameState, explods: { ...gameState.explods, entries } } : gameState;
 }
 
 export function normalizeExplodFacing(value: number): 1 | -1 {

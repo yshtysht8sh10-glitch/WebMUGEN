@@ -157,9 +157,11 @@ export function stepPlayerCnsPhysics(player: PlayerState, cns?: CnsDocument | nu
       ...advanced,
       palFx,
       x: player.x + player.vx,
-      y: DEFAULT_GROUND_Y,
+      // WinMUGEN S/C physics applies ground friction; it does not itself
+      // rewrite Pos Y. StateType and Physics are independent, and real
+      // characters intentionally combine StateType=A with Physics=S.
+      y: player.y + player.vy,
       vx: Math.abs(nextVx) < 0.01 ? 0 : nextVx,
-      vy: 0,
       ...nextTime,
     };
   }
@@ -203,6 +205,13 @@ function clampPlayerAfterCnsPhysics(player: PlayerState): PlayerState {
     return player;
   }
 
+  // Physics=N has no automatic ground interaction. Characters use it for
+  // authored off-screen movement such as sinking below Pos Y = 0 before a
+  // ChangeState; only their CNS controllers decide when that motion stops.
+  if (player.physics === 'N') {
+    return player;
+  }
+
   if ((player.stateType === 'A' || player.stateType === 'L') && player.moveType === 'H') {
     return player;
   }
@@ -210,7 +219,7 @@ function clampPlayerAfterCnsPhysics(player: PlayerState): PlayerState {
   return {
     ...player,
     y: DEFAULT_GROUND_Y,
-    vy: player.physics === 'A' && player.vy > 0 ? 0 : player.vy,
+    vy: player.vy > 0 ? 0 : player.vy,
   };
 }
 

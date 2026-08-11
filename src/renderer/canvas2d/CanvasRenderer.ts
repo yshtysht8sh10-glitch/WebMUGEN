@@ -19,6 +19,7 @@ import type { RoundState } from '../../core/engine/RoundState';
 import type { RoundScore } from '../../core/engine/RoundScore';
 import { RoundStateRenderer } from './RoundStateRenderer';
 import {
+  completeExtendedViewportExplodTiles,
   getExplodsInDrawOrder,
   resolveExplodRenderFrames,
   type CharacterRenderAssets,
@@ -130,11 +131,15 @@ export class CanvasRenderer {
     this.drawProjectiles(ctx, state.projectiles, diagnosticsEnabled);
     ctx.restore();
     const explodResolution = resolveExplodRenderFrames(state, this.defaultAssets(), this.ownerAssets, this.fightFxAssets, camera.x, camera.y, diagnosticsEnabled);
+    const explodFrames = completeExtendedViewportExplodTiles(explodResolution.frames, viewport.logicalWidth);
     const renderDiagnostics = [
       ...(diagnosticsEnabled && globalFlags.has('nobg') ? ['raw.assertspecial_draw flag=noBG target=stage result=hidden'] : []),
       ...(diagnosticsEnabled && hideBars ? ['raw.assertspecial_draw flag=nobardisplay target=hud result=hidden'] : []),
       ...(diagnosticsEnabled && state.bgPalFx ? [`raw.bgpalfx_draw owner=${state.bgPalFx.ownerEntityId} remaining=${state.bgPalFx.remainingTime} color=${state.bgPalFx.color} invertall=${state.bgPalFx.invertAll ? 1 : 0} mul=(${state.bgPalFx.multiply.red},${state.bgPalFx.multiply.green},${state.bgPalFx.multiply.blue}) filter=${bgPalFxFilter} result=drawn limitation=canvas_filter_approximated`] : []),
       ...explodResolution.diagnosticLines,
+      ...(diagnosticsEnabled && explodFrames.length > explodResolution.frames.length
+        ? [`raw.explod_tile_extend viewport=${viewport.logicalWidth} authored=${explodResolution.frames.length} supplemental=${explodFrames.length - explodResolution.frames.length} result=drawn`]
+        : []),
     ];
     const regularDrawables = [
       ...getPlayersInSpritePriorityOrder(state).map((player) => ({
@@ -146,14 +151,14 @@ export class CanvasRenderer {
         scaleY: player.collisionWidth?.yScale ?? 1,
       })),
       ...state.helpers.entries.map((helper) => ({
-        kind: 'player' as const,
+        kind: 'helper' as const,
         priority: helper.player.sprPriority ?? 0,
         stableId: helper.entityId,
         player: helper.player,
         scaleX: helper.player.collisionWidth?.xScale ?? 1,
         scaleY: helper.player.collisionWidth?.yScale ?? 1,
       })),
-      ...getExplodsInDrawOrder(explodResolution.frames)
+      ...getExplodsInDrawOrder(explodFrames)
         .filter((frame) => !frame.entry.onTop)
         .map((frame) => ({
           kind: 'explod' as const,
@@ -164,14 +169,17 @@ export class CanvasRenderer {
     ].sort((a, b) => {
       const priorityOrder = a.priority - b.priority;
       if (priorityOrder !== 0) return priorityOrder;
-      const kindOrder = Number(a.kind === 'explod') - Number(b.kind === 'explod');
+      // A newly-created Helper is a new player object in WinMUGEN. When its
+      // priority ties a root player, its sprite is queued first (behind the
+      // older root sprite). Keep Explods' established tie layer after players.
+      const kindOrder = drawableKindOrder(a.kind) - drawableKindOrder(b.kind);
       if (kindOrder !== 0) return kindOrder;
-      return a.kind === 'explod' && b.kind === 'explod'
+      return (a.kind === 'explod' && b.kind === 'explod') || (a.kind === 'helper' && b.kind === 'helper')
         ? b.stableId - a.stableId
         : a.stableId - b.stableId;
     });
     for (const drawable of regularDrawables) {
-      if (drawable.kind === 'player') {
+      if (drawable.kind !== 'explod') {
         ctx.save();
         ctx.translate(-camera.x, -camera.y);
         renderDiagnostics.push(...this.drawAfterImages(ctx, drawable.player, diagnosticsEnabled, drawable.scaleX, drawable.scaleY));
@@ -212,7 +220,7 @@ export class CanvasRenderer {
       }
     }
     if (hitFeedback) this.hitFeedbackRenderer.render(ctx, hitFeedback);
-    for (const frame of getExplodsInDrawOrder(explodResolution.frames).filter((candidate) => candidate.entry.onTop)) {
+    for (const frame of getExplodsInDrawOrder(explodFrames).filter((candidate) => candidate.entry.onTop)) {
       const diagnostic = this.drawExplod(ctx, frame, diagnosticsEnabled);
       if (diagnostic) renderDiagnostics.push(diagnostic);
     }
@@ -839,4 +847,10 @@ function linearGradient(
 
 export function getPlayersInSpritePriorityOrder(state: GameState): PlayerState[] {
   return [...state.players].sort((a, b) => (a.sprPriority ?? 0) - (b.sprPriority ?? 0) || a.id - b.id);
+}
+
+function drawableKindOrder(kind: 'helper' | 'player' | 'explod'): number {
+  if (kind === 'helper') return 0;
+  if (kind === 'player') return 1;
+  return 2;
 }

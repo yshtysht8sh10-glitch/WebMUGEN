@@ -17,7 +17,7 @@ export type PushBox = {
   back: number;
   height: number;
   mode: 'ground' | 'air';
-  source: 'character_size' | 'winmugen_defaults';
+  source: 'width_controller' | 'character_size' | 'winmugen_defaults';
 };
 
 export type FallbackStageRuleOptions = { autoTurn?: boolean };
@@ -147,12 +147,13 @@ function applyPushApart(p1: PlayerState, p2: PlayerState): PushResult {
 export function buildPushBox(player: PlayerState): PushBox {
   const configured = player.collisionWidth;
   const mode = isAirborne(player) ? 'air' : 'ground';
-  const rawFront = configured
+  const override = player.widthOverride?.player;
+  const rawFront = override?.front ?? (configured
     ? mode === 'air' ? configured.airFront : configured.groundFront
-    : mode === 'air' ? DEFAULT_AIR_FRONT : DEFAULT_GROUND_FRONT;
-  const rawBack = configured
+    : mode === 'air' ? DEFAULT_AIR_FRONT : DEFAULT_GROUND_FRONT);
+  const rawBack = override?.back ?? (configured
     ? mode === 'air' ? configured.airBack : configured.groundBack
-    : mode === 'air' ? DEFAULT_AIR_BACK : DEFAULT_GROUND_BACK;
+    : mode === 'air' ? DEFAULT_AIR_BACK : DEFAULT_GROUND_BACK);
   const scaleX = finiteScale(configured?.xScale);
   const scaleY = finiteScale(configured?.yScale);
   const front = Math.max(0, rawFront) * scaleX;
@@ -167,7 +168,29 @@ export function buildPushBox(player: PlayerState): PushBox {
     back,
     height,
     mode,
-    source: configured ? 'character_size' : 'winmugen_defaults',
+    source: override ? 'width_controller' : configured ? 'character_size' : 'winmugen_defaults',
+  };
+}
+
+export function buildScreenEdgeBox(player: PlayerState): PushBox {
+  const edge = player.widthOverride?.edge;
+  if (!edge) return buildPushBox(player);
+  const configured = player.collisionWidth;
+  const scaleX = finiteScale(configured?.xScale);
+  const scaleY = finiteScale(configured?.yScale);
+  const front = Math.max(0, edge.front) * scaleX;
+  const back = Math.max(0, edge.back) * scaleX;
+  const height = Math.max(0, configured?.height ?? DEFAULT_HEIGHT) * scaleY;
+  return {
+    left: player.x - (player.facing === 1 ? back : front),
+    right: player.x + (player.facing === 1 ? front : back),
+    top: player.y - height,
+    bottom: player.y,
+    front,
+    back,
+    height,
+    mode: isAirborne(player) ? 'air' : 'ground',
+    source: 'width_controller',
   };
 }
 

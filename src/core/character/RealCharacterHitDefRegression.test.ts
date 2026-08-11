@@ -793,7 +793,7 @@ describe('T-H-M-A State 3169 defender-hitpause regression', () => {
     }, assets.air, true);
 
     expect(contact.hitEvents, contact.hitDiagnosticLines?.join('\n')).toHaveLength(1);
-    expect(contact.players[1]).toMatchObject({ life: 920, hitPause: 30 });
+    expect(contact.players[1]).toMatchObject({ life: 920, hitPause: 7 });
     expect(contact.players[0].moveContact).toMatchObject({ hit: true, hitCount: 1, activeHitDefId });
     expect(contact.hitDiagnosticLines?.join('\n')).toContain('previous=3165');
     expect(contact.hitDiagnosticLines?.join('\n')).not.toContain('target_hitpause');

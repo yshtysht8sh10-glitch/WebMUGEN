@@ -80,10 +80,82 @@ ctrl = 0
     });
     expect(result.state.helpers.entries[0].player).toMatchObject({
       stateNo: 100, stateTime: 0, animNo: 1000, animTime: 0,
+      sprPriority: 0,
       collisionWidth: { xScale: 0.5, yScale: 0.75 },
     });
     expect(result.traces).toHaveLength(2);
     expect(result.state.hitDiagnosticLines?.join('\n')).toContain('firstStep=next_frame');
+  });
+
+  it('starts Helper sprpriority independently from the parent and honors the initial StateDef value', () => {
+    const priorityCns = parseCnsText(`
+[StateDef 0]
+type = S
+physics = N
+
+[State 0, Default priority Helper]
+type = Helper
+trigger1 = time = 0
+id = 100
+stateno = 100
+
+[State 0, Explicit priority Helper]
+type = Helper
+trigger1 = time = 0
+id = 200
+stateno = 200
+
+[StateDef 100]
+type = S
+physics = N
+
+[StateDef 200]
+type = S
+physics = N
+sprpriority = -3
+`);
+    const initial = createInitialGameState();
+    const state = stepCnsStateRuntime({
+      ...initial,
+      players: initial.players.map((player) => ({ ...player, sprPriority: 5 })) as typeof initial.players,
+    }, priorityCns).state;
+
+    expect(state.helpers.entries.map((helper) => ({
+      id: helper.helperId,
+      sprPriority: helper.player.sprPriority,
+    }))).toEqual([
+      { id: 100, sprPriority: 0 },
+      { id: 200, sprPriority: -3 },
+      { id: 100, sprPriority: 0 },
+      { id: 200, sprPriority: -3 },
+    ]);
+  });
+
+  it('converts screen-edge postypes into world coordinates once for both facings', () => {
+    const edgeCns = parseCnsText(`
+[StateDef 0]
+type = S
+physics = N
+[State 0, Edge]
+type = Helper
+trigger1 = 1
+id = 900
+stateno = 100
+pos = 10, -5
+postype = front
+`);
+    const initial = createInitialGameState();
+    const result = stepCnsStateRuntime(initial, edgeCns, { screenWidth: 400, cameraX: 120, cameraY: 45 });
+
+    expect(result.state.helpers.entries.map((helper) => ({
+      root: helper.rootEntityId,
+      x: helper.player.x,
+      y: helper.player.y,
+      facing: helper.player.facing,
+    }))).toEqual([
+      { root: 1, x: 530, y: 280, facing: 1 },
+      { root: 2, x: 110, y: 280, facing: -1 },
+    ]);
   });
 
   it('runs Helper State/Anim on the next frame, supports nested parent identity, NumHelper, and DestroySelf', () => {
@@ -198,6 +270,76 @@ trigger1 = time = 1
     expect(evaluateCnsRuntimeTrigger('NumHelper(100) = 2', { player, numHelper: (id) => id === 100 ? 2 : 0 })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('IsHelper = 1', { player, isHelper: true })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('IsHelper = 0', { player, isHelper: false })).toBe(true);
+  });
+
+  it('commits Helper TargetState and exposes it to a later target redirect in the same State pass', () => {
+    const redirectCns = parseCnsText(`
+[StateDef 0]
+type = S
+physics = N
+
+[StateDef 3720]
+type = A
+physics = N
+[State 3720, observe helper]
+type = ChangeState
+trigger1 = helper(3725),stateno = 3735
+value = 3730
+
+[StateDef 3725]
+type = S
+movetype = A
+physics = N
+[State 3725, custom target state]
+type = TargetState
+trigger1 = MoveHit = 1
+value = 3738
+[State 3725, advance helper]
+type = ChangeState
+trigger1 = MoveHit = 1
+trigger1 = target(3725),stateno = 3738
+value = 3735
+
+[StateDef 3730]
+type = A
+physics = N
+[StateDef 3735]
+type = S
+physics = N
+[StateDef 3738]
+type = A
+movetype = H
+physics = N
+`);
+    const initial = createInitialGameState();
+    initial.players[0] = { ...initial.players[0], stateNo: 3720 };
+    let helpers = spawnHelper(initial.helpers, {
+      helperId: 3725, rootEntityId: 1, parentEntityId: 1, ownerCharacterId: 1,
+      stateOwnerId: 1, animationOwnerId: 1, stateNo: 3725, x: 100, y: 0,
+      facing: 1, keyCtrl: false, ownPal: false, spawnFrame: 0, parent: initial.players[0],
+    }, redirectCns);
+    helpers = {
+      ...helpers,
+      entries: helpers.entries.map((helper) => ({
+        ...helper,
+        player: {
+          ...helper.player,
+          targets: [{ playerId: 2, hitDefId: 3725, activeHitDefId: 1 }],
+          moveContact: {
+            activeHitDefId: 1, contact: true, hit: true, guarded: false, elapsed: 1, hitCount: 1,
+          },
+        },
+      })),
+    };
+
+    const helperPass = stepCnsStateRuntime({ ...initial, helpers }, redirectCns);
+    expect(helperPass.state.helpers.entries[0].player.stateNo).toBe(3735);
+    expect(helperPass.state.players[1]).toMatchObject({ stateNo: 3738, stateOwnerId: 1 });
+    expect(helperPass.traces.find((trace) => trace.entityId === 3)?.executedControllers)
+      .toEqual(expect.arrayContaining(['TargetState', 'ChangeState']));
+
+    const rootPass = stepCnsStateRuntime(helperPass.state, redirectCns);
+    expect(rootPass.state.players[0].stateNo).toBe(3730);
   });
 
   it('applies special States only within the WinMUGEN Helper keyctrl scope', () => {

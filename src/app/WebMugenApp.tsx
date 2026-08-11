@@ -24,7 +24,7 @@ import { createAudioStartGate, type AudioStartGate, type AudioStartGateGesture, 
 import type { SoundRuntimeEvent } from '../core/audio/SoundEvent';
 import { processSoundRuntimeEvents } from '../core/audio/SoundRuntimeBridge';
 import { adjustMasterVolumeFromKey, normalizeAudioSettings, type AudioSettings } from './AudioSettings';
-import { applyExplodControllerEvents, removeExplodsOnOwnerHit, stepExplodRuntime, type ExplodControllerEvent } from '../core/explod/ExplodSystem';
+import { applyExplodControllerEvents, removeExplodsOnOwnerHit, stepExplodRuntime, synchronizeBoundExplodPositions, type ExplodControllerEvent } from '../core/explod/ExplodSystem';
 import type { AirAction, AirDocument, AirElement } from '../parser/air/AirTypes';
 import type { ImageDataSprite, ImageDataSpritePack } from '../core/sprite/ImageDataSpriteTypes';
 import { spriteKey } from '../core/sprite/SpritePackLoader';
@@ -767,6 +767,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
             pauseState: pauseAtFrameStart,
             screenWidth: cnsScreenProfile.logicalWidth,
             cameraX: cnsCamera.x,
+            cameraY: cnsCamera.y,
             screenLeft: cnsScreenLeft,
             screenRight: cnsScreenRight,
             roundState: winMugenRoundState(nextRoundState),
@@ -895,6 +896,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
                   pauseState: pauseDuringFrame,
                   screenWidth: cnsScreenProfile.logicalWidth,
                   cameraX: cnsCamera.x,
+                  cameraY: cnsCamera.y,
                   screenLeft: cnsScreenLeft,
                   screenRight: cnsScreenRight,
                   roundState: winMugenRoundState(nextRoundState),
@@ -1026,6 +1028,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
           }
         }
         for (const event of environmentShakeEvents) nextFeedback = startEnvironmentShake(nextFeedback, event);
+
+        nextState = synchronizeBoundExplodPositions(nextState);
 
         restartPressedRef.current = inputSnapshot.system.restartRound;
         presentationSkipInputHeldRef.current = presentationKeys.size > 0;

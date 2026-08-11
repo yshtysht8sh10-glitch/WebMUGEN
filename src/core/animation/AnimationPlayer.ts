@@ -86,17 +86,17 @@ export function getAnimationTriggerInfo(
   const current = getCurrentAnimationElement(document, actionNo, animTime);
   if (!current) return null;
 
-  const previous = animTime > 0
-    ? getCurrentAnimationElement(document, actionNo, animTime - 1)
-    : null;
-  const elementStarted = animTime === 0 || previous?.elementIndex !== current.elementIndex;
-  const normalizedTime = normalizeAnimationTime(current.action, animTime);
+  const safeTime = Math.max(0, animTime);
   let cursor = 0;
-  const elementTimes = current.action.elements.map((element, index) => {
-    const time = normalizedTime - cursor;
+  const elementTimes = current.action.elements.map((element) => {
+    const time = safeTime - cursor;
     cursor += Math.max(1, element.duration);
-    return elementStarted && index === current.elementIndex ? 0 : time;
+    return time;
   });
+  // WinMUGEN keeps AnimElem/AnimElemTime on the action's original timeline.
+  // A finite AIR loop repeats the displayed elements, but does not start their
+  // trigger timeline again on later passes.
+  const elementStarted = elementTimes[current.elementIndex] === 0;
 
   return {
     elementNo: current.elementIndex + 1,

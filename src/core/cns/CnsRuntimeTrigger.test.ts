@@ -285,6 +285,21 @@ describe('CnsRuntimeTrigger', () => {
       screenLeft: 512,
       screenRight: 912,
     })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('FrontEdgeBodyDist = 20', {
+      player: {
+        ...player,
+        x: 822,
+        facing: 1,
+        widthOverride: {
+          edge: { front: 70, back: 0 },
+          player: { front: 0, back: 0 },
+        },
+      },
+      screenWidth: 400,
+      cameraX: 512,
+      screenLeft: 512,
+      screenRight: 912,
+    })).toBe(true);
   });
 
   it('evaluates constants and misc numeric triggers', () => {

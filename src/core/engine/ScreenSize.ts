@@ -1,5 +1,5 @@
 import type { GameState } from './types';
-import { buildPushBox, FALLBACK_STAGE_LEFT, FALLBACK_STAGE_RIGHT } from './FallbackStageRules';
+import { buildScreenEdgeBox, FALLBACK_STAGE_LEFT, FALLBACK_STAGE_RIGHT } from './FallbackStageRules';
 import type { MugenStage } from '../stage/MugenStage';
 
 export const MUGEN_WORLD_ORIGIN_X = 480;
@@ -163,13 +163,9 @@ function constrainCameraToPlayers(
   const visiblePlayers = state.players.filter((player) => player.screenBound?.value !== false);
   if (visiblePlayers.length === 0) return camera;
 
-  const boxes = visiblePlayers.map(buildPushBox);
-  const minimumPlayerLeft = usePlayerAxis
-    ? Math.min(...visiblePlayers.map((player) => player.x))
-    : Math.min(...boxes.map((box) => box.left));
-  const maximumPlayerRight = usePlayerAxis
-    ? Math.max(...visiblePlayers.map((player) => player.x))
-    : Math.max(...boxes.map((box) => box.right));
+  const boxes = visiblePlayers.map((player) => screenBoundsForPlayer(player, usePlayerAxis));
+  const minimumPlayerLeft = Math.min(...boxes.map((box) => box.left));
+  const maximumPlayerRight = Math.max(...boxes.map((box) => box.right));
   const minimumCameraForPlayers = maximumPlayerRight - (width - Math.max(0, rightInset));
   const maximumCameraForPlayers = minimumPlayerLeft - Math.max(0, leftInset);
   const allowedMinimum = Math.max(cameraBounds.minimum, minimumCameraForPlayers);
@@ -232,7 +228,7 @@ function keepPlayersInsideCamera(
   const clampedPlayers: string[] = [];
   const players = state.players.map((player) => {
     if (player.screenBound?.value === false) return player;
-    const box = usePlayerAxis ? { left: player.x, right: player.x } : buildPushBox(player);
+    const box = screenBoundsForPlayer(player, usePlayerAxis);
     let offsetX = 0;
     if (box.left < leftEdge) offsetX = leftEdge - box.left;
     if (box.right + offsetX > rightEdge) offsetX -= box.right + offsetX - rightEdge;
@@ -241,6 +237,11 @@ function keepPlayersInsideCamera(
     return { ...player, x: player.x + offsetX };
   }) as GameState['players'];
   return { players, clampedPlayers };
+}
+
+function screenBoundsForPlayer(player: GameState['players'][number], usePlayerAxis: boolean): { left: number; right: number } {
+  if (usePlayerAxis && !player.widthOverride) return { left: player.x, right: player.x };
+  return buildScreenEdgeBox(player);
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {

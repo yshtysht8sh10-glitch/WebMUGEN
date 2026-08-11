@@ -19,6 +19,10 @@ const ownerWithCommandCns = mergeCnsDocuments(
   ownerCns,
   parseCnsText(readFileSync('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.cmd', 'utf8')),
 );
+const ownerWithNewFlankAttackCns = mergeCnsDocuments(
+  ownerCns,
+  parseCnsText(readFileSync('public/chars/T-H-M-A/T-H-M-A/T-H-M-Atyouhi.cns', 'utf8')),
+);
 
 const targetSelfCns = parseCnsText(`
 [StateDef 5100]
@@ -64,6 +68,63 @@ function stepFrame(state: GameState): GameState {
 }
 
 describe('T-H-M-A Projectile ProjHit -> TargetState custom-state route', () => {
+  it('launches the target through State 3169 -> borrowed State 250', () => {
+    const initial = createInitialGameState();
+    const state: GameState = {
+      ...initial,
+      players: [
+        {
+          ...initial.players[0],
+          x: 300,
+          stateNo: 3169,
+          stateTime: 0,
+          stateType: 'A',
+          moveType: 'A',
+          physics: 'N',
+          facing: 1,
+          targets: [{ playerId: 2, hitDefId: 3165, activeHitDefId: 91 }],
+          moveContact: { activeHitDefId: 91, contact: true, hit: true, guarded: false, elapsed: 1, hitCount: 1 },
+        },
+        { ...initial.players[1], x: 500, stateNo: 5000, facing: -1, vx: 0, vy: -4, hitPause: 7 },
+      ],
+    };
+    const explods: ExplodCreateEvent[] = [];
+    const input: CnsRuntimeInput = {
+      getCnsDocumentForPlayer: (ownerId) => ownerId === 1 ? ownerWithNewFlankAttackCns : targetSelfCns,
+      getAnimationDuration: () => 10,
+      onExplodCreate: (event) => explods.push(event),
+    };
+
+    const runtime = stepCnsStateRuntime(state, ownerWithNewFlankAttackCns, input);
+
+    expect(runtime.traces[0].executedControllers).toContain('TargetState');
+    expect(explods.filter((event) => event.type === 'create' && event.request.animNo === 18200)
+      .map((event) => event.type === 'create' ? event.request.position.x : null)).toEqual([300, -148, 748]);
+    expect(runtime.state.players[1]).toMatchObject({
+      stateNo: 250,
+      stateOwnerId: 1,
+      selfStateOwnerId: 2,
+      stateTime: 0,
+      facing: -1,
+      hitPause: 7,
+      vx: 0,
+      vy: -4,
+    });
+
+    let launched = runtime.state;
+    for (let frame = 0; frame < 7; frame += 1) launched = stepCnsPhysicsMotion(launched, ownerWithNewFlankAttackCns);
+    launched = stepCnsStateRuntime(launched, ownerWithNewFlankAttackCns, input).state;
+    expect(launched.players[1]).toMatchObject({
+      stateNo: 250,
+      stateOwnerId: 1,
+      stateTime: 0,
+      facing: -1,
+      hitPause: 0,
+      vx: 12,
+      vy: -0.2,
+    });
+  });
+
   it('lets P1 State -1 observe wall State 281 and produce its Explod and sound Helper', () => {
     const initial = createInitialGameState();
     const state: GameState = {

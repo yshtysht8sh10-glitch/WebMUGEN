@@ -176,6 +176,28 @@ describe('screen size profiles', () => {
     expect(next.players[0].vx).toBe(0);
   });
 
+  it('keeps a dynamic Width edge bar inside the native viewport', () => {
+    const camera = { left: -400, right: 400, verticalFollow: 0 };
+    const state = createInitialGameState(undefined, {}, [876, 956]);
+    state.camera = { x: 512, y: 65, viewportWidth: 400, viewportHeight: 240 };
+    state.players[0] = {
+      ...state.players[0],
+      widthOverride: {
+        edge: { front: 70, back: 0 },
+        player: { front: 0, back: 0 },
+      },
+    };
+    state.players[1] = {
+      ...state.players[1],
+      screenBound: { value: false, moveCameraX: false, moveCameraY: false },
+    };
+
+    const next = applyViewportCameraRules(state, 400, 240, undefined, camera);
+    expect(resolveViewportCamera(next, 400, 240).x).toBe(512);
+    expect(next.players[0].x).toBe(838);
+    expect(next.players[0].x + 70).toBe(908);
+  });
+
   it('maps an external Stage camera origin to the extended viewport center', () => {
     const state = createInitialGameState(undefined, {}, [380, 580]);
     const next = applyViewportCameraRules(state, 400, 240, beachStage());

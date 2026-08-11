@@ -73,6 +73,87 @@ describe('CanvasRenderer Explod integration', () => {
     expect(drawImage.mock.calls.map(([image]) => image)).toEqual([redImage, blueImage]);
   });
 
+  it('interleaves Explods and players by WinMUGEN sprpriority', () => {
+    const drawImage = vi.fn();
+    const context = fakeContext({ drawImage, scale: vi.fn(), translate: vi.fn() });
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+    const state = createInitialGameState();
+    state.players = [
+      { ...state.players[0], sprPriority: 2 },
+      { ...state.players[1], sprPriority: 0 },
+    ];
+    state.explods.entries = [
+      entry({ runtimeId: 1, owner: { entityId: 1, rootPlayerId: 1 }, animationOwner: { entityId: 1, rootPlayerId: 1 }, animNo: 3901, spritePriority: -1 }),
+      entry({ runtimeId: 2, owner: { entityId: 1, rootPlayerId: 1 }, animationOwner: { entityId: 1, rootPlayerId: 1 }, animNo: 3903, spritePriority: 3 }),
+    ];
+    const portrait = {} as HTMLImageElement;
+    const p1 = {} as HTMLImageElement;
+    const p2 = {} as HTMLImageElement;
+    const accent = {} as HTMLImageElement;
+    const p1Air: AirDocument = { actions: [
+      { actionNo: 0, elements: [{ groupNo: 0, imageNo: 0, offsetX: 0, offsetY: 0, duration: 1, clsn1: [], clsn2: [] }], defaultClsn1: [], defaultClsn2: [] },
+      { actionNo: 3901, elements: [{ groupNo: 3901, imageNo: 0, offsetX: 0, offsetY: 0, duration: 1, clsn1: [], clsn2: [] }], defaultClsn1: [], defaultClsn2: [] },
+      { actionNo: 3903, elements: [{ groupNo: 3903, imageNo: 0, offsetX: 0, offsetY: 0, duration: 1, clsn1: [], clsn2: [] }], defaultClsn1: [], defaultClsn2: [] },
+    ] };
+    const p2Air = air(0, 0, 0);
+    const p1Sprites: SpritePack = { sprites: new Map([
+      ['0,0', { groupNo: 0, imageNo: 0, src: '', xAxis: 0, yAxis: 0, image: p1 }],
+      ['3901,0', { groupNo: 3901, imageNo: 0, src: '', xAxis: 0, yAxis: 0, image: portrait }],
+      ['3903,0', { groupNo: 3903, imageNo: 0, src: '', xAxis: 0, yAxis: 0, image: accent }],
+    ]) };
+    const p2Sprites: SpritePack = { sprites: new Map([
+      ['0,0', { groupNo: 0, imageNo: 0, src: '', xAxis: 0, yAxis: 0, image: p2 }],
+    ]) };
+
+    new CanvasRenderer(canvas, undefined, null, null, {
+      1: { airDocument: p1Air, spritePack: p1Sprites },
+      2: { airDocument: p2Air, spritePack: p2Sprites },
+    }).render(state, undefined, undefined, undefined, { collisionBoxesVisible: false, hudVisible: false });
+
+    expect(drawImage.mock.calls.map(([image]) => image)).toEqual([portrait, p2, p1, accent]);
+  });
+
+  it('draws a same-priority newly-created Helper behind root players', () => {
+    const drawImage = vi.fn();
+    const context = fakeContext({ drawImage, scale: vi.fn(), translate: vi.fn() });
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+    const state = createInitialGameState();
+    state.helpers.entries = [{
+      entityId: 3,
+      helperId: 1000,
+      rootEntityId: 1,
+      parentEntityId: 1,
+      ownerCharacterId: 1,
+      stateOwnerId: 1,
+      animationOwnerId: 1,
+      keyCtrl: false,
+      ownPal: false,
+      spawnFrame: 10,
+      player: { ...state.players[0], animNo: 100, sprPriority: 0 },
+    }];
+    const helperImage = {} as HTMLImageElement;
+    const p1Image = {} as HTMLImageElement;
+    const p2Image = {} as HTMLImageElement;
+    const p1Air: AirDocument = { actions: [
+      { actionNo: 0, elements: [{ groupNo: 0, imageNo: 0, offsetX: 0, offsetY: 0, duration: 1, clsn1: [], clsn2: [] }], defaultClsn1: [], defaultClsn2: [] },
+      { actionNo: 100, elements: [{ groupNo: 100, imageNo: 0, offsetX: 0, offsetY: 0, duration: 1, clsn1: [], clsn2: [] }], defaultClsn1: [], defaultClsn2: [] },
+    ] };
+    const p1Sprites: SpritePack = { sprites: new Map([
+      ['0,0', { groupNo: 0, imageNo: 0, src: '', xAxis: 0, yAxis: 0, image: p1Image }],
+      ['100,0', { groupNo: 100, imageNo: 0, src: '', xAxis: 0, yAxis: 0, image: helperImage }],
+    ]) };
+    const p2Sprites: SpritePack = { sprites: new Map([
+      ['0,0', { groupNo: 0, imageNo: 0, src: '', xAxis: 0, yAxis: 0, image: p2Image }],
+    ]) };
+
+    new CanvasRenderer(canvas, undefined, null, null, {
+      1: { airDocument: p1Air, spritePack: p1Sprites },
+      2: { airDocument: air(0, 0, 0), spritePack: p2Sprites },
+    }).render(state, undefined, undefined, undefined, { collisionBoxesVisible: false, hudVisible: false });
+
+    expect(drawImage.mock.calls.map(([image]) => image)).toEqual([helperImage, p1Image, p2Image]);
+  });
+
   it('uses the AIR element A field when the Explod controller has no trans override', () => {
     const observedBlend: Array<{ composite: GlobalCompositeOperation; alpha: number }> = [];
     let context: CanvasRenderingContext2D;

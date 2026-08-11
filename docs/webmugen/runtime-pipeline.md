@@ -110,6 +110,8 @@ Match-level Pause/SuperPause is checked before State -3/-2/-1 and the current St
 
 The App requestAnimationFrame loop synchronizes its monotonic frame counter into `GameState.frame` before CNS and subsystem stepping. Explod creation/lifecycle and `GameTime` therefore observe the real game tick; the frame must not remain at the initial zero or be incremented independently by each subsystem.
 
+After physics, Stage push/clamp, camera correction, collision, and deferred controller events, bound Explods are synchronized once more to their final live owner position without consuming bind duration. This keeps fast `bindtime` effects aligned with the Player or Helper rendered in the same frame. Screen-edge Helper origins are converted from the current viewport to world space at creation; screen-space Explods remain in viewport space and therefore do not receive camera subtraction again.
+
 Round presentation uses the same CNS pipeline. RoundState 0 enters both roots into engine Initialize State 5900; on round one, character/common CNS continues through State 190 into the character-owned 191-199 Intro family. States 190-199 and `AssertSpecial intro` keep RoundState 1 active until both characters finish; a newly pressed mapped game input routes both roots to State 0 to skip only that character Intro portion. The HUD then presents `ROUND N` followed by `FIGHT!` while commands and collision remain gated; the announcement uses the foreground presentation pass so character sprites cannot cover it. RoundState 2 begins only after that presentation. Later-round initialization restores controllable State 0 even when its StateDef omits `ctrl`. KO disables winner control and command input, lets CNS/physics return the winner through landing/recovery to State 0, then dispatches State 180 and starts the result timer; the defeated player finishes the common route to State 5150. A new input during the active result State advances the result timer to its completion boundary and overrides `roundnotover`; held KO input cannot trigger it. Time-over still dispatches State 180/170, or 175 to both on a draw. A two-win MatchOver automatically resets the score and starts a new Round 1 match. See `../mugen-spec/winmugen/round-flow.md`.
 
 Each player carries `stateOwnerId` and `selfStateOwnerId`. CNS execution resolves the current document by owner id before scanning negative/current States. HitDef `p2stateno` borrows the attacker document by default, matching WinMUGEN's omitted `p2getp1state = 1`; explicit `p2getp1state = 0` keeps the target document. TargetState borrows the controller document; ChangeState remains in the current document; SelfState returns to the self owner document. An explicit owner lookup failure uses an empty document and a diagnostic, never another player's or common CNS as a silent fallback.
@@ -177,9 +179,10 @@ State entry applies:
 - new `stateNo`;
 - `stateTime = 0`;
 - initial animation when present;
-- StateDef header fields such as `type`, `movetype`, `physics`, `ctrl`, `poweradd`, `juggle`, `facep2`.
+- StateDef header fields such as `type`, `movetype`, `physics`, `ctrl`, `poweradd`, `juggle`, `facep2`, and `sprpriority`.
 
 Entry-only fields must not be re-applied every frame while the state remains active.
+An omitted StateDef `sprpriority` preserves the live priority, matching WinMUGEN; an explicit value replaces it on entry before Canvas composes the common Player/Helper/Explod priority queue.
 
 ## Common movement route example: crouch
 

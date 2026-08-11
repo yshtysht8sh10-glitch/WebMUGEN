@@ -1,6 +1,6 @@
 # StateDef Header Compatibility Notes
 
-Updated: 2026-07-16
+Updated: 2026-08-10
 
 This document summarizes implementation notes for StateDef header fields. The compatibility matrix remains the source of truth:
 
@@ -25,7 +25,7 @@ Follow `docs/webmugen/development-policy.md`: do not modify `public/chars/common
 | `hitdefpersist` | Partial | Entering a State with value 1 preserves the ActiveHitDef, its consumed-target generation history, and used flag; value 0 discards them. | Helper/projectile and multi-player HitDef ownership remain incomplete. |
 | `movehitpersist` | Partial | Entering a State with value 1 preserves MoveContact/MoveHit/MoveGuarded result flags; value 0 resets them independently of the hit count. | MoveReversed and multi-player result semantics remain incomplete. |
 | `hitcountpersist` | Partial | Entering a State with value 1 preserves HitCount; value 0 resets it independently of the move-contact result. | UniqHitCount and full team/combo-counter semantics remain incomplete. |
-| `sprpriority` | Partial | Numeric header values are parsed and retained for StateDef diagnostics; the runtime sprite-priority field also exists. | State-entry application and rendering order still need audit. |
+| `sprpriority` | Partial | Numeric header values apply once on State entry to roots and Helpers; omission preserves the preceding priority. Canvas interleaves Player/Helper and normal Explod sprites from lower to higher priority, while `ontop = 1` Explods remain in the later top pass. Bundled T-H-M-A State 3930 verifies its `-1` portrait behind both players, its player priority `2`, and accent Explods at `3`/`4`. | Projectile `projsprpriority`, equal-priority ordering across unlike entity kinds, and every foreground/HUD interaction remain to audit. |
 
 ## Implementation guidance
 

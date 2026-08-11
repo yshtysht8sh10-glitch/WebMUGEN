@@ -54,6 +54,12 @@ Common values:
 
 Current compatibility should remain conservative until each behavior is tested against expected WinMUGEN flow.
 
+`S` and `C` apply horizontal ground friction but do not force the player axis to ground level.
+StateType and Physics are independent in WinMUGEN. An airborne `StateType = A` may intentionally
+retain `Physics = S/C`; its explicit Y velocity still updates position, and only an actual ground
+crossing is clamped. Bundled T-H-M-A uses this combination in the airborne Darkness Finger route
+`3401 -> 3400`, so entering the standing-authored continuation must not drop it to the floor.
+
 ## Controller interaction
 
 Physics should not erase controller mutations incorrectly.
@@ -68,7 +74,7 @@ Important interactions:
 
 For ordinary `Physics=A`, the physics step reads `Const(movement.yaccel)` from the current character CNS and adds it exactly once before integrating Y. The previous unconditional `0.6` gravity is retained only as the existing missing-value fallback. `Physics=N` receives no automatic gravity, so common air-hit/fall states continue to use their explicit `VelAdd y = GetHitVar(yaccel)` controllers without a second acceleration.
 
-`Physics=N` still integrates explicit X/Y velocity. T-H-M-A custom State 280 therefore keeps its
+`Physics=N` still integrates explicit X/Y velocity and has no automatic ground clamp. This permits data-authored below-ground routes such as T-H-M-A State 3710 reaching `Pos Y >= 400` before its ChangeState. T-H-M-A custom State 280 therefore keeps its
 `VelSet x = -12, y = -0.2` unchanged while moving each tick; the launch direction comes from the
 State's `P2Dist X < 0` Turn and Facing-relative VelSet, not from Physics=N.
 
@@ -121,7 +127,7 @@ Issue #62 keeps KO and fall recovery as separate common-state routes. State 5150
 
 State 5110 get-up scheduling uses an independent counter loaded from the defender's `[Data] liedown.time`. It freezes during hitpause/Pause, does not depend on StateTime or `down.hittime`, and never schedules 5120 at zero Life. `raw.down_clock` exposes elapsed/duration/remaining and the advance/frozen/getup/ko_hold result.
 
-HitDef `pausetime = p1, p2` initializes separate attacker and defender counters. WinMUGEN defaults an omitted pair to `0,0`; `guard.pausetime` inherits that normal pair when omitted. While a counter is positive, CNS controllers, position, velocity integration, StateTime, and AnimTime are frozen; the physics step decrements the counter once per game frame. HitPause is not collision immunity: an unpaused attacker with a different ActiveHitDef generation can still contact the frozen defender, while the generation/defender history rejects continued overlap from the already-consumed generation. A newly accepted contact keeps the longer remaining defender pause. A counter of zero resumes normally without an extra frozen frame. Input buffering remains active outside this per-player freeze. Match-level Pause/SuperPause is separate: it freezes non-moving players and round/hit stepping, permits only the controller owner for `movetime`, and uses a resume guard before normal CNS execution restarts.
+HitDef `pausetime = p1, p2` initializes separate attacker and defender counters. WinMUGEN defaults an omitted pair to `0,0`; `guard.pausetime` inherits that normal pair when omitted. While a counter is positive, CNS controllers, position, velocity integration, StateTime, and AnimTime are frozen; the physics step decrements the counter once per game frame. HitPause is not collision immunity: an unpaused attacker with a different ActiveHitDef generation can still contact the frozen defender, while the generation/defender history rejects continued overlap from the already-consumed generation. A newly accepted contact replaces the defender's older counter with its own `p2` value; a same-frame trade keeps the longer of the two newly applied role counters. A counter of zero resumes normally without an extra frozen frame. Input buffering remains active outside this per-player freeze. Match-level Pause/SuperPause is separate: it freezes non-moving players and round/hit stepping, permits only the controller owner for `movetime`, and uses a resume guard before normal CNS execution restarts.
 
 ## Movement debugging
 
@@ -156,7 +162,7 @@ Issue #57 removes the fixed 44x80 normal path. The runtime carries `[Size]` `gro
 
 Horizontal separation is applied only when both Size rectangles overlap vertically and horizontally. `PlayerPush = 0` disables separation for the frame in which the controller executes; it returns to enabled on the next CNS frame unless another `PlayerPush = 0` executes. Stage AutoTurn is evaluated only for grounded root players with `MoveType = I` in common idle State 0 (stand) or State 11 (crouch), after CNS motion and again after push/TargetBind position resolution. When the opponent is on the other side, Facing changes immediately without a State transition, Ctrl is set to 1, and Anim 5 or 6 starts at time zero. Those AIR actions use horizontal-flip flags to show the old direction first and the new direction at animation completion; the existing common State controllers then restore Anim 0 or 11. All other States, including walking, attacks, get-hit, landing State 52, custom States, and airborne States, preserve Facing unless MUGEN data explicitly uses `facep2` or `Turn`. `[StageInfo] autoturn = 0` disables the idle rule. `AssertSpecial noautoturn` suppresses it for the asserting player and tick. A player frozen by hitpause or global pause is not turned until its runtime tick can move again.
 
-This remains Partial compatibility because dynamic `Width` controller overrides and broader multi-entity push behavior still need integration. After push and fallback stage clamping, the selected 320x240 or extended 400x240 viewport computes one shared camera. For an external Stage, an enabled root is shifted until its player axis retains the DEF `[Bound] screenleft`/`screenright` distance from the viewport edge; the Size-derived Push Box may protrude beyond that axis distance, matching WinMUGEN Stage semantics. Built-in stages retain their four-logical-pixel Push Box containment fallback. Velocity is preserved and `value = 0` bypasses the correction. `raw.push` records both resolved boxes, their Size source, overlap and skip/apply result; `raw.cross` records airborne status, each player's `noAutoTurn` value, stage AutoTurn enablement, and Facing changes; `raw.camera` records the final origin and corrected players. Canvas debug draws the same resolved push rectangle in blue.
+This remains Partial compatibility because negative dynamic `Width` values and broader multi-entity push behavior still need integration. `Width edge = front, back` overrides the screen-edge bar for one tick, `player = front, back` separately overrides the push bar, and `value` assigns both. After push and fallback stage clamping, the selected 320x240 or extended 400x240 viewport computes one shared camera. For an external Stage without a dynamic Width, an enabled root is shifted until its player axis retains the DEF `[Bound] screenleft`/`screenright` distance from the viewport edge; a dynamic edge width is honored for that tick. Built-in stages use the Size-derived edge bar or its dynamic override with their four-logical-pixel containment fallback. Velocity is preserved and `ScreenBound value = 0` bypasses the correction. `raw.push` records both resolved boxes, their Size/Width source, overlap and skip/apply result; `raw.cross` records airborne status, each player's `noAutoTurn` value, stage AutoTurn enablement, and Facing changes; `raw.camera` records the final origin and corrected players. Canvas debug draws the resolved player push rectangle in blue.
 
 When sustained movement makes simultaneous root containment impossible, the camera is held at the
 preceding legal point between the incompatible containment limits. The fixed viewport then clamps

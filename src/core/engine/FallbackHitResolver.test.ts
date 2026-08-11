@@ -928,6 +928,13 @@ pausetime = 0, 0
     expect(secondHit.players[1].life).toBe(firstHit.players[1].life - 25);
   });
 
+  it('replaces an older defender hitpause when a later HitDef contacts', () => {
+    const result = resolveConfiguredHit({ pauseTime: [0, 7], targetHitPause: 30 });
+
+    expect(result.hitEvents).toHaveLength(1);
+    expect(result.players[1].hitPause).toBe(7);
+  });
+
   it('does not generate diagnostic lines when hit diagnostics are disabled', () => {
     const state = createInitialGameState();
     const next = resolveFallbackHits({
@@ -1376,6 +1383,7 @@ function resolveConfiguredHit({
   attackerY,
   targetY,
   pauseTime,
+  targetHitPause,
   hitId,
   hitOnce,
   kill,
@@ -1448,6 +1456,7 @@ function resolveConfiguredHit({
   attackerY?: number;
   targetY?: number;
   pauseTime?: [number, number];
+  targetHitPause?: number;
   hitId?: number;
   hitOnce?: boolean;
   kill?: boolean;
@@ -1620,6 +1629,7 @@ ${guardLines}
     stateType: targetStateType,
     physics: targetStateType === 'A' ? 'A' : targetStateType === 'C' ? 'C' : 'S',
     power: targetPower,
+    hitPause: targetHitPause ?? players[targetIndex].hitPause,
   };
   const runtime = stepCnsStateRuntime({ ...initial, players }, cns, attackerId === 1 ? { p2Commands: targetCommands } : { p1Commands: targetCommands }).state;
   return resolveFallbackHits(runtime, airDocument);

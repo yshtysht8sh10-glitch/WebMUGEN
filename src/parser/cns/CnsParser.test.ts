@@ -35,6 +35,29 @@ ctrl = 1
     expect(doc.states[0].controllers[0].triggers[0].expression).toBe('command = "holdfwd"');
   });
 
+  it('accepts WinMUGEN controller headers whose State label has no numeric prefix or comma', () => {
+    const doc = parseCnsText(`
+[StateDef 3935]
+type = A
+movetype = H
+physics = N
+
+[State Turn]
+type = Turn
+trigger1 = Time = 0
+
+[state that transparensizes impact on team play]
+type = PlayerPush
+trigger1 = 1
+value = 0
+`);
+
+    expect(doc.states[0].controllers).toMatchObject([
+      { type: 'Turn', triggers: [{ name: 'trigger1', expression: 'Time = 0' }] },
+      { type: 'PlayerPush', params: { value: 0 } },
+    ]);
+  });
+
   it('preserves expression-valued StateDef anim fields for runtime evaluation', () => {
     const doc = parseCnsText(`
 [StateDef 6142]
@@ -230,6 +253,25 @@ scale = 0.5-parent,fvar(12)/20, 0.25
 
     expect(doc.states[0].controllers[0].triggers[0].expression).toBe('parent,fvar(12) < 5');
     expect(doc.states[0].controllers[0].params.scale).toEqual(['0.5-parent,fvar(12)/20', 0.25]);
+  });
+
+  it('keeps the first duplicate non-trigger controller parameter like WinMUGEN', () => {
+    const doc = parseCnsText(`
+[StateDef 3630]
+type = A
+[State 3630, Background]
+type = Explod
+type = Helper
+trigger1 = Time = 0
+trigger1 = MoveHit = 1
+postype = back
+postype = p1
+`);
+
+    const controller = doc.states[0].controllers[0];
+    expect(controller.type).toBe('Explod');
+    expect(controller.params.postype).toBe('back');
+    expect(controller.triggers.map((trigger) => trigger.expression)).toEqual(['Time = 0', 'MoveHit = 1']);
   });
 
   it('records source file and line numbers when provided', () => {

@@ -13,6 +13,7 @@ import type { SoundPanEvent, SoundPlayEvent, SoundStopEvent } from '../audio/Sou
 import { canEntityMoveDuringPause, canHelperMoveDuringPause, type PauseControllerEvent, type PauseState } from '../pause/PauseSystem';
 import {
   normalizeExplodFacing,
+  resolveHelperOrigin,
   resolveExplodOrigin,
   type ExplodBindTimeEvent,
   type ExplodCreateEvent,
@@ -88,6 +89,7 @@ export type CnsRuntimeInput = {
   canMoveDuringPause?: boolean;
   screenWidth?: number;
   cameraX?: number;
+  cameraY?: number;
   screenLeft?: number;
   screenRight?: number;
   gameTime?: number;
@@ -145,7 +147,6 @@ type ExtendedPlayerState = PlayerState & {
   sprPriority?: number;
   drawOffset?: { x: number; y: number };
   transparent?: string;
-  width?: { edge?: number; player?: number };
   angle?: number;
   pauseTime?: number;
   superPauseTime?: number;
@@ -226,6 +227,7 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
   const p2 = stepPlayer(afterP1Targets[1], afterP1Targets[0], 2, p2Cns, { ...helperInput(p2Context), constants: p2Cns }, input.p2Commands, state.frame);
   let players = applyTargetOperations([afterP1Targets[0], p2.player], p2.targetOperations, cns, input);
   const helperTraces: CnsRuntimeTrace[] = [];
+  const helperTargetOperations: TargetOperation[] = [];
   let helpers = {
     ...initialHelpers,
     entries: initialHelpers.entries.map((helper) => {
@@ -252,12 +254,14 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
       );
       stepped.trace.entityId = helper.entityId;
       helperTraces.push(stepped.trace);
+      helperTargetOperations.push(...stepped.targetOperations);
       const stateOwnerId = stepped.player.stateOwnerId === 1 || stepped.player.stateOwnerId === 2
         ? stepped.player.stateOwnerId
         : helper.stateOwnerId;
       return { ...helper, stateOwnerId, player: stepped.player };
     }),
   };
+  players = applyTargetOperations(players, helperTargetOperations, cns, input);
   for (const entityId of pendingDestroys) helpers = destroyHelper(helpers, entityId);
   for (const request of pendingSpawns) {
     helpers = spawnHelper(helpers, request, resolveCnsByOwner(request.stateOwnerId, cns, input));
@@ -321,6 +325,7 @@ function stepPlayer(
       xScale: readCnsConst(cns, 'size.xscale'),
       yScale: readCnsConst(cns, 'size.yscale'),
     },
+    widthOverride: undefined,
     playerPush: true,
     noAutoTurn: false,
     assertSpecialFlags: [],
@@ -508,6 +513,7 @@ function executeStateControllers(
   controllerFilter?: (controller: CnsStateController) => boolean,
 ): ControllerExecutionResult {
   let next = player;
+  let redirectedOpponent = opponent;
   const executedControllers: string[] = [];
   const executedControllerRefs: CnsExecutedControllerRef[] = [];
   const debugLines: string[] = [];
@@ -519,9 +525,9 @@ function executeStateControllers(
     const triggerPlayer = negativeStateEntry && type !== 'changestate' && next.stateNo !== negativeStateEntry.stateNo
       ? withTriggerStateSnapshot(next, negativeStateEntry)
       : next;
-    const run = shouldRun(controller, triggerPlayer, input, commands, opponent);
-    next = appendRedirectTriggerDiagnostics(next, triggerPlayer, opponent, stateDef, controller, input, commands, runtimeFrame, run);
-    next = appendTargetCompositeTriggerDiagnostic(next, triggerPlayer, opponent, stateDef, controller, input, commands, runtimeFrame, run);
+    const run = shouldRun(controller, triggerPlayer, input, commands, redirectedOpponent);
+    next = appendRedirectTriggerDiagnostics(next, triggerPlayer, redirectedOpponent, stateDef, controller, input, commands, runtimeFrame, run);
+    next = appendTargetCompositeTriggerDiagnostic(next, triggerPlayer, redirectedOpponent, stateDef, controller, input, commands, runtimeFrame, run);
     const debugLine = debugEnabled
       ? debugControllerCheck(stateDef, controller, triggerPlayer, input, commands, run)
       : null;
@@ -539,7 +545,7 @@ function executeStateControllers(
       continue;
     }
 
-    const hitStunBlock = getHitStunControllerBlock(next, stateDef, controller, input, commands, opponent);
+    const hitStunBlock = getHitStunControllerBlock(next, stateDef, controller, input, commands, redirectedOpponent);
     if (hitStunBlock) {
       const blockedEvents = next.hitStun?.blockedEvents ?? [];
       const firstOccurrence = !blockedEvents.includes(hitStunBlock.key);
@@ -560,7 +566,7 @@ function executeStateControllers(
     }
 
     const beforeStateNo = next.stateNo;
-    const result = executeController(next, opponent, controller, cns, input, commands);
+    const result = executeController(next, redirectedOpponent, controller, cns, input, commands);
     next = result.player;
     if (result.executed && readControllerPersistence(controller) === 0) {
       next = {
@@ -571,7 +577,18 @@ function executeStateControllers(
         },
       };
     }
-    if (result.targetOperation) targetOperations.push(result.targetOperation);
+    if (result.targetOperation) {
+      targetOperations.push(result.targetOperation);
+      // WinMUGEN exposes a Target controller's mutation to later controllers
+      // in the same State pass. Keep the committed operation queued for entity
+      // ordering, but advance the local redirect snapshot immediately.
+      [next, redirectedOpponent] = applyTargetOperations(
+        [next, redirectedOpponent],
+        [result.targetOperation],
+        cns,
+        { ...input, hitDiagnostics: false },
+      );
+    }
     next = forceHitStunControl(next, `controller:${stateDef.stateNo}:${controller.type}:${controller.sourceLine ?? '-'}`, input.hitDiagnostics !== false);
     if (debugEnabled && debugLine) {
       pushDebug(debugLines, executedControllers, `pipe after S${stateDef.stateNo} ${controller.type} executed=${result.executed ? 1 : 0} before=${beforeStateNo} after=${next.stateNo}`);
@@ -736,6 +753,7 @@ export function enterCnsState(
     moveType: enteredMoveType,
     physics: toPhysics(stateDef.physics ?? null) ?? player.physics,
     ctrl: stateDef.ctrl ?? inferDefaultCtrl(stateNo, player.ctrl),
+    sprPriority: stateDef.sprPriority ?? player.sprPriority,
     facing: stateDef.faceP2 ? faceToward(player, opponent) : player.facing,
     juggle: stateDef.juggle ?? powered.juggle,
     juggleConsumedTargetIds: startsJuggleChain ? [] : continuesJuggleChain ? player.juggleConsumedTargetIds ?? [] : [],
@@ -851,6 +869,7 @@ function applyStateHeader(
     moveType: toMoveType(stateDef.moveType ?? null) ?? player.moveType,
     physics: toPhysics(stateDef.physics ?? null) ?? player.physics,
     ctrl: applyEntryFields ? stateDef.ctrl ?? player.ctrl : player.ctrl,
+    sprPriority: applyEntryFields ? stateDef.sprPriority ?? player.sprPriority : player.sprPriority,
     juggle: stateDef.juggle ?? player.juggle,
     animNo,
     animTime: player.animTime,
@@ -1228,7 +1247,7 @@ function executeController(
   if (type === 'sprpriority') return withExtendedPlayer(player, { sprPriority: num(controller, 'value') ?? 0 }, 'SprPriority');
   if (type === 'offset') return withExtendedPlayer(player, { drawOffset: { x: num(controller, 'x') ?? 0, y: num(controller, 'y') ?? 0 } }, 'Offset');
   if (type === 'trans') return withExtendedPlayer(player, { transparent: str(controller, 'trans') ?? str(controller, 'value') ?? '' }, 'Trans');
-  if (type === 'width') return withExtendedPlayer(player, { width: { edge: num(controller, 'edge') ?? undefined, player: num(controller, 'player') ?? undefined } }, 'Width');
+  if (type === 'width') return width(player, opponent, controller, input, commands);
   if (type === 'afterimage') return afterImage(player, opponent, controller, input, commands);
   if (type === 'palfx') return playerPalFx(player, opponent, controller, input, commands);
   if (type === 'allpalfx') return allPalFx(player, opponent, controller, input, commands);
@@ -1341,6 +1360,27 @@ function screenBound(
       moveCameraY: moveCamera.y !== 0,
     },
   }, true, 'ScreenBound');
+}
+
+function width(
+  player: PlayerState,
+  opponent: PlayerState,
+  controller: CnsStateController,
+  input: CnsRuntimeInput,
+  commands?: ReadonlySet<string>,
+): ControllerResult {
+  const hasEdge = controller.params.edge !== undefined;
+  const hasPlayer = controller.params.player !== undefined;
+  const useValue = !hasEdge && !hasPlayer && controller.params.value !== undefined;
+  const edge = pair(controller, useValue ? 'value' : 'edge', player, input, commands, opponent, 0, 0);
+  const playerWidth = pair(controller, useValue ? 'value' : 'player', player, input, commands, opponent, 0, 0);
+  return withPlayer({
+    ...player,
+    widthOverride: {
+      edge: { front: edge.x, back: edge.y },
+      player: { front: playerWidth.x, back: playerWidth.y },
+    },
+  }, true, 'Width');
 }
 
 function debugClipboard(
@@ -1572,18 +1612,13 @@ function createHelper(
   const offset = pair(controller, 'pos', player, input, commands, opponent, 0, 0);
   const postype = (str(controller, 'postype') ?? 'p1').replace(/^['"]|['"]$/g, '').toLowerCase();
   const screenWidth = input.screenWidth ?? 960;
-  let x = player.x + offset.x * player.facing;
-  let y = player.y + offset.y;
-  if (postype === 'left') x = offset.x;
-  else if (postype === 'right') x = screenWidth - offset.x;
-  else if (postype === 'front') x = player.facing === 1 ? screenWidth - offset.x : offset.x;
-  else if (postype === 'back') x = player.facing === 1 ? offset.x : screenWidth - offset.x;
-  else if (postype === 'p2') {
-    x = opponent.x + offset.x * opponent.facing;
-    y = opponent.y + offset.y;
-  }
+  const cameraX = input.cameraX ?? 0;
+  const cameraY = input.cameraY ?? 0;
+  const resolved = resolveHelperOrigin(normalizeExplodPostype(postype), player, opponent, offset.x, offset.y, screenWidth, context.entityId, cameraY);
+  const x = resolved.coordinateSpace === 'screen' ? resolved.x + cameraX : resolved.x;
+  const y = resolved.coordinateSpace === 'screen' ? resolved.y + cameraY : resolved.y;
   const facingValue = num(controller, 'facing', player, input, commands, opponent) ?? 1;
-  const facing = (facingValue < 0 ? -player.facing : player.facing) as 1 | -1;
+  const facing = normalizeExplodFacing(resolved.baseFacing * facingValue);
   input.onHelperSpawn({
     helperId: Math.trunc(num(controller, 'id', player, input, commands, opponent) ?? 0),
     rootEntityId: context.rootEntityId,
@@ -2285,7 +2320,7 @@ function createExplod(
   const random = pair(controller, 'random', player, input, commands, opponent, 0, 0);
   const facingParameter = normalizeExplodFacing(num(controller, 'facing', player, input, commands, opponent) ?? 1);
   const verticalFacing = normalizeExplodFacing(num(controller, 'vfacing', player, input, commands, opponent) ?? 1);
-  const resolved = resolveExplodOrigin(postype, player, opponent, offset.x, offset.y, input.screenWidth ?? 640, owner.entityId);
+  const resolved = resolveExplodOrigin(postype, player, opponent, offset.x, offset.y, input.screenWidth ?? 640, owner.entityId, input.cameraY ?? 0);
   const facing = normalizeExplodFacing(resolved.baseFacing * facingParameter);
   const bindTime = Math.trunc(num(controller, 'bindtime', player, input, commands, opponent) ?? 1);
   const rawRemoveTime = num(controller, 'removetime', player, input, commands, opponent) ?? -2;
@@ -2394,6 +2429,7 @@ function modifyExplod(
     patch,
     changedFields,
     screenWidth: input.screenWidth ?? 640,
+    cameraY: input.cameraY ?? 0,
   });
   return withPlayer(player, true, 'ModifyExplod');
 }
@@ -2429,6 +2465,7 @@ function setExplodBindTime(
     mugenId: requestedId === null ? null : Math.trunc(requestedId),
     time: requestedTime === null ? null : Math.trunc(requestedTime),
     screenWidth: input.screenWidth ?? 640,
+    cameraY: input.cameraY ?? 0,
   });
   return withPlayer(player, true, 'ExplodBindTime');
 }
@@ -2610,8 +2647,8 @@ function evaluateHitDefSnapshot(
       airGuard: numValue('airguard.cornerpush.veloff'),
     },
     snap: snap[0] === undefined && snap[1] === undefined ? undefined : { x: snap[0] ?? 0, y: snap[1] ?? 0 },
-    p1SprPriority: numValue('p1sprpriority'),
-    p2SprPriority: numValue('p2sprpriority'),
+    p1SprPriority: numValue('p1sprpriority') ?? 1,
+    p2SprPriority: numValue('p2sprpriority') ?? 0,
     p1StateNo: numValue('p1stateno'),
     p2StateNo: numValue('p2stateno'),
     p2GetP1State: boolValue('p2getp1state'),

@@ -5,7 +5,7 @@ import { hitDefAttrMatches } from '../hitdef/HitAttribute';
 import type { CnsDocument, CnsTrigger } from '../../mugen/common/cnsTypes';
 import { readCnsConst } from './CnsConstants';
 import { readPlayerPowerMax } from '../power/PowerGauge';
-import { buildPushBox, FALLBACK_STAGE_LEFT, FALLBACK_STAGE_RIGHT } from '../engine/FallbackStageRules';
+import { buildPushBox, buildScreenEdgeBox, FALLBACK_STAGE_LEFT, FALLBACK_STAGE_RIGHT } from '../engine/FallbackStageRules';
 
 export type CnsRuntimeTriggerContext = {
   player: PlayerState;
@@ -869,7 +869,7 @@ function readEdgeBodyDistance(
   screen: { left: number; right: number },
   edge: 'back' | 'front',
 ): number {
-  const box = buildPushBox(player);
+  const box = buildScreenEdgeBox(player);
   const leftDistance = box.left - screen.left;
   const rightDistance = screen.right - box.right;
   if (edge === 'back') return player.facing === 1 ? leftDistance : rightDistance;

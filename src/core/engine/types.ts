@@ -195,6 +195,10 @@ export type PlayerState = {
     xScale?: number;
     yScale?: number;
   };
+  widthOverride?: {
+    edge: { front: number; back: number };
+    player: { front: number; back: number };
+  };
   life: number;
   koReason?: 'hit' | 'guard' | 'fall';
   power?: number;

@@ -5,6 +5,7 @@ import { getAnimationTriggerInfo } from '../animation/AnimationPlayer';
 import { stepCnsStateRuntime } from '../cns/CnsStateRuntime';
 import { createInitialGameState } from '../engine/GameState';
 import { resolveFallbackHits } from '../engine/FallbackHitResolver';
+import { spawnHelper } from '../helper/HelperSystem';
 import { parseAirText } from '../../parser/air/AirParser';
 import { parseCnsText } from '../../parser/cns/CnsParser';
 
@@ -46,5 +47,38 @@ describe('real character Helper HitDef integration', () => {
     expect(result.players[1].life).toBe(995);
     expect(result.helpers.entries[0].player.moveContact).toMatchObject({ hit: true, hitCount: 1 });
     expect(result.hitDiagnosticLines).toContain('raw.helper_hit_collision entity=3 helperId=3320 root=p1 target=p2 result=accepted');
+  });
+
+  it('runs the T-H-M-A rock Helper TargetState chain from 3725 through root State 3730', async () => {
+    const cnsBytes = await readFile('public/chars/T-H-M-A/T-H-M-A/T-H-M-Atyouhi.cns');
+    const cns = parseCnsText(new TextDecoder('shift_jis').decode(cnsBytes));
+    const initial = createInitialGameState();
+    initial.players[0] = { ...initial.players[0], stateNo: 3720, stateTime: 129, x: 220, y: 360 };
+    let helpers = spawnHelper(initial.helpers, {
+      helperId: 3725, rootEntityId: 1, parentEntityId: 1, ownerCharacterId: 1,
+      stateOwnerId: 1, animationOwnerId: 1, stateNo: 3725, x: 220, y: 300,
+      facing: 1, keyCtrl: false, ownPal: false, spawnFrame: 0, parent: initial.players[0],
+    }, cns);
+    helpers = {
+      ...helpers,
+      entries: helpers.entries.map((helper) => ({
+        ...helper,
+        player: {
+          ...helper.player,
+          stateTime: 129,
+          targets: [{ playerId: 2, hitDefId: 3725, activeHitDefId: 1 }],
+          moveContact: {
+            activeHitDefId: 1, contact: true, hit: true, guarded: false, elapsed: 1, hitCount: 1,
+          },
+        },
+      })),
+    };
+
+    const helperPass = stepCnsStateRuntime({ ...initial, helpers }, cns);
+    expect(helperPass.state.helpers.entries[0].player.stateNo).toBe(3735);
+    expect(helperPass.state.players[1]).toMatchObject({ stateNo: 3738, stateOwnerId: 1 });
+
+    const rootPass = stepCnsStateRuntime(helperPass.state, cns);
+    expect(rootPass.state.players[0].stateNo).toBe(3730);
   });
 });

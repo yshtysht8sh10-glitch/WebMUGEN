@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createInitialGameState } from '../../core/engine/GameState';
 import type { ExplodRuntimeEntry } from '../../core/explod/ExplodSystem';
 import type { AirDocument } from '../../parser/air/AirTypes';
-import { getExplodsInDrawOrder, resolveExplodRenderFrames } from './ExplodRender';
+import { completeExtendedViewportExplodTiles, getExplodsInDrawOrder, resolveExplodRenderFrames } from './ExplodRender';
 
 describe('Explod render resolution', () => {
   it('selects AIR by owner and converts stage-space coordinates through the camera once', () => {
@@ -62,6 +62,32 @@ describe('Explod render resolution', () => {
     const frames = resolveExplodRenderFrames(state, { airDocument: air(100, 10, 0) }).frames;
 
     expect(getExplodsInDrawOrder(frames).map((frame) => frame.entry.runtimeId)).toEqual([2, 1]);
+  });
+
+  it('extends an authored three-sprite WinMUGEN tile across only the wider viewport', () => {
+    const state = createInitialGameState();
+    state.explods.entries = [-799, -351, 97].map((x, index) => entry({ runtimeId: index + 1, position: { x, y: 100 } }));
+    const imageData = { width: 448, height: 95, data: new Uint8ClampedArray(448 * 95 * 4) } as ImageData;
+    const assets = {
+      airDocument: air(100, 10, 0),
+      imageDataSpritePack: {
+        sprites: new Map([['10,0' as const, { groupNo: 10, imageNo: 0, xAxis: 223, yAxis: 45, imageData }]]),
+      },
+    };
+    const authored = resolveExplodRenderFrames(state, assets).frames;
+
+    expect(completeExtendedViewportExplodTiles(authored, 320)).toHaveLength(3);
+    const extended = completeExtendedViewportExplodTiles(authored, 400);
+    expect(extended.map((frame) => frame.screenX).sort((a, b) => a - b)).toEqual([-799, -351, 97, 545]);
+    expect(extended.filter((frame) => frame.supplementalTile)).toHaveLength(1);
+  });
+
+  it('does not replicate ordinary or unevenly-spaced Explods', () => {
+    const state = createInitialGameState();
+    state.explods.entries = [-300, 0, 500].map((x, index) => entry({ runtimeId: index + 1, position: { x, y: 100 } }));
+    const frames = resolveExplodRenderFrames(state, { airDocument: air(100, 10, 0) }).frames;
+
+    expect(completeExtendedViewportExplodTiles(frames, 400)).toHaveLength(3);
   });
 });
 

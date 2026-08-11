@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialGameState } from '../engine/GameState';
-import { applyExplodCreateEvents, type ExplodCreateRequest } from './ExplodSystem';
+import { applyExplodCreateEvents, synchronizeBoundExplodPositions, type ExplodCreateRequest } from './ExplodSystem';
 
 describe('Explod production runtime model', () => {
   it('allocates internal IDs independently from duplicate MUGEN IDs and preserves snapshots', () => {
@@ -24,6 +24,21 @@ describe('Explod production runtime model', () => {
     expect(result.explods.entries.map((entry) => entry.owner.rootPlayerId)).toEqual([1, 2]);
     expect(result.explods.nextRuntimeId).toBe(3);
     expect(result.hitDiagnosticLines?.join('\n')).toContain('raw.explod_create_rejected owner=p1 reason=missing_anim');
+  });
+
+  it('synchronizes bound positions after the owner finishes physics and stage correction', () => {
+    const initial = createInitialGameState();
+    const request = createRequest({
+      position: { x: 230, y: 265 },
+      offset: { x: 10, y: -20 },
+      bind: { targetEntityId: 1, remaining: 1000, offsetX: 10, offsetY: -20 },
+    });
+    const created = applyExplodCreateEvents(initial, [{ type: 'create', request }]);
+    const movedOwner = { ...created.players[0], x: 500, y: 300, facing: -1 as const };
+    const synchronized = synchronizeBoundExplodPositions({ ...created, players: [movedOwner, created.players[1]] });
+
+    expect(synchronized.explods.entries[0].position).toEqual({ x: 490, y: 280 });
+    expect(synchronized.explods.entries[0].bind?.remaining).toBe(1000);
   });
 });
 

@@ -109,9 +109,9 @@ When adding expression support, update Expression rows in the matrix, not unrela
 
 ## Edge body distance
 
-`BackEdgeDist`/`FrontEdgeDist` select the current viewport edge behind/in front from current Facing. Their Body variants measure from the character Size-derived ground/air push box. Imported WinMUGEN stages and built-in WebMUGEN stages both supply the current scrolling viewport edges; built-in camera limits are constrained so that viewport edges coincide with the fallback arena limits where player physics stops. `ScreenPos X` independently uses the same camera origin. Dynamic Width overrides remain Partial.
+`BackEdgeDist`/`FrontEdgeDist` select the current viewport edge behind/in front from current Facing. Their Body variants measure from the tick's `Width edge` front/back pair when present, otherwise from the character Size-derived ground/air width. Imported WinMUGEN stages and built-in WebMUGEN stages both supply the current scrolling viewport edges; built-in camera limits are constrained so that viewport edges coincide with the fallback arena limits where player physics stops. `ScreenPos X` independently uses the same camera origin.
 
-The remaining approximation is dynamic `Width` controller consumption; static character Size is included in Body-distance calculations.
+Negative `Width` values and broader non-root ownership remain approximations; positive dynamic widths and static character Size are included in Body-distance calculations.
 
 ## Player body distance
 
@@ -179,13 +179,13 @@ For `GetHitVar(yvel)`, contact StateType S/C selects `ground.velocity.y` and A s
 
 ## Real-character audit findings
 
-The three-character HitDef audit observed `BackEdgeBodyDist`, `FrontEdgeBodyDist`, `ScreenPos`, `StateTime`, and `TimeMod`. Body-edge distance now uses the current horizontal viewport wall and Size geometry. `ScreenPos X` subtracts the same camera origin; `ScreenPos Y` remains an internal-coordinate approximation. T-H-M-A Darkness Finger verifies that State 3420 reaches its `FrontEdgeBodyDist <= 20` wall transition on both the scrolling Material 22 viewport and built-in WebMUGEN stages without accelerating indefinitely or changing to its wall state away from the rendered edge. `StateTime` aliases current `Time`, and `TimeMod = divisor, remainder` evaluates State-time modulo for a positive divisor; both remain Partial pending broader WinMUGEN-version syntax audit. These names have separate Matrix rows so their presence in real CNS files is not hidden by a generic safe default.
+The three-character HitDef audit observed `BackEdgeBodyDist`, `FrontEdgeBodyDist`, `ScreenPos`, `StateTime`, and `TimeMod`. Body-edge distance uses the current horizontal viewport wall and the tick's dynamic Width edge bar, falling back to Size geometry. `ScreenPos X` subtracts the same camera origin; `ScreenPos Y` remains an internal-coordinate approximation. T-H-M-A Darkness Finger verifies that State 3920's `edge = 70,0` reaches its `FrontEdgeBodyDist <= 20` wall transition before the target-bound impact Explods leave the rendered edge. `StateTime` aliases current `Time`, and `TimeMod = divisor, remainder` evaluates State-time modulo for a positive divisor; both remain Partial pending broader WinMUGEN-version syntax audit. These names have separate Matrix rows so their presence in real CNS files is not hidden by a generic safe default.
 
 ## AnimElem timing
 
-`AnimElem = N` is evaluated from the current AIR action, using 1-based element numbering. It is true only when element N starts, including when the animation reaches that element again after an explicit `LoopStart` or a default whole-action loop. `AnimElem = N, op T` compares the element-relative time with `=`, `!=`, `<`, `>`, `<=`, or `>=`; an invalid element number returns false. `AnimElemTime(N)` reads the same AIR-relative timeline.
+`AnimElem = N` is evaluated from the current AIR action, using 1-based element numbering. It is true only when element N first starts. WinMUGEN 2002.04.14 does not restart this trigger timeline when a finite action repeats through an explicit `LoopStart` or the default whole-action loop. `AnimElem = N, op T` compares the original element-relative time with `=`, `!=`, `<`, `>`, `<=`, or `>=`; an invalid element number returns false. `AnimElemTime(N)` reads the same non-resetting AIR-relative timeline.
 
-Issue #54 identified the previous implementation error: bare `AnimElem` compared N with global `player.animTime`, so T-H-M-A State 101 emitted its `S100,1` footstep at the first global times only and never on later AIR loops. The production app now supplies AIR element timing to CNS evaluation, and focused real-character regression covers repeated elements 1 and 4.
+Issue #111 corrected the finite-loop behavior introduced by Issue #54. The production app still supplies AIR element timing to CNS evaluation, but a repeated visual pass no longer makes bare `AnimElem` true again. T-H-M-A State 3010 is covered by a real-character regression proving that its `AnimElem = 3` Helper controller runs once instead of once per loop.
 
 ## Move contact results
 
@@ -227,7 +227,7 @@ Old-style `ProjHit[ID] = value` reads the same history. Its simple form reports 
 
 Successful HitDef contact registers `{playerId, hitDefId, activeHitDefId}` on the attacker. NumTarget optionally filters by HitDef id; TargetID and TargetStateNo select the first matching entry. The storage permits multiple targets and is pruned for KO/destroyed players; round restart creates an empty list. Current TargetStateNo lookup is verified for the two-player runtime, while Helper/multi-player lookup remains Partial.
 
-Issue #65 connects that same registry to redirect expressions. `target(ID), MoveType` treats `ID` as the HitDef `id`, selects the first matching live Target entry, resolves its runtime player, and then evaluates `MoveType` on that player. It does not compare `ID` with StateNo or runtime entity id. A missing id/player produces SFalse for both equality and inequality instead of falling back to self or the ordinary opponent.
+Issue #65 connects that same registry to redirect expressions. `target(ID), MoveType` treats `ID` as the HitDef `id`, selects the first matching live Target entry, resolves its runtime player, and then evaluates `MoveType` on that player. It does not compare `ID` with StateNo or runtime entity id. Root and Helper attackers use their own Target registry when selecting the opposing root. Later controllers in the same State pass observe a preceding Target controller mutation, including `TargetState` followed by `target(ID),StateNo`. A missing id/player produces SFalse for both equality and inequality instead of falling back to self or the ordinary opponent.
 
 Trigger record grouping remains `triggerall` AND every numbered group, repeated records with the same `triggerN` are AND, and different numbered groups are OR. `PrevStateNo` is written from the immediate source on every State entry, including multiple same-frame ChangeState entries; `MoveHit` remains owned by the accepted ActiveHitDef contact lifecycle described above. `raw.target_composite_trigger` records the three layers together for routes such as T-H-M-A 1015 -> 1016.
 

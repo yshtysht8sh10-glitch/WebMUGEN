@@ -114,6 +114,57 @@ describe('CnsPhysicsStep', () => {
     });
   });
 
+  it.each(['S', 'C'] as const)('lets airborne StateType A keep its Y motion under %s friction physics', (physics) => {
+    const state = createInitialGameState();
+    const next = stepCnsPhysicsMotion({
+      ...state,
+      players: [
+        {
+          ...state.players[0],
+          stateNo: 3401,
+          stateType: 'A',
+          physics,
+          y: DEFAULT_GROUND_Y - 85,
+          vx: 4,
+          vy: 1.5,
+        },
+        state.players[1],
+      ],
+    });
+
+    expect(next.players[0]).toMatchObject({
+      x: state.players[0].x + 4,
+      y: DEFAULT_GROUND_Y - 83.5,
+      vy: 1.5,
+      stateType: 'A',
+      physics,
+    });
+  });
+
+  it('does not clamp Physics=N movement below the ground axis', () => {
+    const state = createInitialGameState();
+    const next = stepCnsPhysicsMotion({
+      ...state,
+      players: [
+        {
+          ...state.players[0],
+          stateType: 'A',
+          physics: 'N',
+          y: DEFAULT_GROUND_Y + 398,
+          vy: 4,
+        },
+        state.players[1],
+      ],
+    });
+
+    expect(next.players[0]).toMatchObject({
+      y: DEFAULT_GROUND_Y + 402,
+      vy: 4,
+      stateType: 'A',
+      physics: 'N',
+    });
+  });
+
   it('clamps falling air-physics players to ground without changing state', () => {
     const state = createInitialGameState();
     const next = stepCnsPhysicsMotion({

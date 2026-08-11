@@ -86,8 +86,10 @@ export function resolveFallbackHits(
   hitDiagnosticLines.push(...p2Result.diagnosticLines);
   if (p2Result.hitEvent) hitEvents.push(p2Result.hitEvent);
 
-  p1 = mergeCombatRoles(p1Result.attacker, p2Result.target, Boolean(p2Result.hitEvent) || p2Result.contactApplied === true);
-  p2 = mergeCombatRoles(p2Result.attacker, p1Result.target, Boolean(p1Result.hitEvent) || p1Result.contactApplied === true);
+  const p1Contacted = Boolean(p1Result.hitEvent) || p1Result.contactApplied === true;
+  const p2Contacted = Boolean(p2Result.hitEvent) || p2Result.contactApplied === true;
+  p1 = mergeCombatRoles(p1Result.attacker, p2Result.target, p2Contacted, p1Contacted);
+  p2 = mergeCombatRoles(p2Result.attacker, p1Result.target, p1Contacted, p2Contacted);
 
   const helpers = state.helpers.entries.map((helper) => {
     const target = helper.rootEntityId === 1 ? p2 : p1;
@@ -774,11 +776,18 @@ function formatActiveAttr(hitDef: NonNullable<PlayerState['activeHitDef']>): str
   return hitDef.attr ? `${hitDef.attr.stateType},${hitDef.attr.attackTypes.join('|')}` : '-';
 }
 
-function mergeCombatRoles(attackerResult: PlayerState, targetResult: PlayerState, wasTargeted: boolean): PlayerState {
+function mergeCombatRoles(
+  attackerResult: PlayerState,
+  targetResult: PlayerState,
+  wasTargeted: boolean,
+  alsoContacted: boolean,
+): PlayerState {
   if (!wasTargeted) return attackerResult;
   return {
     ...targetResult,
-    hitPause: Math.max(attackerResult.hitPause, targetResult.hitPause),
+    // A later HitDef replaces an older defender pause. Only a same-frame trade
+    // must retain the longer of this player's attacker and defender pauses.
+    hitPause: alsoContacted ? Math.max(attackerResult.hitPause, targetResult.hitPause) : targetResult.hitPause,
     hitTargets: attackerResult.hitTargets,
     moveContact: attackerResult.moveContact,
     targets: attackerResult.targets,
