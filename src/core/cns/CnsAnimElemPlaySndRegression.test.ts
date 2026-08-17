@@ -8,7 +8,7 @@ import { createInitialGameState } from '../engine/GameState';
 import { stepCnsStateRuntime } from './CnsStateRuntime';
 
 describe('AnimElem finite-loop compatibility', () => {
-  it('emits PlaySnd only on the first pass through a finite AIR action', () => {
+  it('emits PlaySnd again on each pass through a finite implicit AIR loop', () => {
     const air = parseAirText(`
 [Begin Action 101]
 101,0, 0,0, 2
@@ -28,10 +28,10 @@ trigger2 = AnimElem = 4
 value = S100,1
 `);
 
-    expect(collectEvents(cns, air, 17).map((event) => event.animTime)).toEqual([0, 6]);
+    expect(collectEvents(cns, air, 17).map((event) => event.animTime)).toEqual([0, 6, 14, 16]);
   });
 
-  it('does not replay bundled T-H-M-A dash footsteps on later finite loops', async () => {
+  it('replays bundled T-H-M-A dash footsteps on later finite implicit loops', async () => {
     const [cnsBytes, airBytes] = await Promise.all([
       readFile('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.cns'),
       readFile('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.air'),
@@ -41,7 +41,7 @@ value = S100,1
     const air = parseAirText(decoder.decode(airBytes));
 
     const events = collectEvents(cns, air, 44);
-    expect(events.filter((event) => event.group === 100 && event.index === 1).map((event) => event.animTime)).toEqual([0, 6]);
+    expect(events.filter((event) => event.group === 100 && event.index === 1).map((event) => event.animTime)).toEqual([0, 6, 18, 24, 30, 36, 42]);
   });
 });
 

@@ -40,6 +40,7 @@ const HITDEF_PARTIAL_PARAMS = new Set([
   'snap',
   'p1sprpriority',
   'p2sprpriority',
+  'p2facing',
   'p1stateno',
   'p2stateno',
   'p2getp1state',

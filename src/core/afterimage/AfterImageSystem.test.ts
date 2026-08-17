@@ -28,6 +28,21 @@ describe('Phase54 AfterImageSystem', () => {
     expect(state.frameGap).toBe(3);
   });
 
+  it('captures AngleDraw angle and scale with each afterimage frame', () => {
+    const player = {
+      ...createInitialGameState().players[0],
+      drawAngle: 15,
+      drawScale: { x: 0.75, y: 1.5 },
+    };
+
+    const state = stepAfterImage(createAfterImageState(2), player);
+
+    expect(state?.frames[0]).toMatchObject({
+      drawAngle: 15,
+      drawScale: { x: 0.75, y: 1.5 },
+    });
+  });
+
   it('changes duration only while active and clears at zero', () => {
     expect(setAfterImageTime(undefined, 10)).toBeUndefined();
     expect(setAfterImageTime(createAfterImageState(3), 9)?.remainingTime).toBe(9);

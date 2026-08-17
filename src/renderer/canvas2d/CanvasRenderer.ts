@@ -1,5 +1,6 @@
 import type { AirDocument } from '../../parser/air/AirTypes';
 import { getCurrentAnimationElement } from '../../core/animation/AnimationPlayer';
+import { getPresentedAnimationTime } from '../../core/animation/PresentedAnimation';
 import {
   getPlayerAttackBoxes,
   getPlayerBodyBoxes,
@@ -150,14 +151,16 @@ export class CanvasRenderer {
         scaleX: player.collisionWidth?.xScale ?? 1,
         scaleY: player.collisionWidth?.yScale ?? 1,
       })),
-      ...state.helpers.entries.map((helper) => ({
-        kind: 'helper' as const,
-        priority: helper.player.sprPriority ?? 0,
-        stableId: helper.entityId,
-        player: helper.player,
-        scaleX: helper.player.collisionWidth?.xScale ?? 1,
-        scaleY: helper.player.collisionWidth?.yScale ?? 1,
-      })),
+      ...state.helpers.entries
+        .filter((helper) => helper.hasCompletedInitialStatePass !== false)
+        .map((helper) => ({
+          kind: 'helper' as const,
+          priority: helper.player.sprPriority ?? 0,
+          stableId: helper.entityId,
+          player: helper.player,
+          scaleX: helper.player.collisionWidth?.xScale ?? 1,
+          scaleY: helper.player.collisionWidth?.yScale ?? 1,
+        })),
       ...getExplodsInDrawOrder(explodFrames)
         .filter((frame) => !frame.entry.onTop)
         .map((frame) => ({
@@ -169,9 +172,10 @@ export class CanvasRenderer {
     ].sort((a, b) => {
       const priorityOrder = a.priority - b.priority;
       if (priorityOrder !== 0) return priorityOrder;
-      // A newly-created Helper is a new player object in WinMUGEN. When its
-      // priority ties a root player, its sprite is queued first (behind the
-      // older root sprite). Keep Explods' established tie layer after players.
+      // Helpers and Explods are created after the root players. At equal
+      // priority WinMUGEN queues those newer objects first, behind the older
+      // root sprite. T-H-M-A State 3640 depends on its priority-5 full-screen
+      // background Explod staying behind the priority-5 Action 3640 player.
       const kindOrder = drawableKindOrder(a.kind) - drawableKindOrder(b.kind);
       if (kindOrder !== 0) return kindOrder;
       return (a.kind === 'explod' && b.kind === 'explod') || (a.kind === 'helper' && b.kind === 'helper')
@@ -186,12 +190,6 @@ export class CanvasRenderer {
         const palFxFilter = resolveBgPalFxFilter(drawable.player.palFx);
         ctx.save();
         ctx.filter = palFxFilter;
-        if (drawable.player.drawAngle !== undefined || drawable.player.drawScale) {
-          ctx.translate(drawable.player.x, drawable.player.y);
-          ctx.rotate((drawable.player.drawAngle ?? 0) * Math.PI / 180);
-          ctx.scale(drawable.player.drawScale?.x ?? 1, drawable.player.drawScale?.y ?? 1);
-          ctx.translate(-drawable.player.x, -drawable.player.y);
-        }
         const diagnostic = this.drawPlayer(ctx, drawable.player, drawable.player.id === 1 ? '#66ccff' : '#ff99aa', diagnosticsEnabled, drawable.scaleX, drawable.scaleY);
         ctx.restore();
         if (diagnostic) renderDiagnostics.push(diagnostic);
@@ -386,10 +384,15 @@ export class CanvasRenderer {
   private drawPlayer(ctx: CanvasRenderingContext2D, player: PlayerState, color: string, diagnosticsEnabled: boolean, scaleX = 1, scaleY = 1): string {
     const hasOwnerAssetMap = Object.keys(this.ownerAssets).length > 0;
     const animationOwner = player.animationOwnerId ?? player.id;
-    const assets = this.ownerAssets[animationOwner] ?? (hasOwnerAssetMap ? undefined : this.defaultAssets());
+    const spriteOwner = player.selfStateOwnerId ?? player.id;
+    const animationAssets = this.ownerAssets[animationOwner] ?? (hasOwnerAssetMap ? undefined : this.defaultAssets());
+    const spriteAssets = this.ownerAssets[spriteOwner] ?? (hasOwnerAssetMap ? undefined : this.defaultAssets());
     const stateOwner = player.stateOwnerId ?? player.id;
-    const prefix = diagnosticsEnabled ? `raw.render entity=p${player.id} state=${player.stateNo} anim=${player.animNo} stateOwner=${stateOwner} animOwner=${animationOwner}` : '';
-    if (!assets) return diagnosticsEnabled ? `${prefix} result=skip reason=animation_owner_missing playerVisible=0 rendererDrawRequested=0` : '';
+    const prefix = diagnosticsEnabled
+      ? `raw.render entity=p${player.id} state=${player.stateNo} anim=${player.animNo} stateOwner=${stateOwner} animOwner=${animationOwner} spriteOwner=${spriteOwner} drawAngle=${player.drawAngle ?? 0} drawScale=(${player.drawScale?.x ?? 1},${player.drawScale?.y ?? 1})`
+      : '';
+    if (!animationAssets) return diagnosticsEnabled ? `${prefix} result=skip reason=animation_owner_missing playerVisible=0 rendererDrawRequested=0` : '';
+    if (!spriteAssets) return diagnosticsEnabled ? `${prefix} result=skip reason=sprite_owner_missing playerVisible=0 rendererDrawRequested=0` : '';
 
     const assertSpecial = (player.assertSpecialFlags ?? (player as PlayerState & { runtime?: { assertSpecial?: string[] } }).runtime?.assertSpecial ?? [])
       .map((flag) => flag.trim().toLowerCase());
@@ -397,16 +400,16 @@ export class CanvasRenderer {
       return diagnosticsEnabled ? `${prefix} result=skip reason=entity_invisible playerVisible=0 assertSpecialInvisible=1 rendererDrawRequested=0` : '';
     }
 
-    if (!assets.airDocument && (assets.imageDataSpritePack || assets.spritePack)) {
+    if (!animationAssets.airDocument && (spriteAssets.imageDataSpritePack || spriteAssets.spritePack)) {
       return diagnosticsEnabled ? `${prefix} result=skip reason=animation_owner_missing animExists=0 playerVisible=0 rendererDrawRequested=0` : '';
     }
 
-    const action = assets.airDocument?.actions.find((candidate) => candidate.actionNo === player.animNo);
-    if (assets.airDocument && !action) {
+    const action = animationAssets.airDocument?.actions.find((candidate) => candidate.actionNo === player.animNo);
+    if (animationAssets.airDocument && !action) {
       return diagnosticsEnabled ? `${prefix} result=skip reason=air_action_missing animExists=0 playerVisible=0 rendererDrawRequested=0` : '';
     }
-    const currentElement = assets.airDocument
-      ? getCurrentAnimationElement(assets.airDocument, player.animNo, player.animTime)
+    const currentElement = animationAssets.airDocument
+      ? getCurrentAnimationElement(animationAssets.airDocument, player.animNo, getPresentedAnimationTime(player))
       : null;
 
     if (action && !currentElement) {
@@ -432,23 +435,36 @@ export class CanvasRenderer {
         currentElement.element.offsetX,
         currentElement.element.offsetY,
         currentElement.element.flip,
-        assets,
+        spriteAssets,
         1,
         scaleX,
         scaleY,
         false,
         diagnosticsEnabled,
         blend.subtractive,
+        player.drawAngle !== undefined || player.drawScale ? {
+          angleRadians: -(player.drawAngle ?? 0) * player.facing * Math.PI / 180,
+          scaleX: player.drawScale?.x ?? 1,
+          scaleY: player.drawScale?.y ?? 1,
+        } : undefined,
       );
       ctx.restore();
 
       if (drawn.drawn) return diagnosticsEnabled ? `${prefix} ${elementFields} scale=(${scaleX},${scaleY}) airBlend=${blend.mode || 'none'} composite=${describeSpriteComposite(blend)} spriteExists=1 result=drawn playerVisible=1 rendererDrawRequested=1 ${drawn.diagnostic}${blend.limitation ? ` limitation=${blend.limitation}` : ''}` : '';
-      if (assets.imageDataSpritePack || assets.spritePack) {
+      if (spriteAssets.imageDataSpritePack || spriteAssets.spritePack) {
         return diagnosticsEnabled ? `${prefix} ${elementFields} spriteExists=0 result=skip reason=sprite_missing playerVisible=0 rendererDrawRequested=0` : '';
       }
     }
 
+    ctx.save();
+    if (player.drawAngle !== undefined || player.drawScale) {
+      ctx.translate(player.x, player.y);
+      ctx.rotate(-(player.drawAngle ?? 0) * player.facing * Math.PI / 180);
+      ctx.scale(player.drawScale?.x ?? 1, player.drawScale?.y ?? 1);
+      ctx.translate(-player.x, -player.y);
+    }
     this.drawFallbackPlayer(ctx, player, color, currentElement);
+    ctx.restore();
     return diagnosticsEnabled ? `${prefix} result=fallback reason=no_character_sprite_assets playerVisible=1 rendererDrawRequested=1 rendererDrawSource=debug_fallback` : '';
   }
 
@@ -487,6 +503,11 @@ export class CanvasRenderer {
         false,
         diagnosticsEnabled,
         blend.subtractive,
+        frame.drawAngle !== undefined || frame.drawScale ? {
+          angleRadians: -(frame.drawAngle ?? 0) * frame.facing * Math.PI / 180,
+          scaleX: frame.drawScale?.x ?? 1,
+          scaleY: frame.drawScale?.y ?? 1,
+        } : undefined,
       );
       ctx.restore();
       if (result.drawn) drawn += 1;
@@ -592,6 +613,7 @@ export class CanvasRenderer {
     ownPalette = false,
     diagnosticsEnabled = true,
     subtractive = false,
+    drawTransform?: { angleRadians: number; scaleX: number; scaleY: number },
   ): { drawn: boolean; diagnostic: string } {
     const flipX = flip.toUpperCase().includes('H');
     const key = spriteKey(groupNo, imageNo);
@@ -601,13 +623,23 @@ export class CanvasRenderer {
       const resolved = this.imageDataSpriteRenderer.resolveCanvas(assets.imageDataSpritePack, groupNo, imageNo, ownPalette, diagnosticsEnabled);
       if (!resolved) return { drawn: false, diagnostic: '' };
 
-      this.drawSpriteCanvas(ctx, resolved.canvas, x, y, facing * (flipX ? -1 : 1) * scaleX, verticalFacing * scaleY, -imageDataSprite.xAxis + offsetX, -imageDataSprite.yAxis + offsetY, subtractive);
+      this.drawSpriteCanvas(
+        ctx, resolved.canvas, x, y, facing * (flipX ? -1 : 1) * scaleX, verticalFacing * scaleY,
+        -imageDataSprite.xAxis + (drawTransform ? 0 : offsetX),
+        -imageDataSprite.yAxis + (drawTransform ? 0 : offsetY),
+        subtractive, drawTransform ? offsetX : 0, drawTransform ? offsetY : 0, drawTransform,
+      );
       return { drawn: true, diagnostic: resolved.diagnostic };
     }
 
     const sprite = findSprite(assets.spritePack, groupNo, imageNo);
     if (sprite) {
-      this.drawSpriteCanvas(ctx, sprite.image, x, y, facing * (flipX ? -1 : 1) * scaleX, verticalFacing * scaleY, -sprite.xAxis + offsetX, -sprite.yAxis + offsetY, subtractive);
+      this.drawSpriteCanvas(
+        ctx, sprite.image, x, y, facing * (flipX ? -1 : 1) * scaleX, verticalFacing * scaleY,
+        -sprite.xAxis + (drawTransform ? 0 : offsetX),
+        -sprite.yAxis + (drawTransform ? 0 : offsetY),
+        subtractive, drawTransform ? offsetX : 0, drawTransform ? offsetY : 0, drawTransform,
+      );
       return { drawn: true, diagnostic: 'sprite=bitmap cache=external' };
     }
 
@@ -624,13 +656,40 @@ export class CanvasRenderer {
     drawX: number,
     drawY: number,
     subtractive: boolean,
+    offsetX = 0,
+    offsetY = 0,
+    drawTransform?: { angleRadians: number; scaleX: number; scaleY: number },
   ): void {
-    if (subtractive && this.drawSubtractiveSprite(ctx, source, x, y, scaleX, scaleY, drawX, drawY)) return;
+    if (subtractive && this.drawSubtractiveSprite(ctx, source, x, y, scaleX, scaleY, drawX, drawY, offsetX, offsetY, drawTransform)) return;
     ctx.save();
-    ctx.translate(x, y);
-    ctx.scale(scaleX, scaleY);
+    this.applySpriteTransform(ctx, x, y, scaleX, scaleY, offsetX, offsetY, drawTransform);
     ctx.drawImage(source, drawX, drawY);
     ctx.restore();
+  }
+
+  private applySpriteTransform(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    scaleX: number,
+    scaleY: number,
+    offsetX: number,
+    offsetY: number,
+    drawTransform?: { angleRadians: number; scaleX: number; scaleY: number },
+  ): void {
+    ctx.translate(x, y);
+    // AIR offsets move the sprite axis and are affected by scale, but WinMUGEN
+    // does not rotate that displacement. Rotate only after reaching the
+    // offset-adjusted sprite axis.
+    ctx.translate(
+      scaleX * offsetX * (drawTransform?.scaleX ?? 1),
+      scaleY * offsetY * (drawTransform?.scaleY ?? 1),
+    );
+    if (drawTransform) {
+      ctx.rotate(drawTransform.angleRadians);
+      ctx.scale(drawTransform.scaleX, drawTransform.scaleY);
+    }
+    ctx.scale(scaleX, scaleY);
   }
 
   private drawSubtractiveSprite(
@@ -642,6 +701,9 @@ export class CanvasRenderer {
     scaleY: number,
     drawX: number,
     drawY: number,
+    offsetX: number,
+    offsetY: number,
+    drawTransform?: { angleRadians: number; scaleX: number; scaleY: number },
   ): boolean {
     if (typeof document === 'undefined' || typeof ctx.getTransform !== 'function' || typeof ctx.setTransform !== 'function') return false;
     const layer = this.subtractiveLayer ?? document.createElement('canvas');
@@ -654,6 +716,13 @@ export class CanvasRenderer {
     layerContext.save();
     layerContext.setTransform(1, 0, 0, 1, 0, 0);
     layerContext.clearRect(0, 0, layer.width, layer.height);
+    // WinMUGEN's framebuffer is opaque black even while AssertSpecial noBG
+    // hides the stage. Canvas clear pixels are transparent, so seed the
+    // inverted destination with white before applying D - S. Otherwise an S
+    // sprite drawn outside opaque content becomes an inverted yellow/white
+    // sprite instead of disappearing against black.
+    layerContext.fillStyle = '#fff';
+    layerContext.fillRect(0, 0, layer.width, layer.height);
     layerContext.globalAlpha = 1;
     layerContext.globalCompositeOperation = 'source-over';
     layerContext.filter = 'invert(1)';
@@ -662,8 +731,7 @@ export class CanvasRenderer {
 
     layerContext.save();
     layerContext.setTransform(ctx.getTransform());
-    layerContext.translate(x, y);
-    layerContext.scale(scaleX, scaleY);
+    this.applySpriteTransform(layerContext, x, y, scaleX, scaleY, offsetX, offsetY, drawTransform);
     layerContext.globalAlpha = ctx.globalAlpha;
     layerContext.globalCompositeOperation = 'lighter';
     layerContext.filter = ctx.filter;
@@ -851,6 +919,6 @@ export function getPlayersInSpritePriorityOrder(state: GameState): PlayerState[]
 
 function drawableKindOrder(kind: 'helper' | 'player' | 'explod'): number {
   if (kind === 'helper') return 0;
-  if (kind === 'player') return 1;
+  if (kind === 'explod') return 1;
   return 2;
 }

@@ -37,6 +37,8 @@ export type AfterImageFrame = {
   facing: 1 | -1;
   animNo: number;
   animTime: number;
+  drawAngle?: number;
+  drawScale?: { x: number; y: number };
   age: number;
 };
 
@@ -99,6 +101,7 @@ export type ActiveHitDef = {
   fallAnimType?: string;
   hitFlag?: string;
   guardFlag?: string;
+  affectTeam?: 'E' | 'F' | 'B';
   priority?: { value: number; type?: string };
   guardPauseTime?: { attacker: number; defender: number };
   groundType?: string;
@@ -144,6 +147,7 @@ export type ActiveHitDef = {
   p2SprPriority?: number;
   p1StateNo?: number;
   p2StateNo?: number;
+  p2Facing?: number;
   p2GetP1State?: boolean;
   forceStand?: boolean;
   spark?: { animNo: number; scope: 'common' | 'attacker' };
@@ -174,6 +178,8 @@ export type ActiveHitDef = {
 
 export type PlayerState = {
   id: 1 | 2;
+  /** WinMUGEN Helper ID. Undefined for root players. */
+  helperId?: number;
   name?: string;
   authorName?: string;
   palNo?: number;
@@ -219,6 +225,13 @@ export type PlayerState = {
   airJumpInputHeld?: boolean;
   animNo: number;
   animTime: number;
+  /** AIR frame committed by the latest motion step for collision/rendering. */
+  presentedAnimation?: {
+    stateNo: number;
+    stateTime: number;
+    animNo: number;
+    animTime: number;
+  };
   hitPause: number;
   afterImage?: AfterImageState;
   palFx?: BgPalFxState;
@@ -343,6 +356,7 @@ export type HelperEntity = {
   pauseMoveTime?: number;
   superMoveTime?: number;
   spawnFrame: number;
+  hasCompletedInitialStatePass?: boolean;
   player: PlayerState;
 };
 

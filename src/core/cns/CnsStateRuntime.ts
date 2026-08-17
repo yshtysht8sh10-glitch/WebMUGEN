@@ -1,7 +1,7 @@
 import type { CnsDocument, CnsStateController, CnsStateDefinition, CnsTrigger, CnsValue } from '../../mugen/common/cnsTypes';
 import { prepareCnsControllerTriggerGroups } from '../../mugen/common/CnsTriggerGroups';
 import { findCnsState } from '../../mugen/common/CnsStateIndex';
-import type { ActiveHitDef, GameState, PlayerState, ProjectileState } from '../engine/types';
+import type { ActiveHitDef, GameState, HelperRuntimeState, PlayerState, ProjectileState } from '../engine/types';
 import { readCnsConst } from './CnsConstants';
 import { calculateMugenAnimTime } from '../animation/AnimationDuration';
 import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
@@ -26,13 +26,15 @@ import {
 } from '../explod/ExplodSystem';
 import { addPlayerPower, setPlayerPower } from '../power/PowerGauge';
 import type { AnimationTriggerInfo } from '../animation/AnimationPlayer';
-import { countHelpers, createInitialHelperState, destroyHelper, spawnHelper, type HelperSpawnRequest } from '../helper/HelperSystem';
+import { createInitialHelperState, destroyHelper, spawnHelper, type HelperSpawnRequest } from '../helper/HelperSystem';
 import { createAfterImageState, setAfterImageTime } from '../afterimage/AfterImageSystem';
 import type { BgPalFxEvent } from '../palfx/BgPalFxSystem';
+import { mugenPosXToWorldX } from './MugenPositionCoordinates';
 
 type RuntimeEntityContext = {
   kind: 'root' | 'helper';
   entityId: number;
+  helperId?: number;
   rootEntityId: 1 | 2;
   parentEntityId: number | null;
   ownerCharacterId: 1 | 2;
@@ -52,6 +54,7 @@ export type CnsRuntimeTrace = {
   executedControllerRefs?: CnsExecutedControllerRef[];
   debugLines: string[];
   entityId?: number;
+  externalEntryFromStateNo?: number;
 };
 
 export type CnsExecutedControllerRef = {
@@ -119,9 +122,14 @@ export type CnsRuntimeResult = { state: GameState; traces: CnsRuntimeTrace[] };
 
 type TargetOperation = {
   kind: 'state' | 'velSet' | 'velAdd' | 'lifeAdd' | 'powerAdd' | 'bind' | 'drop' | 'facing';
+  /** Unique runtime entity id. Helpers must not alias their root player id. */
   ownerId: number;
+  stateOwnerId: 1 | 2;
+  ownerPlayer: PlayerState;
   targetIds: number[];
   value?: number;
+  absolute?: boolean;
+  kill?: boolean;
   x?: number;
   y?: number;
   time?: number;
@@ -202,7 +210,16 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
     ...input,
     gameTime: state.frame,
     entityContext: context,
-    numHelper: (helperId) => countHelpers(initialHelpers, context.rootEntityId, helperId),
+    // WinMUGEN exposes a Helper creation to NumHelper immediately, even
+    // though the new Helper's own State pass begins on the next frame. This
+    // lets later entities in the same tick allocate distinct Helper-ID slots.
+    numHelper: (helperId) => countVisibleHelpers(
+      initialHelpers,
+      pendingSpawns,
+      pendingDestroys,
+      context.rootEntityId,
+      helperId,
+    ),
     numProj: (projectileId) => state.projectiles.filter((entry) => (
       entry.ownerId === context.rootEntityId && (projectileId === undefined || entry.id === Math.trunc(projectileId))
     )).length,
@@ -228,16 +245,17 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
   let players = applyTargetOperations([afterP1Targets[0], p2.player], p2.targetOperations, cns, input);
   const helperTraces: CnsRuntimeTrace[] = [];
   const helperTargetOperations: TargetOperation[] = [];
-  let helpers = {
+  let helpers: HelperRuntimeState = {
     ...initialHelpers,
     entries: initialHelpers.entries.map((helper) => {
       const helperCns = resolveCnsByOwner(helper.stateOwnerId, cns, input);
       const opponent = players[helper.rootEntityId === 1 ? 1 : 0];
       const context: RuntimeEntityContext = {
-        kind: 'helper', entityId: helper.entityId, rootEntityId: helper.rootEntityId,
+        kind: 'helper', entityId: helper.entityId, helperId: helper.helperId, rootEntityId: helper.rootEntityId,
         parentEntityId: helper.parentEntityId, ownerCharacterId: helper.ownerCharacterId,
       };
       const commands = helper.keyCtrl ? (helper.rootEntityId === 1 ? input.p1Commands : input.p2Commands) : undefined;
+      const canMoveDuringPause = input.pauseState ? canHelperMoveDuringPause(input.pauseState, helper) : true;
       const stepped = stepPlayer(
         helper.player,
         opponent,
@@ -246,7 +264,7 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
         {
           ...helperInput(context),
           constants: helperCns,
-          canMoveDuringPause: input.pauseState ? canHelperMoveDuringPause(input.pauseState, helper) : true,
+          canMoveDuringPause,
         },
         commands,
         state.frame,
@@ -258,10 +276,15 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
       const stateOwnerId = stepped.player.stateOwnerId === 1 || stepped.player.stateOwnerId === 2
         ? stepped.player.stateOwnerId
         : helper.stateOwnerId;
-      return { ...helper, stateOwnerId, player: stepped.player };
+      return {
+        ...helper,
+        stateOwnerId,
+        hasCompletedInitialStatePass: helper.hasCompletedInitialStatePass === true || canMoveDuringPause,
+        player: stepped.player,
+      };
     }),
   };
-  players = applyTargetOperations(players, helperTargetOperations, cns, input);
+  players = applyTargetOperations(players, helperTargetOperations, cns, input, true);
   for (const entityId of pendingDestroys) helpers = destroyHelper(helpers, entityId);
   for (const request of pendingSpawns) {
     helpers = spawnHelper(helpers, request, resolveCnsByOwner(request.stateOwnerId, cns, input));
@@ -310,7 +333,7 @@ function stepPlayer(
   runtimeFrame = 0,
   specialStateNos: readonly number[] = ROOT_SPECIAL_STATE_NOS,
 ): { player: PlayerState; trace: CnsRuntimeTrace; targetOperations: TargetOperation[] } {
-  const originalStateNo = player.stateNo;
+  let originalStateNo = player.stateNo;
   const traceDiagnosticsEnabled = input.traceDiagnostics !== false;
   const juggleMax = player.juggleMax ?? readAirJuggle(cns);
   const resetJuggle = player.stateType !== 'A' && player.stateType !== 'L' && player.moveType === 'I' && player.ctrl;
@@ -329,7 +352,10 @@ function stepPlayer(
     playerPush: true,
     noAutoTurn: false,
     assertSpecialFlags: [],
-    screenBound: { value: true, moveCameraX: true, moveCameraY: true },
+    screenBound: input.entityContext?.entityId !== undefined
+      && input.entityContext.entityId !== input.entityContext.rootEntityId
+      ? { value: false, moveCameraX: false, moveCameraY: false }
+      : { value: true, moveCameraX: true, moveCameraY: true },
     hitDiagnosticLines: [],
     juggleMax,
     juggleRemaining: resetJuggle ? juggleMax : player.juggleRemaining ?? juggleMax,
@@ -402,6 +428,16 @@ function stepPlayer(
   next = tickHitAttributeSlots(next);
   next = tickHitOverrides(next);
 
+  if (isCommonGetUpReady(next) && findState(cns, 5120)) {
+    next = {
+      ...enterState(next, opponent, 5120, cns, input, commands),
+      lieDownElapsed: undefined,
+      lieDownTime: undefined,
+    };
+    originalStateNo = next.stateNo;
+    if (traceDiagnosticsEnabled) trace.executedControllers.push('EngineGetUp 5110->5120');
+  }
+
   const stateDefBeforeNegative = findState(cns, next.stateNo);
   if (stateDefBeforeNegative) {
     next = applyStateHeader(next, opponent, stateDefBeforeNegative, input, commands);
@@ -465,6 +501,13 @@ function stepPlayer(
   if (traceDiagnosticsEnabled) trace.executedControllerRefs?.push(...result.executedControllerRefs);
   if (traceDiagnosticsEnabled) trace.debugLines.push(...result.debugLines);
   targetOperations.push(...result.targetOperations);
+  // WinMUGEN owns the terminal State 140 route after the State's own
+  // controllers. This ordering lets character guard-end cleanup run first.
+  if (stateDef.stateNo === 140 && next.stateNo === 140 && mugenAnimTime(next, input) === 0) {
+    const destination = (next.stateType === 'C' ? 11 : 0) + (next.stateType === 'A' ? 51 : 0);
+    next = enterState(next, opponent, destination, cns, input, commands);
+    if (traceDiagnosticsEnabled) trace.executedControllers.push(`EngineGuardEnd ${stateDef.stateNo}->${destination}`);
+  }
   if (next.stateNo !== stateDef.stateNo && next.stateTime === 0) {
     const enteredState = findState(cns, next.stateNo);
     if (enteredState) {
@@ -633,20 +676,59 @@ function applyTargetOperations(
   operations: TargetOperation[],
   cns: CnsDocument,
   input: CnsRuntimeInput,
+  runTimeZeroForStateEntry = false,
 ): [PlayerState, PlayerState] {
   let players = initialPlayers;
   for (const operation of operations) {
-    const owner = players.find((candidate) => candidate.id === operation.ownerId);
+    const owner = players.find((candidate) => candidate.id === operation.ownerId) ?? operation.ownerPlayer;
     players = players.map((player) => {
       if (!operation.targetIds.includes(player.id)) return player;
       if (operation.kind === 'state' && operation.value !== undefined) {
-        const ownerId = owner?.id ?? operation.ownerId;
+        const ownerId = operation.stateOwnerId;
         const ownerCns = resolveCnsByOwner(ownerId, cns, input);
-        return { ...enterState(player, owner ?? player, operation.value, ownerCns, { ...input, constants: ownerCns }), stateOwnerId: ownerId };
+        const stateInput = {
+          ...input,
+          constants: ownerCns,
+          entityContext: {
+            kind: 'root' as const,
+            entityId: player.id,
+            rootEntityId: player.id,
+            parentEntityId: null,
+            ownerCharacterId: player.id,
+          },
+        };
+        const entered = runTimeZeroForStateEntry
+          ? enterCnsStateAndRunTimeZero(
+              player,
+              owner,
+              operation.value,
+              ownerCns,
+              stateInput,
+              player.id === 1 ? input.p1Commands : input.p2Commands,
+            )
+          : enterState(player, owner, operation.value, ownerCns, stateInput);
+        return { ...entered, stateOwnerId: ownerId };
       }
       if (operation.kind === 'velSet') return { ...player, vx: operation.x ?? player.vx, vy: operation.y ?? player.vy };
       if (operation.kind === 'velAdd') return { ...player, vx: player.vx + (operation.x ?? 0), vy: player.vy + (operation.y ?? 0) };
-      if (operation.kind === 'lifeAdd') return { ...player, life: Math.max(0, player.life + (operation.value ?? 0)) };
+      if (operation.kind === 'lifeAdd') {
+        const rawValue = Number.isFinite(operation.value) ? operation.value ?? 0 : 0;
+        const storedAttackMultiplier = (operation.ownerPlayer as ExtendedPlayerState).attackMultiplier;
+        const storedDefenseMultiplier = (player as ExtendedPlayerState).defenseMultiplier;
+        // Keep a malformed stored multiplier from poisoning Life with NaN.
+        const attackMultiplier = Number.isFinite(storedAttackMultiplier)
+          ? storedAttackMultiplier as number
+          : 1;
+        const defenseMultiplier = Number.isFinite(storedDefenseMultiplier)
+          ? storedDefenseMultiplier as number
+          : 1;
+        const appliedValue = operation.absolute
+          ? rawValue
+          : Math.trunc(rawValue * attackMultiplier * defenseMultiplier);
+        const minimumLife = operation.kill === false && appliedValue < 0 ? 1 : 0;
+        const lifeBefore = Number.isFinite(player.life) ? player.life : 0;
+        return { ...player, life: Math.max(minimumLife, lifeBefore + appliedValue) };
+      }
       if (operation.kind === 'powerAdd') {
         const value = operation.value ?? 0;
         const next = addPlayerPower(player, value);
@@ -660,14 +742,14 @@ function applyTargetOperations(
       }
       if (operation.kind === 'bind') {
         const bindTime = Math.trunc(operation.time ?? 1);
-        if (bindTime === 0 || !owner) return { ...player, targetBind: undefined };
-        const ownerFacing = operation.ownerFacing ?? owner?.facing ?? 1;
+        if (bindTime === 0) return { ...player, targetBind: undefined };
+        const ownerFacing = operation.ownerFacing ?? owner.facing;
         const offsetX = operation.x ?? 0;
         const offsetY = operation.y ?? 0;
         return {
           ...player,
-          x: (operation.ownerX ?? owner?.x ?? player.x) + offsetX * ownerFacing,
-          y: (operation.ownerY ?? owner?.y ?? player.y) + offsetY,
+          x: (operation.ownerX ?? owner.x) + offsetX * ownerFacing,
+          y: (operation.ownerY ?? owner.y) + offsetY,
           vx: owner.vx,
           vy: owner.vy,
           targetBind: { ownerId: operation.ownerId, remaining: bindTime < 0 ? -1 : bindTime, offsetX, offsetY },
@@ -729,7 +811,7 @@ export function enterCnsState(
   const powerAdded = addPlayerPower(player, stateDef.powerAdd ?? 0);
   const preserveHitDef = stateDef.hitDefPersist === true;
   const preservedMoveContact = preserveMoveContact(player, stateDef.moveHitPersist === true, stateDef.hitCountPersist === true);
-  const enteredMoveType = toMoveType(stateDef.moveType ?? null) ?? player.moveType;
+  const enteredMoveType = resolveStateDefMoveType(stateDef.moveType, player.moveType);
   const startsJuggleChain = enteredMoveType === 'A' && stateDef.juggle !== undefined;
   const continuesJuggleChain = enteredMoveType === 'A' && player.moveType === 'A' && stateDef.juggle === undefined;
   const hitDiagnosticLines = input?.hitDiagnostics !== false && player.activeHitDef?.diagnosticId ? [
@@ -762,6 +844,8 @@ export function enterCnsState(
     hitTargets: preserveHitDef ? player.hitTargets ?? [] : [],
     moveContact: preservedMoveContact,
     pauseControllerLatch: undefined,
+    drawAngle: undefined,
+    drawScale: undefined,
     hitDiagnosticLines,
   } as PlayerState;
   return stateDef.powerAdd === undefined || input?.hitDiagnostics === false
@@ -779,10 +863,56 @@ export function enterCnsStateAndRunTimeZero(
   input: CnsRuntimeInput = {},
   commands?: ReadonlySet<string>,
 ): PlayerState {
+  return enterCnsStateAndRunTimeZeroWithTrace(player, opponent, stateNo, cns, input, commands).player;
+}
+
+function countVisibleHelpers(
+  initialHelpers: HelperRuntimeState,
+  pendingSpawns: readonly HelperSpawnRequest[],
+  pendingDestroys: ReadonlySet<number>,
+  rootEntityId: 1 | 2,
+  helperId?: number,
+): number {
+  const normalizedId = helperId === undefined ? undefined : Math.trunc(helperId);
+  const committed = initialHelpers.entries.filter((helper) => (
+    !pendingDestroys.has(helper.entityId)
+    && helper.rootEntityId === rootEntityId
+    && (normalizedId === undefined || helper.helperId === normalizedId)
+  )).length;
+  const spawned = pendingSpawns.filter((helper) => (
+    helper.rootEntityId === rootEntityId
+    && (normalizedId === undefined || helper.helperId === normalizedId)
+  )).length;
+  return committed + spawned;
+}
+
+export function enterCnsStateAndRunTimeZeroWithTrace(
+  player: PlayerState,
+  opponent: PlayerState,
+  stateNo: number,
+  cns: CnsDocument,
+  input: CnsRuntimeInput = {},
+  commands?: ReadonlySet<string>,
+): { player: PlayerState; trace: CnsRuntimeTrace } {
   const entered = enterCnsState(player, opponent, stateNo, cns, input, commands);
   const stateDef = findState(cns, entered.stateNo);
-  if (!stateDef) return entered;
-  return executeStateControllers(
+  const trace: CnsRuntimeTrace = {
+    playerId: player.id,
+    stateNo: entered.stateNo,
+    afterStateNo: entered.stateNo,
+    animNo: entered.animNo,
+    afterAnimNo: entered.animNo,
+    stateTime: entered.stateTime,
+    afterStateTime: entered.stateTime,
+    mugenAnimTime: input.traceDiagnostics === false ? 0 : mugenAnimTime(entered, input),
+    stateFound: Boolean(stateDef),
+    executedControllers: [],
+    executedControllerRefs: [],
+    debugLines: [],
+    externalEntryFromStateNo: player.stateNo,
+  };
+  if (!stateDef) return { player: entered, trace };
+  const result = executeStateControllers(
     entered,
     opponent,
     stateDef,
@@ -790,10 +920,19 @@ export function enterCnsStateAndRunTimeZero(
     input,
     commands,
     false,
-    false,
+    input.traceDiagnostics !== false,
     undefined,
     input.gameTime ?? 0,
-  ).player;
+  );
+  trace.afterStateNo = result.player.stateNo;
+  trace.afterAnimNo = result.player.animNo;
+  trace.afterStateTime = result.player.stateTime;
+  if (input.traceDiagnostics !== false) {
+    trace.executedControllers.push(...result.executedControllers);
+    trace.executedControllerRefs?.push(...result.executedControllerRefs);
+    trace.debugLines.push(...result.debugLines);
+  }
+  return { player: result.player, trace };
 }
 
 export function advanceExternalCnsStateEntryFrame(player: PlayerState): PlayerState {
@@ -861,18 +1000,36 @@ function applyStateHeader(
   const animNo = applyEntryFields
     ? stateDef.initialAnim ?? expressionAnimNo ?? player.animNo
     : player.animNo;
+  const startsExplicitAnimation = applyEntryFields
+    && (stateDef.initialAnim !== undefined || expressionAnimNo !== null);
+  const appliesKnownExternalEntry = applyEntryFields
+    && player.stateHeaderAppliedStateNo !== undefined
+    && player.stateTime === 0;
   const applyEntryVelocity = applyEntryFields && stateDef.velocitySet !== undefined;
   return {
     ...player,
     stateHeaderAppliedStateNo: stateDef.stateNo,
-    stateType: toStateType(stateDef.stateType ?? null) ?? player.stateType,
-    moveType: toMoveType(stateDef.moveType ?? null) ?? player.moveType,
-    physics: toPhysics(stateDef.physics ?? null) ?? player.physics,
+    stateType: applyEntryFields
+      ? toStateType(stateDef.stateType ?? null) ?? player.stateType
+      : player.stateType,
+    moveType: applyEntryFields
+      ? resolveStateDefMoveType(stateDef.moveType, player.moveType)
+      : toMoveType(stateDef.moveType ?? null) ?? player.moveType,
+    physics: applyEntryFields
+      ? toPhysics(stateDef.physics ?? null) ?? player.physics
+      : player.physics,
     ctrl: applyEntryFields ? stateDef.ctrl ?? player.ctrl : player.ctrl,
     sprPriority: applyEntryFields ? stateDef.sprPriority ?? player.sprPriority : player.sprPriority,
-    juggle: stateDef.juggle ?? player.juggle,
+    juggle: applyEntryFields ? stateDef.juggle ?? player.juggle : player.juggle,
     animNo,
-    animTime: player.animTime,
+    // Collision and other subsystem-owned transitions update StateNo before
+    // this CNS pass. Their first StateDef header must restart an explicit Anim
+    // just like an ordinary ChangeState entry; carrying the old AnimTime can
+    // skip most of a custom hit/throw animation.
+    animTime: appliesKnownExternalEntry
+      && (startsExplicitAnimation || player.animNo !== animNo)
+      ? 0
+      : player.animTime,
     vx: applyEntryVelocity ? stateDef.velocitySet!.x * player.facing : player.vx,
     vy: applyEntryVelocity ? stateDef.velocitySet!.y : player.vy,
   };
@@ -964,6 +1121,7 @@ function createTriggerContext(
     numEnemy: opponent ? 1 : 0,
     numPartner: 0,
     isHelper: input.entityContext?.kind === 'helper',
+    helperId: input.entityContext?.helperId,
     entityId: input.entityContext?.entityId ?? player.id,
     numHelper: input.numHelper,
     numProj: input.numProj,
@@ -1261,9 +1419,21 @@ function executeController(
     const time = num(controller, 'time', player, input, commands, opponent) ?? num(controller, 'value', player, input, commands, opponent) ?? 0;
     return withPlayer({ ...player, afterImage: setAfterImageTime(player.afterImage, time) }, true, 'AfterImageTime');
   }
-  if (type === 'angleadd') return withExtendedPlayer(player, { angle: readAngle(player) + (num(controller, 'value') ?? 0) }, 'AngleAdd');
-  if (type === 'anglemul') return withExtendedPlayer(player, { angle: readAngle(player) * (num(controller, 'value') ?? 1) }, 'AngleMul');
-  if (type === 'angleset') return withExtendedPlayer(player, { angle: num(controller, 'value') ?? 0 }, 'AngleSet');
+  if (type === 'angleadd') return setAngle(
+    player,
+    readAngle(player) + (num(controller, 'value', player, input, commands, opponent) ?? 0),
+    'AngleAdd',
+  );
+  if (type === 'anglemul') return setAngle(
+    player,
+    readAngle(player) * (num(controller, 'value', player, input, commands, opponent) ?? 1),
+    'AngleMul',
+  );
+  if (type === 'angleset') return setAngle(
+    player,
+    num(controller, 'value', player, input, commands, opponent) ?? 0,
+    'AngleSet',
+  );
   if (type === 'angledraw') return withPlayer({
     ...player,
     drawAngle: num(controller, 'angle', player, input, commands, opponent) ?? readAngle(player),
@@ -1315,7 +1485,13 @@ function executeController(
       animationOwnerId: selfOwnerId as 1 | 2,
     }, true, 'SelfState');
   }
-  if (type === 'turn') return withPlayer({ ...player, facing: player.facing === 1 ? -1 : 1 }, true, 'Turn');
+  if (type === 'turn') return withPlayer({
+    ...player,
+    facing: player.facing === 1 ? -1 : 1,
+    // PlayerState keeps X velocity in world coordinates, while MUGEN's Vel X
+    // is facing-relative. Preserve the authored relative velocity across Turn.
+    vx: -player.vx,
+  }, true, 'Turn');
   if (type === 'varset') return setVarController(player, controller, input, commands, opponent);
   if (type === 'varadd') return addVarController(player, controller, input, commands, opponent);
   if (type === 'varrangeset') return varRangeSet(player, controller, input, commands, opponent);
@@ -1360,6 +1536,14 @@ function screenBound(
       moveCameraY: moveCamera.y !== 0,
     },
   }, true, 'ScreenBound');
+}
+
+function isCommonGetUpReady(player: PlayerState): boolean {
+  return player.stateNo === 5110
+    && player.life > 0
+    && player.lieDownElapsed !== undefined
+    && player.lieDownTime !== undefined
+    && player.lieDownElapsed >= player.lieDownTime;
 }
 
 function width(
@@ -1658,9 +1842,11 @@ function executeTargetController(
   if (!name) return withPlayer(player, false, controller.type);
   const id = num(controller, 'id', player, input, commands, opponent);
   const selected = selectTargets(player, id ?? undefined);
+  const ownerEntityId = input.entityContext?.entityId ?? player.id;
+  const stateOwnerId = player.stateOwnerId === 1 || player.stateOwnerId === 2 ? player.stateOwnerId : player.id;
   const diagnostic = [
     ...(player.hitDiagnosticLines ?? []),
-    `raw.target_controller owner=p${player.id} controller=${name}`,
+    `raw.target_controller owner=p${player.id} controller=${name} entity=${ownerEntityId}`,
     `  id=${id ?? 'all'} targets=${selected.map((entry) => entry.playerId).join(',') || 'none'} result=${selected.length > 0 ? (type === 'targetdrop' ? 'dropped' : 'queued') : 'noop'}${selected.length > 0 ? '' : ' reason=target_not_found'}`,
   ];
   let next = { ...player, hitDiagnosticLines: input.hitDiagnostics === false ? player.hitDiagnosticLines : diagnostic };
@@ -1670,7 +1856,9 @@ function executeTargetController(
       ...withPlayer(next, true, name),
       targetOperation: {
         kind: 'drop',
-        ownerId: player.id,
+        ownerId: ownerEntityId,
+        stateOwnerId,
+        ownerPlayer: player,
         targetIds: selected.map((entry) => entry.playerId),
       },
     };
@@ -1688,9 +1876,17 @@ function executeTargetController(
     name,
     targetOperation: {
       kind: kinds[type],
-      ownerId: player.id,
+      ownerId: ownerEntityId,
+      stateOwnerId,
+      ownerPlayer: player,
       targetIds: selected.map((entry) => entry.playerId),
       value: num(controller, 'value', player, input, commands, opponent) ?? undefined,
+      absolute: type === 'targetlifeadd'
+        ? (num(controller, 'absolute', player, input, commands, opponent) ?? 0) !== 0
+        : undefined,
+      kill: type === 'targetlifeadd'
+        ? (num(controller, 'kill', player, input, commands, opponent) ?? 1) !== 0
+        : undefined,
       x: type === 'targetbind' ? posX : num(controller, 'x', player, input, commands, opponent) ?? undefined,
       y: type === 'targetbind' ? posY : num(controller, 'y', player, input, commands, opponent) ?? undefined,
       time: num(controller, 'time', player, input, commands, opponent) ?? undefined,
@@ -1915,7 +2111,11 @@ function posSet(
   const x = num(controller, 'x', player, input, commands, opponent);
   const y = num(controller, 'y', player, input, commands, opponent);
   return withPlayer(
-    { ...player, x: x ?? player.x, y: y === null ? player.y : mugenYToInternalY(y) },
+    {
+      ...player,
+      x: x === null ? player.x : mugenPosXToWorldX(x, input.cameraX, input.screenWidth),
+      y: y === null ? player.y : mugenYToInternalY(y),
+    },
     x !== null || y !== null,
     'PosSet',
   );
@@ -2522,7 +2722,7 @@ function activateHitDef(
     `  airHitTime=${airHitTime ?? 28} source=${airHitTime === undefined ? 'hardcoded' : 'cns'}${airHitTimeFallbackReason ? ` fallbackReason=${airHitTimeFallbackReason}` : ''}`,
     `  animType=${selectedAnimType} source=${animTypeSource}`,
     `raw.hitdef_parameters activeHitDefId=${diagnosticId}`,
-    `  attr=${formatAttr(snapshot.attr)} hitflag=${snapshot.hitFlag ?? '-'} guardflag=${snapshot.guardFlag ?? '-'} guard.dist=${snapshot.guardDistance ?? '-'} guard.kill=${snapshot.guardKill === undefined ? '-' : snapshot.guardKill ? 1 : 0} priority=${formatPriority(snapshot.priority)}`,
+    `  attr=${formatAttr(snapshot.attr)} hitflag=${snapshot.hitFlag ?? '-'} guardflag=${snapshot.guardFlag ?? '-'} affectteam=${snapshot.affectTeam ?? 'E'} guard.dist=${snapshot.guardDistance ?? '-'} guard.kill=${snapshot.guardKill === undefined ? '-' : snapshot.guardKill ? 1 : 0} priority=${formatPriority(snapshot.priority)}`,
     `  animtypes=ground:${selectedAnimType},air:${snapshot.airAnimType ?? '-'},fall:${snapshot.fallAnimType ?? '-'} types=ground:${snapshot.groundType ?? '-'},air:${snapshot.airType ?? '-'}`,
     `  pausetime=${snapshot.pauseTime.attacker},${snapshot.pauseTime.defender} guard.pausetime=${formatPair(snapshot.guardPauseTime)} hittime=${groundHitTime ?? '-'},${airHitTime ?? '-'},${snapshot.guardHitTime ?? '-'}`,
     `  velocity=ground:${formatPair(snapshot.groundVelocity)},air:${formatPair(snapshot.airVelocity)},guard:${formatPair(snapshot.guardVelocity)} ids=${snapshot.hitId ?? '-'},${snapshot.chainId ?? '-'},${snapshot.noChainIds?.join('|') || '-'}`,
@@ -2651,6 +2851,7 @@ function evaluateHitDefSnapshot(
     p2SprPriority: numValue('p2sprpriority') ?? 0,
     p1StateNo: numValue('p1stateno'),
     p2StateNo: numValue('p2stateno'),
+    p2Facing: numValue('p2facing'),
     p2GetP1State: boolValue('p2getp1state'),
     forceStand: boolValue('forcestand'),
     spark: parseEffectAnimation(controller.params.sparkno, player, input, commands, opponent),
@@ -2703,6 +2904,7 @@ function evaluateHitDefSnapshot(
     fallAnimType: textValue('fall.animtype'),
     hitFlag: textValue('hitflag')?.toUpperCase() ?? 'MAF',
     guardFlag: textValue('guardflag')?.toUpperCase(),
+    affectTeam: normalizeAffectTeam(textValue('affectteam')),
     priority: { value: priorityValue ?? 4, type: priorityValues[1] === undefined ? 'Hit' : String(priorityValues[1]).trim() },
     guardPauseTime: guardPause[0] === undefined && guardPause[1] === undefined ? undefined : { attacker: Math.max(0, guardPause[0] ?? 0), defender: Math.max(0, guardPause[1] ?? 0) },
     groundType: readHitReactionType(textValue('ground.type')),
@@ -2737,6 +2939,11 @@ function evaluateHitDefSnapshot(
     unappliedParameters: presentUnapplied,
     invalidParameters: Array.from(new Set(invalidParameters)),
   };
+}
+
+function normalizeAffectTeam(value: string | undefined): ActiveHitDef['affectTeam'] {
+  const normalized = value?.trim().toUpperCase();
+  return normalized === 'F' || normalized === 'B' ? normalized : 'E';
 }
 
 function nonNegative(value: number | undefined): number | undefined {
@@ -2974,6 +3181,16 @@ function tickHitAttributeSlots(player: PlayerState): PlayerState {
 
 function readAngle(player: PlayerState): number {
   return (player as ExtendedPlayerState).angle ?? 0;
+}
+
+function setAngle(player: PlayerState, angle: number, name: 'AngleAdd' | 'AngleMul' | 'AngleSet'): ControllerResult {
+  return withExtendedPlayer(player, {
+    angle,
+    // AngleDraw enables the transform for the current tick. A later angle
+    // controller in the same State pass still changes the angle rendered for
+    // that tick; bundled itoko States 52 and 1210 rely on this ordering.
+    ...(player.drawAngle !== undefined ? { drawAngle: angle } : {}),
+  }, name);
 }
 
 function withPlayer(player: PlayerState, executed: boolean, name: string): ControllerResult {
@@ -3345,6 +3562,15 @@ function toStateType(value: string | null): PlayerState['stateType'] | null {
 function toMoveType(value: string | null): PlayerState['moveType'] | null {
   const normalized = value?.toUpperCase();
   return normalized === 'I' || normalized === 'A' || normalized === 'H' ? normalized : null;
+}
+
+function resolveStateDefMoveType(
+  value: string | undefined,
+  previous: PlayerState['moveType'],
+): PlayerState['moveType'] {
+  if (value === undefined) return 'I';
+  if (value.trim().toUpperCase() === 'U') return previous;
+  return toMoveType(value) ?? previous;
 }
 
 function toPhysics(value: string | null): PlayerState['physics'] | null {

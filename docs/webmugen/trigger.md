@@ -85,7 +85,7 @@ Examples:
 - comparison operators: `=`, `!=`, `<`, `<=`, `>`, `>=`;
 - range comparisons: `= [a,b]`, `!= [a,b]`;
 - boolean operators: `&&`, `||`, `!`;
-- math operators: `+`, `-`, `*`, `/`, `%`;
+- math operators: `+`, `-`, `*`, `/`, `%`, including unary `-` on grouped, function, and redirected numeric expressions;
 - math constants/functions: `Pi`, `E`, `ACos`, `ASin`, `ATan`, `Sin`, `Cos`, `Tan`, `Exp`, `Ln`, `Log(base, value)`, `IfElse`, `Cond`.
 
 `IfElse` and `Cond` preserve a leading WinMUGEN redirect condition as one argument even though the
@@ -106,6 +106,8 @@ When adding expression support, update Expression rows in the matrix, not unrela
 ## Velocity coordinates
 
 `PlayerState.vx` is stored in world coordinates, but the CNS `Vel X` trigger is facing-relative. The evaluator multiplies world X velocity by the player's facing when exposing `Vel X`; `Vel Y` remains unchanged.
+
+`Pos X` is relative to the current screen center, not the internal world origin. The evaluator subtracts `cameraX + screenWidth / 2` from the entity world X. `PosSet X` applies the inverse conversion with the same frame camera snapshot, including while the camera is scrolling. Redirected forms such as `Enemy(0), Pos X` retain that shared camera context.
 
 ## Edge body distance
 
@@ -162,7 +164,8 @@ Safe defaults are useful but should not be overclaimed.
 Examples:
 
 - `CanRecover` reads snapshotted `fall.recover` and `fall.recovertime` during an air-fall reaction. Common recovery states still require the CNS `Command = "recovery"` trigger; `CanRecover` alone must not auto-enter States 5200/5210;
-- `NumHelper` counts committed Helpers owned by the current root and optionally filters by MUGEN Helper ID; same-frame pending spawns become visible only at the commit point;
+- `NumHelper` counts Helpers owned by the current root and optionally filters by MUGEN Helper ID; a spawn queued by an earlier entity/controller in the same tick is immediately count-visible, although the new Helper's State pass begins on the next frame;
+- `IsHelper` returns whether the evaluated entity is a Helper, and `IsHelper(expr)` additionally requires its MUGEN Helper ID to equal the truncated numeric expression;
 - projectile contact time may return -1 before projectile contact is integrated.
 
 These should generally remain Partial.
@@ -183,7 +186,7 @@ The three-character HitDef audit observed `BackEdgeBodyDist`, `FrontEdgeBodyDist
 
 ## AnimElem timing
 
-`AnimElem = N` is evaluated from the current AIR action, using 1-based element numbering. It is true only when element N first starts. WinMUGEN 2002.04.14 does not restart this trigger timeline when a finite action repeats through an explicit `LoopStart` or the default whole-action loop. `AnimElem = N, op T` compares the original element-relative time with `=`, `!=`, `<`, `>`, `<=`, or `>=`; an invalid element number returns false. `AnimElemTime(N)` reads the same non-resetting AIR-relative timeline.
+`AnimElem = N` is evaluated from the current AIR action, using 1-based element numbering. It is true when element N starts. A finite action without `LoopStart` repeats the whole action and bare `AnimElem = N` becomes true again on each pass. Explicit `LoopStart` and negative-duration holds retain the original non-resetting trigger timeline, so a terminal `-1` element does not continuously retrigger. `AnimElem = N, op T` compares the original element-relative time with `=`, `!=`, `<`, `>`, `<=`, or `>=`; an invalid element number returns false. `AnimElemTime(N)` reads the same original timeline. Bundled T-H-M-A Helper State 3031 and State 3940 cover the finite-repeat and infinite-hold distinction.
 
 Issue #111 corrected the finite-loop behavior introduced by Issue #54. The production app still supplies AIR element timing to CNS evaluation, but a repeated visual pass no longer makes bare `AnimElem` true again. T-H-M-A State 3010 is covered by a real-character regression proving that its `AnimElem = 3` Helper controller runs once instead of once per loop.
 
@@ -210,7 +213,7 @@ cancel animation, Pause/SuperPause parity, and Helper-owned Projectile ordering 
 Root, Parent, Helper, and PlayerID redirects resolve committed runtime entities instead of falling
 back to self. Root players have no Parent, missing lookups return SFalse, MUGEN Helper IDs remain
 separate from unique entity IDs, and `ID` / `PlayerIDExist(expr)` use the unique entity ID space.
-`ParentDist X/Y` and `RootDist X/Y` use these same resolvers: X is relative to the evaluating entity's Facing, Y is axis-space, and a missing Parent does not fall back to self or root. `LifeMax` reads owner constants, while `UniqHitCount` counts accepted ActiveHitDef-generation/defender pairs rather than `numhits` weighting.
+`ParentDist X/Y` and `RootDist X/Y` use these same resolvers: X is relative to the evaluating entity's Facing, Y is axis-space, and a missing Parent does not fall back to self or root. For WinMUGEN compatibility, `ParentDist X/Y` truncates the resolved fractional distance toward zero before CNS comparison; this lets legacy Helpers use `ParentDist X = 0` as a sub-pixel settling condition. `LifeMax` reads owner constants, while `UniqHitCount` counts accepted ActiveHitDef-generation/defender pairs rather than `numhits` weighting.
 
 Production RoundState supplies `RoundNo`, `RoundsExisted`, KO/time/draw winner data, and end reason.
 `WinKO`, `WinTime`, `WinPerfect`, `LoseKO`, and `LoseTime` are derived symmetrically from that state.
@@ -225,9 +228,11 @@ Old-style `ProjHit[ID] = value` reads the same history. Its simple form reports 
 
 ## Target lookup
 
-Successful HitDef contact registers `{playerId, hitDefId, activeHitDefId}` on the attacker. NumTarget optionally filters by HitDef id; TargetID and TargetStateNo select the first matching entry. The storage permits multiple targets and is pruned for KO/destroyed players; round restart creates an empty list. Current TargetStateNo lookup is verified for the two-player runtime, while Helper/multi-player lookup remains Partial.
+Successful HitDef contact registers `{playerId, hitDefId, activeHitDefId}` on the attacker. NumTarget optionally filters by HitDef id; TargetID and TargetStateNo select the first matching entry. The storage permits multiple targets. An already acquired Target remains selectable after its Life reaches zero so delayed custom-State release controllers can run; missing entities are pruned and round restart creates an empty list. Current TargetStateNo lookup is verified for the two-player runtime, while Helper/multi-player lookup remains Partial.
 
 Issue #65 connects that same registry to redirect expressions. `target(ID), MoveType` treats `ID` as the HitDef `id`, selects the first matching live Target entry, resolves its runtime player, and then evaluates `MoveType` on that player. It does not compare `ID` with StateNo or runtime entity id. Root and Helper attackers use their own Target registry when selecting the opposing root. Later controllers in the same State pass observe a preceding Target controller mutation, including `TargetState` followed by `target(ID),StateNo`. A missing id/player produces SFalse for both equality and inequality instead of falling back to self or the ordinary opponent.
+
+Direct redirected numeric operands are parsed as a comparison before the generic redirected-boolean path. For WinMUGEN ordering operators (`>`, `>=`, `<`, `<=`), an unresolved direct redirect participates with numeric value zero; equality and inequality against an unresolved redirect remain SFalse. This distinction is used by itoko State 1102 to rank the remaining bag Helpers after one or more sibling bags have already been destroyed.
 
 Trigger record grouping remains `triggerall` AND every numbered group, repeated records with the same `triggerN` are AND, and different numbered groups are OR. `PrevStateNo` is written from the immediate source on every State entry, including multiple same-frame ChangeState entries; `MoveHit` remains owned by the accepted ActiveHitDef contact lifecycle described above. `raw.target_composite_trigger` records the three layers together for routes such as T-H-M-A 1015 -> 1016.
 

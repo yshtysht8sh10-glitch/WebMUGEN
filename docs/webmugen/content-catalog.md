@@ -76,7 +76,7 @@ The Development Mode Generator uses `showDirectoryPicker()` when supported:
 
 1. Independently choose external Character, Stage, and LifeBar folders. Any source may remain unset.
 2. Set the published same-origin URL base for each folder, such as `/chars`, `/stages`, or `/lifebars`. A local filesystem path is never treated as a Runtime URL.
-3. Add same-origin direct file paths when a desired DEF, ZIP, or JSON file is not obtained from folder scanning.
+3. Add same-origin direct file paths when a desired DEF, ZIP, or JSON file is not obtained from folder scanning. A file name or relative path such as `itoko.zip` is resolved against that source's Published URL base (for example `/chars/itoko.zip`); an absolute same-origin path remains unchanged.
 4. The Generator recursively reads candidates and requires each result to match the source slot's expected kind.
 5. Publisher-shipped `source: "builtin"` items are always retained; generated items receive `source: "external"`. An unset source kind retains its currently loaded external items instead of silently deleting them.
 6. Structured classification results record kind, engine, confidence, entry file, warnings, and errors.

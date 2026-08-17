@@ -74,6 +74,7 @@ ctrl = 0
       rootEntityId: 1, parentEntityId: 1, ownerCharacterId: 1,
       stateOwnerId: 1, animationOwnerId: 1,
       pauseMoveTime: 12, superMoveTime: 34,
+      hasCompletedInitialStatePass: false,
     });
     expect(result.state.helpers.entries[1]).toMatchObject({
       rootEntityId: 2, parentEntityId: 2, ownerCharacterId: 2,
@@ -85,6 +86,35 @@ ctrl = 0
     });
     expect(result.traces).toHaveLength(2);
     expect(result.state.hitDiagnosticLines?.join('\n')).toContain('firstStep=next_frame');
+  });
+
+  it('makes a queued Helper visible to later NumHelper checks in the same tick', () => {
+    const initial = createInitialGameState();
+    const request = {
+      helperId: 100,
+      rootEntityId: 1 as const,
+      parentEntityId: 1,
+      ownerCharacterId: 1 as const,
+      stateOwnerId: 1 as const,
+      animationOwnerId: 1 as const,
+      stateNo: 100,
+      x: initial.players[0].x,
+      y: initial.players[0].y,
+      facing: 1 as const,
+      keyCtrl: false,
+      ownPal: false,
+      spawnFrame: 0,
+      parent: initial.players[0],
+    };
+    let helpers = spawnHelper(initial.helpers, request, cns);
+    helpers = spawnHelper(helpers, request, cns);
+
+    const result = stepCnsStateRuntime({ ...initial, helpers }, cns);
+
+    expect(result.state.helpers.entries.filter((helper) => helper.helperId === 200)).toHaveLength(1);
+    expect(result.traces.filter((trace) => trace.entityId !== undefined)
+      .flatMap((trace) => trace.executedControllers)
+      .filter((controller) => controller === 'Helper')).toHaveLength(1);
   });
 
   it('starts Helper sprpriority independently from the parent and honors the initial StateDef value', () => {
@@ -162,10 +192,16 @@ postype = front
     let state = stepCnsStateRuntime(createInitialGameState(), cns).state;
     state = stepCnsPhysicsMotion(state, cns);
     expect(state.helpers.entries[0].player.stateTime).toBe(0);
+    expect(state.helpers.entries[0].hasCompletedInitialStatePass).toBe(false);
 
     const stepped = stepCnsStateRuntime(state, cns);
+    expect(stepped.state.helpers.entries.slice(0, 2).every((helper) => helper.hasCompletedInitialStatePass)).toBe(true);
     expect(stepped.state.helpers.entries).toHaveLength(4);
     expect(stepped.state.helpers.entries.slice(0, 2).map((helper) => helper.player.animNo)).toEqual([1001, 1001]);
+    expect(stepped.state.helpers.entries.slice(0, 2).map((helper) => helper.player.screenBound)).toEqual([
+      { value: false, moveCameraX: false, moveCameraY: false },
+      { value: false, moveCameraX: false, moveCameraY: false },
+    ]);
     expect(stepped.state.helpers.entries.slice(2).map((helper) => helper.helperId)).toEqual([200, 200]);
     expect(stepped.state.helpers.entries[2]).toMatchObject({ rootEntityId: 1, parentEntityId: 3, ownerCharacterId: 1 });
     expect(stepped.state.helpers.entries[3]).toMatchObject({ rootEntityId: 2, parentEntityId: 4, ownerCharacterId: 2 });
@@ -270,6 +306,24 @@ trigger1 = time = 1
     expect(evaluateCnsRuntimeTrigger('NumHelper(100) = 2', { player, numHelper: (id) => id === 100 ? 2 : 0 })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('IsHelper = 1', { player, isHelper: true })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('IsHelper = 0', { player, isHelper: false })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('IsHelper(1101) = 1', { player, isHelper: true, helperId: 1101 })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('IsHelper(1102) = 0', { player, isHelper: true, helperId: 1101 })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('IsHelper(1100 + 1) = 1', { player, isHelper: true, helperId: 1101 })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('IsHelper(1101) = 0', { player, isHelper: false })).toBe(true);
+
+    const helper = { ...player, helperId: 1101, vars: { 9: 108 } };
+    const redirectContext = {
+      player: helper,
+      isHelper: true,
+      helperId: 1101,
+      resolveRedirectEntity: (kind: 'root' | 'parent' | 'helper' | 'playerid' | 'partner', id?: number) => (
+        kind === 'helper' && id === 1101 ? helper : undefined
+      ),
+    };
+    expect(evaluateCnsRuntimeTrigger('helper(1101),var(9) >= helper(1102),var(9)', redirectContext)).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('helper(1102),var(9) >= helper(1103),var(9)', redirectContext)).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('helper(1102),var(9) = 0', redirectContext)).toBe(false);
+    expect(evaluateCnsRuntimeTrigger('helper(1102),var(9) != 0', redirectContext)).toBe(false);
   });
 
   it('commits Helper TargetState and exposes it to a later target redirect in the same State pass', () => {

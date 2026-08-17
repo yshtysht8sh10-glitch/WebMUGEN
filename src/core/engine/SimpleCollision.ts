@@ -1,4 +1,5 @@
 import type { ActiveHitDef, GameState, HitEvent, PlayerState, Rect } from './types';
+import { getPresentedAnimationTime } from '../animation/PresentedAnimation';
 
 export type SimpleCollisionResult = Pick<GameState, 'players' | 'hitEvents'>;
 
@@ -75,7 +76,8 @@ export function getAttackBox(player: PlayerState): Rect {
 }
 
 export function isAttackActive(player: PlayerState): boolean {
-  return player.stateNo === 200 && player.animTime >= 5 && player.animTime <= 12;
+  const animTime = getPresentedAnimationTime(player);
+  return player.stateNo === 200 && animTime >= 5 && animTime <= 12;
 }
 
 function canHit(player: PlayerState): boolean {

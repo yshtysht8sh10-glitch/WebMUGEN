@@ -211,6 +211,36 @@ describe('T-H-M-A Darkness Finger effect coordinates (#109)', () => {
     expect(state.players[1]).toMatchObject({ facing: 1, vx: -98.5, vy: -2.925 });
   });
 
+  it('reverses State 3935 world velocity when State 3937 turns at the opposite wall', async () => {
+    const { cns } = await loadCharacter();
+    const state3937 = cns.states.find((candidate) => candidate.stateNo === 3937);
+    expect(state3937).toBeDefined();
+    const turnOnlyCns = {
+      ...cns,
+      states: [{
+        ...state3937!,
+        controllers: state3937!.controllers.filter((controller) => controller.type.trim().toLowerCase() === 'turn'),
+      }],
+    };
+    const initial = createInitialGameState();
+    const state = stepCnsStateRuntime({
+      ...initial,
+      players: [initial.players[0], {
+        ...initial.players[1],
+        stateNo: 3937,
+        stateHeaderAppliedStateNo: 3937,
+        stateTime: 0,
+        animNo: 5012,
+        animTime: 0,
+        facing: -1,
+        vx: 98.5,
+        vy: -3,
+      }],
+    }, turnOnlyCns).state;
+
+    expect(state.players[1]).toMatchObject({ stateNo: 3937, facing: 1, vx: -98.5 });
+  });
+
   it.each([
     [1, 1, 320, 160],
     [1, 1, 400, 120],

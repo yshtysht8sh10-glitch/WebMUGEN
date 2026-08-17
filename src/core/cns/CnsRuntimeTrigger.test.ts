@@ -44,6 +44,23 @@ describe('CnsRuntimeTrigger', () => {
     })).toBe(151);
   });
 
+  it('applies unary minus to functions and redirected arithmetic terms', () => {
+    const state = createInitialGameState();
+    const parent = { ...state.players[0], x: 100, y: DEFAULT_GROUND_Y - 270 };
+    const root = { ...state.players[0], x: 300, y: DEFAULT_GROUND_Y };
+    const context = {
+      player: state.players[0],
+      resolveRedirectEntity: (kind: 'root' | 'parent' | 'helper' | 'playerid' | 'partner') => (
+        kind === 'root' ? root : kind === 'parent' ? parent : undefined
+      ),
+    };
+
+    expect(readNumberExpression('-atan(270 / 200) * 180 / pi + 90', context))
+      .toBeCloseTo(36.52885536698516, 8);
+    expect(readNumberExpression('-(root, Pos X - parent, Pos X)', context)).toBe(-200);
+    expect(evaluateCnsRuntimeTrigger('-atan(270 / 200) < 0', context)).toBe(true);
+  });
+
   it('keeps a WinMUGEN redirect comparison together as an IfElse condition', () => {
     const state = createInitialGameState();
     const belowThreshold = { ...state.players[1], getHitVars: { hitcount: 6 } };
@@ -277,6 +294,12 @@ describe('CnsRuntimeTrigger', () => {
     })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('ScreenPos X = 365', {
       player: { ...player, x: 525 }, screenWidth: 400, cameraX: 160,
+    })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('Pos X = 165', {
+      player: { ...player, x: 525 }, screenWidth: 400, cameraX: 160,
+    })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('Pos X = 125', {
+      player: { ...player, x: 525 }, screenWidth: 400, cameraX: 200,
     })).toBe(true);
     expect(evaluateCnsRuntimeTrigger('FrontEdgeBodyDist <= 20', {
       player: { ...player, x: 876, facing: 1 },

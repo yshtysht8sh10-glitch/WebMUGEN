@@ -237,11 +237,11 @@ x = -5
     const atTimeZero = stepCnsStateRuntime({
       ...initial,
       players: [
-        { ...initial.players[0], stateNo: 3110, stateTime: 0, x: 200, y: 250, facing: 1 },
+        { ...initial.players[0], stateNo: 3110, stateTime: 0, x: 200, y: 250, facing: 1, vx: 3 },
         { ...initial.players[1], x: 500, y: 260, facing: -1 },
       ],
     }, cns);
-    expect(atTimeZero.state.players[0]).toMatchObject({ x: 200, y: 250, facing: -1 });
+    expect(atTimeZero.state.players[0]).toMatchObject({ x: 200, y: 250, facing: -1, vx: -3 });
 
     const atTimeOne = stepCnsStateRuntime({
       ...atTimeZero.state,
@@ -262,6 +262,48 @@ x = -5
     }, cns);
     expect(atTimeTwo.state.players[0]).toMatchObject({ x: 505, y: 260, facing: -1 });
     expect(atTimeTwo.traces[0].executedControllers).toEqual(['PosAdd']);
+  });
+
+  it('converts PosSet X from the current screen center and preserves Pos X round trips while the camera moves', () => {
+    const setCenterCns = parseCnsText(`
+[Statedef 3110]
+type = S
+movetype = I
+physics = N
+
+[State 3110, Set center-relative X]
+type = PosSet
+trigger1 = 1
+x = 40
+`);
+    const roundTripCns = parseCnsText(`
+[Statedef 3110]
+type = S
+movetype = I
+physics = N
+
+[State 3110, Preserve current X]
+type = PosSet
+trigger1 = 1
+x = Pos X
+`);
+    const initial = createInitialGameState();
+    const state = {
+      ...initial,
+      players: [
+        { ...initial.players[0], stateNo: 3110, x: 650 },
+        initial.players[1],
+      ],
+    } as typeof initial;
+
+    const firstCamera = stepCnsStateRuntime(state, setCenterCns, { cameraX: 200, screenWidth: 400 });
+    expect(firstCamera.state.players[0].x).toBe(440);
+
+    const movedCamera = stepCnsStateRuntime(state, setCenterCns, { cameraX: 320, screenWidth: 400 });
+    expect(movedCamera.state.players[0].x).toBe(560);
+
+    const roundTrip = stepCnsStateRuntime(state, roundTripCns, { cameraX: 320, screenWidth: 400 });
+    expect(roundTrip.state.players[0].x).toBe(650);
   });
 
   it('maps WinMUGEN PosSet y=0 to the internal ground y', () => {

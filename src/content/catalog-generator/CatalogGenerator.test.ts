@@ -2,7 +2,7 @@ import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it, vi } from 'vitest';
 import { loadCatalogDirectoryHandle, saveCatalogDirectoryHandle } from './CatalogDirectoryStore';
 import { classifyDefText, classifyWebMugenJson, classifyZipBytes } from './CatalogContentClassifier';
-import { generateContentCatalog, resolveCatalogPublicPath } from './CatalogGenerator';
+import { generateContentCatalog, resolveCatalogDirectPath, resolveCatalogPublicPath } from './CatalogGenerator';
 import type { CatalogDirectoryHandle, CatalogFileHandle, CatalogSourceFile } from './CatalogGeneratorTypes';
 import { readCatalogSourceFiles, readCatalogSourcePath } from './LocalFolderCatalogSource';
 import { downloadCatalogJson, ensureDirectoryPermission, serializeContentCatalog, writeCatalogToDirectory } from './CatalogWriter';
@@ -69,6 +69,8 @@ describe('Catalog Generator classification', () => {
     ]));
     expect(result.excluded[0].result.errors).toContain('Expected stage, but detected character.');
     expect(resolveCatalogPublicPath('/', 'chars/hero.def')).toBe('/chars/hero.def');
+    expect(resolveCatalogDirectPath('/chars', 'itoko.zip')).toBe('/chars/itoko.zip');
+    expect(resolveCatalogDirectPath('/chars', '/content/itoko.zip')).toBe('/content/itoko.zip');
     expect(() => resolveCatalogPublicPath('https://evil.example', 'hero.def')).toThrow('Unsafe public base path');
   });
 });
@@ -84,6 +86,10 @@ describe('Catalog Generator folder and permission support', () => {
     const bytes = strToU8(characterDef);
     const loaded = await readCatalogSourcePath('/external/chars/hero.def', async () => ({ ok: true, status: 200, arrayBuffer: async () => bytes.slice().buffer }));
     expect(loaded).toMatchObject({ path: '/external/chars/hero.def', catalogPath: '/external/chars/hero.def', name: 'hero.def' });
+    const fetchZip = vi.fn(async () => ({ ok: true, status: 200, arrayBuffer: async () => bytes.slice().buffer }));
+    const relativeZip = await readCatalogSourcePath(resolveCatalogDirectPath('/chars', 'itoko.zip'), fetchZip);
+    expect(fetchZip).toHaveBeenCalledWith('/chars/itoko.zip');
+    expect(relativeZip).toMatchObject({ path: '/chars/itoko.zip', catalogPath: '/chars/itoko.zip', name: 'itoko.zip' });
     await expect(readCatalogSourcePath('https://evil.example/hero.def')).rejects.toThrow('same-origin');
     await expect(readCatalogSourcePath('/external/../hero.def')).rejects.toThrow('same-origin');
   });

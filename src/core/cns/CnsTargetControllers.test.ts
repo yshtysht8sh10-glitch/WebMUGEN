@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { parseCnsText } from '../../parser/cns/CnsParser';
 import { createInitialGameState } from '../engine/GameState';
 import { applyFallbackStageRules } from '../engine/FallbackStageRules';
+import { spawnHelper } from '../helper/HelperSystem';
+import { pruneTargets } from '../hitdef/TargetState';
 import { stepCnsPhysicsMotion } from './CnsPhysicsStep';
 import { stepCnsStateRuntime } from './CnsStateRuntime';
 
@@ -17,6 +19,85 @@ function targetState(hitDefId = 42) {
 }
 
 describe('CnsStateRuntime target controllers', () => {
+  it('can release an already acquired KO target from a borrowed custom State', () => {
+    const cns = parseCnsText(`
+[Statedef 200]
+[State 200, Finish]
+type = TargetState
+trigger1 = Time = 200
+value = 701
+[Statedef 700]
+type = A
+movetype = H
+physics = N
+[Statedef 701]
+type = A
+movetype = H
+physics = N
+`);
+    const state = targetState();
+    state.players[0] = { ...state.players[0], stateTime: 200 };
+    state.players[1] = { ...state.players[1], life: 0, stateNo: 700, stateOwnerId: 1 };
+
+    const retained = pruneTargets(state.players[0], [state.players[1]]);
+    const result = stepCnsStateRuntime({
+      ...state,
+      players: [retained, state.players[1]],
+    }, cns).state;
+
+    expect(result.players[1]).toMatchObject({ stateNo: 701, stateOwnerId: 1, life: 0 });
+  });
+
+  it('runs a Helper TargetState destination Time=0 pass before physics', () => {
+    const cns = parseCnsText(`
+[Statedef 0]
+physics = N
+[Statedef 3030]
+type = A
+movetype = A
+physics = N
+[State 3030, send target]
+type = TargetState
+trigger1 = Time = 0
+value = 270
+[Statedef 270]
+type = A
+movetype = H
+physics = N
+[State 270, face away]
+type = Turn
+trigger1 = Time = 0
+trigger1 = P2Dist X < 0
+[State 270, travel with helper]
+type = VelSet
+trigger1 = Time = 0
+x = -8
+y = -.2
+`);
+    const state = createInitialGameState();
+    state.players[0] = { ...state.players[0], x: 200, physics: 'N', vx: 0, vy: 0 };
+    state.players[1] = { ...state.players[1], x: 340, facing: 1, physics: 'N', vx: 0, vy: 0 };
+    let helpers = spawnHelper(state.helpers, {
+      helperId: 3010, rootEntityId: 1, parentEntityId: 1, ownerCharacterId: 1,
+      stateOwnerId: 1, animationOwnerId: 1, stateNo: 3030, x: 326, y: 0,
+      facing: 1, keyCtrl: false, ownPal: false, spawnFrame: -1, parent: state.players[0],
+    }, cns);
+    helpers = {
+      ...helpers,
+      entries: helpers.entries.map((helper) => ({
+        ...helper,
+        player: {
+          ...helper.player,
+          targets: [{ playerId: 2, hitDefId: 3010, activeHitDefId: 7 }],
+        },
+      })),
+    };
+
+    const result = stepCnsStateRuntime({ ...state, helpers }, cns).state;
+
+    expect(result.players[1]).toMatchObject({ stateNo: 270, stateTime: 0, facing: -1, vx: 8, vy: -0.2 });
+  });
+
   it('applies common target mutations to the registered target selected by HitDef id', () => {
     const cns = parseCnsText(`
 [Statedef 200]
@@ -88,6 +169,68 @@ value = -100
     expect(result.state.players[0].hitDiagnosticLines?.join('\n')).toContain('result=noop reason=target_not_found');
   });
 
+  it('scales TargetLifeAdd by attack and defense multipliers unless absolute is enabled', () => {
+    const scaled = parseCnsText(`
+[Statedef 200]
+[State 200, Attack multiplier]
+type = AttackMulSet
+trigger1 = 1
+value = .5
+[State 200, Damage]
+type = TargetLifeAdd
+trigger1 = 1
+value = -100
+`);
+    const initial = targetState();
+    initial.players[1] = { ...initial.players[1], defenseMultiplier: .8 } as typeof initial.players[1];
+    expect(stepCnsStateRuntime(initial, scaled).state.players[1].life).toBe(760);
+
+    const absolute = parseCnsText(`
+[Statedef 200]
+[State 200, Attack multiplier]
+type = AttackMulSet
+trigger1 = 1
+value = .5
+[State 200, Absolute damage]
+type = TargetLifeAdd
+trigger1 = 1
+value = -100
+absolute = 1
+`);
+    expect(stepCnsStateRuntime(initial, absolute).state.players[1].life).toBe(700);
+  });
+
+  it('honors TargetLifeAdd kill = 0', () => {
+    const cns = parseCnsText(`
+[Statedef 200]
+[State 200, Non-lethal damage]
+type = TargetLifeAdd
+trigger1 = 1
+value = -1000
+kill = 0
+absolute = 1
+`);
+    expect(stepCnsStateRuntime(targetState(), cns).state.players[1].life).toBe(1);
+  });
+
+  it('does not let a non-finite multiplier poison target Life', () => {
+    const cns = parseCnsText(`
+[Statedef 200]
+[State 200, Fatal damage]
+type = TargetLifeAdd
+trigger1 = 1
+value = -99999
+`);
+    const state = targetState();
+    state.players[0] = { ...state.players[0], attackMultiplier: Number.NaN } as typeof state.players[0];
+    state.players[1] = { ...state.players[1], life: 1, defenseMultiplier: .85 } as typeof state.players[1];
+
+    const result = stepCnsStateRuntime(state, cns).state;
+
+    expect(result.players[1].life).toBe(0);
+    expect(Number.isFinite(result.players[1].life)).toBe(true);
+  });
+
   it('maintains a finite TargetBind after both players move and then releases it', () => {
     const cns = parseCnsText(`
 [Statedef 200]
@@ -119,6 +262,54 @@ pos = 10, -20
 
     const released = stepCnsPhysicsMotion(second, cns);
     expect(released.players[1]).toMatchObject({ x: 126, y: 0, vx: 12, vy: 0 });
+  });
+
+  it('keeps a Helper-owned TargetBind attached to the unique Helper entity', () => {
+    const cns = parseCnsText(`
+[Statedef 0]
+physics = N
+[Statedef 3735]
+type = S
+movetype = A
+physics = N
+[State 3735, rock bind]
+type = TargetBind
+trigger1 = Time = 0
+time = 3
+pos = 10, -20
+`);
+    const state = createInitialGameState();
+    state.players[0] = { ...state.players[0], stateNo: 0, x: 50, vx: 0, vy: 0 };
+    let helpers = spawnHelper(state.helpers, {
+      helperId: 3725, rootEntityId: 1, parentEntityId: 1, ownerCharacterId: 1,
+      stateOwnerId: 1, animationOwnerId: 1, stateNo: 3735, x: 200, y: 100,
+      facing: -1, keyCtrl: false, ownPal: false, spawnFrame: -1, parent: state.players[0],
+    }, cns);
+    helpers = {
+      ...helpers,
+      entries: helpers.entries.map((helper) => ({
+        ...helper,
+        player: {
+          ...helper.player,
+          vx: 5,
+          vy: -2,
+          targets: [{ playerId: 2, hitDefId: 3725, activeHitDefId: 7 }],
+        },
+      })),
+    };
+
+    const activated = stepCnsStateRuntime({ ...state, helpers }, cns).state;
+    expect(activated.players[1]).toMatchObject({
+      x: 190, y: 80, vx: 5, vy: -2,
+      targetBind: { ownerId: 3, remaining: 3, offsetX: 10, offsetY: -20 },
+    });
+
+    const moved = stepCnsPhysicsMotion(activated, cns);
+    expect(moved.helpers.entries[0].player).toMatchObject({ x: 205, y: 98 });
+    expect(moved.players[1]).toMatchObject({
+      x: 195, y: 78, vx: 5, vy: -2,
+      targetBind: { ownerId: 3, remaining: 2 },
+    });
   });
 
   it('uses the default one-tick duration and leaves a stationary target stopped on release', () => {

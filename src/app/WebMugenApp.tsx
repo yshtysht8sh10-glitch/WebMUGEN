@@ -103,7 +103,7 @@ import { analyzeCnsCoverage } from '../core/cns/CnsCoverageDiagnostics';
 import type { CnsCoverageDiagnostics } from '../core/cns/CnsCoverageDiagnostics';
 import {
   advanceExternalCnsStateEntryFrame,
-  enterCnsStateAndRunTimeZero,
+  enterCnsStateAndRunTimeZeroWithTrace,
   stepCnsStateRuntime,
   type CnsExecutedControllerRef,
   type CnsRuntimeTrace,
@@ -835,6 +835,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
           const processedProjectileEventCount = projectileEvents.length;
           let pauseDuringFrame = nextState.pause ?? createInitialPauseState();
           let pausedThisFrame = isGamePaused(pauseDuringFrame);
+          const externalStateEntryTraces: CnsRuntimeTrace[] = [];
           const beforePhysicsState = nextState;
           if (ENABLE_RUNTIME_FALLBACKS) {
             nextState = stepFallbackMotion(nextState);
@@ -862,12 +863,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
               character.air,
               aiLogEnabled && runtimeSettingsRef.current.hitDiagnostics,
               beforePhysicsState,
-              (player, opponent, stateNo) => advanceExternalCnsStateEntryFrame(enterCnsStateAndRunTimeZero(
-                player,
-                opponent,
-                stateNo,
-                character.cns,
-                {
+              (player, opponent, stateNo) => {
+                const entry = enterCnsStateAndRunTimeZeroWithTrace(player, opponent, stateNo, character.cns, {
                   gameTime: nextState.frame,
                   getAnimationDuration: (animNo) => getMugenAnimEndTime(character.air, animNo),
                   getAnimationElementNo: (animNo, animTime) => {
@@ -876,6 +873,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
                   },
                   getAnimationTriggerInfo: (animNo, animTime) => getAnimationTriggerInfo(character.air, animNo, animTime),
                   hitDiagnostics: aiLogEnabled && runtimeSettingsRef.current.hitDiagnostics,
+                  traceDiagnostics: traceDiagnosticsEnabled,
                   onSoundPlay: (event) => soundEvents.push(event),
                   onSoundStop: (event) => soundEvents.push(event),
                   onSoundPan: (event) => soundEvents.push(event),
@@ -905,9 +903,10 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
                   roundWinner: nextRoundState.winner,
                   roundEndReason: nextRoundState.endReason,
                   teamMode: 'single',
-                },
-                player.id === 1 ? p1Commands : p2Commands,
-              )),
+                }, player.id === 1 ? p1Commands : p2Commands);
+                externalStateEntryTraces.push(entry.trace);
+                return advanceExternalCnsStateEntryFrame(entry.player);
+              },
               (entityId) => {
                 if (!pausedThisFrame) return true;
                 const helper = nextState.helpers.entries.find((entry) => entry.entityId === entityId);
@@ -975,6 +974,13 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
             nextState = hitEffects.state;
             runtimeEventDiagnosticLines.push(...processSoundRuntimeEvents(hitEffects.soundEvents, character.sounds, null, audioRuntimeRef.current, aiLogEnabled));
             nextState = applyFallbackHitRecovery(nextState, aiLogEnabled && runtimeSettingsRef.current.hitDiagnostics);
+            if (externalStateEntryTraces.length > 0) {
+              nextCnsTraces = [...nextCnsTraces, ...externalStateEntryTraces];
+              // HitDef custom-state entry occurs after the ordinary CNS and
+              // physics passes. Preserve that committed state in the readable
+              // history so its Time=0 controllers do not disappear.
+              nextReadableHistoryState = nextState;
+            }
           }
           if (runtimeEventDiagnosticLines.length > 0) {
             nextState = { ...nextState, hitDiagnosticLines: [...(nextState.hitDiagnosticLines ?? []), ...runtimeEventDiagnosticLines] };
@@ -3648,12 +3654,18 @@ export function CharacterSourceFilesViewer({
   const [selectedSndSampleKey, setSelectedSndSampleKey] = useState<string | null>(null);
   const [sffZoom, setSffZoom] = useState(1);
   const [sffPan, setSffPan] = useState({ x: 0, y: 0 });
+  const [sourceViewport, setSourceViewport] = useState({ path: '', selectedLine: 1, viewportLine: 1 });
   const fallbackSelection = files[0] ? { path: files[0].path, line: 1 } : null;
   const effectiveSelection = selection && files.some((file) => file.path === selection.path) ? selection : fallbackSelection;
   const selectedFile = effectiveSelection ? files.find((file) => file.path === effectiveSelection.path) : null;
   const selectedLineId = effectiveSelection ? cnsSourceLineId(effectiveSelection.path, effectiveSelection.line) : null;
   const selectedPath = selectedFile?.path ?? '';
   const selectedLine = effectiveSelection?.line ?? 1;
+  const sourceLines = useMemo(() => selectedFile?.text.split(/\r?\n/) ?? [], [selectedFile?.text]);
+  const sourceViewportLine = sourceViewport.path === selectedPath && sourceViewport.selectedLine === selectedLine
+    ? sourceViewport.viewportLine
+    : selectedLine;
+  const sourceLineWindow = calculateSourceLineWindow(sourceLines.length, selectedLine, sourceViewportLine);
   const sourceOutline = useMemo(
     () => selectedFile ? createSourceOutline(selectedFile) : [],
     [selectedFile],
@@ -3715,6 +3727,12 @@ export function CharacterSourceFilesViewer({
   const handleCodeScroll = () => {
     if (!selectedPath || !codeRef.current) return;
     effectiveScrollPositionsRef.current[selectedPath] = codeRef.current.scrollTop;
+    if (sourceLines.length <= SOURCE_LINE_VIRTUALIZATION_THRESHOLD) return;
+    const approximateLine = Math.max(1, Math.floor(codeRef.current.scrollTop / SOURCE_LINE_HEIGHT) + 1);
+    if (approximateLine < sourceLineWindow.start + SOURCE_LINE_WINDOW_EDGE
+      || approximateLine > sourceLineWindow.end - SOURCE_LINE_WINDOW_EDGE) {
+      setSourceViewport({ path: selectedPath, selectedLine, viewportLine: approximateLine });
+    }
   };
 
   const handleOutlineClick = (item: SourceOutlineItem) => {
@@ -3789,7 +3807,6 @@ export function CharacterSourceFilesViewer({
     );
   }
 
-  const lines = selectedFile.text.split(/\r?\n/);
   return (
     <section className={`cns-source-viewer character-source-viewer syntax-theme-${syntaxTheme}`}>
       <h2>{text('Character Files', 'キャラクターファイル')}</h2>
@@ -4018,8 +4035,11 @@ export function CharacterSourceFilesViewer({
             </div>
           ) : (
             <div className="cns-source-code" ref={codeRef} onScroll={handleCodeScroll}>
-              {lines.map((line, index) => {
-                const lineNo = index + 1;
+              {sourceLineWindow.start > 0 ? (
+                <div aria-hidden="true" className="cns-source-line-spacer" style={{ height: sourceLineWindow.start * SOURCE_LINE_HEIGHT }} />
+              ) : null}
+              {sourceLines.slice(sourceLineWindow.start, sourceLineWindow.end).map((line, index) => {
+                const lineNo = sourceLineWindow.start + index + 1;
                 const selected = lineNo === effectiveSelection?.line;
                 return (
                   <div
@@ -4047,6 +4067,9 @@ export function CharacterSourceFilesViewer({
                   </div>
                 );
               })}
+              {sourceLineWindow.end < sourceLines.length ? (
+                <div aria-hidden="true" className="cns-source-line-spacer" style={{ height: (sourceLines.length - sourceLineWindow.end) * SOURCE_LINE_HEIGHT }} />
+              ) : null}
             </div>
           ) : (
             <div className="character-source-binary-empty">
@@ -4858,6 +4881,23 @@ export function createSourceNavigationTargets(
   files: readonly CharacterSourceFile[],
 ): Map<number, SourceNavigationTarget> {
   const targets = new Map<number, SourceNavigationTarget>();
+  const stateSelections = new Map<number, CnsSourceSelection>();
+  const preferredStateSelections = new Map<number, CnsSourceSelection>();
+  const animationSelections = new Map<number, CnsSourceSelection>();
+  for (const candidate of files) {
+    const outline = createSourceOutline(candidate);
+    for (const item of outline) {
+      const value = Number(item.value);
+      if (!Number.isFinite(value)) continue;
+      const selection = { path: candidate.path, line: item.line };
+      if (item.kind === 'statedef') {
+        if (!stateSelections.has(value)) stateSelections.set(value, selection);
+        if (candidate.path === file.path && !preferredStateSelections.has(value)) preferredStateSelections.set(value, selection);
+      } else if (item.kind === 'air-action' && !animationSelections.has(value)) {
+        animationSelections.set(value, selection);
+      }
+    }
+  }
   const lines = file.text.split(/\r?\n/);
   let insideController = false;
   let controllerType = '';
@@ -4880,9 +4920,13 @@ export function createSourceNavigationTargets(
       continue;
     }
 
-    const navigable = key === 'anim' || (key === 'value' && insideController && controllerType === 'changeanim')
+    const navigable = key === 'anim'
+      || (key === 'value' && insideController && (controllerType === 'changeanim' || controllerType === 'changeanim2'))
       ? 'animation'
-      : key === 'stateno' || (key === 'value' && insideController && controllerType === 'changestate')
+      : key === 'stateno'
+        || key === 'p1stateno'
+        || key === 'p2stateno'
+        || (key === 'value' && insideController && controllerType === 'changestate')
         ? 'state'
         : null;
     if (!navigable) continue;
@@ -4891,8 +4935,8 @@ export function createSourceNavigationTargets(
     const value = Number(valueMatch[1]);
     const start = valueMatch.index + valueMatch[0].lastIndexOf(valueMatch[1]);
     const selection = navigable === 'animation'
-      ? findAirActionSourceSelection(files, value)
-      : findStateDefSourceSelection(files, value, file.path);
+      ? animationSelections.get(value) ?? null
+      : preferredStateSelections.get(value) ?? stateSelections.get(value) ?? null;
     if (!selection) continue;
     targets.set(index + 1, {
       end: start + valueMatch[1].length,
@@ -4904,6 +4948,22 @@ export function createSourceNavigationTargets(
   }
 
   return targets;
+}
+
+const SOURCE_LINE_HEIGHT = 18;
+const SOURCE_LINE_VIRTUALIZATION_THRESHOLD = 2_000;
+const SOURCE_LINE_WINDOW_SIZE = 800;
+const SOURCE_LINE_WINDOW_EDGE = 120;
+
+export function calculateSourceLineWindow(
+  lineCount: number,
+  selectedLine: number,
+  viewportLine = selectedLine,
+): { start: number; end: number } {
+  if (lineCount <= SOURCE_LINE_VIRTUALIZATION_THRESHOLD) return { start: 0, end: lineCount };
+  const viewportIndex = Math.max(0, Math.min(lineCount - 1, Math.trunc(viewportLine) - 1));
+  let start = Math.max(0, Math.min(lineCount - SOURCE_LINE_WINDOW_SIZE, viewportIndex - Math.floor(SOURCE_LINE_WINDOW_SIZE / 2)));
+  return { start, end: Math.min(lineCount, start + SOURCE_LINE_WINDOW_SIZE) };
 }
 
 function findFollowingAssignment(
@@ -5605,7 +5665,8 @@ export function shouldEvaluateHumanLogFrame(
   traces: readonly CnsRuntimeTrace[],
 ): boolean {
   if (mode === 'state-transition') {
-    return traces.some((trace) => trace.stateNo !== trace.afterStateNo);
+    return traces.some((trace) => trace.stateNo !== trace.afterStateNo
+      || (trace.externalEntryFromStateNo !== undefined && trace.externalEntryFromStateNo !== trace.stateNo));
   }
   if (mode !== 'controller-activated') return true;
   return traces.some((trace) => trace.executedControllers.some((name) => !name.startsWith('dbg ')));
@@ -5892,7 +5953,36 @@ function formatRuntimeEntitySatisfiedStateDefTriggerSummary(
   trace?: CnsRuntimeTrace,
 ): string {
   const mugenAnimTime = calculateMugenAnimTime(player.animTime, getAnimEndTime?.(player.animNo));
-  const context = { player, opponent, commands, animTime: mugenAnimTime, constants: cns, gameTime: state.frame };
+  const helper = state.helpers.entries.find((entry) => entry.player === player);
+  const rootEntityId = helper?.rootEntityId ?? player.id;
+  const resolveEntityById = (entityId: number) => {
+    if (entityId === 1 || entityId === 2) return state.players[entityId - 1];
+    return state.helpers.entries.find((entry) => entry.entityId === entityId)?.player;
+  };
+  const context: CnsRuntimeTriggerContext = {
+    player,
+    opponent,
+    commands,
+    animTime: mugenAnimTime,
+    constants: cns,
+    gameTime: state.frame,
+    isHelper: helper !== undefined || player.helperId !== undefined,
+    helperId: helper?.helperId ?? player.helperId,
+    entityId: helper?.entityId ?? player.id,
+    numHelper: (helperId) => state.helpers.entries.filter((entry) => (
+      entry.rootEntityId === rootEntityId && (helperId === undefined || entry.helperId === Math.trunc(helperId))
+    )).length,
+    resolveRedirectEntity: (kind, argument) => {
+      if (kind === 'root') return state.players[rootEntityId - 1];
+      if (kind === 'parent') return helper ? resolveEntityById(helper.parentEntityId) : undefined;
+      if (kind === 'helper') return state.helpers.entries.find((entry) => (
+        entry.rootEntityId === rootEntityId && (argument === undefined || entry.helperId === argument)
+      ))?.player;
+      if (kind === 'playerid' && argument !== undefined) return resolveEntityById(argument);
+      return undefined;
+    },
+    playerIdExists: (entityId) => resolveEntityById(entityId) !== undefined,
+  };
   const summaries = cns.states
     .filter((stateDef) => stateDef.stateNo === player.stateNo)
     .flatMap((stateDef) => formatSatisfiedStateDefTriggers(stateDef, context, trace?.executedControllerRefs));

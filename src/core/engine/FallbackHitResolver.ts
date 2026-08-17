@@ -25,7 +25,8 @@ type PriorityDecision = {
   opponentType: string;
 };
 
-type HitEligibility = { accepted: boolean; reason: string; targetClass: string };
+export type HitEligibility = { accepted: boolean; reason: string; targetClass: string };
+type TeamRelation = 'enemy' | 'friendly';
 
 export function resolveFallbackHits(
   state: GameState,
@@ -92,34 +93,42 @@ export function resolveFallbackHits(
   p2 = mergeCombatRoles(p2Result.attacker, p1Result.target, p1Contacted, p2Contacted);
 
   const helpers = state.helpers.entries.map((helper) => {
-    const target = helper.rootEntityId === 1 ? p2 : p1;
-    const attacker = pruneTargets(helper.player, [target]);
+    let attacker = pruneTargets(helper.player, [p1, p2]);
     const snapshotHelper = animationSnapshot?.helpers.entries.find((entry) => entry.entityId === helper.entityId)?.player;
     const collisionAttacker = withSnapshotAnimation(attacker, snapshotHelper);
-    const snapshotTarget = helper.rootEntityId === 1 ? animationSnapshot?.players[1] : animationSnapshot?.players[0];
-    const collisionTarget = withSnapshotAnimation(target, snapshotTarget);
     const helperCanResolveHit = canEntityResolveHit(helper.entityId);
-    const result = resolveAttack(
-      attacker,
-      target,
-      helperCanResolveHit ? getPlayerAttackBoxes(collisionAttacker, airDocument) : [],
-      getPlayerBodyBoxes(collisionTarget, airDocument),
-      airDocument,
-      diagnosticsEnabled,
-      undefined,
-      enterOverrideState,
-      helperCanResolveHit,
-    );
-    hitDiagnosticLines.push(...result.diagnosticLines);
-    if (result.hitEvent || result.contactApplied) {
-      if (result.hitEvent) hitEvents.push(result.hitEvent);
-      hitDiagnosticLines.push(`raw.helper_hit_collision entity=${helper.entityId} helperId=${helper.helperId} root=p${helper.rootEntityId} target=p${target.id} result=accepted`);
-      if (helper.rootEntityId === 1) p2 = result.target;
-      else p1 = result.target;
-    } else if (diagnosticsEnabled && attacker.activeHitDef) {
-      hitDiagnosticLines.push(`raw.helper_hit_collision entity=${helper.entityId} helperId=${helper.helperId} root=p${helper.rootEntityId} target=p${target.id} result=no_contact`);
+    const attackBoxes = helperCanResolveHit ? getPlayerAttackBoxes(collisionAttacker, airDocument) : [];
+    // Resolve the ordinary opposing root first. This preserves the normal P2
+    // target preference when a B/F HitDef also makes friendly roots eligible.
+    const targetIds: Array<1 | 2> = [helper.rootEntityId === 1 ? 2 : 1, helper.rootEntityId];
+    for (const targetId of targetIds) {
+      const target = targetId === 1 ? p1 : p2;
+      const snapshotTarget = animationSnapshot?.players[targetId - 1];
+      const relation: TeamRelation = targetId === helper.rootEntityId ? 'friendly' : 'enemy';
+      const result = resolveAttack(
+        attacker,
+        target,
+        attackBoxes,
+        getPlayerBodyBoxes(withSnapshotAnimation(target, snapshotTarget), airDocument),
+        airDocument,
+        diagnosticsEnabled,
+        undefined,
+        enterOverrideState,
+        helperCanResolveHit,
+        relation,
+      );
+      attacker = result.attacker;
+      hitDiagnosticLines.push(...result.diagnosticLines);
+      if (result.hitEvent || result.contactApplied) {
+        if (result.hitEvent) hitEvents.push(result.hitEvent);
+        hitDiagnosticLines.push(`raw.helper_hit_collision entity=${helper.entityId} helperId=${helper.helperId} root=p${helper.rootEntityId} target=p${target.id} result=accepted`);
+        if (targetId === 1) p1 = result.target;
+        else p2 = result.target;
+      } else if (diagnosticsEnabled && attacker.activeHitDef && hitDefAffectsTeam(attacker.activeHitDef, relation)) {
+        hitDiagnosticLines.push(`raw.helper_hit_collision entity=${helper.entityId} helperId=${helper.helperId} root=p${helper.rootEntityId} target=p${target.id} result=no_contact`);
+      }
     }
-    return { ...helper, player: result.attacker };
+    return { ...helper, player: attacker };
   });
 
   return {
@@ -141,6 +150,7 @@ function resolveAttack(
   priorityDecision: PriorityDecision = { allowed: true, reason: 'no_clash', own: 4, opponent: 4, ownType: 'Hit', opponentType: 'Hit' },
   enterOverrideState?: (player: PlayerState, opponent: PlayerState, stateNo: number) => PlayerState,
   canResolveHit = true,
+  teamRelation: TeamRelation = 'enemy',
 ): { attacker: PlayerState; target: PlayerState; hitEvent: HitEvent | null; diagnosticLines: string[]; contactApplied?: boolean } {
   const diagnosticLines: string[] = [];
   if (!canResolveHit) {
@@ -163,6 +173,13 @@ function resolveAttack(
     if (diagnosticsEnabled) diagnosticLines.push(
       `raw.hit_collision attacker=p${attacker.id} target=p${target.id}`,
       `${collisionHeader} result=rejected reason=${!active ? 'active_hitdef_missing' : attackBoxes.length === 0 ? 'clsn1_missing' : 'clsn2_missing'}`,
+    );
+    return { attacker, target, hitEvent: null, diagnosticLines };
+  }
+  if (!hitDefAffectsTeam(active, teamRelation)) {
+    if (diagnosticsEnabled) diagnosticLines.push(
+      `raw.hit_collision attacker=p${attacker.id} target=p${target.id}`,
+      `${collisionHeader} result=rejected reason=affectteam affectteam=${active.affectTeam ?? 'E'} relation=${teamRelation}`,
     );
     return { attacker, target, hitEvent: null, diagnosticLines };
   }
@@ -230,6 +247,22 @@ function resolveAttack(
     && entry.remaining > 0
     && hitAttributeMatchesFilter(active.attr, entry.attr));
   if (override) {
+    const overrideHitTimeKind = override.forceAir
+      ? 'air'
+      : target.stateType === 'L' ? 'down' : target.stateType === 'A' ? 'air' : 'ground';
+    const overrideHitTime = overrideHitTimeKind === 'down'
+      ? active.downHitTime ?? 28
+      : overrideHitTimeKind === 'air' ? active.airHitTime ?? 28 : active.groundHitTime ?? 28;
+    const overrideVelocity = overrideHitTimeKind === 'down'
+      ? active.downVelocity ?? active.airVelocity
+      : overrideHitTimeKind === 'air' ? active.airVelocity : active.groundVelocity;
+    const overrideGetHitVars = createGetHitVarSnapshot(
+      active,
+      damage,
+      overrideHitTime,
+      overrideHitTimeKind,
+      overrideVelocity,
+    );
     const marked = activeHitDefId === null
       ? attacker
       : recordMoveContact(markAttackerHit(attacker, activeHitDefId, target.id, active.hitId, active.pauseTime.attacker), activeHitDefId, 'hit');
@@ -244,6 +277,10 @@ function resolveAttack(
       stateType: override.forceAir ? 'A' : target.stateType,
       stateOwnerId: override.stateOwnerId,
       selfStateOwnerId: target.selfStateOwnerId ?? target.id,
+      // HitOverride replaces normal damage/reaction, but WinMUGEN still exposes
+      // the incoming HitDef through GetHitVar in the destination State.
+      getHitVars: overrideGetHitVars,
+      getHitVarUnsupportedKeys: ['fall.time', 'zoff'],
       // WinMUGEN clears P2's inherited hitpause before entering the
       // HitOverride destination. The attacker's P1 pausetime still applies.
       hitPause: 0,
@@ -251,7 +288,9 @@ function resolveAttack(
     if (enterOverrideState) overriddenTarget = enterOverrideState(overriddenTarget, attacker, override.stateNo);
     if (diagnosticsEnabled) diagnosticLines.push(
       `raw.hit_override attacker=p${attacker.id} target=p${target.id}`,
-      `  activeHitDefId=${activeHitDefId ?? 'none'} slot=${override.slot} attr=${override.attr} state=${override.stateNo} forceair=${override.forceAir ? 1 : 0} remaining=${override.remaining} result=accepted damage=0`,
+      `  activeHitDefId=${activeHitDefId ?? 'none'} slot=${override.slot} attr=${override.attr} state=${override.stateNo} forceair=${override.forceAir ? 1 : 0} remaining=${override.remaining} result=accepted damage=0 getHitVarKind=${overrideHitTimeKind}`,
+      `raw.gethitvar_snapshot target=p${target.id}`,
+      `  activeHitDefId=${activeHitDefId ?? 'none'} keys=${Object.keys(overrideGetHitVars).sort().join(',')} unsupportedKeys=fall.time,zoff source=hitoverride`,
     );
     return { attacker: marked, target: overriddenTarget, hitEvent: null, diagnosticLines, contactApplied: true };
   }
@@ -471,6 +510,11 @@ function resolveAttack(
     hitEvent,
     diagnosticLines,
   };
+}
+
+function hitDefAffectsTeam(active: NonNullable<PlayerState['activeHitDef']>, relation: TeamRelation): boolean {
+  const affectTeam = active.affectTeam ?? 'E';
+  return affectTeam === 'B' || (affectTeam === 'E' ? relation === 'enemy' : relation === 'friendly');
 }
 
 function resolveReversal(
@@ -740,11 +784,13 @@ function normalizePriorityType(value: string | undefined): 'Hit' | 'Miss' | 'Dod
   return 'Unsupported';
 }
 
-function evaluateHitEligibility(hitDef: NonNullable<PlayerState['activeHitDef']>, target: PlayerState): HitEligibility {
+export function evaluateHitEligibility(hitDef: NonNullable<PlayerState['activeHitDef']>, target: PlayerState): HitEligibility {
   const targetClass = classifyHitTarget(target);
   if (target.life <= 0) return { accepted: false, reason: 'target_ko', targetClass };
   const hitFlag = (hitDef.hitFlag ?? 'MAF').replace(/\s+/g, '').toUpperCase();
-  if (!/^[HLAFDMP+-]+$/.test(hitFlag)) return { accepted: false, reason: 'unsupported_hitflag', targetClass };
+  if (!/^[HLAFDMP+-]+$/.test(hitFlag) || !/[HLAM]/.test(hitFlag)) {
+    return { accepted: false, reason: 'unsupported_hitflag', targetClass };
+  }
   if (hitFlag.includes('+') && target.moveType !== 'H') return { accepted: false, reason: 'hitflag_requires_hit_state', targetClass };
   if (hitFlag.includes('-') && target.moveType === 'H') return { accepted: false, reason: 'hitflag_excludes_hit_state', targetClass };
   const requiredFlag = targetClass === 'stand' ? ['H', 'M']
@@ -889,6 +935,11 @@ function applyHitDefAuxiliary(
   const target = {
     ...targetAfterContact,
     ...(hitDef.p2SprPriority === undefined ? {} : { sprPriority: hitDef.p2SprPriority }),
+    ...(!guarded && hitDef.p2Facing
+      // WinMUGEN defines p2facing relative to P1's Facing, not world position:
+      // positive faces P2 opposite P1; negative faces P2 the same way as P1.
+      ? { facing: (attackerBefore.facing * (hitDef.p2Facing > 0 ? -1 : 1)) as 1 | -1 }
+      : {}),
   };
   return {
     attacker: attackerPower === undefined ? attacker : addPlayerPower(attacker, attackerPower),
@@ -924,6 +975,10 @@ function formatHitAuxiliaryDiagnostics(
   if (hitDef.p1SprPriority !== undefined || hitDef.p2SprPriority !== undefined) lines.push(
     `raw.hit_sprpriority attacker=p${attackerBefore.id} target=p${targetBefore.id}`,
     `  activeHitDefId=${activeHitDefId ?? 'none'} p1=${hitDef.p1SprPriority ?? '-'} p2=${hitDef.p2SprPriority ?? '-'} result=applied`,
+  );
+  if (!guarded && hitDef.p2Facing) lines.push(
+    `raw.hit_facing attacker=p${attackerBefore.id} target=p${targetBefore.id}`,
+    `  activeHitDefId=${activeHitDefId ?? 'none'} p2facing=${hitDef.p2Facing} attackerFacing=${attackerBefore.facing} targetBefore=${targetBefore.facing} targetAfter=${result.target.facing} result=applied`,
   );
   return lines;
 }

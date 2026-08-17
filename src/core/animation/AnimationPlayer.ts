@@ -93,10 +93,14 @@ export function getAnimationTriggerInfo(
     cursor += Math.max(1, element.duration);
     return time;
   });
-  // WinMUGEN keeps AnimElem/AnimElemTime on the action's original timeline.
-  // A finite AIR loop repeats the displayed elements, but does not start their
-  // trigger timeline again on later passes.
-  const elementStarted = elementTimes[current.elementIndex] === 0;
+  // A finite action without LoopStart repeats from its first element and bare
+  // AnimElem controllers re-enter on each displayed pass. Explicit LoopStart
+  // and a negative-duration terminal hold retain the original trigger timeline.
+  const implicitlyLooped = (current.action.loopStartIndex === null || current.action.loopStartIndex === undefined)
+    && current.action.elements.every((element) => element.duration >= 0);
+  const elementStarted = implicitlyLooped
+    ? current.localTime === 0
+    : elementTimes[current.elementIndex] === 0;
 
   return {
     elementNo: current.elementIndex + 1,

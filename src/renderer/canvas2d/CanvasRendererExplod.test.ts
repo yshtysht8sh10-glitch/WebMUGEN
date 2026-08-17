@@ -113,6 +113,48 @@ describe('CanvasRenderer Explod integration', () => {
     expect(drawImage.mock.calls.map(([image]) => image)).toEqual([portrait, p2, p1, accent]);
   });
 
+  it('draws a same-priority full-screen Explod behind the root like T-H-M-A State 3640', () => {
+    const drawImage = vi.fn();
+    const context = fakeContext({ drawImage, scale: vi.fn(), translate: vi.fn() });
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+    const state = createInitialGameState();
+    state.players = [
+      { ...state.players[0], animNo: 3640, sprPriority: 5 },
+      { ...state.players[1], sprPriority: 0 },
+    ];
+    state.explods.entries = [
+      entry({
+        runtimeId: 1,
+        owner: { entityId: 1, rootPlayerId: 1 },
+        animationOwner: { entityId: 1, rootPlayerId: 1 },
+        animNo: 3603,
+        spritePriority: 5,
+      }),
+    ];
+    const playerImage = {} as HTMLImageElement;
+    const opponentImage = {} as HTMLImageElement;
+    const backgroundImage = {} as HTMLImageElement;
+    const p1Air: AirDocument = { actions: [
+      { actionNo: 3640, elements: [{ groupNo: 3130, imageNo: 1, offsetX: 0, offsetY: 0, duration: 1, clsn1: [], clsn2: [] }], defaultClsn1: [], defaultClsn2: [] },
+      { actionNo: 3603, elements: [{ groupNo: 3602, imageNo: 1, offsetX: 0, offsetY: 0, duration: 1, clsn1: [], clsn2: [] }], defaultClsn1: [], defaultClsn2: [] },
+    ] };
+    const p1Sprites: SpritePack = { sprites: new Map([
+      ['3130,1', { groupNo: 3130, imageNo: 1, src: '', xAxis: 0, yAxis: 0, image: playerImage }],
+      ['3602,1', { groupNo: 3602, imageNo: 1, src: '', xAxis: 0, yAxis: 0, image: backgroundImage }],
+    ]) };
+    const p2Air = air(0, 0, 0);
+    const p2Sprites: SpritePack = { sprites: new Map([
+      ['0,0', { groupNo: 0, imageNo: 0, src: '', xAxis: 0, yAxis: 0, image: opponentImage }],
+    ]) };
+
+    new CanvasRenderer(canvas, undefined, null, null, {
+      1: { airDocument: p1Air, spritePack: p1Sprites },
+      2: { airDocument: p2Air, spritePack: p2Sprites },
+    }).render(state, undefined, undefined, undefined, { collisionBoxesVisible: false, hudVisible: false });
+
+    expect(drawImage.mock.calls.map(([image]) => image)).toEqual([opponentImage, backgroundImage, playerImage]);
+  });
+
   it('draws a same-priority newly-created Helper behind root players', () => {
     const drawImage = vi.fn();
     const context = fakeContext({ drawImage, scale: vi.fn(), translate: vi.fn() });
@@ -205,6 +247,8 @@ describe('CanvasRenderer Explod integration', () => {
 
       const diagnostics = new CanvasRenderer(canvas, undefined, null, null, { 2: assets }).render(state);
 
+      expect(layerContext.fillStyle).toBe('#fff');
+      expect(layerContext.fillRect).toHaveBeenCalledWith(0, 0, 640, 360);
       expect(layerDrawImage).toHaveBeenCalledWith(canvas, 0, 0);
       expect(layerDrawImage).toHaveBeenCalledWith(image, -2, -7);
       expect(mainDrawImage).toHaveBeenCalledWith(layer, 0, 0);
@@ -272,7 +316,8 @@ describe('CanvasRenderer Explod integration', () => {
     const observed: Array<{ x: number; composite: GlobalCompositeOperation }> = [];
     let context: CanvasRenderingContext2D;
     const translate = vi.fn((x: number) => observed.push({ x, composite: context.globalCompositeOperation }));
-    context = fakeContext({ drawImage: vi.fn(), scale: vi.fn(), translate });
+    const rotate = vi.fn();
+    context = { ...fakeContext({ drawImage: vi.fn(), scale: vi.fn(), translate }), rotate } as unknown as CanvasRenderingContext2D;
     const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
     const state = createInitialGameState();
     state.players[0] = {
@@ -280,7 +325,7 @@ describe('CanvasRenderer Explod integration', () => {
       animNo: 100,
       afterImage: {
         ...createAfterImageState(42, { frameGap: 6, transparency: 'add1' }),
-        frames: [{ x: 180, y: 285, facing: 1, animNo: 100, animTime: 0, age: 6 }],
+        frames: [{ x: 180, y: 285, facing: -1, animNo: 100, animTime: 0, age: 6, drawAngle: 10 }],
       },
     };
     const image = {} as HTMLImageElement;
@@ -290,6 +335,7 @@ describe('CanvasRenderer Explod integration', () => {
 
     expect(observed).toContainEqual({ x: 180, composite: 'lighter' });
     expect(observed).toContainEqual({ x: 220, composite: 'source-over' });
+    expect(rotate).toHaveBeenCalledWith(10 * Math.PI / 180);
     expect(diagnostics).toContainEqual(expect.stringContaining('raw.afterimage_draw entity=p1 captured=1 displayed=1 drawn=1'));
     expect(diagnostics).toContainEqual(expect.stringContaining('trans=add1 composite=lighter'));
   });

@@ -1,6 +1,6 @@
 import type { HitEvent, PlayerState, ProjectileState, Rect } from '../engine/types';
 import { intersects } from '../collision/CollisionBox';
-import { createGetHitVarSnapshot, createHitEffectEvent } from '../engine/FallbackHitResolver';
+import { createGetHitVarSnapshot, createHitEffectEvent, evaluateHitEligibility } from '../engine/FallbackHitResolver';
 import { recordMoveContact } from '../hitdef/MoveContactState';
 import { addPlayerPower } from '../power/PowerGauge';
 import { registerTarget } from '../hitdef/TargetState';
@@ -69,6 +69,21 @@ export function resolveProjectileHits(
     const targetBox = getPlayerFallbackBodyBox(target);
 
     if (target.hitPause === 0 && intersects(projectileBox, targetBox)) {
+      const eligibility = evaluateHitEligibility(projectile.hitDef, target);
+      if (!eligibility.accepted) {
+        const rejectedTarget = {
+          ...target,
+          hitDiagnosticLines: [
+            ...(target.hitDiagnosticLines ?? []),
+            `raw.projectile_hit_eligibility owner=p${projectile.ownerId} projectileId=${projectile.id} target=p${target.id}`,
+            `  hitflag=${projectile.hitDef.hitFlag ?? 'MAF'} targetClass=${eligibility.targetClass} stateType=${target.stateType} moveType=${target.moveType} result=rejected reason=${eligibility.reason}`,
+          ],
+        };
+        if (projectile.ownerId === 1) p2 = rejectedTarget;
+        else p1 = rejectedTarget;
+        remaining.push(projectile);
+        continue;
+      }
       const guarded = canGuardProjectile(target, projectile);
       const reactedTarget = guarded ? applyProjectileGuard(target, projectile) : applyProjectileHit(target, projectile);
       const givePower = guarded ? projectile.hitDef.givePower?.guarded : projectile.hitDef.givePower?.hit;
@@ -210,22 +225,24 @@ function applyHit(
   projectile: ProjectileState,
 ): PlayerState {
   const { hitDef } = projectile;
-  const isAirHit = defender.stateType === 'A' || defender.y < 285;
-  const velocity = isAirHit ? hitDef.airVelocity : hitDef.groundVelocity;
+  const isDownHit = defender.stateType === 'L';
+  const isAirHit = !isDownHit && (defender.stateType === 'A' || defender.y < 285);
+  const velocity = isDownHit ? hitDef.downVelocity ?? hitDef.airVelocity : isAirHit ? hitDef.airVelocity : hitDef.groundVelocity;
   const launched = velocity.y !== 0;
-  const hitTimeKind = isAirHit ? 'air' : 'ground';
-  const hitTime = (isAirHit ? hitDef.airHitTime : hitDef.groundHitTime) ?? 28;
+  const hitTimeKind = isDownHit ? 'down' : isAirHit ? 'air' : 'ground';
+  const hitTime = (isDownHit ? hitDef.downHitTime : isAirHit ? hitDef.airHitTime : hitDef.groundHitTime) ?? (isDownHit ? 20 : 28);
   const worldVelocityX = velocity.x * -projectile.facing;
   const appliedVelocity = {
     x: Object.is(worldVelocityX, -0) ? 0 : worldVelocityX,
     y: velocity.y,
   };
   const getHitVars = createGetHitVarSnapshot(hitDef, hitDef.damage, hitTime, hitTimeKind, velocity);
-  const stateNo = launched || isAirHit ? AIR_HIT_STATE : STAND_HIT_STATE;
+  const stateNo = isDownHit ? 5080 : launched || isAirHit ? AIR_HIT_STATE : STAND_HIT_STATE;
+  const animNo = isDownHit ? defender.animNo : stateNo;
   const comboHitCount = (defender.comboHitCount ?? 0) + Math.max(0, Math.trunc(hitDef.numHits ?? 1));
   const fallVelocity = {
     x: (hitDef.fall?.xVelocity ?? 0) * projectile.facing,
-    y: hitDef.fall?.yVelocity ?? -4.5,
+    y: isDownHit && launched && !hitDef.downBounce ? 0 : hitDef.fall?.yVelocity ?? -4.5,
   };
 
   return {
@@ -234,9 +251,9 @@ function applyHit(
     comboHitCount,
     stateNo,
     stateTime: 0,
-    animNo: stateNo,
+    animNo,
     animTime: 0,
-    stateType: launched || isAirHit ? 'A' : 'S',
+    stateType: isDownHit ? 'L' : launched || isAirHit ? 'A' : 'S',
     moveType: 'H',
     // WinMUGEN common get-hit states own gravity through GetHitVar(yaccel).
     // Physics=A here would either double-apply gravity or bypass that route.
@@ -264,16 +281,16 @@ function applyHit(
     hitStun: {
       activeHitDefId: hitDef.diagnosticId ?? null,
       selectedHitTime: hitTime,
-      kind: isAirHit ? 'air' : hitDef.groundHitTime === undefined ? 'fallback' : 'ground',
-      source: (isAirHit ? hitDef.airHitTime : hitDef.groundHitTime) === undefined ? 'hardcoded' : 'active_hitdef',
+      kind: (isDownHit ? hitDef.downHitTime : isAirHit ? hitDef.airHitTime : hitDef.groundHitTime) === undefined ? 'fallback' : hitTimeKind,
+      source: (isDownHit ? hitDef.downHitTime : isAirHit ? hitDef.airHitTime : hitDef.groundHitTime) === undefined ? 'hardcoded' : 'active_hitdef',
       targetStateTypeAtHit: defender.stateType,
       fallbackReason: (isAirHit ? hitDef.airHitTime : hitDef.groundHitTime) === undefined
         ? `missing_${hitTimeKind}_hittime`
         : undefined,
       elapsed: 0,
       lastStateNo: stateNo,
-      selectedAnim: stateNo,
-      getHitVarYVelocitySource: isAirHit ? 'air.velocity.y' : 'ground.velocity.y',
+      selectedAnim: animNo,
+      getHitVarYVelocitySource: isDownHit ? 'down.velocity.y' : isAirHit ? 'air.velocity.y' : 'ground.velocity.y',
       groundVelocityAtHit: { ...hitDef.groundVelocity },
       airVelocityAtHit: { ...hitDef.airVelocity },
       fallYVelocityAtHit: hitDef.fall?.yVelocity ?? 0,
@@ -289,6 +306,7 @@ function applyHit(
 }
 
 function canGuardProjectile(defender: PlayerState, projectile: ProjectileState): boolean {
+  if (defender.stateType === 'L') return false;
   if (!defender.guardIntent || !projectile.hitDef.guardFlag) return false;
   const flags = projectile.hitDef.guardFlag.toUpperCase();
   if (defender.stateType === 'A') return flags.includes('A');

@@ -59,6 +59,41 @@ describe('T-H-M-A airborne Darkness Finger wall carry', () => {
       vy: 1.5,
     });
   });
+
+  it('keeps the State 3410 airborne override and exits a missed rush at the front edge', async () => {
+    const assets = await loadCharacterFromDef(
+      'public/chars/T-H-M-A/T-H-M-A/T-H-M-A.def',
+      createFileSystemFetcher(),
+    );
+    const states = assets.cns.states.filter((state) => state.stateNo === 3410 || state.stateNo === 6140);
+    expect(states.map((state) => state.stateNo)).toEqual(expect.arrayContaining([3410, 6140]));
+
+    const initial = createInitialGameState();
+    const result = stepCnsStateRuntime({
+      ...initial,
+      players: [{
+        ...initial.players[0],
+        x: 912,
+        y: 200,
+        stateNo: 3410,
+        stateHeaderAppliedStateNo: 3410,
+        stateTime: 20,
+        stateType: 'A',
+        moveType: 'A',
+        physics: 'N',
+        animNo: 3411,
+        ctrl: false,
+        vars: { 21: 1 },
+      }, initial.players[1]],
+    }, { metadataSections: assets.cns.metadataSections, states }, {
+      getAnimationDuration: (animNo) => getMugenAnimEndTime(assets.air, animNo),
+    }).state;
+
+    expect(result.players[0]).toMatchObject({
+      stateNo: 6140,
+      prevStateNo: 3410,
+    });
+  });
 });
 
 function createFileSystemFetcher(): CharacterAssetFetcher {

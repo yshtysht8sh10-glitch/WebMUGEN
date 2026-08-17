@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useUiLanguage } from '../../app/UiLanguage';
 import type { ContentCatalog, ContentCatalogDocument, ContentKind } from '../catalog/ContentCatalogTypes';
 import { loadCatalogDirectoryHandle, saveCatalogDirectoryHandle } from './CatalogDirectoryStore';
-import { generateContentCatalog, resolveCatalogPublicPath } from './CatalogGenerator';
+import { generateContentCatalog, resolveCatalogDirectPath, resolveCatalogPublicPath } from './CatalogGenerator';
 import type { CatalogDirectoryHandle, CatalogDirectoryRole, CatalogGeneratorResult, CatalogSourceFile } from './CatalogGeneratorTypes';
 import { readCatalogSourceFiles, readCatalogSourcePath } from './LocalFolderCatalogSource';
 import { downloadCatalogJson, ensureDirectoryPermission, writeCatalogToDirectory } from './CatalogWriter';
@@ -84,7 +84,10 @@ export function CatalogGeneratorPanel({ catalog }: { catalog: ContentCatalog }) 
           })));
         }
         for (const path of directPaths[kind]) {
-          files.push({ ...await readCatalogSourcePath(path), expectedKind: kind });
+          files.push({
+            ...await readCatalogSourcePath(resolveCatalogDirectPath(publicBases[kind], path)),
+            expectedKind: kind,
+          });
         }
       }
       const preserved = catalog.entries.filter((entry) => (
@@ -153,7 +156,7 @@ export function CatalogGeneratorPanel({ catalog }: { catalog: ContentCatalog }) 
           <label>
             <span>{text('Direct file path', 'ファイルを直接パス指定')}</span>
             <div className="catalog-direct-path-row">
-              <input aria-label={`${kind} direct file path`} placeholder={`${DEFAULT_PUBLIC_BASES[kind]}/...`} value={directDrafts[kind]} onChange={(event) => {
+              <input aria-label={`${kind} direct file path`} placeholder={`${DEFAULT_PUBLIC_BASES[kind]}/... or file.zip`} value={directDrafts[kind]} onChange={(event) => {
                 const value = event.currentTarget.value;
                 setDirectDrafts((current) => ({ ...current, [kind]: value }));
               }} />

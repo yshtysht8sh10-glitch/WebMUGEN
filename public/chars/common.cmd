@@ -71,7 +71,7 @@ value = 11
 [State -1, Common Crouch End]
 type = ChangeState
 triggerall = command != "holddown"
-trigger1 = statetype = C
+trigger1 = stateno = 11
 value = 12
 
 [State -1, Common Walk Forward]

@@ -114,6 +114,31 @@ describe('CnsPhysicsStep', () => {
     });
   });
 
+  it.each(['S', 'C'] as const)('does not teleport an authored below-ground %s entity back to the floor', (physics) => {
+    const state = createInitialGameState();
+    const next = stepCnsPhysicsMotion({
+      ...state,
+      players: [
+        {
+          ...state.players[0],
+          stateNo: 3730,
+          stateType: 'S',
+          physics,
+          y: 400,
+          vy: -0.1,
+        },
+        state.players[1],
+      ],
+    });
+
+    expect(next.players[0]).toMatchObject({
+      y: 399.9,
+      vy: -0.1,
+      stateType: 'S',
+      physics,
+    });
+  });
+
   it.each(['S', 'C'] as const)('lets airborne StateType A keep its Y motion under %s friction physics', (physics) => {
     const state = createInitialGameState();
     const next = stepCnsPhysicsMotion({

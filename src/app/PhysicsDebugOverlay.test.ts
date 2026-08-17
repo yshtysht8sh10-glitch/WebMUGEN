@@ -8,13 +8,16 @@ describe('PhysicsDebugOverlay', () => {
     const lines = formatPhysicsDebugOverlay({
       ...state,
       players: [
-        { ...state.players[0], power: 120, debugClipboard: 'x=12' },
-        { ...state.players[1], juggle: 6, juggleRemaining: 4, juggleMax: 15, guardIntent: true, guardCrouchIntent: true },
+        { ...state.players[0], life: 875, power: 120, attackMultiplier: .8, debugClipboard: 'x=12' },
+        { ...state.players[1], defenseMultiplier: .85, juggle: 6, juggleRemaining: 4, juggleMax: 15, guardIntent: true, guardCrouchIntent: true },
       ],
     });
 
     expect(lines[0]).toContain('power=120');
+    expect(lines[0]).toContain('life=875');
+    expect(lines[0]).toContain('mul=0.80/1');
     expect(lines[1]).toContain('power=0');
+    expect(lines[1]).toContain('mul=1/0.85');
     expect(lines[0]).toContain('facing=1');
     expect(lines[1]).toContain('facing=-1');
     expect(lines[0]).toContain('juggle=-');

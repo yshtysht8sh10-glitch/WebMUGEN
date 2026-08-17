@@ -98,6 +98,55 @@ describe('ProjectileSystem', () => {
     expect(result.players[0].targets).toEqual([]);
   });
 
+  it('rejects the real ignition-shockwave hitflag MAF while the target is lying down', () => {
+    const state = createInitialGameState();
+    const downed = {
+      ...state.players[1], stateNo: 5110, stateType: 'L' as const,
+      moveType: 'H' as const, physics: 'N' as const, ctrl: false,
+    };
+    const projectile = {
+      ...createProjectile(), id: 1005,
+      hitDef: { ...createProjectile().hitDef, hitFlag: 'MAF' },
+    };
+
+    const result = resolveProjectileHits([state.players[0], downed], [projectile]);
+
+    expect(result.hitEvents).toHaveLength(0);
+    expect(result.projectiles).toHaveLength(1);
+    expect(result.players[1]).toMatchObject({ life: 1000, stateNo: 5110, stateType: 'L' });
+    expect(result.players[1].hitDiagnosticLines?.join('\n')).toContain('targetClass=down');
+    expect(result.players[1].hitDiagnosticLines?.join('\n')).toContain('reason=hitflag_state_mismatch');
+  });
+
+  it('routes a D-enabled projectile through the lying hit State 5080 and down parameters', () => {
+    const state = createInitialGameState();
+    const downed = {
+      ...state.players[1], stateNo: 5110, stateType: 'L' as const,
+      moveType: 'H' as const, physics: 'N' as const, ctrl: false, animNo: 5110,
+      guardIntent: true,
+    };
+    const projectile = {
+      ...createProjectile(),
+      hitDef: {
+        ...createProjectile().hitDef,
+        hitFlag: 'MAFD',
+        guardFlag: 'MA',
+        downVelocity: { x: -1.5, y: 0 },
+        downHitTime: 11,
+      },
+    };
+
+    const result = resolveProjectileHits([state.players[0], downed], [projectile]);
+
+    expect(result.hitEvents).toHaveLength(1);
+    expect(result.hitEvents[0].guarded).toBe(false);
+    expect(result.players[1]).toMatchObject({
+      stateNo: 5080, stateType: 'L', animNo: 5110, vx: 1.5, vy: 0,
+      hitStun: { selectedHitTime: 11, kind: 'down', getHitVarYVelocitySource: 'down.velocity.y' },
+      getHitVars: { 'down.xvel': -1.5, 'down.yvel': 0, 'down.hittime': 11 },
+    });
+  });
+
   it('connects guard, power transfer, MoveGuarded and defender PalFX for Projectile HitDef data', () => {
     const state = createInitialGameState();
     const projectile = {

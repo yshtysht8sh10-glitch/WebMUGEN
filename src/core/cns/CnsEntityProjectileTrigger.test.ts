@@ -39,6 +39,21 @@ describe('entity and projectile Trigger integration', () => {
     expect(evaluateCnsRuntimeTrigger('RootDist Y = 0', context)).toBe(true);
   });
 
+  it('truncates ParentDist toward zero like WinMUGEN', () => {
+    const helper = { ...state.players[0], x: 100.75, y: 200.75, facing: 1 as const };
+    const parent = { ...state.players[0], x: 100, y: 200 };
+    const context = {
+      player: helper,
+      resolveRedirectEntity: (kind: 'root' | 'parent' | 'helper' | 'playerid' | 'partner') => (
+        kind === 'parent' ? parent : undefined
+      ),
+    };
+
+    expect(evaluateCnsRuntimeTrigger('ParentDist X = 0', context)).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('ParentDist Y = 0', context)).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('ParentDist X < 0', context)).toBe(false);
+  });
+
   it('reads character LifeMax and unique accepted HitDef generations', () => {
     const player = {
       ...state.players[0],

@@ -338,7 +338,7 @@ physics = S
       attackerId: targetId === 1 ? 2 : 1,
       targetStateType: 'L',
       targetMoveType: 'H',
-      hitFlag: 'D',
+      hitFlag: 'MAFD',
       downVelocity: [-1.5, 0],
       downHitTime: 11,
       pauseTime: [0, 0],
@@ -353,7 +353,7 @@ physics = S
   });
 
   it('defaults omitted down.velocity to air.velocity as WinMUGEN specifies', () => {
-    const hit = resolveConfiguredHit({ targetStateType: 'L', targetMoveType: 'H', hitFlag: 'D', airVelocity: [-3, -6], pauseTime: [0, 0] });
+    const hit = resolveConfiguredHit({ targetStateType: 'L', targetMoveType: 'H', hitFlag: 'MAFD', airVelocity: [-3, -6], pauseTime: [0, 0] });
     expect(hit.players[1]).toMatchObject({ stateNo: 5080, vx: 3, vy: -6 });
     expect(hit.players[1].getHitVars).toMatchObject({ 'down.xvel': -3, 'down.yvel': -6, 'down.hittime': 20 });
   });
@@ -363,7 +363,7 @@ physics = S
     { downBounce: true, expectedFallY: -4.5 },
   ])('uses down.bounce=$downBounce to select the one-bounce fall velocity', ({ downBounce, expectedFallY }) => {
     const hit = resolveConfiguredHit({
-      targetStateType: 'L', targetMoveType: 'H', hitFlag: 'D', downVelocity: [-2, -5], downBounce, pauseTime: [0, 0],
+      targetStateType: 'L', targetMoveType: 'H', hitFlag: 'MAFD', downVelocity: [-2, -5], downBounce, pauseTime: [0, 0],
     });
     expect(hit.players[1]).toMatchObject({ stateNo: 5080, hitFall: true, hitFallVelocity: { x: 0, y: expectedFallY } });
     expect(hit.players[1].getHitVars).toMatchObject({ fall: 1, 'fall.yvel': expectedFallY, 'down.bounce': downBounce ? 1 : 0 });
@@ -373,8 +373,8 @@ physics = S
     ['S', 'I', 'H', true], ['S', 'I', 'L', false],
     ['C', 'I', 'L', true], ['C', 'I', 'H', false],
     ['A', 'I', 'A', true], ['A', 'I', 'M', false],
-    ['A', 'H', 'F', true], ['A', 'H', 'A', false],
-    ['L', 'H', 'D', true], ['L', 'H', 'M', false],
+    ['A', 'H', 'AF', true], ['A', 'H', 'A', false],
+    ['L', 'H', 'MAFD', true], ['L', 'H', 'M', false],
   ] as const)('matches hitflag for StateType=%s MoveType=%s flag=%s', (targetStateType, targetMoveType, hitFlag, accepted) => {
     const result = resolveConfiguredHit({ targetStateType, targetMoveType, hitFlag, pauseTime: [0, 0] });
     expect(result.hitEvents.length > 0).toBe(accepted);
@@ -928,6 +928,100 @@ pausetime = 0, 0
     expect(secondHit.players[1].life).toBe(firstHit.players[1].life - 25);
   });
 
+  it.each([
+    [1, 1, -1],
+    [1, -1, 1],
+    [-1, 1, 1],
+    [-1, -1, -1],
+  ] as const)('applies p2facing=%i relative to attacker Facing %i', (attackerFacing, p2Facing, expectedFacing) => {
+    for (const [attackerX, targetX] of [[260, 265], [265, 260]] as const) {
+      const result = resolveConfiguredHit({
+        attackerFacing, targetFacing: -attackerFacing as 1 | -1, p2Facing,
+        attackerX, targetX, pauseTime: [3, 4],
+      });
+      expect(result.players[1]).toMatchObject({ facing: expectedFacing });
+      expect(result.hitDiagnosticLines?.join('\n')).toContain(`p2facing=${p2Facing} attackerFacing=${attackerFacing}`);
+    }
+  });
+
+  it('preserves p2facing through a requested custom state and does not apply it on guard', () => {
+    const customState = resolveConfiguredHit({
+      attackerFacing: 1, targetFacing: 1, p2Facing: 1, p2StateNo: 700, pauseTime: [0, 0],
+    });
+    expect(customState.players[1]).toMatchObject({ stateNo: 700, stateOwnerId: 1, facing: -1 });
+
+    const guarded = resolveConfiguredHit({
+      attackerFacing: 1, targetFacing: 1, p2Facing: 1,
+      guardFlag: 'H', targetCommands: new Set(['holdback']), guardPauseTime: [0, 0],
+    });
+    expect(guarded.hitEvents[0].guarded).toBe(true);
+    expect(guarded.players[1]).toMatchObject({ stateNo: 150, facing: 1 });
+    expect(guarded.hitDiagnosticLines?.join('\n')).not.toContain('raw.hit_facing');
+  });
+
+  it('applies p2facing to an air hit while zero and omission preserve the defender Facing', () => {
+    const airHit = resolveConfiguredHit({
+      attackerFacing: -1, targetFacing: -1, targetStateType: 'A', hitFlag: 'A',
+      p2Facing: 1, pauseTime: [0, 0],
+    });
+    expect(airHit.players[1]).toMatchObject({ stateType: 'A', facing: 1 });
+
+    for (const p2Facing of [0, undefined]) {
+      const unchanged = resolveConfiguredHit({
+        attackerFacing: 1, targetFacing: -1, p2Facing, pauseTime: [0, 0],
+      });
+      expect(unchanged.players[1].facing).toBe(-1);
+      expect(unchanged.hitDiagnosticLines?.join('\n')).not.toContain('raw.hit_facing');
+    }
+  });
+
+  it('applies HitDef affectteam to root and Helper target eligibility', () => {
+    const friendlyOnly = resolveConfiguredHit({ affectTeam: 'F' });
+    expect(friendlyOnly.hitEvents).toHaveLength(0);
+    expect(friendlyOnly.players[1].life).toBe(1000);
+    expect(friendlyOnly.hitDiagnosticLines?.join('\n')).toContain('reason=affectteam affectteam=F relation=enemy');
+
+    const cns = parseCnsText(`
+[StateDef 3750]
+type = S
+movetype = A
+physics = N
+anim = 200
+[State 3750, Both teams]
+type = HitDef
+trigger1 = 1
+attr = S, HA
+affectteam = B
+hitflag = MAF
+damage = 37, 0
+pausetime = 0, 0
+`);
+    const initial = createInitialGameState();
+    const helperPlayer = {
+      ...initial.players[0], x: 240, stateNo: 3750, animNo: 200,
+      stateType: 'S' as const, moveType: 'A' as const, physics: 'N' as const, ctrl: false,
+    };
+    const activated = stepCnsStateRuntime({
+      ...initial,
+      players: [
+        { ...initial.players[0], x: 290, animNo: 0 },
+        { ...initial.players[1], x: 290, animNo: 0 },
+      ],
+      helpers: {
+        entries: [{
+          entityId: 3, helperId: 3750, rootEntityId: 1 as const, parentEntityId: 1,
+          ownerCharacterId: 1 as const, stateOwnerId: 1 as const, animationOwnerId: 1 as const,
+          keyCtrl: false, ownPal: false, spawnFrame: -1, player: helperPlayer,
+        }],
+        nextEntityId: 4,
+      },
+    }, cns).state;
+    expect(activated.helpers.entries[0].player.activeHitDef?.affectTeam).toBe('B');
+    const bothTeams = resolveFallbackHits(activated, air);
+    expect(bothTeams.players.map((player) => player.life)).toEqual([963, 963]);
+    expect(bothTeams.hitEvents).toHaveLength(2);
+  });
+
   it('replaces an older defender hitpause when a later HitDef contacts', () => {
     const result = resolveConfiguredHit({ pauseTime: [0, 7], targetHitPause: 30 });
 
@@ -1300,7 +1394,7 @@ movetype = A
 
   it.each([
     { kind: 'air', targetStateType: 'A' as const, hitFlag: 'A', options: { airCornerPush: -5 } },
-    { kind: 'down', targetStateType: 'L' as const, hitFlag: 'D', options: { downCornerPush: -4 } },
+    { kind: 'down', targetStateType: 'L' as const, hitFlag: 'MAFD', options: { downCornerPush: -4 } },
   ])('selects $kind cornerpush for the target contact class', ({ kind, targetStateType, hitFlag, options }) => {
     const hit = resolveConfiguredHit({
       attackerX: 862, targetX: 912, targetStateType, hitFlag, pauseTime: [0, 0], ...options,
@@ -1398,6 +1492,7 @@ function resolveConfiguredHit({
   snap,
   p1SprPriority,
   p2SprPriority,
+  p2Facing,
   attackerPower,
   targetPower,
   powerMax,
@@ -1441,6 +1536,7 @@ function resolveConfiguredHit({
   guardSound,
   envShake,
   fallEnvShake,
+  affectTeam,
 }: {
   damage?: number;
   groundHitTime?: number;
@@ -1471,6 +1567,7 @@ function resolveConfiguredHit({
   snap?: [number, number];
   p1SprPriority?: number;
   p2SprPriority?: number;
+  p2Facing?: number;
   attackerPower?: number;
   targetPower?: number;
   powerMax?: number;
@@ -1514,6 +1611,7 @@ function resolveConfiguredHit({
   guardSound?: string;
   envShake?: [number, number, number, number];
   fallEnvShake?: [number, number, number, number];
+  affectTeam?: 'E' | 'F' | 'B';
 }) {
   const hitTimeLines = [
     groundHitTime === undefined ? '' : `ground.hittime = ${groundHitTime}`,
@@ -1528,6 +1626,7 @@ function resolveConfiguredHit({
   const hitIdLine = hitId === undefined ? '' : `id = ${hitId}`;
   const hitOnceLine = hitOnce === undefined ? '' : `hitonce = ${hitOnce ? 1 : 0}`;
   const auxiliaryLines = [
+    affectTeam === undefined ? '' : `affectteam = ${affectTeam}`,
     kill === undefined ? '' : `kill = ${kill ? 1 : 0}`,
     getPower === undefined ? '' : `getpower = ${getPower.join(', ')}`,
     givePower === undefined ? '' : `givepower = ${givePower.join(', ')}`,
@@ -1540,6 +1639,7 @@ function resolveConfiguredHit({
     snap === undefined ? '' : `snap = ${snap.join(', ')}`,
     p1SprPriority === undefined ? '' : `p1sprpriority = ${p1SprPriority}`,
     p2SprPriority === undefined ? '' : `p2sprpriority = ${p2SprPriority}`,
+    p2Facing === undefined ? '' : `p2facing = ${p2Facing}`,
   ].filter(Boolean).join('\n');
   const fallLines = [
     airAnimType === undefined ? '' : `air.animtype = ${airAnimType}`,

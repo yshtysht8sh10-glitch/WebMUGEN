@@ -59,6 +59,12 @@ StateType and Physics are independent in WinMUGEN. An airborne `StateType = A` m
 retain `Physics = S/C`; its explicit Y velocity still updates position, and only an actual ground
 crossing is clamped. Bundled T-H-M-A uses this combination in the airborne Darkness Finger route
 `3401 -> 3400`, so entering the standing-authored continuation must not drop it to the floor.
+StateDef `type` and `physics` establish their values on entry only. A Time=0 `StateTypeSet` can
+therefore keep an `A`/`N` route active across later ticks; State 3410 uses this to select its airborne
+front-edge exit after a missed Darkness Finger rush.
+The same rule applies after CNS has already placed an `S/C` entity below the ground axis: it is not
+teleported back to the floor. T-H-M-A State 3730 therefore retains Pos Y=400 beneath its State 3735
+rock Helper at Pos Y=360 while both begin their authored lift.
 
 ## Controller interaction
 
@@ -68,7 +74,7 @@ Important interactions:
 
 - `VelSet` sets velocity before physics integrates position;
 - `VelAdd` and `VelMul` modify velocity before integration;
-- `PosSet` assigns absolute stage coordinates after evaluating CNS expressions, while `PosAdd` adds a Facing-relative X offset and an axis-space Y offset;
+- `PosSet` converts its screen-center-relative X through the current frame camera center into internal world X after evaluating CNS expressions, while `PosAdd` adds a Facing-relative X offset and an axis-space Y offset;
 - air physics may apply gravity;
 - ground checks may trigger landing state routes.
 
@@ -78,13 +84,13 @@ For ordinary `Physics=A`, the physics step reads `Const(movement.yaccel)` from t
 `VelSet x = -12, y = -0.2` unchanged while moving each tick; the launch direction comes from the
 State's `P2Dist X < 0` Turn and Facing-relative VelSet, not from Physics=N.
 
-After both root players integrate motion, an active `TargetBind` reapplies its offset from the
-owner's resulting position and Facing and copies the owner's resulting X/Y world velocity. This
+After roots and Helpers integrate motion, an active `TargetBind` reapplies its offset from the
+unique runtime owner's resulting position and Facing and copies the owner's resulting X/Y world velocity. A Helper owner therefore follows its own entity position instead of aliasing its root id. This
 prevents the owner movement and target CustomState velocity from creating a one-frame separation,
 and release retains the last copied velocity instead of restoring an older value or forcing zero.
 Stage clamp/push then performs a final bind correction. Positive durations count down on movable
 ticks, omitted `time` is one tick, zero cancels, any negative value is indefinite, and either
-participant's HitPause freezes the finite counter. Global Pause/movetime combinations and non-root
+participant's HitPause freezes the finite counter. Global Pause/movetime combinations and Helper-as-target
 ownership timing remain Partial.
 
 P1 Target controllers are committed before P2 CNS execution. On the Projectile-to-TargetState 280
@@ -105,7 +111,7 @@ The count resets on grounded execution; holding the original jump input does not
 
 On HitDef contact, the defender receives `ground.velocity` or `air.velocity` according to its StateType at contact. CNS X is converted once into the defender reaction direction: the common negative value sends the target away from the attacker for either Facing. Y remains in CNS/internal velocity coordinates. Physics does not clear velocity during hit pause and begins integrating it when pause ends. Guard contact separately applies Facing-relative `guard.velocity`.
 
-Projectile contact uses the same split between world-space live velocity and the WinMUGEN-relative HitDef snapshot. It records `hitVel`, hit time, fall values, and `GetHitVar(yaccel)` before entering the common get-hit States with `Physics=N`. This is required because States 5030/5040 apply gravity explicitly; retaining only the initial projectile Y velocity would send a launched defender upward indefinitely.
+Projectile contact uses the same split between world-space live velocity and the WinMUGEN-relative HitDef snapshot. Before contact is accepted, it now uses the same target-class eligibility as an ordinary HitDef: a lying `StateType = L` target requires `D` in addition to a normal H/L/A/M hitflag class. Accepted lying Projectile hits enter State 5080 and use `down.velocity`, `down.hittime`, and `down.bounce`; lying targets cannot guard the contact. It records `hitVel`, hit time, fall values, and `GetHitVar(yaccel)` before entering the common get-hit States with `Physics=N`. This is required because States 5030/5040 apply gravity explicitly; retaining only the initial projectile Y velocity would send a launched defender upward indefinitely.
 
 Projectile `guardflag` uses the defender's current stand/crouch/air guard intent at collision. Accepted guard enters State 150/152/154 and applies `guard.velocity`; normal hit additionally starts any snapshotted defender PalFX. Player PalFX duration advances on game ticks, including HitPause, while exact Pause/SuperPause parity remains under audit.
 
@@ -121,11 +127,11 @@ Issue #60 audits the complete 5030 fall family against the unmodified common Sta
 
 `raw.gethitvar_frame` includes position/velocity, yaccel, ground crossing, fall/recover window, recovery input, and the ground-clamp decision for these States. `raw.gethit_changestate_eval` reports each ChangeState controller index and result. `raw.fall_pause` records hitpause or global pause frames with frozen state/animation clocks.
 
-Issue #61 separates lying-hit time from get-up time. A HitDef contacting `StateType = L` enters State 5080 and uses `down.velocity` plus `down.hittime`; nonzero Y launches through the 5090 animation and 5030, while zero Y slides through 5081. `down.bounce` decides whether a launched lying target receives one fall bounce. Omitted `down.velocity` inherits `air.velocity`.
+Issue #61 separates lying-hit time from get-up time. A HitDef or Projectile permitted to contact `StateType = L` enters State 5080 and uses `down.velocity` plus `down.hittime`; nonzero Y launches through the 5090 animation and 5030, while zero Y slides through 5081. `down.bounce` decides whether a launched lying target receives one fall bounce. Omitted `down.velocity` inherits `air.velocity`.
 
 Issue #62 keeps KO and fall recovery as separate common-state routes. State 5150 remains lying and uncontrollable. State 5200 falls under its CNS `GetHitVar(yaccel)` until it enters 5201; State 5201 applies its data-defined ground recovery launch. State 5210 executes boolean `PosFreeze` at Time 0, so physics skips position integration for that one frame without pausing StateTime/AnimTime or zeroing velocity, then CNS steering/gravity continues to the normal State 52 landing route. Repeated PosFreeze triggers, such as State 902 `Time <= 12`, apply the same one-frame rule on every matching owner-active frame.
 
-State 5110 get-up scheduling uses an independent counter loaded from the defender's `[Data] liedown.time`. It freezes during hitpause/Pause, does not depend on StateTime or `down.hittime`, and never schedules 5120 at zero Life. `raw.down_clock` exposes elapsed/duration/remaining and the advance/frozen/getup/ko_hold result.
+State 5110 get-up scheduling uses an independent counter loaded from the defender's `[Data] liedown.time`. It freezes during hitpause/Pause, does not depend on StateTime or `down.hittime`, and never schedules 5120 at zero Life. Reaching the duration marks the player ready but leaves State 5110 intact through that render boundary. The following CNS pass performs the engine-owned 5110→5120 entry before State scans, allowing State 5120 Time=0 Controllers and an immediate character-defined route such as itoko State 730 to finish before the next draw. This avoids rendering one stale lying-animation frame under State 5120. `raw.down_clock` exposes elapsed/duration/remaining and the advance/frozen/ready/ko_hold result.
 
 HitDef `pausetime = p1, p2` initializes separate attacker and defender counters. WinMUGEN defaults an omitted pair to `0,0`; `guard.pausetime` inherits that normal pair when omitted. While a counter is positive, CNS controllers, position, velocity integration, StateTime, and AnimTime are frozen; the physics step decrements the counter once per game frame. HitPause is not collision immunity: an unpaused attacker with a different ActiveHitDef generation can still contact the frozen defender, while the generation/defender history rejects continued overlap from the already-consumed generation. A newly accepted contact replaces the defender's older counter with its own `p2` value; a same-frame trade keeps the longer of the two newly applied role counters. A counter of zero resumes normally without an extra frozen frame. Input buffering remains active outside this per-player freeze. Match-level Pause/SuperPause is separate: it freezes non-moving players and round/hit stepping, permits only the controller owner for `movetime`, and uses a resume guard before normal CNS execution restarts.
 
@@ -164,7 +170,10 @@ Horizontal separation is applied only when both Size rectangles overlap vertical
 
 This remains Partial compatibility because negative dynamic `Width` values and broader multi-entity push behavior still need integration. `Width edge = front, back` overrides the screen-edge bar for one tick, `player = front, back` separately overrides the push bar, and `value` assigns both. After push and fallback stage clamping, the selected 320x240 or extended 400x240 viewport computes one shared camera. For an external Stage without a dynamic Width, an enabled root is shifted until its player axis retains the DEF `[Bound] screenleft`/`screenright` distance from the viewport edge; a dynamic edge width is honored for that tick. Built-in stages use the Size-derived edge bar or its dynamic override with their four-logical-pixel containment fallback. Velocity is preserved and `ScreenBound value = 0` bypasses the correction. `raw.push` records both resolved boxes, their Size/Width source, overlap and skip/apply result; `raw.cross` records airborne status, each player's `noAutoTurn` value, stage AutoTurn enablement, and Facing changes; `raw.camera` records the final origin and corrected players. Canvas debug draws the resolved player push rectangle in blue.
 
-When sustained movement makes simultaneous root containment impossible, the camera is held at the
+On a native Stage with authored horizontal `tension`, the camera follows the leading enabled root
+until its Stage camera bound; ScreenBound containment shifts another enabled root only if it would
+leave that moving viewport. This lets edge-triggered wall carries reach the authored Stage end. On
+the legacy tension-less path, when sustained movement makes simultaneous root containment impossible, the camera is held at the
 preceding legal point between the incompatible containment limits. The fixed viewport then clamps
 only the root walking beyond its edge; the stationary opponent's world X is not rewritten. The
 correction keeps velocity intact so the edge-bound root remains in its data-driven walk, dash, jump,

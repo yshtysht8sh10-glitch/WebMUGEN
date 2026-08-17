@@ -1,6 +1,6 @@
 # CMD Compatibility Notes
 
-Updated: 2026-07-21
+Updated: 2026-08-17
 
 This document summarizes CMD implementation notes. The compatibility matrix remains the source of truth:
 
@@ -37,7 +37,7 @@ Issue #79 was caused in the production matcher, not by State -1 route ordering. 
 It should contain visible baseline routes for common behavior such as:
 
 - stand to crouch;
-- crouch hold/release;
+- crouch hold/release, scoped to common State 10/11 so character-owned crouching states are not intercepted;
 - jump start and jump velocity glue;
 - walk forward/back routes;
 - temporary VelSet/ChangeAnim glue required while full common1/runtime semantics are incomplete.

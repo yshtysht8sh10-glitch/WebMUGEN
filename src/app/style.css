@@ -1702,6 +1702,10 @@ button.readable-state-badge:disabled {
   min-height: 18px;
 }
 
+.cns-source-line-spacer {
+  pointer-events: none;
+}
+
 .cns-source-line.selected {
   background: rgba(37, 99, 235, 0.28);
   outline: 1px solid rgba(96, 165, 250, 0.75);

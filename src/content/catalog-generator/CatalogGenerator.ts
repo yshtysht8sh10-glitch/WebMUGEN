@@ -87,6 +87,11 @@ export function resolveCatalogPublicPath(basePath: string, relativePath: string)
   return `${base}/${relative}`;
 }
 
+export function resolveCatalogDirectPath(basePath: string, directPath: string): string {
+  const normalized = directPath.trim().replace(/\\/g, '/');
+  return normalized.startsWith('/') ? normalized : resolveCatalogPublicPath(basePath, normalized);
+}
+
 export function compareCatalogs(previous: ContentCatalogDocument | undefined, next: ContentCatalogDocument): CatalogGeneratorDiff {
   const before = new Map((previous?.items ?? []).map((item) => [item.id, item]));
   const after = new Map(next.items.map((item) => [item.id, item]));

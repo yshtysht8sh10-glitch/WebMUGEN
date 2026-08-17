@@ -1,6 +1,6 @@
 # Trigger Compatibility Notes
 
-Updated: 2026-07-22
+Updated: 2026-08-17
 
 This document summarizes Trigger implementation notes. The compatibility matrix remains the source of truth:
 
@@ -53,6 +53,9 @@ Do not mark safe defaults as Complete.
 | `GetHitVar` | Partial | Reads a contact snapshot for damage, hit/slide/control time, velocities, type/animation codes, fall values, ids, guarded, and yaccel across get-hit State changes. | Offset/fall-time keys and later guard/fall semantics still use diagnosed safe defaults. |
 | `NumTarget` / `TargetID` / `TargetStateNo` | Partial | Reads a multi-entry attacker Target list, supports HitDef id filtering, and returns current two-player target State. `target(ID),MoveType` uses the same registry and SFalse on lookup failure. Root and Helper attackers can select the opposing root, and later same-pass redirects observe preceding Target controller mutations. | Helper-as-target, team/multi-player selection, and other redirected trigger families remain incomplete. |
 | `PrevStateNo` | Partial | Stores the immediate source State on entry, including re-entry and multiple same-frame transitions; round reset starts without stale history. | Helper/custom-state ownership and broader real-character routes remain incomplete. |
+| `NumHelper` | Partial | Counts root-owned Helpers with optional MUGEN ID filtering. Same-tick spawns are visible to later counts before their first State pass, and pending destroys are excluded; this covers itoko's simultaneous H1105/H1106/H1107 slot allocation. | Redirect/team/custom-state edge audit remains incomplete. |
+| `IsHelper` | Partial | Bare form distinguishes root and Helper evaluation; `IsHelper(expr)` evaluates and compares the Helper's MUGEN ID, including redirected PlayerState context. Direct missing-Helper numeric redirects retain SFalse for `=`/`!=` and participate as zero in ordering comparisons, covering itoko's surviving-bag ranking. | Broader custom-state and non-player entity audit remains incomplete. |
+| `ParentDist X/Y` | Partial 90% | Resolves the immediate parent, applies Facing to X, and truncates fractional distance toward zero before CNS comparison as WinMUGEN does. Bundled itoko coverage verifies that a trailing H1360 can satisfy `ParentDist X = 0`, enter 1362, and let State 1300 create the doll. | Same-pass parent removal and version-specific MUGEN 1.x precise-distance behavior remain incomplete. |
 | `enemy` / `enemynear` redirects | Partial | Root P1/P2, index 0, numeric/string/boolean/AIR child context, SFalse failure, grouping, diagnostics, bundled 3405/3415, and redirected `IfElse` conditions in T-H-M-A State 233 are tested. | Team/multiple-enemy nearest/index ordering and Helper ownership remain incomplete. |
 | Projectile triggers | Partial | `ProjContact`/`ProjHit`/`ProjGuarded` and their elapsed-time forms read owner-local histories, including ID 0/omitted selection, multiple IDs, repeated contacts, and HitPause freezing. Opposing projectile priority cancellation records `ProjCancelTime`; bundled T-H-M-A State -2 execution is covered. | Helper-owned Projectiles, cancel animation details, and exact Pause/SuperPause ordering remain incomplete. |
 
@@ -84,6 +87,10 @@ including unsupported expressions and unused invalid `Cond` / `IfElse` branches.
 Matrix rows retain their prior status because no Trigger result is intentionally broadened.
 
 For example, adding math support for `+`, `-`, `*`, `/`, `%`, `Sin`, `Cos`, or `IfElse` should update Expression rows, not arbitrary Trigger rows.
+
+Unary minus is evaluated after additive and multiplicative splitting, so it binds to the following
+numeric term rather than negating an entire surrounding expression. This covers function and Redirect
+operands such as itoko State 1210's `-atan(...) * 180 / pi + 90` AngleSet value.
 
 The numeric evaluator enforces WinMUGEN-style bottom propagation for invalid math domains and
 non-finite arithmetic. `Log` takes the documented two arguments (`base`, `value`), `Cond` skips its

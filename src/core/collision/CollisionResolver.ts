@@ -1,5 +1,6 @@
 import type { AirDocument } from '../../parser/air/AirTypes';
 import { getCurrentAnimationElement } from '../animation/AnimationPlayer';
+import { getPresentedAnimationTime } from '../animation/PresentedAnimation';
 import type { ActiveHitDef, GameState, HitEvent, PlayerState, Rect } from '../engine/types';
 import { airBoxToWorldRect, intersects, type WorldCollisionBox } from './CollisionBox';
 
@@ -65,7 +66,7 @@ export function getPlayerAttackBoxes(
   player: PlayerState,
   airDocument: AirDocument,
 ): WorldCollisionBox[] {
-  const current = getCurrentAnimationElement(airDocument, player.animNo, player.animTime);
+  const current = getCurrentAnimationElement(airDocument, player.animNo, getPresentedAnimationTime(player));
   return current ? current.element.clsn1.map((box, boxIndex) => airBoxToWorldRect(
     player, box, 'attack', { x: current.element.offsetX, y: current.element.offsetY },
     { source: current.element.clsn1Source ?? 'none', animNo: player.animNo, elementIndex: current.elementIndex, boxIndex },
@@ -76,7 +77,7 @@ export function getPlayerBodyBoxes(
   player: PlayerState,
   airDocument: AirDocument,
 ): WorldCollisionBox[] {
-  const current = getCurrentAnimationElement(airDocument, player.animNo, player.animTime);
+  const current = getCurrentAnimationElement(airDocument, player.animNo, getPresentedAnimationTime(player));
   return current ? current.element.clsn2.map((box, boxIndex) => airBoxToWorldRect(
     player, box, 'body', { x: current.element.offsetX, y: current.element.offsetY },
     { source: current.element.clsn2Source ?? 'none', animNo: player.animNo, elementIndex: current.elementIndex, boxIndex },

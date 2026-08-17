@@ -45,12 +45,13 @@ CanvasRenderer
 Debug Overlay / Runtime History
 ```
 
-Hit resolution uses the animation snapshot observed by the CNS pass that created or retained the
-ActiveHitDef. Physics still updates position before collision, but its `AnimTime` increment must not
-advance Clsn lookup to the next AIR element. This keeps an `AnimElem = N` HitDef and the Clsn1 boxes
-on element N in the same collision frame, including one-tick attack elements such as bundled
-T-H-M-A State 215. If physics changes State or Anim entirely, collision uses that new animation
-instead of restoring the old snapshot.
+The frame stores the AIR time observed by the CNS pass before physics advances `AnimTime`.
+Player/Helper rendering, AfterImage capture, and hit resolution use that presented-animation
+snapshot with the post-physics world position. This keeps an `AnimElem = N` controller, the displayed
+sprite, and Clsn boxes on element N in the same frame. It covers one-tick attacks such as bundled
+T-H-M-A State 215 and ensures bundled itoko State 730 applies its element-11 `PosAdd`/`Turn` before
+sprite `5030,506` first appears. A State or Anim identity change invalidates the snapshot rather than
+restoring an obsolete animation.
 
 Projectile Controllers now emit into the same production frame. New and existing projectiles advance
 with Facing-relative velocity and acceleration after player physics, then resolve their contact
@@ -95,6 +96,8 @@ The negative states execute before the current state. This is important for comm
 Helpers use the WinMUGEN special-State scope instead of the root sequence. A Helper with
 `keyctrl = 0` executes only its current State. A Helper with `keyctrl = 1` executes the inherited
 State -1 command routes and then its current State. Helpers do not execute State -3 or State -2.
+New Helpers are committed for identity and `NumHelper` visibility immediately, but do not enter the
+Canvas drawable queue until their deferred initial State pass has executed on the next frame.
 See `../mugen-spec/winmugen/state-processing-order.md` and `helper.md`.
 
 If a negative state changes `stateNo`, the old current State is not executed. The newly entered State is selected instead. Positive-State `ChangeState` stops the remaining controllers in that State; entered-State controllers may run in the same frame under the existing bounded pipeline. If that entered State immediately changes State again, the final unprocessed destination keeps `StateTime = 0` through the following physics increment, so its `Time = 0` controllers run on the next CNS tick.
@@ -106,7 +109,7 @@ asserts Anim 205 at time zero; common walk-back Anim 21 cannot overwrite it late
 
 When a player's HitDef hit-pause counter is positive, CNS StateDef headers and controllers are skipped for that player. The following physics step decrements only the counter; position, velocity, StateTime, and AnimTime remain frozen. Input buffers are updated before CNS execution and therefore continue collecting input during hit pause. Resolved commands containing a non-hold button are retained and exposed once on the first CNS-active frame after the pause, while direction-only hold commands continue to follow the live key state. Hit pause is per player and separate from SuperPause.
 
-Match-level Pause/SuperPause is checked before State -3/-2/-1 and the current StateDef. Non-moving players therefore emit no repeated Explod or sound events while paused. The controller owner runs only while its `movetime` remains; physics, round time, hit resolution, and Explod lifecycle use the same frame's pause snapshot. Collision still runs during the global pause, but only root players and Helpers whose matching movement allowance permits that tick may resolve their active HitDef; frozen entities retain their HitDef without contacting. This lets bundled T-H-M-A State 3110 hit on AnimElem 2 while the preceding State 3100 SuperPause remains active. A HitOverride destination clears the overridden entity's inherited P2 hitpause before its Time=0 pass, so a Pause owner is not incorrectly stopped before the `movetime` allowance is considered; the attacker's P1 hitpause remains intact. Explods and Helpers use their matching `pausemovetime` or `supermovetime` independently: positive values are consumed per permitted tick, zero freezes, and negative values permit movement indefinitely without decrementing. A moving Helper advances its CNS, physics, and animation clocks while the allowance remains. When a finite clock reaches zero, one guarded CNS pass advances StateTime through physics without replaying time-zero controllers. Already-started Browser Audio continues; the runtime does not suspend AudioContext.
+Match-level Pause/SuperPause is checked before State -3/-2/-1 and the current StateDef. Non-moving players therefore emit no repeated Explod or sound events while paused. The controller owner runs only while its `movetime` remains; physics, round time, hit resolution, and Explod lifecycle use the same frame's pause snapshot. Collision still runs during the global pause, but only root players and Helpers whose matching movement allowance permits that tick may resolve their active HitDef; frozen entities retain their HitDef without contacting. This lets bundled T-H-M-A State 3110 hit on AnimElem 2 while the preceding State 3100 SuperPause remains active. A HitOverride destination snapshots the matching incoming HitDef for `GetHitVar`, then clears the overridden entity's inherited P2 hitpause before its Time=0 pass, so a Pause owner is not incorrectly stopped before the `movetime` allowance is considered; the attacker's P1 hitpause remains intact. Normal damage/reaction are still suppressed. Explods and Helpers use their matching `pausemovetime` or `supermovetime` independently: positive values are consumed per permitted tick, zero freezes, and negative values permit movement indefinitely without decrementing. A moving Helper advances its CNS, physics, and animation clocks while the allowance remains. When a finite clock reaches zero, one guarded CNS pass advances StateTime through physics without replaying time-zero controllers. Already-started Browser Audio continues; the runtime does not suspend AudioContext.
 
 The App requestAnimationFrame loop synchronizes its monotonic frame counter into `GameState.frame` before CNS and subsystem stepping. Explod creation/lifecycle and `GameTime` therefore observe the real game tick; the frame must not remain at the initial zero or be incremented independently by each subsystem.
 
@@ -240,7 +243,10 @@ State 5035 transitions to State 5050 after hit shake
   ->
 FallbackHitRecovery ends hit-stun without clearing HitFall/get-hit values
   ->
-State 5050 lands through 5100/5110, then 5120, then State 0
+State 5050 lands through 5100/5110, then 5120, then State 0. When the independent
+`liedown.time` clock completes, physics retains State 5110 for that render boundary. The next CNS
+pass enters 5120 before State scans, so its Time=0 Controllers can route directly to a custom
+get-up State without exposing a one-frame `State 5120 / old lying Anim` combination.
 ```
 
 Do not treat `targetStateTypeAtHit = S/C` as permission for fallback recovery to return directly to State 0 once `HitFall=1` has moved the defender into the common air/down path. Recovery States 5200/5210 are only valid when both `CanRecover` and `Command = "recovery"` are true in the CNS route.

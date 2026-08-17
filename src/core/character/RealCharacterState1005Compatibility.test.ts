@@ -57,7 +57,10 @@ describe('T-H-M-A State 1005 compatibility', () => {
       onProjectileCreate: (projectile) => projectiles.push(projectile),
     });
     expect(projectiles).toHaveLength(1);
-    expect(projectiles[0]).toMatchObject({ id: 1005, animNo: 15201, hitAnimNo: 15210, scaleX: 0.5, scaleY: 0.5 });
+    expect(projectiles[0]).toMatchObject({
+      id: 1005, animNo: 15201, hitAnimNo: 15210, scaleX: 0.5, scaleY: 0.5,
+      hitDef: { hitFlag: 'MAF' },
+    });
     expect(projectiles[0].hitDef.palFx).toEqual({
       duration: 50, color: 0, invertAll: true,
       add: { red: 0, green: -70, blue: -170 },

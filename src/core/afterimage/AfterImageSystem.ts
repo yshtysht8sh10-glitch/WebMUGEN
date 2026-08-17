@@ -1,4 +1,5 @@
 import type { AfterImageState, PlayerState } from '../engine/types';
+import { getPresentedAnimationTime } from '../animation/PresentedAnimation';
 
 type AfterImageOptions = Omit<AfterImageState, 'enabled' | 'remainingTime' | 'captureTick' | 'frames'>;
 
@@ -48,7 +49,9 @@ export function stepAfterImage(
     y: player.y,
     facing: player.facing,
     animNo: player.animNo,
-    animTime: player.animTime,
+    animTime: getPresentedAnimationTime(player),
+    drawAngle: player.drawAngle,
+    drawScale: player.drawScale,
     age: 0,
   }, ...agedFrames] : agedFrames).slice(0, state.length);
   const nextTime = state.remainingTime === -1 ? -1 : Math.max(0, state.remainingTime - 1);

@@ -85,7 +85,11 @@ function launchedGroundHitPlayer(options: {
 }
 
 function tick(state: GameState, p2Commands?: ReadonlySet<string>): GameState {
-  const cns = stepCnsStateRuntime(state, common, { p2Commands, hitDiagnostics: true }).state;
+  const cns = stepCnsStateRuntime(state, common, {
+    p2Commands,
+    hitDiagnostics: true,
+    getAnimationDuration: (animNo) => animNo === 5120 ? 2 : null,
+  }).state;
   const moved = stepCnsPhysicsMotion(cns, common);
   return applyFallbackHitRecovery(moved);
 }
@@ -103,7 +107,11 @@ function traceUntil(
   for (let frame = 0; frame < maxFrames; frame += 1) {
     const before = state.players[1];
     const commands = commandForFrame(frame);
-    const cns = stepCnsStateRuntime(state, common, { p2Commands: commands, hitDiagnostics: true }).state;
+    const cns = stepCnsStateRuntime(state, common, {
+      p2Commands: commands,
+      hitDiagnostics: true,
+      getAnimationDuration: (animNo) => animNo === 5120 ? 2 : null,
+    }).state;
     const afterCns = cns.players[1];
     const moved = stepCnsPhysicsMotion(cns, common);
     const afterPhysics = moved.players[1];
