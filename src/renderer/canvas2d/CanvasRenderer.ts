@@ -152,7 +152,9 @@ export class CanvasRenderer {
         scaleY: player.collisionWidth?.yScale ?? 1,
       })),
       ...state.helpers.entries
-        .filter((helper) => helper.hasCompletedInitialStatePass !== false)
+        .filter((helper) => (
+          helper.hasCompletedInitialStatePass !== false || helper.canRenderBeforeInitialStatePass === true
+        ))
         .map((helper) => ({
           kind: 'helper' as const,
           priority: helper.player.sprPriority ?? 0,
@@ -616,6 +618,7 @@ export class CanvasRenderer {
     drawTransform?: { angleRadians: number; scaleX: number; scaleY: number },
   ): { drawn: boolean; diagnostic: string } {
     const flipX = flip.toUpperCase().includes('H');
+    const flipY = flip.toUpperCase().includes('V');
     const key = spriteKey(groupNo, imageNo);
 
     const imageDataSprite = assets.imageDataSpritePack?.sprites.get(key);
@@ -624,7 +627,7 @@ export class CanvasRenderer {
       if (!resolved) return { drawn: false, diagnostic: '' };
 
       this.drawSpriteCanvas(
-        ctx, resolved.canvas, x, y, facing * (flipX ? -1 : 1) * scaleX, verticalFacing * scaleY,
+        ctx, resolved.canvas, x, y, facing * (flipX ? -1 : 1) * scaleX, verticalFacing * (flipY ? -1 : 1) * scaleY,
         -imageDataSprite.xAxis + (drawTransform ? 0 : offsetX),
         -imageDataSprite.yAxis + (drawTransform ? 0 : offsetY),
         subtractive, drawTransform ? offsetX : 0, drawTransform ? offsetY : 0, drawTransform,
@@ -635,7 +638,7 @@ export class CanvasRenderer {
     const sprite = findSprite(assets.spritePack, groupNo, imageNo);
     if (sprite) {
       this.drawSpriteCanvas(
-        ctx, sprite.image, x, y, facing * (flipX ? -1 : 1) * scaleX, verticalFacing * scaleY,
+        ctx, sprite.image, x, y, facing * (flipX ? -1 : 1) * scaleX, verticalFacing * (flipY ? -1 : 1) * scaleY,
         -sprite.xAxis + (drawTransform ? 0 : offsetX),
         -sprite.yAxis + (drawTransform ? 0 : offsetY),
         subtractive, drawTransform ? offsetX : 0, drawTransform ? offsetY : 0, drawTransform,

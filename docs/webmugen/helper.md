@@ -9,14 +9,17 @@ The Phase1 frame order is:
 1. evaluate the two root players and the Helper snapshot that existed at frame start;
 2. collect Helper and DestroySelf requests without mutating the collection;
 3. remove destroyed entities and append spawned entities with monotonic runtime IDs;
-4. skip State/physics stepping and rendering for newly spawned entities in that frame;
-5. begin their normal owner-CNS State pass on the next frame;
-6. mark the initial State pass complete and include surviving Helpers in owner-scoped AIR/SFF rendering.
+4. skip State/physics stepping for newly spawned entities in that frame;
+5. render a new Helper immediately only when its initial StateDef presentation is already stable; defer Helpers with presentation-changing controllers;
+6. begin the normal owner-CNS State pass on the next frame, then render every surviving Helper through owner-scoped AIR/SFF assets.
 
-Deferring both execution and visibility prevents a Helper's raw StateDef Anim from appearing before
-its Time=0 `ChangeAnim`, `AngleDraw`, palette, or other visual setup runs. Bundled itoko Helper 1210
-therefore first appears as its strong red belt with the evaluated transform instead of flashing one
-unscaled green frame during a weak-to-strong chain.
+State execution remains deferred, but visibility is conditional. A Helper whose initial State has
+`ChangeAnim`, `AngleDraw`, position, palette, Facing, priority, or other presentation controllers is
+hidden until those controllers receive their first pass. Bundled itoko Helper 1210 therefore still
+first appears as its strong red belt with the evaluated transform instead of flashing one unscaled
+green frame. A Helper whose StateDef already determines the complete initial presentation may draw
+on its creation frame; itoko flying-hand Helper 1421 uses this path so the rocket punch has no blank
+frame between the attached hand and the launched hand.
 
 Issue #81 adds Helper-as-attacker collision after the root-player clash pass. A Helper with an active HitDef resolves its owner AIR `Clsn1` against root `Clsn2` boxes allowed by `affectteam` E/F/B (enemy by default); accepted contact updates the Helper's HitPause, MoveContact/MoveHit, consumed-target history, and Target registry while applying damage, reaction State/velocity, guard handling, and HitDef effects to the root target. Helper-owned Target controllers commit against that root target, and later controllers in the same Helper State pass observe the queued mutation through `target(ID)` redirects. This supports the bundled T-H-M-A sequence where Helper 3725 applies TargetState 3738, observes it, enters 3735, and lets the root's `helper(3725),StateNo` redirect enter 3730 on the next pass. Helper TargetBind ownership uses the unique runtime entity id, so the target follows Helper 3725 after physics instead of following its root. Hit events retain the root character id for owner AIR/SFF/SND effect lookup, while `raw.helper_hit_collision` identifies the unique Helper runtime id. T-H-M-A State 3320 and State 3735 provide production regression coverage.
 

@@ -75,6 +75,7 @@ ctrl = 0
       stateOwnerId: 1, animationOwnerId: 1,
       pauseMoveTime: 12, superMoveTime: 34,
       hasCompletedInitialStatePass: false,
+      canRenderBeforeInitialStatePass: false,
     });
     expect(result.state.helpers.entries[1]).toMatchObject({
       rootEntityId: 2, parentEntityId: 2, ownerCharacterId: 2,
@@ -86,6 +87,7 @@ ctrl = 0
     });
     expect(result.traces).toHaveLength(2);
     expect(result.state.hitDiagnosticLines?.join('\n')).toContain('firstStep=next_frame');
+    expect(result.state.hitDiagnosticLines?.join('\n')).toContain('creationRender=after_initial_pass');
   });
 
   it('makes a queued Helper visible to later NumHelper checks in the same tick', () => {

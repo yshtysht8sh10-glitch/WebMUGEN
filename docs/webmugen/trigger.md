@@ -101,6 +101,11 @@ bottom when its condition is bottom and evaluates only its selected branch. `IfE
 branches but returns bottom only when its condition or selected branch is bottom, matching the
 WinMUGEN expression rules relevant to Controller execution.
 
+Unary `-` is also preserved after comparison and boolean operators. This matters when a comparison
+such as `P2Dist X < -1` is nested inside a numeric `IfElse`: the negative threshold is one operand,
+not binary subtraction from the comparison result. Bundled itoko State 1301 uses this form to select
+Actions 1315-1318 for forward/back movement on either side of P2.
+
 When adding expression support, update Expression rows in the matrix, not unrelated Trigger rows.
 
 ## Velocity coordinates

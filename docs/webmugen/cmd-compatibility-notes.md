@@ -1,6 +1,6 @@
 # CMD Compatibility Notes
 
-Updated: 2026-08-17
+Updated: 2026-08-18
 
 This document summarizes CMD implementation notes. The compatibility matrix remains the source of truth:
 
@@ -20,11 +20,11 @@ Follow `docs/webmugen/development-policy.md`: common movement routing belongs in
 | Hold direction `/U` | Complete | Used for ground jump routing; a release/re-press also feeds root-player special State 45 AirJump handling. | Exact Pause/SuperPause timing remains under audit. |
 | Direction sequences | Partial | Facing-relative sequences are verified through T-H-M-A and focused tests. A held diagonal may satisfy a neighboring cardinal step for normal leniency, but one unchanged diagonal stretch cannot be reused as alternating `D, F, D, F` inputs. | Other sequence forms and charge syntax need audit. |
 | Button sequences | Partial | Basic support; simple button commands are kept briefly active. | Full sequence timing and cancel windows need audit. |
-| Simultaneous buttons | Partial | Basic syntax exists. | Full parsing/timing behavior needs audit. |
+| Simultaneous buttons | Partial | `+` requires all listed buttons to be active together and accepts the chord when the final required button is added; the buttons no longer need to acquire their pressed edge on the same tick. Bundled itoko's final `z+c` definition is preserved when `[Statedef -1]` follows it. | Negative-edge chords and broader WinMUGEN timing still need audit. |
 | Release commands | Partial | The matcher retains `~` and requires the matched direction/button to be released in a newer input frame. | Numeric charge forms such as `~30$D` and other compound modifiers remain unsupported. |
-| Buffer time | Partial | InputBuffer exists and default buffering covers simple buttons/double-tap directions. Button-bearing commands resolved during attacker hit pause are delivered once on the first CNS-active frame; direction-only holds are not latched. Double-tap directions do not retrigger while the second direction is held. | Exact WinMUGEN timing, long hit-pause windows, and simultaneous commands still need audit. |
-| `command.time` | Partial | A 25-frame window accepts sequences spanning 24 or 25 frames and rejects 26 frames. | Broader WinMUGEN timing and pause behavior still need audit. |
-| `command.buffer.time` | Partial | Parser and matcher honor explicit post-match active window; double-tap direction buffering applies after release, not during a held second tap. | Exact WinMUGEN behavior still needs audit. |
+| Buffer time | Partial | InputBuffer exists; parsed commands inherit CMD `[Defaults]` values. Without a Defaults section, button-ending motion commands receive a one-tick compatibility buffer, keeping itoko's `~B,B,b` and `~D,D,b` active after completion; established short buffers for simple buttons/double taps remain intact. Direction-only holds remain unlatched. | Exact WinMUGEN timing and long hit-pause windows still need audit. |
+| `command.time` | Partial | The parser applies `[Defaults] command.time` to commands that omit `time`, including when `[Defaults]` follows the command blocks; otherwise the matcher uses 15. A 25-frame window accepts sequences spanning 24 or 25 frames and rejects 26 frames. | Broader WinMUGEN timing and pause behavior still need audit. |
+| `command.buffer.time` | Partial | The parser applies `[Defaults] command.buffer.time` to omitted values; without Defaults the matcher supplies its compatibility defaults, including one tick for button-ending motions. Direction-only holds are excluded from post-match buffering. | Exact WinMUGEN pause behavior still needs audit. |
 | `$` direction match | Partial | KFM hold commands work. | Full syntax and facing-relative behavior need tests. |
 | `/` hold prefix | Partial | Used in common commands. | Syntax coverage is incomplete. |
 

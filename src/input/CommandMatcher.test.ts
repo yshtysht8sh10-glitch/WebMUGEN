@@ -123,6 +123,16 @@ describe('CommandMatcher', () => {
     expect(matchesCommand({ name: 'holdfwd', command: '/F', time: 1 }, buffer.getFrames())).toBe(false);
   });
 
+  it('does not buffer a hold command when CMD defaults provide buffer.time', () => {
+    const buffer = new InputBuffer(10);
+    buffer.push({ left: false, right: true, up: false, down: false, attack: false });
+    buffer.push({ left: false, right: false, up: false, down: false, attack: false });
+
+    expect(
+      matchesCommand({ name: 'holdfwd', command: '/F', time: 15, bufferTime: 1 }, buffer.getFrames()),
+    ).toBe(false);
+  });
+
   it('keeps double-tap direction commands briefly active by default', () => {
     const buffer = new InputBuffer(10);
     buffer.push({ left: false, right: true, up: false, down: false, attack: false });
@@ -163,6 +173,20 @@ describe('CommandMatcher', () => {
 
     expect(
       matchesCommand({ name: 'holdfwd_up', command: '/F+/U', time: 1 }, buffer.getFrames()),
+    ).toBe(true);
+  });
+
+  it('matches a simultaneous button chord when the final required button is added', () => {
+    const buffer = new InputBuffer(10);
+    buffer.push({
+      left: false, right: false, up: false, down: false, attack: false, buttons: ['x', 'y', 'a'],
+    });
+    buffer.push({
+      left: false, right: false, up: false, down: false, attack: false, buttons: ['x', 'y', 'a', 'b'],
+    });
+
+    expect(
+      matchesCommand({ name: 'release', command: 'x+y+a+b', time: 15 }, buffer.getFrames()),
     ).toBe(true);
   });
 

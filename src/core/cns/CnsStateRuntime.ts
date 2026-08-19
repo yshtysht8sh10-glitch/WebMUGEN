@@ -305,7 +305,7 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
   const helperDiagnostics = input.hitDiagnostics === false ? [] : [
     ...pendingSpawns.map((request, index) => {
       const entity = helpers.entries[helpers.entries.length - pendingSpawns.length + index];
-      return `raw.helper event=spawn entityId=${entity?.entityId ?? '-'} helperId=${request.helperId} root=${request.rootEntityId} parent=${request.parentEntityId} owner=${request.ownerCharacterId} state=${request.stateNo} anim=${entity?.player.animNo ?? '-'} scale=(${request.sizeXScale ?? 1},${request.sizeYScale ?? 1}) pausemovetime=${request.pauseMoveTime ?? 0} supermovetime=${request.superMoveTime ?? 0} frame=${state.frame} firstStep=next_frame`;
+      return `raw.helper event=spawn entityId=${entity?.entityId ?? '-'} helperId=${request.helperId} root=${request.rootEntityId} parent=${request.parentEntityId} owner=${request.ownerCharacterId} state=${request.stateNo} anim=${entity?.player.animNo ?? '-'} scale=(${request.sizeXScale ?? 1},${request.sizeYScale ?? 1}) pausemovetime=${request.pauseMoveTime ?? 0} supermovetime=${request.superMoveTime ?? 0} frame=${state.frame} firstStep=next_frame creationRender=${entity?.canRenderBeforeInitialStatePass ? 'immediate' : 'after_initial_pass'}`;
     }),
     ...Array.from(pendingDestroys, (entityId) => `raw.helper event=destroy entityId=${entityId} frame=${state.frame} result=removed`),
   ];

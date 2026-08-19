@@ -152,6 +152,7 @@ describe('itoko rubber-belt Helper compatibility', () => {
     let belt = state.helpers.entries.find((helper) => helper.helperId === 1210);
     expect(belt).toMatchObject({
       hasCompletedInitialStatePass: false,
+      canRenderBeforeInitialStatePass: false,
       player: { animNo: 1210, drawAngle: undefined, drawScale: undefined },
     });
 

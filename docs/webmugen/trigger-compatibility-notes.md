@@ -91,6 +91,9 @@ For example, adding math support for `+`, `-`, `*`, `/`, `%`, `Sin`, `Cos`, or `
 Unary minus is evaluated after additive and multiplicative splitting, so it binds to the following
 numeric term rather than negating an entire surrounding expression. This covers function and Redirect
 operands such as itoko State 1210's `-atan(...) * 180 / pi + 90` AngleSet value.
+Comparison and boolean operators also establish a unary-sign boundary. Consequently a nested numeric
+condition such as itoko State 1301's `ifelse(P2Dist X < -1, 1, 0)` compares against negative one;
+the evaluator must not reinterpret it as subtraction from the comparison result.
 
 The numeric evaluator enforces WinMUGEN-style bottom propagation for invalid math domains and
 non-finite arithmetic. `Log` takes the documented two arguments (`base`, `value`), `Cond` skips its

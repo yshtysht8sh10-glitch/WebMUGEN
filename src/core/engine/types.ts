@@ -357,6 +357,7 @@ export type HelperEntity = {
   superMoveTime?: number;
   spawnFrame: number;
   hasCompletedInitialStatePass?: boolean;
+  canRenderBeforeInitialStatePass?: boolean;
   player: PlayerState;
 };
 

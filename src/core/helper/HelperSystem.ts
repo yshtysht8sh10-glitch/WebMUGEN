@@ -93,9 +93,37 @@ export function spawnHelper(state: HelperRuntimeState, request: HelperSpawnReque
     superMoveTime: Math.max(0, Math.trunc(request.superMoveTime ?? 0)),
     spawnFrame: request.spawnFrame,
     hasCompletedInitialStatePass: false,
+    canRenderBeforeInitialStatePass: hasStableInitialPresentation(stateDef),
     player,
   };
   return { entries: [...state.entries, entity], nextEntityId: state.nextEntityId + 1 };
+}
+
+const INITIAL_PRESENTATION_CONTROLLER_TYPES = new Set([
+  'allpalfx',
+  'angledraw',
+  'angleset',
+  'assertspecial',
+  'bindtoparent',
+  'bindtoroot',
+  'bindtotarget',
+  'changeanim',
+  'changeanim2',
+  'offset',
+  'palfx',
+  'posadd',
+  'posset',
+  'remappal',
+  'sprpriority',
+  'trans',
+  'turn',
+]);
+
+function hasStableInitialPresentation(stateDef: ReturnType<typeof findCnsState>): boolean {
+  if (!stateDef || stateDef.initialAnimExpression) return false;
+  return !stateDef.controllers.some((controller) => (
+    INITIAL_PRESENTATION_CONTROLLER_TYPES.has(controller.type.trim().toLowerCase())
+  ));
 }
 
 export function destroyHelper(state: HelperRuntimeState, entityId: number): HelperRuntimeState {

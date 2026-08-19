@@ -61,6 +61,18 @@ describe('CnsRuntimeTrigger', () => {
     expect(evaluateCnsRuntimeTrigger('-atan(270 / 200) < 0', context)).toBe(true);
   });
 
+  it('keeps a negative comparison operand unary inside numeric IfElse conditions', () => {
+    const state = createInitialGameState();
+    const player = { ...state.players[0], x: 320, facing: 1 as const };
+
+    expect(readNumberExpression('ifelse(P2Dist X < -1, 1, 0)', {
+      player, opponent: { ...state.players[1], x: 500 },
+    })).toBe(0);
+    expect(readNumberExpression('ifelse(P2Dist X < -1, 1, 0)', {
+      player, opponent: { ...state.players[1], x: 200 },
+    })).toBe(1);
+  });
+
   it('keeps a WinMUGEN redirect comparison together as an IfElse condition', () => {
     const state = createInitialGameState();
     const belowThreshold = { ...state.players[1], getHitVars: { hitcount: 6 } };

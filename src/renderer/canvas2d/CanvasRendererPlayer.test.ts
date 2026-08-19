@@ -105,6 +105,42 @@ describe('CanvasRenderer player sprite fallback', () => {
     expect(diagnostics).toContain('drawAngle=10 drawScale=(1.25,1.25)');
   });
 
+  it('applies an AIR V flag to a Helper sprite before its AngleDraw transform', () => {
+    const scale = vi.fn();
+    const context = { ...fakeContext(vi.fn(), vi.fn(), vi.fn()), scale };
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+    const airDocument: AirDocument = {
+      actions: [{
+        actionNo: 1370,
+        elements: [{
+          groupNo: 1362, imageNo: 0, offsetX: 0, offsetY: 0, duration: 3,
+          flip: 'V', clsn1: [], clsn2: [],
+        }],
+        defaultClsn1: [], defaultClsn2: [],
+      }],
+    };
+    const assets = { airDocument, spritePack: spritePack(1362, 0) };
+    const state = createInitialGameState();
+    state.players = [
+      { ...state.players[0], assertSpecialFlags: ['invisible'] },
+      { ...state.players[1], assertSpecialFlags: ['invisible'] },
+    ];
+    state.helpers.entries = [{
+      entityId: 3, helperId: 1310, rootEntityId: 1, parentEntityId: 1,
+      ownerCharacterId: 1, stateOwnerId: 1, animationOwnerId: 1,
+      keyCtrl: false, ownPal: false, spawnFrame: -1, hasCompletedInitialStatePass: true,
+      player: {
+        ...state.players[0], stateNo: 1310, animNo: 1370,
+        assertSpecialFlags: [], drawAngle: 20, drawScale: { x: 1, y: 0.7 },
+      },
+    }];
+
+    new CanvasRenderer(canvas, undefined, null, null, { 1: assets, 2: assets }).render(state);
+
+    expect(scale).toHaveBeenCalledWith(1, 0.7);
+    expect(scale).toHaveBeenCalledWith(1, -1);
+  });
+
   it('keeps an AIR offset outside AngleDraw rotation and rotates around the offset sprite axis', () => {
     const translate = vi.fn();
     const rotate = vi.fn();
@@ -371,6 +407,26 @@ describe('CanvasRenderer player sprite fallback', () => {
     state.helpers.entries[0] = { ...state.helpers.entries[0], hasCompletedInitialStatePass: true };
     renderer.render(state);
     expect(drawImage).toHaveBeenCalledTimes(5);
+  });
+
+  it('draws a newly spawned Helper when its StateDef presentation is already stable', () => {
+    const drawImage = vi.fn();
+    const context = fakeContext(vi.fn(), vi.fn(), drawImage);
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+    const assets = { airDocument: air(1000, 10, 0), spritePack: spritePack(10, 0) };
+    const renderer = new CanvasRenderer(canvas, undefined, null, null, { 1: assets, 2: assets });
+    const state = createInitialGameState();
+    state.players = [{ ...state.players[0], animNo: 1000 }, { ...state.players[1], animNo: 1000 }];
+    state.helpers.entries = [{
+      entityId: 3, helperId: 100, rootEntityId: 1, parentEntityId: 1,
+      ownerCharacterId: 1, stateOwnerId: 1, animationOwnerId: 1,
+      keyCtrl: false, ownPal: false, spawnFrame: 0,
+      hasCompletedInitialStatePass: false, canRenderBeforeInitialStatePass: true,
+      player: { ...state.players[0], animNo: 1000 },
+    }];
+
+    renderer.render(state);
+    expect(drawImage).toHaveBeenCalledTimes(3);
   });
 
   it('renders the timed EnvColor layer and reports its ordering', () => {

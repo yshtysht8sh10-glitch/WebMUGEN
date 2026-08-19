@@ -29,7 +29,10 @@ export function matchesCommand(command: CmdCommand, frames: readonly InputFrame[
     return false;
   }
 
-  const bufferTime = Math.max(0, command.bufferTime ?? defaultBufferTime(command));
+  const steps = parseCommandSteps(command.command);
+  const bufferTime = steps.some((step) => step.tokens.some((token) => token.hold))
+    ? 0
+    : Math.max(0, command.bufferTime ?? defaultBufferTime(command));
   const doubleTapDirection = doubleTapDirectionCommandDirection(command);
   for (let offset = 0; offset <= bufferTime; offset += 1) {
     if (
@@ -54,6 +57,10 @@ function defaultBufferTime(command: CmdCommand): number {
 
   if (isDoubleTapDirectionCommand(steps)) {
     return DEFAULT_DOUBLE_TAP_DIRECTION_BUFFER_TIME;
+  }
+
+  if (steps[steps.length - 1]?.tokens.some((token) => token.kind === 'button' && !token.hold)) {
+    return 1;
   }
 
   return 0;
@@ -277,7 +284,7 @@ function isFreshButtonStep(step: CommandStep, frames: readonly InputFrame[], ind
   if (buttons.length === 0) return true;
 
   const olderFrame = frames[index + 1];
-  return buttons.every((token) => !olderFrame?.buttons.has(token.value));
+  return buttons.some((token) => !olderFrame?.buttons.has(token.value));
 }
 
 function reusesAmbiguousDiagonal(

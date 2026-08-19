@@ -1,11 +1,12 @@
 import type { CmdCommand, CmdDocument } from './CmdTypes';
 
 export function parseCmdText(text: string): CmdDocument {
-  const document: CmdDocument = {
-    commands: [],
-  };
+  const commands: CmdCommand[] = [];
 
   let currentCommand: Partial<CmdCommand> | null = null;
+  let currentSection: 'command' | 'defaults' | 'other' = 'other';
+  let defaultTime: number | undefined;
+  let defaultBufferTime: number | undefined;
 
   for (const rawLine of text.split(/\r?\n/)) {
     const line = stripComment(rawLine).trim();
@@ -14,21 +15,37 @@ export function parseCmdText(text: string): CmdDocument {
       continue;
     }
 
-    if (/^\[Command]$/i.test(line)) {
+    const section = line.match(/^\[([^\]]+)]$/);
+    if (section) {
       if (isCompleteCommand(currentCommand)) {
-        document.commands.push(currentCommand);
+        commands.push(currentCommand);
       }
 
-      currentCommand = {};
-      continue;
-    }
-
-    if (currentCommand === null) {
+      if (/^command$/i.test(section[1].trim())) {
+        currentSection = 'command';
+        currentCommand = {};
+      } else {
+        currentSection = /^defaults$/i.test(section[1].trim()) ? 'defaults' : 'other';
+        currentCommand = null;
+      }
       continue;
     }
 
     const keyValue = parseKeyValue(line);
     if (keyValue === null) {
+      continue;
+    }
+
+    if (currentSection === 'defaults') {
+      if (keyValue.key.toLowerCase() === 'command.time') {
+        defaultTime = Number(keyValue.value);
+      } else if (keyValue.key.toLowerCase() === 'command.buffer.time') {
+        defaultBufferTime = Number(keyValue.value);
+      }
+      continue;
+    }
+
+    if (currentSection !== 'command' || currentCommand === null) {
       continue;
     }
 
@@ -55,10 +72,18 @@ export function parseCmdText(text: string): CmdDocument {
   }
 
   if (isCompleteCommand(currentCommand)) {
-    document.commands.push(currentCommand);
+    commands.push(currentCommand);
   }
 
-  return document;
+  return {
+    commands: commands.map((command) => ({
+      ...command,
+      ...(command.time === undefined && defaultTime !== undefined ? { time: defaultTime } : {}),
+      ...(command.bufferTime === undefined && defaultBufferTime !== undefined
+        ? { bufferTime: defaultBufferTime }
+        : {}),
+    })),
+  };
 }
 
 export function findCommand(document: CmdDocument, name: string): CmdCommand | undefined {

@@ -1246,7 +1246,8 @@ function isUnarySign(expression: string, index: number): boolean {
   const before = expression.slice(0, index).trimEnd();
   const previous = before.length > 0 ? before[before.length - 1] : undefined;
   return previous === undefined || previous === '(' || previous === '[' || previous === ',' ||
-    previous === '+' || previous === '-' || previous === '*' || previous === '/' || previous === '%';
+    previous === '+' || previous === '-' || previous === '*' || previous === '/' || previous === '%' ||
+    previous === '=' || previous === '!' || previous === '>' || previous === '<' || previous === '&' || previous === '|';
 }
 
 function stripOuterParentheses(expression: string): string {

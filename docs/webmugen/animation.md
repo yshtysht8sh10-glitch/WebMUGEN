@@ -28,7 +28,11 @@ Begin Action 20
 20,2, 0,0, 4
 ```
 
-Each element references a sprite group/image and has display time.
+Each element references a sprite group/image and has display time. AIR `H` and `V` flags mirror the
+sprite around its axis on the corresponding Canvas axis. The vertical flag composes with Explod
+`vfacing` and AngleDraw instead of being discarded. Bundled itoko Action 1370 uses `V` on every
+frame so its Helper 1310/1311 control threads extend upward from itoko toward the overhead Helper,
+not downward through the floor.
 
 Current-element Clsn1 and Clsn2 boxes are converted through a shared world-coordinate API. The conversion applies the element X/Y offset, mirrors the combined local X coordinates for left-facing players, adds the player world origin, preserves multiple boxes, and returns no rectangles when the selected element has no applicable default or element Clsn block. Each result records attack/body kind, default/element source, animation number, element index, and box index for collision diagnostics and renderer debug labels.
 
@@ -41,6 +45,13 @@ overlaps Action 215 element 4 Clsn1 instead of activating after those boxes have
 Bundled itoko State 730 covers presentation timing: `Animelem = 11` applies `PosAdd` and `Turn`
 before Action 730 element 11 (`5030,506`) is first drawn, so the get-up sprite never flashes at the
 old lying position.
+
+New Helpers still defer their first CNS State/physics pass until the following frame. Their creation
+frame visibility depends on whether the initial State already has a stable presentation. Helpers with
+`ChangeAnim`, `AngleDraw`, position, palette, Facing, or similar visual controllers wait for that first
+pass, while a StateDef-only initial sprite may draw immediately. This keeps itoko's strong rubber belt
+from flashing its uninitialized green sprite and also keeps rocket-hand Helper 1421 visible on the tick
+it replaces the attached hand.
 
 ## Runtime interaction
 
