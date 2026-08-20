@@ -246,6 +246,54 @@ Do not mix unrelated debug UI, docs, and compatibility changes unless they are p
 
 Never push, open a pull request, merge, rebase, rewrite history, or force-push unless the user explicitly requests that action.
 
+## Required Issue completion comment
+
+When working from a GitHub Issue, do not consider the work complete until you have posted a completion comment on that Issue.
+
+The completion comment must include these three sections exactly in substance:
+
+### 原因
+
+State the actual root cause or precise compatibility gap that was identified. Do not merely restate the symptom.
+
+If the exact cause could not be proven, say so explicitly and describe what was verified instead. Never invent a cause.
+
+### 修正内容
+
+Summarize the implementation changes made to address the cause, including the main files or runtime areas changed when useful.
+
+Do not list unrelated refactors or incidental formatting changes.
+
+### 確認結果
+
+State what was verified after the fix. Include focused tests, full test suite, build result, and real-game / WinMUGEN comparison when performed.
+
+If something was not verified, say so explicitly. Do not imply runtime verification or WinMUGEN parity without evidence.
+
+Example:
+
+```markdown
+### 原因
+HitDef の guard.velocity を world 座標へ変換する際、P2 の facing を基準に再反転しており、ガードノックバックの X 方向が逆転していた。
+
+### 修正内容
+- Guard 時の velocity 変換を P1 基準の WinMUGEN 互換ロジックへ修正
+- 左右反転ケースの focused test を追加
+- Compatibility Matrix / physics.md を更新
+
+### 確認結果
+- focused test: PASS
+- `npm test -- --run`: PASS
+- `npm run build`: PASS
+- 実ゲームで左右両向きのガードノックバックを確認
+```
+
+This Issue comment is mandatory even when the implementation itself is already committed.
+
+Do not close an Issue before posting this comment.
+
+If the Issue cannot be completed, leave it open and post a status comment that clearly states the unresolved cause, work performed, and verification status instead of presenting it as complete.
+
 ## Required completion report
 
 Use this structure when reporting completed work:
