@@ -266,9 +266,22 @@ Do not list unrelated refactors or incidental formatting changes.
 
 ### 確認結果
 
-State what was verified after the fix. Include focused tests, full test suite, build result, and real-game / WinMUGEN comparison when performed.
+State the concrete behavior or runtime evidence used to judge that the Issue itself is fixed.
 
-If something was not verified, say so explicitly. Do not imply runtime verification or WinMUGEN parity without evidence.
+This section is **not** a test-command log. Do not use `npm test`, focused-test PASS, or build success by themselves as the reason the Issue is considered fixed. Tests and build results belong in the normal completion report under `### Tests`.
+
+Describe the observable or state-level evidence that proves the original symptom is gone and the expected WinMUGEN behavior is now reproduced. Examples include:
+
+- the previously failing State now transitions to the expected next State under the same trigger conditions;
+- a guarded character now receives velocity in the correct direction on both left/right sides;
+- the expected Helper / Explod is created exactly once at the required AnimElem;
+- the character and Helper return to neutral on the same frame;
+- the target reaches the visible screen edge and the wall-impact route actually starts;
+- the visual effect, palette change, gauge value, collision result, or input route now matches the WinMUGEN observation used as the acceptance criterion.
+
+Whenever possible, include the exact StateNo, AnimNo, position/velocity, trigger result, frame timing, count, or other runtime value that demonstrates correctness.
+
+If the real-game behavior or the specific acceptance criterion could not be verified, say so explicitly and do **not** present the Issue as fully resolved merely because automated tests pass.
 
 Example:
 
@@ -282,10 +295,8 @@ HitDef の guard.velocity を world 座標へ変換する際、P2 の facing を
 - Compatibility Matrix / physics.md を更新
 
 ### 確認結果
-- focused test: PASS
-- `npm test -- --run`: PASS
-- `npm run build`: PASS
-- 実ゲームで左右両向きのガードノックバックを確認
+P1 が左・P2 が右の配置ではガード成立直後の P2 の X 速度が右向きになり、左右反転時は左向きになった。
+どちらの配置でも被ガード側が攻撃側から離れる方向へ実際に移動し、Issue の「攻撃側へ吸い寄せられる」現象が再現しなくなった。
 ```
 
 This Issue comment is mandatory even when the implementation itself is already committed.
