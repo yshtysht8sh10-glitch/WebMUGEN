@@ -50,6 +50,6 @@ so the same artifact supports both placements without changing a domain or serve
 - [ ] Confirm gameplay, audio, language, input configuration, and settings persistence work.
 - [ ] Confirm the Content Share URL copies and opens the selected Character and Stage.
 - [ ] Deploy only the intended public catalog and `default-settings.json`.
-- [ ] For proxy-release integration, deploy `api/catalog.php` and `api/catalog-lib.php`, configure the server-only shared secret/storage/catalog/public-URL environment variables, and confirm the PHP process can read ZIPs and replace `content/catalog.json`. Never place `WEBMUGEN_CATALOG_SECRET` in Vite variables, JavaScript, HTML, URLs, or repository files.
+- [ ] For proxy-release integration, deploy `api/catalog.php` and `api/catalog-lib.php`; copy `config/catalog-config.example.php` to the Git-ignored `config/catalog-config.php` and set its server-only `secret`, or retain the `WEBMUGEN_CATALOG_SECRET` environment-variable fallback. Configure the storage/catalog/public-URL environment variables and confirm the PHP process can read ZIPs and replace `content/catalog.json`. Never place the real secret in the example file, Vite variables, JavaScript, HTML, URLs, logs, or repository files.
 
 If a Development build was published accidentally, rebuild with Public Mode and replace the deployed assets. Public Mode ignores direct Stage source settings and does not expose server-writer handlers.

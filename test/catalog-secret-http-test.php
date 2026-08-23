@@ -1,0 +1,134 @@
+<?php
+
+declare(strict_types=1);
+
+$root = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'webmugen-catalog-secret-http-' . bin2hex(random_bytes(6));
+$public = $root . DIRECTORY_SEPARATOR . 'public';
+$api = $public . DIRECTORY_SEPARATOR . 'api';
+$config = $public . DIRECTORY_SEPARATOR . 'config';
+$content = $public . DIRECTORY_SEPARATOR . 'content';
+$configPath = $config . DIRECTORY_SEPARATOR . 'catalog-config.php';
+$originalEnvironmentSecret = getenv('WEBMUGEN_CATALOG_SECRET');
+$server = null;
+
+try {
+    if (!extension_loaded('curl')) throw new RuntimeException('PHP curl extension is required.');
+    foreach ([$api, $config, $content] as $directory) {
+        if (!mkdir($directory, 0777, true) && !is_dir($directory)) throw new RuntimeException('failed to create test directory');
+    }
+    copy(__DIR__ . '/../public/api/catalog.php', $api . '/catalog.php');
+    copy(__DIR__ . '/../public/api/catalog-lib.php', $api . '/catalog-lib.php');
+    copy(__DIR__ . '/../public/content/catalog.json', $content . '/catalog.json');
+
+    putenv('WEBMUGEN_CATALOG_SECRET');
+    writeHttpSecretConfig($configPath, 'http-file-secret-value');
+    $server = startCatalogServer($public);
+    assertHttpStatus(200, catalogRequest($server['url'], 'http-file-secret-value'), 'config file only');
+    stopCatalogServer($server);
+    $server = null;
+
+    putenv('WEBMUGEN_CATALOG_SECRET=http-environment-secret-value');
+    $server = startCatalogServer($public);
+    assertHttpStatus(200, catalogRequest($server['url'], 'http-file-secret-value'), 'config file takes priority');
+    assertHttpStatus(401, catalogRequest($server['url'], 'http-environment-secret-value'), 'environment token loses to config file');
+    stopCatalogServer($server);
+    $server = null;
+
+    unlink($configPath);
+    $server = startCatalogServer($public);
+    assertHttpStatus(200, catalogRequest($server['url'], 'http-environment-secret-value'), 'environment only');
+    stopCatalogServer($server);
+    $server = null;
+
+    putenv('WEBMUGEN_CATALOG_SECRET');
+    $server = startCatalogServer($public);
+    assertHttpStatus(401, catalogRequest($server['url'], 'any-token'), 'missing configuration');
+
+    echo "catalog-secret-http-test: PASS\n";
+} finally {
+    if (is_array($server)) stopCatalogServer($server);
+    if ($originalEnvironmentSecret === false) putenv('WEBMUGEN_CATALOG_SECRET');
+    else putenv('WEBMUGEN_CATALOG_SECRET=' . $originalEnvironmentSecret);
+    removeHttpTestTree($root);
+}
+
+function startCatalogServer(string $documentRoot): array
+{
+    $socket = stream_socket_server('tcp://127.0.0.1:0', $errorNumber, $errorMessage);
+    if ($socket === false) throw new RuntimeException($errorMessage, $errorNumber);
+    $address = (string)stream_socket_get_name($socket, false);
+    fclose($socket);
+    $port = (int)substr(strrchr($address, ':'), 1);
+    $process = proc_open(
+        [PHP_BINARY, '-S', '127.0.0.1:' . $port, '-t', $documentRoot],
+        [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+        $pipes,
+        $documentRoot,
+    );
+    if (!is_resource($process)) throw new RuntimeException('failed to start PHP server');
+    fclose($pipes[0]);
+    $url = 'http://127.0.0.1:' . $port . '/api/catalog.php?action=play-url';
+    $deadline = microtime(true) + 5;
+    do {
+        $status = catalogRequest($url, 'startup-probe');
+        if ($status !== 0) return ['process' => $process, 'pipes' => $pipes, 'url' => $url];
+        usleep(100000);
+    } while (microtime(true) < $deadline);
+    stopCatalogServer(['process' => $process, 'pipes' => $pipes, 'url' => $url]);
+    throw new RuntimeException('PHP server did not start.');
+}
+
+function stopCatalogServer(array $server): void
+{
+    $process = $server['process'];
+    if (is_resource($process)) {
+        $status = proc_get_status($process);
+        if (($status['running'] ?? false) && PHP_OS_FAMILY === 'Windows' && (int)($status['pid'] ?? 0) > 0) {
+            exec('taskkill /F /T /PID ' . (int)$status['pid'] . ' >NUL 2>NUL');
+        } elseif ($status['running'] ?? false) {
+            proc_terminate($process);
+        }
+        foreach ($server['pipes'] as $pipe) if (is_resource($pipe)) fclose($pipe);
+        proc_close($process);
+    }
+}
+
+function catalogRequest(string $url, string $token): int
+{
+    $curl = curl_init($url);
+    curl_setopt_array($curl, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 2,
+        CURLOPT_POST => true,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $token],
+        CURLOPT_POSTFIELDS => json_encode(['characterId' => 'kfm', 'stageId' => 'cyber']),
+    ]);
+    $body = curl_exec($curl);
+    if ($body === false && curl_errno($curl) !== CURLE_COULDNT_CONNECT) {
+        $message = curl_error($curl);
+        curl_close($curl);
+        throw new RuntimeException($message);
+    }
+    $status = (int)curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+    curl_close($curl);
+    return $status;
+}
+
+function writeHttpSecretConfig(string $path, string $secret): void
+{
+    $source = "<?php\n\nreturn [\n    'secret' => " . var_export($secret, true) . ",\n];\n";
+    if (file_put_contents($path, $source) === false) throw new RuntimeException('failed to write test config');
+}
+
+function assertHttpStatus(int $expected, int $actual, string $label): void
+{
+    if ($expected !== $actual) throw new RuntimeException($label . ': expected HTTP ' . $expected . ', got ' . $actual);
+}
+
+function removeHttpTestTree(string $path): void
+{
+    if (!is_dir($path)) return;
+    $items = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
+    foreach ($items as $item) $item->isDir() ? rmdir($item->getPathname()) : unlink($item->getPathname());
+    rmdir($path);
+}

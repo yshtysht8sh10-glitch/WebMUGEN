@@ -117,9 +117,17 @@ The supplied PHP endpoint `public/api/catalog.php` is the deployment adapter for
 - `rebuild`: rescan the fixed storage root and replace all `proxy-release-*` entries while retaining publisher/built-in entries;
 - `play-url`: return the current URL for an already cataloged publication.
 
-Configure these server-side environment variables; never place the secret in Vite/browser settings:
+For rental-server deployments, copy `public/config/catalog-config.example.php` to `public/config/catalog-config.php` and replace `YOUR_SECRET_HERE` with the same Bearer token configured in the proxy-release administrator screen. `catalog-config.php` is ignored by Git and must remain server-only. PHP reads the secret in this order:
 
-- `WEBMUGEN_CATALOG_SECRET`: Bearer token shared with proxy-release;
+1. non-empty `secret` from `public/config/catalog-config.php`;
+2. `WEBMUGEN_CATALOG_SECRET` environment variable;
+3. no secret, causing Catalog API authorization to fail with HTTP 401.
+
+The environment variable remains supported for Docker and existing deployments. Never place either real value in the example file, Vite/browser settings, JavaScript, HTML, URLs, logs, or repository files.
+
+Configure the remaining deployment values with these server-side environment variables:
+
+- `WEBMUGEN_CATALOG_SECRET`: backward-compatible Bearer token fallback when the config file has no non-empty secret;
 - `WEBMUGEN_PROXY_STORAGE_DIR`: filesystem path to `/DotoEita/16_proxy_release/storage/data`;
 - `WEBMUGEN_PROXY_STORAGE_PUBLIC_BASE`: corresponding same-origin URL path;
 - `WEBMUGEN_CATALOG_PATH`: filesystem path to the deployed `content/catalog.json`;

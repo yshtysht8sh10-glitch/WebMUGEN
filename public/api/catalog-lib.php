@@ -10,13 +10,26 @@ function webMugenCatalogConfig(array $server = []): array
     $scheme = (($server['HTTPS'] ?? '') !== '' && ($server['HTTPS'] ?? '') !== 'off') ? 'https' : 'http';
     $host = (string)($server['HTTP_HOST'] ?? 'localhost');
     return [
-        'secret' => (string)(getenv('WEBMUGEN_CATALOG_SECRET') ?: ''),
+        'secret' => webMugenCatalogSecret(),
         'storageDir' => (string)(getenv('WEBMUGEN_PROXY_STORAGE_DIR') ?: $documentRoot . '/DotoEita/16_proxy_release/storage/data'),
         'storagePublicBase' => rtrim((string)(getenv('WEBMUGEN_PROXY_STORAGE_PUBLIC_BASE') ?: '/DotoEita/16_proxy_release/storage/data'), '/'),
         'catalogPath' => (string)(getenv('WEBMUGEN_CATALOG_PATH') ?: dirname(__DIR__) . '/content/catalog.json'),
         'publicUrl' => rtrim((string)(getenv('WEBMUGEN_PUBLIC_URL') ?: $scheme . '://' . $host . $appPath . '/index.html'), '/'),
         'defaultStageId' => (string)(getenv('WEBMUGEN_DEFAULT_STAGE_ID') ?: 'cyber'),
     ];
+}
+
+function webMugenCatalogSecret(?string $configPath = null): string
+{
+    $path = $configPath ?? dirname(__DIR__) . '/config/catalog-config.php';
+    if (is_file($path)) {
+        $fileConfig = require $path;
+        if (is_array($fileConfig) && is_string($fileConfig['secret'] ?? null)) {
+            $fileSecret = trim($fileConfig['secret']);
+            if ($fileSecret !== '') return $fileSecret;
+        }
+    }
+    return trim((string)(getenv('WEBMUGEN_CATALOG_SECRET') ?: ''));
 }
 
 function webMugenAuthorize(string $authorization, string $secret): bool
