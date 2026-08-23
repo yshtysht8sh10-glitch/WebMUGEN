@@ -11,11 +11,33 @@ header('X-Content-Type-Options: nosniff');
 try {
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') throw new RuntimeException('POST is required.', 405);
     $config = webMugenCatalogConfig($_SERVER);
-    $authorization = (string)($_SERVER['HTTP_AUTHORIZATION'] ?? '');
-    if (!webMugenAuthorize($authorization, (string)$config['secret'])) throw new RuntimeException('Catalog API authorization failed.', 401);
+    $authorizationState = webMugenAuthorizationHeader($_SERVER);
+    $authorization = (string)$authorizationState['value'];
     $payload = json_decode((string)file_get_contents('php://input'), true);
     if (!is_array($payload)) $payload = [];
     $action = (string)($_GET['action'] ?? $payload['action'] ?? '');
+
+    if ($action === 'debug') {
+        if (($config['debug'] ?? false) !== true) throw new RuntimeException('Unknown Catalog API action.', 404);
+        echo json_encode([
+            'configFileExists' => (bool)$config['configFileExists'],
+            'configFileReadable' => (bool)$config['configFileReadable'],
+            'configFileLoaded' => (bool)$config['configFileLoaded'],
+            'configFilePath' => (string)$config['configFilePath'],
+            'secretSource' => (string)$config['secretSource'],
+            'secretLength' => strlen((string)$config['secret']),
+            'authorizationHeaderExists' => $authorization !== '',
+            'authorizationHeaderLength' => strlen($authorization),
+            'authorizationHeaderSource' => (string)$authorizationState['source'],
+            'bearerPrefix' => preg_match('/^Bearer(?:\s|$)/i', $authorization) === 1,
+            'storageDir' => (string)$config['storageDir'],
+            'catalogPath' => (string)$config['catalogPath'],
+            'publicUrl' => (string)$config['publicUrl'],
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        return;
+    }
+
+    if (!webMugenAuthorize($authorization, (string)$config['secret'])) throw new RuntimeException('Catalog API authorization failed.', 401);
 
     if ($action === 'publish-character') {
         $publicationId = (string)($payload['publicationId'] ?? '');

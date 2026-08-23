@@ -9,8 +9,15 @@ function webMugenCatalogConfig(array $server = []): array
     $appPath = rtrim(dirname(dirname($scriptName)), '/');
     $scheme = (($server['HTTPS'] ?? '') !== '' && ($server['HTTPS'] ?? '') !== 'off') ? 'https' : 'http';
     $host = (string)($server['HTTP_HOST'] ?? 'localhost');
+    $security = webMugenCatalogSecurityState();
     return [
-        'secret' => webMugenCatalogSecret(),
+        'secret' => $security['secret'],
+        'secretSource' => $security['secretSource'],
+        'debug' => $security['debug'],
+        'configFilePath' => $security['configFilePath'],
+        'configFileExists' => $security['configFileExists'],
+        'configFileReadable' => $security['configFileReadable'],
+        'configFileLoaded' => $security['configFileLoaded'],
         'storageDir' => (string)(getenv('WEBMUGEN_PROXY_STORAGE_DIR') ?: $documentRoot . '/DotoEita/16_proxy_release/storage/data'),
         'storagePublicBase' => rtrim((string)(getenv('WEBMUGEN_PROXY_STORAGE_PUBLIC_BASE') ?: '/DotoEita/16_proxy_release/storage/data'), '/'),
         'catalogPath' => (string)(getenv('WEBMUGEN_CATALOG_PATH') ?: dirname(__DIR__) . '/content/catalog.json'),
@@ -21,15 +28,61 @@ function webMugenCatalogConfig(array $server = []): array
 
 function webMugenCatalogSecret(?string $configPath = null): string
 {
+    return webMugenCatalogSecurityState($configPath)['secret'];
+}
+
+function webMugenCatalogSecurityState(?string $configPath = null): array
+{
     $path = $configPath ?? dirname(__DIR__) . '/config/catalog-config.php';
-    if (is_file($path)) {
+    $exists = is_file($path);
+    $readable = $exists && is_readable($path);
+    $loaded = false;
+    $fileConfig = [];
+    if ($readable) {
         $fileConfig = require $path;
-        if (is_array($fileConfig) && is_string($fileConfig['secret'] ?? null)) {
-            $fileSecret = trim($fileConfig['secret']);
-            if ($fileSecret !== '') return $fileSecret;
-        }
+        $loaded = is_array($fileConfig);
+        if (!$loaded) $fileConfig = [];
     }
-    return trim((string)(getenv('WEBMUGEN_CATALOG_SECRET') ?: ''));
+    $fileSecret = is_string($fileConfig['secret'] ?? null) ? trim($fileConfig['secret']) : '';
+    $environmentSecret = trim((string)(getenv('WEBMUGEN_CATALOG_SECRET') ?: ''));
+    $secretSource = $fileSecret !== '' ? 'config' : ($environmentSecret !== '' ? 'environment' : 'none');
+    return [
+        'secret' => $fileSecret !== '' ? $fileSecret : $environmentSecret,
+        'secretSource' => $secretSource,
+        'debug' => $loaded && ($fileConfig['debug'] ?? false) === true,
+        'configFilePath' => $path,
+        'configFileExists' => $exists,
+        'configFileReadable' => $readable,
+        'configFileLoaded' => $loaded,
+    ];
+}
+
+function webMugenAuthorizationHeader(array $server = [], ?array $apacheHeaders = null, ?array $allHeaders = null): array
+{
+    $serverValue = trim((string)($server['HTTP_AUTHORIZATION'] ?? ''));
+    if ($serverValue !== '') return ['value' => $serverValue, 'source' => 'HTTP_AUTHORIZATION'];
+
+    if ($apacheHeaders === null) {
+        $apacheHeaders = function_exists('apache_request_headers') ? apache_request_headers() : [];
+    }
+    $apacheValue = webMugenHeaderValue(is_array($apacheHeaders) ? $apacheHeaders : [], 'Authorization');
+    if ($apacheValue !== '') return ['value' => $apacheValue, 'source' => 'apache_request_headers'];
+
+    if ($allHeaders === null) {
+        $allHeaders = function_exists('getallheaders') ? getallheaders() : [];
+    }
+    $allValue = webMugenHeaderValue(is_array($allHeaders) ? $allHeaders : [], 'Authorization');
+    if ($allValue !== '') return ['value' => $allValue, 'source' => 'getallheaders'];
+
+    return ['value' => '', 'source' => 'none'];
+}
+
+function webMugenHeaderValue(array $headers, string $name): string
+{
+    foreach ($headers as $headerName => $value) {
+        if (strcasecmp((string)$headerName, $name) === 0) return trim((string)$value);
+    }
+    return '';
 }
 
 function webMugenAuthorize(string $authorization, string $secret): bool

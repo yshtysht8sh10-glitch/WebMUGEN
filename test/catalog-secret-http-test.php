@@ -21,14 +21,29 @@ try {
     copy(__DIR__ . '/../public/content/catalog.json', $content . '/catalog.json');
 
     putenv('WEBMUGEN_CATALOG_SECRET');
-    writeHttpSecretConfig($configPath, 'http-file-secret-value');
+    writeHttpSecretConfig($configPath, 'http-file-secret-value', true);
     $server = startCatalogServer($public);
+    $debug = catalogResponse(str_replace('action=play-url', 'action=debug', $server['url']), 'http-file-secret-value');
+    assertHttpStatus(200, $debug['status'], 'debug enabled');
+    $debugJson = json_decode($debug['body'], true, flags: JSON_THROW_ON_ERROR);
+    assertHttpValue(true, $debugJson['configFileExists'], 'debug config exists');
+    assertHttpValue(true, $debugJson['configFileReadable'], 'debug config readable');
+    assertHttpValue(true, $debugJson['configFileLoaded'], 'debug config loaded');
+    assertHttpValue('config', $debugJson['secretSource'], 'debug secret source');
+    assertHttpValue(strlen('http-file-secret-value'), $debugJson['secretLength'], 'debug secret length');
+    assertHttpValue(true, $debugJson['authorizationHeaderExists'], 'debug Authorization exists');
+    assertHttpValue(strlen('Bearer http-file-secret-value'), $debugJson['authorizationHeaderLength'], 'debug Authorization length');
+    assertHttpValue('HTTP_AUTHORIZATION', $debugJson['authorizationHeaderSource'], 'debug Authorization source');
+    assertHttpValue(true, $debugJson['bearerPrefix'], 'debug Bearer prefix');
+    assertHttpValue(false, str_contains($debug['body'], 'http-file-secret-value'), 'debug omits secret and Authorization values');
     assertHttpStatus(200, catalogRequest($server['url'], 'http-file-secret-value'), 'config file only');
     stopCatalogServer($server);
     $server = null;
 
+    writeHttpSecretConfig($configPath, 'http-file-secret-value', false);
     putenv('WEBMUGEN_CATALOG_SECRET=http-environment-secret-value');
     $server = startCatalogServer($public);
+    assertHttpStatus(404, catalogRequest(str_replace('action=play-url', 'action=debug', $server['url']), 'http-file-secret-value'), 'debug disabled');
     assertHttpStatus(200, catalogRequest($server['url'], 'http-file-secret-value'), 'config file takes priority');
     assertHttpStatus(401, catalogRequest($server['url'], 'http-environment-secret-value'), 'environment token loses to config file');
     stopCatalogServer($server);
@@ -95,6 +110,11 @@ function stopCatalogServer(array $server): void
 
 function catalogRequest(string $url, string $token): int
 {
+    return catalogResponse($url, $token)['status'];
+}
+
+function catalogResponse(string $url, string $token): array
+{
     $curl = curl_init($url);
     curl_setopt_array($curl, [
         CURLOPT_RETURNTRANSFER => true,
@@ -111,18 +131,23 @@ function catalogRequest(string $url, string $token): int
     }
     $status = (int)curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
     curl_close($curl);
-    return $status;
+    return ['status' => $status, 'body' => is_string($body) ? $body : ''];
 }
 
-function writeHttpSecretConfig(string $path, string $secret): void
+function writeHttpSecretConfig(string $path, string $secret, bool $debug = false): void
 {
-    $source = "<?php\n\nreturn [\n    'secret' => " . var_export($secret, true) . ",\n];\n";
+    $source = "<?php\n\nreturn [\n    'secret' => " . var_export($secret, true) . ",\n    'debug' => " . var_export($debug, true) . ",\n];\n";
     if (file_put_contents($path, $source) === false) throw new RuntimeException('failed to write test config');
 }
 
 function assertHttpStatus(int $expected, int $actual, string $label): void
 {
     if ($expected !== $actual) throw new RuntimeException($label . ': expected HTTP ' . $expected . ', got ' . $actual);
+}
+
+function assertHttpValue(mixed $expected, mixed $actual, string $label): void
+{
+    if ($expected !== $actual) throw new RuntimeException($label . ': expected ' . var_export($expected, true) . ', got ' . var_export($actual, true));
 }
 
 function removeHttpTestTree(string $path): void

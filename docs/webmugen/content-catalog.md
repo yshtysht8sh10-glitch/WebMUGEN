@@ -125,6 +125,10 @@ For rental-server deployments, copy `public/config/catalog-config.example.php` t
 
 The environment variable remains supported for Docker and existing deployments. Never place either real value in the example file, Vite/browser settings, JavaScript, HTML, URLs, logs, or repository files.
 
+For temporary 401 diagnosis only, set `'debug' => true` in the server-only `catalog-config.php` and send a `POST` to `api/catalog.php?action=debug`. This action runs before Bearer authentication only while the flag is the boolean `true`; otherwise it returns 404. The response reports whether the config file exists, is readable, and returned an array; whether the selected secret came from `config`, `environment`, or `none`; Secret and Authorization header byte lengths; Authorization retrieval source and Bearer prefix; and the resolved deployment paths. It never returns either secret or Authorization value. Set `debug` back to `false` immediately after diagnosis because the response includes server filesystem paths.
+
+Authorization is read first from `$_SERVER['HTTP_AUTHORIZATION']`, then from `apache_request_headers()`, then from `getallheaders()`. This preserves standard PHP behavior while supporting rental-server Apache configurations that expose the header only through a header function.
+
 Configure the remaining deployment values with these server-side environment variables:
 
 - `WEBMUGEN_CATALOG_SECRET`: backward-compatible Bearer token fallback when the config file has no non-empty secret;
