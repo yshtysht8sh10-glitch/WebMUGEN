@@ -51,6 +51,15 @@ try {
     $rebuild = catalogResponse(str_replace('action=play-url', 'action=rebuild', $server['url']), null, 'http-file-secret-value');
     assertHttpStatus(200, $rebuild['status'], 'X-WebMUGEN-Token rebuild');
     assertHttpValue(true, json_decode($rebuild['body'], true, flags: JSON_THROW_ON_ERROR)['success'], 'X-WebMUGEN-Token rebuild success');
+    if (DIRECTORY_SEPARATOR !== '\\') {
+        clearstatcache(true, $content . '/catalog.json');
+        assertHttpValue(0644, fileperms($content . '/catalog.json') & 0777, 'rebuild Catalog permission');
+    }
+    $publicCatalog = catalogGetResponse(str_replace('/api/catalog.php?action=play-url', '/content/catalog.json', $server['url']));
+    assertHttpStatus(200, $publicCatalog['status'], 'generated Catalog public GET');
+    $publicCatalogJson = json_decode($publicCatalog['body'], true, flags: JSON_THROW_ON_ERROR);
+    assertHttpValue(1, $publicCatalogJson['version'], 'generated Catalog Runtime schema version');
+    assertHttpValue(true, is_array($publicCatalogJson['items']), 'generated Catalog Runtime items');
     assertHttpStatus(401, catalogRequest($server['url'], null, null), 'missing Authorization and X-WebMUGEN-Token');
     assertHttpStatus(401, catalogRequest($server['url'], null, 'wrong-token'), 'mismatched X-WebMUGEN-Token');
     assertHttpStatus(401, catalogRequest($server['url'], 'wrong-token', 'http-file-secret-value'), 'Bearer mismatch takes priority over matching X-WebMUGEN-Token');
@@ -148,6 +157,24 @@ function catalogResponse(string $url, ?string $token = null, ?string $xToken = n
     ]);
     $body = curl_exec($curl);
     if ($body === false && curl_errno($curl) !== CURLE_COULDNT_CONNECT) {
+        $message = curl_error($curl);
+        curl_close($curl);
+        throw new RuntimeException($message);
+    }
+    $status = (int)curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+    curl_close($curl);
+    return ['status' => $status, 'body' => is_string($body) ? $body : ''];
+}
+
+function catalogGetResponse(string $url): array
+{
+    $curl = curl_init($url);
+    curl_setopt_array($curl, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 2,
+    ]);
+    $body = curl_exec($curl);
+    if ($body === false) {
         $message = curl_error($curl);
         curl_close($curl);
         throw new RuntimeException($message);

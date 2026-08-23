@@ -366,7 +366,13 @@ function webMugenValidateCatalog(mixed $catalog): void
     }
 }
 
-function webMugenWriteCatalogAtomic(string $path, array $catalog, ?callable $beforeReplace = null): void
+function webMugenWriteCatalogAtomic(
+    string $path,
+    array $catalog,
+    ?callable $beforeReplace = null,
+    ?callable $chmodFile = null,
+    ?callable $warningLogger = null,
+): void
 {
     webMugenValidateCatalog($catalog);
     $directory = dirname($path);
@@ -390,9 +396,24 @@ function webMugenWriteCatalogAtomic(string $path, array $catalog, ?callable $bef
         } elseif (!rename($temporary, $path)) {
             throw new RuntimeException('Catalog atomic replacement failed.', 500);
         }
+        webMugenSetCatalogPublicPermissions($path, $chmodFile, $warningLogger);
     } finally {
         if (is_file($temporary)) @unlink($temporary);
     }
+}
+
+function webMugenSetCatalogPublicPermissions(
+    string $path,
+    ?callable $chmodFile = null,
+    ?callable $warningLogger = null,
+): bool {
+    $chmodFile ??= static fn(string $catalogPath, int $mode): bool => @chmod($catalogPath, $mode);
+    if ($chmodFile($path, 0644)) return true;
+
+    $message = 'WebMUGEN Catalog warning: failed to set generated Catalog permissions to 0644: ' . $path;
+    if ($warningLogger !== null) $warningLogger($message);
+    else error_log($message);
+    return false;
 }
 
 function webMugenPathIsInside(string $path, string $root): bool

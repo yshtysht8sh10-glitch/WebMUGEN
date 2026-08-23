@@ -54,6 +54,10 @@ try {
 
     $second = webMugenRebuildCatalog($config);
     assertSame(array_column($rebuilt['entries'], 'id'), array_column($second['entries'], 'id'), 'rebuild keeps IDs stable');
+    if (DIRECTORY_SEPARATOR !== '\\') {
+        clearstatcache(true, $catalogPath);
+        assertSame(0644, fileperms($catalogPath) & 0777, 'rebuild makes the Catalog publicly readable');
+    }
     $published = webMugenPublishCharacter($config, '123', 'uploaded_938472.zip');
     assertSame('proxy-release-123', $published['entry']['id'], 'publication ID is independent from the archive filename');
     assertSame('/DotoEita/16_proxy_release/storage/data/uploaded_938472.zip', $published['entry']['path'], 'the actual archive filename is retained in the Catalog path');
@@ -97,6 +101,32 @@ try {
         assertSame('simulated pre-replace failure', $error->getMessage(), 'simulated failure is observed');
     }
     assertSame($before, (string)file_get_contents($catalogPath), 'failed update leaves current Catalog unchanged');
+
+    $chmodCall = null;
+    webMugenWriteCatalogAtomic(
+        $catalogPath,
+        $builtin,
+        null,
+        static function (string $path, int $mode) use (&$chmodCall): bool {
+            $chmodCall = [$path, $mode];
+            return true;
+        },
+    );
+    assertSame([$catalogPath, 0644], $chmodCall, 'atomic replacement applies public permissions to the final Catalog path');
+
+    $warnings = [];
+    webMugenWriteCatalogAtomic(
+        $catalogPath,
+        $builtin,
+        null,
+        static fn(string $path, int $mode): bool => false,
+        static function (string $message) use (&$warnings): void {
+            $warnings[] = $message;
+        },
+    );
+    assertSame(1, count($warnings), 'chmod failure emits one warning');
+    assertSame(true, str_contains($warnings[0], 'failed to set generated Catalog permissions to 0644'), 'chmod warning identifies the failed mode');
+    assertSame($builtin, webMugenReadCatalog($catalogPath), 'chmod failure does not discard the successfully replaced Catalog');
 
     echo "catalog-api-test: PASS\n";
 } finally {
