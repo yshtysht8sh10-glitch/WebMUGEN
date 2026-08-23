@@ -36,10 +36,38 @@ try {
     assertSecret('', webMugenCatalogSecret($configPath), 'missing configuration');
     assertSecret(false, webMugenAuthorize('Bearer any-token', webMugenCatalogSecret($configPath)), 'missing configuration rejects authorization');
 
-    assertSecret('HTTP_AUTHORIZATION', webMugenAuthorizationHeader(['HTTP_AUTHORIZATION' => 'Bearer server-token'], ['Authorization' => 'Bearer apache-token'], ['Authorization' => 'Bearer all-token'])['source'], 'server Authorization priority');
-    assertSecret('apache_request_headers', webMugenAuthorizationHeader([], ['authorization' => 'Bearer apache-token'], ['Authorization' => 'Bearer all-token'])['source'], 'Apache Authorization fallback');
-    assertSecret('getallheaders', webMugenAuthorizationHeader([], [], ['AUTHORIZATION' => 'Bearer all-token'])['source'], 'getallheaders Authorization fallback');
-    assertSecret('none', webMugenAuthorizationHeader([], [], [])['source'], 'missing Authorization header');
+    $sharedSecret = 'shared-request-token';
+    $httpAuthorization = webMugenApiTokenState(['HTTP_AUTHORIZATION' => 'Bearer ' . $sharedSecret], [], []);
+    assertSecret('HTTP_AUTHORIZATION', $httpAuthorization['authorization']['source'], 'HTTP Authorization priority');
+    assertSecret(true, webMugenAuthorizeRequest($httpAuthorization, $sharedSecret), 'HTTP Authorization authenticates');
+
+    $redirectAuthorization = webMugenApiTokenState(['REDIRECT_HTTP_AUTHORIZATION' => 'Bearer ' . $sharedSecret], [], []);
+    assertSecret('REDIRECT_HTTP_AUTHORIZATION', $redirectAuthorization['authorization']['source'], 'redirect Authorization fallback');
+    assertSecret(true, webMugenAuthorizeRequest($redirectAuthorization, $sharedSecret), 'redirect Authorization authenticates');
+
+    $apacheAuthorization = webMugenApiTokenState([], ['authorization' => 'Bearer ' . $sharedSecret], []);
+    assertSecret('apache_request_headers', $apacheAuthorization['authorization']['source'], 'Apache Authorization fallback');
+    assertSecret(true, webMugenAuthorizeRequest($apacheAuthorization, $sharedSecret), 'Apache Authorization authenticates');
+
+    $allAuthorization = webMugenApiTokenState([], [], ['AUTHORIZATION' => 'Bearer ' . $sharedSecret]);
+    assertSecret('getallheaders', $allAuthorization['authorization']['source'], 'getallheaders Authorization fallback');
+    assertSecret(true, webMugenAuthorizeRequest($allAuthorization, $sharedSecret), 'getallheaders Authorization authenticates');
+
+    $xToken = webMugenApiTokenState(['HTTP_X_WEBMUGEN_TOKEN' => $sharedSecret], [], []);
+    assertSecret('x-webmugen-token', $xToken['selectedAuthSource'], 'X-WebMUGEN-Token fallback selected');
+    assertSecret(true, webMugenAuthorizeRequest($xToken, $sharedSecret), 'X-WebMUGEN-Token authenticates');
+
+    assertSecret(false, webMugenAuthorizeRequest(webMugenApiTokenState([], [], []), $sharedSecret), 'missing headers reject authentication');
+    assertSecret(false, webMugenAuthorizeRequest(webMugenApiTokenState(['HTTP_X_WEBMUGEN_TOKEN' => 'wrong-token'], [], []), $sharedSecret), 'mismatched X-WebMUGEN-Token rejects authentication');
+    $bearerWins = webMugenApiTokenState(['HTTP_AUTHORIZATION' => 'Bearer wrong-token', 'HTTP_X_WEBMUGEN_TOKEN' => $sharedSecret], [], []);
+    assertSecret('bearer', $bearerWins['selectedAuthSource'], 'Bearer remains preferred when both headers exist');
+    assertSecret(false, webMugenAuthorizeRequest($bearerWins, $sharedSecret), 'mismatched Bearer is not rescued by matching X-WebMUGEN-Token');
+    assertSecret(['HTTP_AUTHORIZATION', 'HTTP_X_WEBMUGEN_TOKEN', 'REDIRECT_HTTP_AUTHORIZATION'], webMugenDebugServerHeaderKeys([
+        'HTTP_X_WEBMUGEN_TOKEN' => 'hidden',
+        'REQUEST_METHOD' => 'POST',
+        'REDIRECT_HTTP_AUTHORIZATION' => 'hidden',
+        'HTTP_AUTHORIZATION' => 'hidden',
+    ]), 'debug returns only sorted HTTP server key names');
 
     echo "catalog-secret-test: PASS\n";
 } finally {

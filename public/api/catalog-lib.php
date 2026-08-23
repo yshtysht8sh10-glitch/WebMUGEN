@@ -61,6 +61,8 @@ function webMugenAuthorizationHeader(array $server = [], ?array $apacheHeaders =
 {
     $serverValue = trim((string)($server['HTTP_AUTHORIZATION'] ?? ''));
     if ($serverValue !== '') return ['value' => $serverValue, 'source' => 'HTTP_AUTHORIZATION'];
+    $redirectValue = trim((string)($server['REDIRECT_HTTP_AUTHORIZATION'] ?? ''));
+    if ($redirectValue !== '') return ['value' => $redirectValue, 'source' => 'REDIRECT_HTTP_AUTHORIZATION'];
 
     if ($apacheHeaders === null) {
         $apacheHeaders = function_exists('apache_request_headers') ? apache_request_headers() : [];
@@ -75,6 +77,62 @@ function webMugenAuthorizationHeader(array $server = [], ?array $apacheHeaders =
     if ($allValue !== '') return ['value' => $allValue, 'source' => 'getallheaders'];
 
     return ['value' => '', 'source' => 'none'];
+}
+
+function webMugenXTokenHeader(array $server = [], ?array $apacheHeaders = null, ?array $allHeaders = null): array
+{
+    $serverValue = trim((string)($server['HTTP_X_WEBMUGEN_TOKEN'] ?? ''));
+    if ($serverValue !== '') return ['value' => $serverValue, 'source' => 'HTTP_X_WEBMUGEN_TOKEN'];
+    $redirectValue = trim((string)($server['REDIRECT_HTTP_X_WEBMUGEN_TOKEN'] ?? ''));
+    if ($redirectValue !== '') return ['value' => $redirectValue, 'source' => 'REDIRECT_HTTP_X_WEBMUGEN_TOKEN'];
+
+    if ($apacheHeaders === null) {
+        $apacheHeaders = function_exists('apache_request_headers') ? apache_request_headers() : [];
+    }
+    $apacheValue = webMugenHeaderValue(is_array($apacheHeaders) ? $apacheHeaders : [], 'X-WebMUGEN-Token');
+    if ($apacheValue !== '') return ['value' => $apacheValue, 'source' => 'apache_request_headers'];
+
+    if ($allHeaders === null) {
+        $allHeaders = function_exists('getallheaders') ? getallheaders() : [];
+    }
+    $allValue = webMugenHeaderValue(is_array($allHeaders) ? $allHeaders : [], 'X-WebMUGEN-Token');
+    if ($allValue !== '') return ['value' => $allValue, 'source' => 'getallheaders'];
+
+    return ['value' => '', 'source' => 'none'];
+}
+
+function webMugenApiTokenState(array $server = [], ?array $apacheHeaders = null, ?array $allHeaders = null): array
+{
+    if ($apacheHeaders === null) {
+        $apacheHeaders = function_exists('apache_request_headers') ? apache_request_headers() : [];
+    }
+    if ($allHeaders === null) {
+        $allHeaders = function_exists('getallheaders') ? getallheaders() : [];
+    }
+    $authorization = webMugenAuthorizationHeader($server, is_array($apacheHeaders) ? $apacheHeaders : [], is_array($allHeaders) ? $allHeaders : []);
+    $xToken = webMugenXTokenHeader($server, is_array($apacheHeaders) ? $apacheHeaders : [], is_array($allHeaders) ? $allHeaders : []);
+    if ($authorization['value'] !== '') {
+        $token = '';
+        if (preg_match('/^Bearer\s+(.+)$/i', trim((string)$authorization['value']), $match) === 1) $token = trim($match[1]);
+        return ['token' => $token, 'selectedAuthSource' => 'bearer', 'authorization' => $authorization, 'xToken' => $xToken];
+    }
+    if ($xToken['value'] !== '') {
+        return ['token' => (string)$xToken['value'], 'selectedAuthSource' => 'x-webmugen-token', 'authorization' => $authorization, 'xToken' => $xToken];
+    }
+    return ['token' => '', 'selectedAuthSource' => 'none', 'authorization' => $authorization, 'xToken' => $xToken];
+}
+
+function webMugenAuthorizeRequest(array $tokenState, string $secret): bool
+{
+    $token = (string)($tokenState['token'] ?? '');
+    return $secret !== '' && $token !== '' && hash_equals($secret, $token);
+}
+
+function webMugenDebugServerHeaderKeys(array $server): array
+{
+    $keys = array_values(array_filter(array_map('strval', array_keys($server)), static fn(string $key): bool => str_starts_with($key, 'HTTP_') || str_starts_with($key, 'REDIRECT_HTTP_')));
+    sort($keys, SORT_STRING);
+    return $keys;
 }
 
 function webMugenHeaderValue(array $headers, string $name): string

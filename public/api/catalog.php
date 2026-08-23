@@ -11,7 +11,9 @@ header('X-Content-Type-Options: nosniff');
 try {
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') throw new RuntimeException('POST is required.', 405);
     $config = webMugenCatalogConfig($_SERVER);
-    $authorizationState = webMugenAuthorizationHeader($_SERVER);
+    $tokenState = webMugenApiTokenState($_SERVER);
+    $authorizationState = $tokenState['authorization'];
+    $xTokenState = $tokenState['xToken'];
     $authorization = (string)$authorizationState['value'];
     $payload = json_decode((string)file_get_contents('php://input'), true);
     if (!is_array($payload)) $payload = [];
@@ -30,6 +32,10 @@ try {
             'authorizationHeaderLength' => strlen($authorization),
             'authorizationHeaderSource' => (string)$authorizationState['source'],
             'bearerPrefix' => preg_match('/^Bearer(?:\s|$)/i', $authorization) === 1,
+            'xWebMugenTokenExists' => (string)$xTokenState['value'] !== '',
+            'xWebMugenTokenLength' => strlen((string)$xTokenState['value']),
+            'selectedAuthSource' => (string)$tokenState['selectedAuthSource'],
+            'serverHeaderKeys' => webMugenDebugServerHeaderKeys($_SERVER),
             'storageDir' => (string)$config['storageDir'],
             'catalogPath' => (string)$config['catalogPath'],
             'publicUrl' => (string)$config['publicUrl'],
@@ -37,7 +43,7 @@ try {
         return;
     }
 
-    if (!webMugenAuthorize($authorization, (string)$config['secret'])) throw new RuntimeException('Catalog API authorization failed.', 401);
+    if (!webMugenAuthorizeRequest($tokenState, (string)$config['secret'])) throw new RuntimeException('Catalog API authorization failed.', 401);
 
     if ($action === 'publish-character') {
         $publicationId = (string)($payload['publicationId'] ?? '');

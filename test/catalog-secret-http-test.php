@@ -7,13 +7,15 @@ $public = $root . DIRECTORY_SEPARATOR . 'public';
 $api = $public . DIRECTORY_SEPARATOR . 'api';
 $config = $public . DIRECTORY_SEPARATOR . 'config';
 $content = $public . DIRECTORY_SEPARATOR . 'content';
+$storage = $root . DIRECTORY_SEPARATOR . 'storage';
 $configPath = $config . DIRECTORY_SEPARATOR . 'catalog-config.php';
 $originalEnvironmentSecret = getenv('WEBMUGEN_CATALOG_SECRET');
+$originalStorageDir = getenv('WEBMUGEN_PROXY_STORAGE_DIR');
 $server = null;
 
 try {
     if (!extension_loaded('curl')) throw new RuntimeException('PHP curl extension is required.');
-    foreach ([$api, $config, $content] as $directory) {
+    foreach ([$api, $config, $content, $storage] as $directory) {
         if (!mkdir($directory, 0777, true) && !is_dir($directory)) throw new RuntimeException('failed to create test directory');
     }
     copy(__DIR__ . '/../public/api/catalog.php', $api . '/catalog.php');
@@ -21,9 +23,11 @@ try {
     copy(__DIR__ . '/../public/content/catalog.json', $content . '/catalog.json');
 
     putenv('WEBMUGEN_CATALOG_SECRET');
+    putenv('WEBMUGEN_PROXY_STORAGE_DIR=' . $storage);
     writeHttpSecretConfig($configPath, 'http-file-secret-value', true);
     $server = startCatalogServer($public);
-    $debug = catalogResponse(str_replace('action=play-url', 'action=debug', $server['url']), 'http-file-secret-value');
+    $debugXToken = 'http-debug-x-token-value';
+    $debug = catalogResponse(str_replace('action=play-url', 'action=debug', $server['url']), 'http-file-secret-value', $debugXToken);
     assertHttpStatus(200, $debug['status'], 'debug enabled');
     $debugJson = json_decode($debug['body'], true, flags: JSON_THROW_ON_ERROR);
     assertHttpValue(true, $debugJson['configFileExists'], 'debug config exists');
@@ -35,8 +39,22 @@ try {
     assertHttpValue(strlen('Bearer http-file-secret-value'), $debugJson['authorizationHeaderLength'], 'debug Authorization length');
     assertHttpValue('HTTP_AUTHORIZATION', $debugJson['authorizationHeaderSource'], 'debug Authorization source');
     assertHttpValue(true, $debugJson['bearerPrefix'], 'debug Bearer prefix');
+    assertHttpValue(true, $debugJson['xWebMugenTokenExists'], 'debug X-WebMUGEN-Token exists');
+    assertHttpValue(strlen($debugXToken), $debugJson['xWebMugenTokenLength'], 'debug X-WebMUGEN-Token length');
+    assertHttpValue('bearer', $debugJson['selectedAuthSource'], 'debug selected auth source');
+    assertHttpValue(true, in_array('HTTP_AUTHORIZATION', $debugJson['serverHeaderKeys'], true), 'debug lists Authorization server key');
+    assertHttpValue(true, in_array('HTTP_X_WEBMUGEN_TOKEN', $debugJson['serverHeaderKeys'], true), 'debug lists X token server key');
     assertHttpValue(false, str_contains($debug['body'], 'http-file-secret-value'), 'debug omits secret and Authorization values');
+    assertHttpValue(false, str_contains($debug['body'], $debugXToken), 'debug omits X-WebMUGEN-Token value');
     assertHttpStatus(200, catalogRequest($server['url'], 'http-file-secret-value'), 'config file only');
+    assertHttpStatus(200, catalogRequest($server['url'], null, 'http-file-secret-value'), 'X-WebMUGEN-Token only');
+    $rebuild = catalogResponse(str_replace('action=play-url', 'action=rebuild', $server['url']), null, 'http-file-secret-value');
+    assertHttpStatus(200, $rebuild['status'], 'X-WebMUGEN-Token rebuild');
+    assertHttpValue(true, json_decode($rebuild['body'], true, flags: JSON_THROW_ON_ERROR)['success'], 'X-WebMUGEN-Token rebuild success');
+    assertHttpStatus(401, catalogRequest($server['url'], null, null), 'missing Authorization and X-WebMUGEN-Token');
+    assertHttpStatus(401, catalogRequest($server['url'], null, 'wrong-token'), 'mismatched X-WebMUGEN-Token');
+    assertHttpStatus(401, catalogRequest($server['url'], 'wrong-token', 'http-file-secret-value'), 'Bearer mismatch takes priority over matching X-WebMUGEN-Token');
+    assertHttpStatus(200, catalogRequest($server['url'], 'http-file-secret-value', 'http-file-secret-value'), 'matching Bearer and X-WebMUGEN-Token');
     stopCatalogServer($server);
     $server = null;
 
@@ -64,6 +82,8 @@ try {
     if (is_array($server)) stopCatalogServer($server);
     if ($originalEnvironmentSecret === false) putenv('WEBMUGEN_CATALOG_SECRET');
     else putenv('WEBMUGEN_CATALOG_SECRET=' . $originalEnvironmentSecret);
+    if ($originalStorageDir === false) putenv('WEBMUGEN_PROXY_STORAGE_DIR');
+    else putenv('WEBMUGEN_PROXY_STORAGE_DIR=' . $originalStorageDir);
     removeHttpTestTree($root);
 }
 
@@ -108,19 +128,22 @@ function stopCatalogServer(array $server): void
     }
 }
 
-function catalogRequest(string $url, string $token): int
+function catalogRequest(string $url, ?string $token = null, ?string $xToken = null): int
 {
-    return catalogResponse($url, $token)['status'];
+    return catalogResponse($url, $token, $xToken)['status'];
 }
 
-function catalogResponse(string $url, string $token): array
+function catalogResponse(string $url, ?string $token = null, ?string $xToken = null): array
 {
     $curl = curl_init($url);
+    $headers = ['Content-Type: application/json'];
+    if ($token !== null) $headers[] = 'Authorization: Bearer ' . $token;
+    if ($xToken !== null) $headers[] = 'X-WebMUGEN-Token: ' . $xToken;
     curl_setopt_array($curl, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => 2,
         CURLOPT_POST => true,
-        CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $token],
+        CURLOPT_HTTPHEADER => $headers,
         CURLOPT_POSTFIELDS => json_encode(['characterId' => 'kfm', 'stageId' => 'cyber']),
     ]);
     $body = curl_exec($curl);
