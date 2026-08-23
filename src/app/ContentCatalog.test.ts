@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   entriesOfKind,
   formatCatalogEntryLabel,
@@ -33,6 +33,12 @@ describe('Content Catalog Reader and Validator', () => {
     ]);
     expect(catalog).toMatchObject({ totalEntries: 3, rejectedEntries: 0, sourcePath: '/packs/catalog.json' });
     expect(catalog.entries[0].source).toBe('builtin');
+  });
+
+  it('bypasses HTTP caches so a just-published Character is immediately selectable', async () => {
+    const fetcher = vi.fn(async () => response(validDocument));
+    await loadContentCatalog('/content/catalog.json', fetcher);
+    expect(fetcher).toHaveBeenCalledWith('/content/catalog.json', expect.objectContaining({ cache: 'no-store' }));
   });
 
   it.each([

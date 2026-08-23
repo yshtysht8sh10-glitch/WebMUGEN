@@ -108,6 +108,65 @@ describe('AppCharacterLoader', () => {
     }
   });
 
+  it('discovers a nested Character DEF by structure and resolves its files from the DEF directory', async () => {
+    const zipBytes = zipSync({
+      'package/stage.def': strToU8('[Info]\nname = Arena\n[Camera]\n[PlayerInfo]\n[Bound]\n[BGDef]\n'),
+      'package/sub/character.def': strToU8('[Info]\nname = Nested Fighter\n[Files]\ncmd = .\\FILES\\FIGHTER.CMD\ncns = ../shared/fighter.cns\nanim = files/fighter.air\n'),
+      'package/sub/files/fighter.cmd': strToU8('[Command]\nname = "a"\ncommand = a\ntime = 1\n'),
+      'package/shared/Fighter.CNS': strToU8('[StateDef 0]\ntype = S\nmovetype = I\nphysics = S\nanim = 0\nctrl = 1\n'),
+      'package/sub/FILES/Fighter.AIR': strToU8('Begin Action 0\n0,0, 0,0, 5\n'),
+    });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (path: RequestInfo | URL) => {
+      if (String(path) === '/storage/random-upload-name.zip') return new Response(toArrayBuffer(zipBytes));
+      if (String(path) === '/chars/common.cmd') return new Response('[Command]\nname = "holddown"\ncommand = /D\n');
+      return new Response('missing', { status: 404 });
+    }) as typeof fetch;
+
+    try {
+      const result = await loadAppCharacter('/storage/random-upload-name.zip');
+      expect(result.errorMessage).toBeNull();
+      expect(readCharacterRuntimeMetadata(result.character!)).toMatchObject({ name: 'Nested Fighter' });
+      expect(result.character?.cnsSourceFiles?.map((file) => file.path)).toEqual(expect.arrayContaining([
+        'package/sub/character.def',
+        'package/sub/.\\FILES\\FIGHTER.CMD',
+        'package/sub/../shared/fighter.cns',
+        'package/sub/files/fighter.air',
+      ]));
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('rejects ZIPs with multiple valid Character DEF files instead of selecting the first', async () => {
+    const definition = '[Info]\nname = Fighter\n[Files]\ncmd = fighter.cmd\ncns = fighter.cns\nanim = fighter.air\n';
+    const zipBytes = zipSync({ 'a.def': strToU8(definition), 'b/b.def': strToU8(definition) });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => new Response(toArrayBuffer(zipBytes))) as typeof fetch;
+    try {
+      const result = await loadAppCharacter('/storage/ambiguous.zip');
+      expect(result.character).toBeNull();
+      expect(result.errorMessage).toContain('multiple valid Character DEF');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it.each([
+    { name: 'corrupt', bytes: new Uint8Array([1, 2, 3]), message: 'invalid zip data' },
+    { name: 'without DEF', bytes: zipSync({ 'readme.txt': strToU8('not a character') }), message: 'no valid Character DEF' },
+  ])('rejects a $name ZIP without falling back to an arbitrary entry', async ({ bytes, message }) => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => new Response(toArrayBuffer(bytes))) as typeof fetch;
+    try {
+      const result = await loadAppCharacter('/storage/invalid.zip');
+      expect(result.character).toBeNull();
+      expect(result.errorMessage?.toLowerCase()).toContain(message.toLowerCase());
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it('saves editable character text through the restricted development endpoint', async () => {
     const originalFetch = globalThis.fetch;
     let request: RequestInit | undefined;

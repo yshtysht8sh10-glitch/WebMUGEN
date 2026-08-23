@@ -3,6 +3,7 @@ import { parseWebMugenLifeBar } from '../../lifebar/webmugen/WebMugenLifeBarLoad
 import { parseWebMugenStage } from '../../stage/webmugen/WebMugenStageLoader';
 import type { ContentKind } from '../catalog/ContentCatalogTypes';
 import type { CatalogClassificationResult, CatalogSourceFile } from './CatalogGeneratorTypes';
+import { inspectCharacterDef } from '../CharacterDefDiscovery';
 
 type ParsedDef = {
   sections: Map<string, Map<string, string>>;
@@ -13,11 +14,7 @@ export function classifyDefText(text: string, entryFile = 'content.def'): Catalo
   const parsed = parseDef(text);
   const sections = parsed.sections;
   const files = sections.get('files');
-  const characterEvidence = Boolean(
-    sections.has('info') && files
-    && (files.has('cmd') || files.has('cns') || [...files.keys()].some((key) => /^st\d*$/.test(key)))
-    && (files.has('sprite') || files.has('anim')),
-  );
+  const characterEvidence = inspectCharacterDef(entryFile, text) !== null;
   const stageEvidence = (sections.has('info') || sections.has('stageinfo'))
     && sections.has('camera') && sections.has('playerinfo') && sections.has('bound') && sections.has('bgdef');
   const lifeBarSections = ['lifebar', 'powerbar', 'face', 'name', 'winicon', 'time', 'combo', 'round'];

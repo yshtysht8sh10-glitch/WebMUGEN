@@ -1,12 +1,13 @@
 # Implementation Inventory
 
-Updated: 2026-08-04
+Updated: 2026-08-23
 
 This document is a high-level inventory of WebMUGEN implementation areas. It is not the source of truth for exact compatibility status; use the compatibility matrix for that.
 
 - Content catalog Reader/Validator/Selection: `src/content/catalog/`, the `src/app/ContentCatalog.ts` facade, `public/content/catalog.json`, and `docs/webmugen/content-catalog.md`.
 - Development Catalog generation: `src/content/catalog-generator/`; separate Character/Stage/LifeBar source handles and one output handle, direct same-origin paths, kind validation, and built-in/external merging.
-- URL content selection: `src/app/UrlContentSelection.ts` and `docs/webmugen/url-settings.md`.
+- URL content selection and Share URL generation: `src/app/UrlContentSelection.ts`, the Content settings UI, and `docs/webmugen/url-settings.md`.
+- Proxy-release publication adapter: `public/api/catalog.php` and `catalog-lib.php`; authenticated fixed-root ZIP classification, stable `proxy-release-*` IDs, atomic Catalog replacement, and generated Character/Stage play URLs.
 - Separated Stage/LifeBar presentation runtimes: `src/stage/{winmugen,webmugen}`, `src/lifebar/{winmugen,webmugen}`, and `docs/webmugen/native-presentation.md`.
 
 ## Parser layer
@@ -47,7 +48,7 @@ This document is a high-level inventory of WebMUGEN implementation areas. It is 
 | Browser audio | Shared lazy AudioContext adapter supports user-gesture unlock, decode cache, owner/channel gain and pan, a ramped persistent 0-100 master/mute UI (default 50%), stop/cleanup, and safe diagnostics. Common SND and advanced ownership remain incomplete. |
 | Static debug | Character load, StateDef list, command routes, and coverage are visible. |
 | Runtime settings | Publisher defaults, versioned per-origin browser settings, legacy-key migration, field validation, and full Settings reset are unified under `webmugen.settings.v1`; live match state is excluded. URL Character/Stage overrides remain session-only across unrelated setting changes. Persistent Character palette (`p1`-`p12`), Game time, fractional-cursor frame scheduling, hit diagnostics, root-player Power Infinite, Practice Mode zero-Life recovery/timer freeze, and four independent opt-in Debug/Logging sinks exist. Human/AI logs, collision boxes, lower-left history, and Practice Mode default OFF; a rolling 600-frame performance snapshot supports A-F comparisons. |
-| Build mode | One explicit Development/Public mode derives editor, loader, default-export, Runtime Debug, trace, log, collision, history, and diagnostic features. Production defaults fail closed to Public; saved development-only values are ignored there. |
+| Build mode | One explicit Development/Public mode keeps server-writer features such as Character/Stage editing and default export Development-only. Catalog management/generation and Runtime diagnostics are available in both modes; Public Catalog writes are limited to user-permissioned local directories. Production defaults fail closed to Public. |
 
 ## Documentation layer
 

@@ -1,6 +1,6 @@
 # Content Catalog
 
-Updated: 2026-08-04
+Updated: 2026-08-23
 
 ## Purpose and architecture
 
@@ -58,7 +58,7 @@ Unknown kinds/engines, unsafe paths, duplicate IDs, invalid item shapes, and inc
 
 ## Runtime reading and fallback
 
-The Catalog path is stored as `content.catalogPath`. The default is `/content/catalog.json`. Only same-origin absolute JSON paths without traversal are accepted; arbitrary external URLs are rejected.
+The Catalog path is stored as `content.catalogPath`. The publisher default is `content/catalog.json`, resolved from the directory containing the deployed `index.html`, so the same build works at the origin root or below a path such as `/DotoEita/50_WEBMUGEN/`. Safe same-origin absolute JSON paths are also accepted; arbitrary external URLs and traversal are rejected. Runtime reads use `cache: no-store` so a newly published Character is selectable without waiting for a stale browser cache to expire.
 
 On first load, a Catalog failure leaves the code/publisher Character, Stage, and LifeBar fallbacks available so the game can still start. On explicit reload, a failed request, 404, invalid JSON, version error, or timeout retains the previous successful Catalog. Development Mode displays the error and whether fallback was used.
 
@@ -107,7 +107,26 @@ For a server or rental-hosting environment, create or update `catalog.json` outs
 - separate management web application;
 - manual authoring.
 
-Only the shared schema is part of the runtime contract. Do not add a required proprietary server API merely to enumerate files.
+Only the shared schema is part of the runtime contract. Do not make the browser Runtime enumerate server folders.
+
+### Proxy-release publishing endpoint
+
+The supplied PHP endpoint `public/api/catalog.php` is the deployment adapter for the proxy-release workflow. It scans only the configured fixed storage root, validates each ZIP server-side, and rewrites the same version 1 Catalog consumed by the Runtime. It supports authenticated `POST` actions:
+
+- `publish-character`: validate one `publicationId`/archive and return its stable Character ID and play URL;
+- `rebuild`: rescan the fixed storage root and replace all `proxy-release-*` entries while retaining publisher/built-in entries;
+- `play-url`: return the current URL for an already cataloged publication.
+
+Configure these server-side environment variables; never place the secret in Vite/browser settings:
+
+- `WEBMUGEN_CATALOG_SECRET`: Bearer token shared with proxy-release;
+- `WEBMUGEN_PROXY_STORAGE_DIR`: filesystem path to `/DotoEita/16_proxy_release/storage/data`;
+- `WEBMUGEN_PROXY_STORAGE_PUBLIC_BASE`: corresponding same-origin URL path;
+- `WEBMUGEN_CATALOG_PATH`: filesystem path to the deployed `content/catalog.json`;
+- `WEBMUGEN_PUBLIC_URL`: deployed WebMUGEN `index.html` URL;
+- `WEBMUGEN_DEFAULT_STAGE_ID`: stage ID included in generated play URLs.
+
+Archive names produced by proxy-release (`material-<publicationId>-archive.zip`) map to stable IDs `proxy-release-<publicationId>`. A valid Character DEF requires `[Info]`, `[Files]`, `cmd`, `anim`, and either `cns` or `st`. Zero or multiple structurally valid Character DEFs, corrupt archives, traversal paths, or unsafe names fail without changing the existing Catalog. Successful writes serialize a complete validated document to a temporary file and replace the Catalog atomically where the host filesystem supports it.
 
 ## Development and Public Mode UI
 

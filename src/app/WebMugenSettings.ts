@@ -4,10 +4,11 @@ import { DEFAULT_RUNTIME_SETTINGS, normalizeRuntimeSettings, type RuntimeSetting
 import type { UiLanguage } from './UiLanguage';
 import type { WebMugenFeatureFlags } from './BuildMode';
 import { DEFAULT_CONTENT_CATALOG_PATH, resolveCatalogSelection, type ContentCatalog } from './ContentCatalog';
+import { resolveApplicationAssetPath } from './ApplicationAssetPath';
 
 export const WEBMUGEN_SETTINGS_VERSION = 1;
 export const WEBMUGEN_SETTINGS_STORAGE_KEY = 'webmugen.settings.v1';
-export const PUBLISHED_SETTINGS_PATH = '/config/default-settings.json';
+export const PUBLISHED_SETTINGS_PATH = resolveApplicationAssetPath('config/default-settings.json');
 export const PUBLISH_SETTINGS_API_PATH = '/__webmugen/default-settings';
 
 export const LEGACY_SETTINGS_KEYS = {
@@ -278,7 +279,13 @@ function normalizeContentPath(value: unknown, prefix: string, fallback: string, 
 function normalizeCatalogPath(value: unknown, fallback: string): string {
   if (typeof value !== 'string') return fallback;
   const path = value.trim().replace(/\\/g, '/');
-  return path.startsWith('/') && path.endsWith('.json') && !path.includes('..') && !path.includes('://') ? path : fallback;
+  if (!path.endsWith('.json') || path.includes('..') || path.includes('://')) return fallback;
+  if (path.startsWith('/')) return path;
+  try {
+    return resolveApplicationAssetPath(path);
+  } catch {
+    return fallback;
+  }
 }
 
 function normalizeContentId(value: unknown, fallback: string): string {

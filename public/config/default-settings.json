@@ -21,7 +21,7 @@
     "stageArchivePath": "/stages/material-22-archive.zip"
   },
   "content": {
-    "catalogPath": "/content/catalog.json",
+    "catalogPath": "content/catalog.json",
     "characterId": "t-h-m-a",
     "stageId": "cyber",
     "lifeBarId": "default-cyber",

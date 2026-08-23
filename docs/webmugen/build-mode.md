@@ -32,5 +32,6 @@ The mode is a distribution safety boundary, not authentication. Never deploy pri
 - [ ] Confirm Runtime Debug, CNS Trace, detailed logs, collision boxes, and state history are absent and not collected.
 - [ ] Confirm gameplay, audio, language, input configuration, and settings persistence work.
 - [ ] Deploy only the intended public catalog and `default-settings.json`.
+- [ ] For proxy-release integration, deploy `api/catalog.php` and `api/catalog-lib.php`, configure the server-only shared secret/storage/catalog/public-URL environment variables, and confirm the PHP process can read ZIPs and replace `content/catalog.json`.
 
 If a Development build was published accidentally, rebuild with Public Mode and replace the deployed assets. Existing browser settings are safe: Public Mode ignores development-only fields.

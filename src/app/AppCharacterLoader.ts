@@ -9,6 +9,7 @@ import { sampleCharacterCmd } from './sampleCharacterCmd';
 import { sampleCharacterCns } from './sampleCharacterCns';
 import { getCharacterDefFiles, getDefValue } from '../parser/def/DefParser';
 import type { DefDocument } from '../parser/def/DefTypes';
+import { discoverCharacterDef } from '../content/CharacterDefDiscovery';
 
 export type AppCharacterLoadResult = {
   character: CharacterAssets | null;
@@ -89,26 +90,41 @@ async function createZipCharacterAssetFetcher(zipPath: string): Promise<ZipChara
   const httpFetcher = createHttpCharacterAssetFetcher();
   const entries = unzipSync(new Uint8Array(await httpFetcher.arrayBuffer(zipPath)));
   const normalizedEntries = new Map<string, Uint8Array>();
+  const entryKeys = new Map<string, string>();
 
   for (const [name, bytes] of Object.entries(entries)) {
     if (name.endsWith('/')) continue;
-    normalizedEntries.set(normalizeZipPath(name), bytes);
+    const normalized = normalizeZipPath(name);
+    if (!normalized) continue;
+    const key = archiveLookupKey(normalized);
+    if (entryKeys.has(key)) {
+      throw new Error(`ZIP contains case-insensitive duplicate paths: ${entryKeys.get(key)}, ${normalized}.`);
+    }
+    entryKeys.set(key, normalized);
+    normalizedEntries.set(normalized, bytes);
   }
 
-  const defPath = findPrimaryDefPath(normalizedEntries);
+  const defPath = discoverCharacterDef(normalizedEntries, decodeZipText).path;
+
+  const archiveEntry = (path: string): Uint8Array | undefined => {
+    const normalized = normalizeZipPath(path);
+    return normalized ? normalizedEntries.get(entryKeys.get(archiveLookupKey(normalized)) ?? '') : undefined;
+  };
 
   return {
     defPath,
     entries: normalizedEntries,
     async text(path: string) {
-      const entry = normalizedEntries.get(normalizeZipPath(path));
+      const entry = archiveEntry(path);
       if (entry) return decodeZipText(entry);
-      return httpFetcher.text(path);
+      if (isSharedHttpAssetPath(path)) return httpFetcher.text(path);
+      throw new Error(`ZIP text asset not found: ${path}`);
     },
     async arrayBuffer(path: string) {
-      const entry = normalizedEntries.get(normalizeZipPath(path));
+      const entry = archiveEntry(path);
       if (entry) return toArrayBuffer(entry);
-      return httpFetcher.arrayBuffer(path);
+      if (isSharedHttpAssetPath(path)) return httpFetcher.arrayBuffer(path);
+      throw new Error(`ZIP binary asset not found: ${path}`);
     },
   };
 }
@@ -309,28 +325,27 @@ function compareCharacterFiles(left: CharacterSourceFile, right: CharacterSource
   return left.path.localeCompare(right.path, 'en');
 }
 
-function findPrimaryDefPath(entries: ReadonlyMap<string, Uint8Array>): string {
-  const defPaths = Array.from(entries.keys()).filter((path) => path.toLowerCase().endsWith('.def'));
-  if (defPaths.length === 0) {
-    throw new Error('ZIP character has no .def file.');
-  }
-
-  const rootName = commonRootName(defPaths);
-  return defPaths.find((path) => fileStem(path).toLowerCase() === rootName.toLowerCase()) ?? defPaths[0];
-}
-
-function commonRootName(paths: readonly string[]): string {
-  const first = paths[0]?.split('/')[0] ?? '';
-  return first && paths.every((path) => path.startsWith(`${first}/`)) ? first : fileStem(paths[0] ?? '');
-}
-
-function fileStem(path: string): string {
-  const file = path.split('/').pop() ?? path;
-  return file.replace(/\.[^.]+$/, '');
-}
-
 function normalizeZipPath(path: string): string {
-  return path.replace(/\\/g, '/').replace(/^\/+/, '').replace(/^\.\//, '');
+  const segments: string[] = [];
+  for (const segment of path.replace(/\\/g, '/').split('/')) {
+    if (!segment || segment === '.') continue;
+    if (segment === '..') {
+      if (segments.length === 0) throw new Error(`ZIP path escapes the archive root: ${path}`);
+      segments.pop();
+      continue;
+    }
+    segments.push(segment);
+  }
+  return segments.join('/');
+}
+
+function archiveLookupKey(path: string): string {
+  return path.toLowerCase();
+}
+
+function isSharedHttpAssetPath(path: string): boolean {
+  const normalized = path.replace(/\\/g, '/');
+  return normalized === '/chars/common1.cns' || normalized === '/chars/common.cmd';
 }
 
 function decodeZipText(bytes: Uint8Array): string {

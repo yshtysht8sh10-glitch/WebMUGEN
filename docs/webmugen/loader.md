@@ -1,6 +1,6 @@
 # Loader
 
-Updated: 2026-08-10
+Updated: 2026-08-23
 
 This document describes how WebMUGEN loads and merges character files.
 
@@ -15,6 +15,10 @@ requested ACT is absent, rendering falls back to the first resolved palette whil
 requested number so character CNS palette branches remain observable. For SFF v1, the selected ACT
 overrides the first shared palette owner and propagates through its `samePalette` chain; later
 sprite-specific palettes, such as effect palettes, remain independent.
+
+For ZIP Characters, the entry DEF is selected by Character structure rather than archive name or entry order. The loader inspects all DEF files and requires exactly one definition with `[Info]`, Character `[Files]`, `cmd`, `anim`, and either `cns` or `st`; stage, storyboard, and system DEFs are ignored. This permits proxy-upload filenames, outer folders, and the internal Character folder/DEF basename to differ. Zero or multiple valid Character definitions are rejected as ambiguous instead of silently loading an arbitrary DEF.
+
+All ZIP references are resolved relative to the selected DEF directory. Backslashes, `.` segments, case differences, and safe `..` segments within the archive are normalized; traversal above the archive root and case-insensitive duplicate paths are rejected. A missing Character-owned referenced asset is fatal and cannot fall through to an HTTP path. Only WebMUGEN's explicit `/chars/common1.cns` and `/chars/common.cmd` engine assets use the HTTP fallback.
 
 ## Loaded asset types
 

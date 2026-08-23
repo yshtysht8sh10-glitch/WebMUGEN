@@ -56,7 +56,10 @@ export async function loadContentCatalog(
     }, timeoutMs);
   });
   try {
-    const response = await Promise.race([fetcher(path, controller ? { signal: controller.signal } : undefined), timeout]);
+    const response = await Promise.race([fetcher(path, {
+      cache: 'no-store',
+      ...(controller ? { signal: controller.signal } : {}),
+    }), timeout]);
     if (!response.ok) throw new Error(`Catalog request failed: HTTP ${response.status}.`);
     return validateContentCatalog(await response.json(), path);
   } finally {

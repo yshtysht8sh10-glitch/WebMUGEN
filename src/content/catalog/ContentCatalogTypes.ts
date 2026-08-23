@@ -1,3 +1,5 @@
+import { resolveApplicationAssetPath } from '../../app/ApplicationAssetPath';
+
 export type ContentKind = 'character' | 'stage' | 'lifebar';
 export type ContentEngine = 'winmugen' | 'webmugen';
 export type ContentSource = 'builtin' | 'external';
@@ -40,7 +42,7 @@ export type ContentCatalogReadResult = {
 };
 
 export const CONTENT_CATALOG_VERSION = 1;
-export const DEFAULT_CONTENT_CATALOG_PATH = '/content/catalog.json';
+export const DEFAULT_CONTENT_CATALOG_PATH = resolveApplicationAssetPath('content/catalog.json');
 
 export function createEmptyContentCatalog(sourcePath?: string): ContentCatalog {
   return {

@@ -8,6 +8,8 @@ https://example.com/webmugen/?character=t-h-m-a&stage=fresh
 
 `character` must name a character entry and `stage` must name a stage entry in the publisher's validated content catalog. The values are IDs, not paths or URLs. Find valid IDs in `public/content/catalog.json` or in the Settings content selectors.
 
+The proxy-release publishing endpoint returns this same URL form after it adds the Character to the Catalog. It does not add a second runtime selection mechanism; `proxy-release-<publicationId>` is an ordinary validated Character ID and the configured default Stage is an ordinary Stage ID.
+
 Startup priority is `URL query > localStorage user settings > default-settings.json > compiled fallback`. A partial URL changes only that content type. For example, `?character=kfm` keeps the stored/default stage, audio, input, and display settings.
 
 URL selections are session overrides and are not automatically written to localStorage. Reloading the same URL reapplies them; opening the application without the query returns to the earlier stored selections. Selecting content in Settings is an explicit user action and becomes the new stored choice.
