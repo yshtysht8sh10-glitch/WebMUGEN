@@ -246,6 +246,65 @@ Do not mix unrelated debug UI, docs, and compatibility changes unless they are p
 
 Never push, open a pull request, merge, rebase, rewrite history, or force-push unless the user explicitly requests that action.
 
+## Required Issue completion comment
+
+When working from a GitHub Issue, do not consider the work complete until you have posted a completion comment on that Issue.
+
+The completion comment must include these three sections exactly in substance:
+
+### 原因
+
+State the actual root cause or precise compatibility gap that was identified. Do not merely restate the symptom.
+
+If the exact cause could not be proven, say so explicitly and describe what was verified instead. Never invent a cause.
+
+### 修正内容
+
+Summarize the implementation changes made to address the cause, including the main files or runtime areas changed when useful.
+
+Do not list unrelated refactors or incidental formatting changes.
+
+### 確認結果
+
+State the concrete behavior or runtime evidence used to judge that the Issue itself is fixed.
+
+This section is **not** a test-command log. Do not use `npm test`, focused-test PASS, or build success by themselves as the reason the Issue is considered fixed. Tests and build results belong in the normal completion report under `### Tests`.
+
+Describe the observable or state-level evidence that proves the original symptom is gone and the expected WinMUGEN behavior is now reproduced. Examples include:
+
+- the previously failing State now transitions to the expected next State under the same trigger conditions;
+- a guarded character now receives velocity in the correct direction on both left/right sides;
+- the expected Helper / Explod is created exactly once at the required AnimElem;
+- the character and Helper return to neutral on the same frame;
+- the target reaches the visible screen edge and the wall-impact route actually starts;
+- the visual effect, palette change, gauge value, collision result, or input route now matches the WinMUGEN observation used as the acceptance criterion.
+
+Whenever possible, include the exact StateNo, AnimNo, position/velocity, trigger result, frame timing, count, or other runtime value that demonstrates correctness.
+
+If the real-game behavior or the specific acceptance criterion could not be verified, say so explicitly and do **not** present the Issue as fully resolved merely because automated tests pass.
+
+Example:
+
+```markdown
+### 原因
+HitDef の guard.velocity を world 座標へ変換する際、P2 の facing を基準に再反転しており、ガードノックバックの X 方向が逆転していた。
+
+### 修正内容
+- Guard 時の velocity 変換を P1 基準の WinMUGEN 互換ロジックへ修正
+- 左右反転ケースの focused test を追加
+- Compatibility Matrix / physics.md を更新
+
+### 確認結果
+P1 が左・P2 が右の配置ではガード成立直後の P2 の X 速度が右向きになり、左右反転時は左向きになった。
+どちらの配置でも被ガード側が攻撃側から離れる方向へ実際に移動し、Issue の「攻撃側へ吸い寄せられる」現象が再現しなくなった。
+```
+
+This Issue comment is mandatory even when the implementation itself is already committed.
+
+Do not close an Issue before posting this comment.
+
+If the Issue cannot be completed, leave it open and post a status comment that clearly states the unresolved cause, work performed, and verification status instead of presenting it as complete.
+
 ## Required completion report
 
 Use this structure when reporting completed work:
