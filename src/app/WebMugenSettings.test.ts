@@ -142,13 +142,13 @@ describe('WebMugenSettings', () => {
     expect(body).not.toHaveProperty('life');
   });
 
-  it('ignores development-only saved settings in public mode', () => {
+  it('keeps public catalog and diagnostic settings while blocking direct Stage source settings', () => {
     const published = normalizeWebMugenSettings({
       content: { characterPath: '/chars/T-H-M-A.zip' },
       runtime: { stageArchivePath: '/stages/published.zip' },
     });
     const saved = normalizeWebMugenSettings({
-      content: { characterPath: '/chars/KFM/KFM.def' },
+      content: { catalogPath: '/content/user-catalog.json', characterPath: '/chars/KFM/KFM.def' },
       runtime: {
         stageArchivePath: '/stages/private.zip',
         humanLogEnabled: true,
@@ -159,17 +159,14 @@ describe('WebMugenSettings', () => {
       },
     }, published);
     const publicSettings = applyFeaturePolicyToSettings(saved, published, createFeatureFlags('public'));
-    expect(publicSettings.content).toEqual({
-      ...saved.content,
-      catalogPath: published.content.catalogPath,
-    });
+    expect(publicSettings.content).toEqual(saved.content);
     expect(publicSettings.runtime.stageArchivePath).toBe('/stages/published.zip');
     expect(publicSettings.runtime).toMatchObject({
-      humanLogEnabled: false,
-      aiLogEnabled: false,
-      collisionBoxesVisible: false,
-      stateHistoryVisible: false,
-      hitDiagnostics: false,
+      humanLogEnabled: true,
+      aiLogEnabled: true,
+      collisionBoxesVisible: true,
+      stateHistoryVisible: true,
+      hitDiagnostics: true,
     });
     expect(applyFeaturePolicyToSettings(saved, published, createFeatureFlags('development')).runtime.aiLogEnabled).toBe(true);
   });

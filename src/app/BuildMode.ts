@@ -14,6 +14,7 @@ export type WebMugenFeatureFlags = {
   hitboxDebug: boolean;
   inputHistoryDebug: boolean;
   compatibilityMatrix: boolean;
+  shareUrl: boolean;
 };
 
 export function resolveBuildMode(value: unknown, environment: { dev: boolean; prod: boolean }): WebMugenBuildMode {
@@ -27,16 +28,17 @@ export function createFeatureFlags(buildMode: WebMugenBuildMode): WebMugenFeatur
     buildMode,
     characterFiles: true,
     characterEditor: development,
-    catalogManagement: development,
-    catalogGenerator: development,
+    catalogManagement: true,
+    catalogGenerator: true,
     stageEditor: development,
     publishDefaultsButton: development,
-    runtimeDebug: development,
-    cnsTrace: development,
-    detailedLogs: development,
-    hitboxDebug: development,
-    inputHistoryDebug: development,
-    compatibilityMatrix: development,
+    runtimeDebug: true,
+    cnsTrace: true,
+    detailedLogs: true,
+    hitboxDebug: true,
+    inputHistoryDebug: true,
+    compatibilityMatrix: true,
+    shareUrl: true,
   };
 }
 

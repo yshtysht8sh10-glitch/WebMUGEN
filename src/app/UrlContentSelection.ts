@@ -11,6 +11,25 @@ export type UrlContentSelectionResult = {
 
 export type UrlContentOverrides = Partial<Pick<WebMugenSettings['content'], 'characterId' | 'stageId'>>;
 
+export type UrlContentSelectionBase = Pick<Location, 'origin' | 'pathname'>;
+
+const URL_CONTENT_QUERY_KEYS = {
+  character: 'character',
+  stage: 'stage',
+} as const;
+
+export function createUrlContentSelectionUrl(
+  base: UrlContentSelectionBase,
+  selection: Pick<WebMugenSettings['content'], 'characterId' | 'stageId'>,
+): string {
+  const url = new URL(base.pathname || '/', base.origin);
+  url.search = '';
+  url.hash = '';
+  url.searchParams.set(URL_CONTENT_QUERY_KEYS.character, selection.characterId);
+  url.searchParams.set(URL_CONTENT_QUERY_KEYS.stage, selection.stageId);
+  return url.href;
+}
+
 export function getUrlContentOverrides(result: UrlContentSelectionResult): UrlContentOverrides {
   return {
     ...(result.source.character === 'url' ? { characterId: result.settings.content.characterId } : {}),
@@ -42,8 +61,8 @@ export function applyUrlContentSelection(
     return { settings, source: { character: 'settings', stage: 'settings' }, diagnostics: ['query: parse failed'] };
   }
   const diagnostics: string[] = [];
-  const character = readAllowedId(query, 'character', 'character', catalog, diagnostics);
-  const stage = readAllowedId(query, 'stage', 'stage', catalog, diagnostics);
+  const character = readAllowedId(query, URL_CONTENT_QUERY_KEYS.character, 'character', catalog, diagnostics);
+  const stage = readAllowedId(query, URL_CONTENT_QUERY_KEYS.stage, 'stage', catalog, diagnostics);
   const selected = applyCatalogSelectionToSettings({
     ...settings,
     content: {

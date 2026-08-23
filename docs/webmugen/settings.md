@@ -1,10 +1,10 @@
 # WebMUGEN Settings
 
-Updated: 2026-08-10
+Updated: 2026-08-23
 
 WebMUGEN separates publisher defaults, browser-owned user settings, and live match state.
 
-Content settings store the publisher catalog path, stable Character/Stage/LifeBar IDs, and the selected character palette number (`p1`-`p12`). Runtime paths are derived from the validated catalog at startup. Public builds lock the source to the published catalog while still allowing selection among its valid entries; development builds can edit and reload the source. See [content-catalog.md](content-catalog.md).
+Content settings store the Catalog path, stable Character/Stage/LifeBar IDs, and the selected character palette number (`p1`-`p12`). Runtime paths are derived from the validated catalog at startup. Development and Public builds can edit and reload the same-origin Catalog source. See [content-catalog.md](content-catalog.md).
 
 The `character` and `stage` URL parameters provide non-persistent, catalog-validated session overrides. Their precedence and fallback rules are documented in [url-settings.md](url-settings.md).
 
@@ -19,15 +19,16 @@ fields remain normalized and persisted for migration and catalog-to-loader integ
 
 Settings uses a left menu and renders only the selected page in the right pane. Development Mode
 provides Publisher settings, Content, General, Input, Audio, Display, and Developer pages. Public
-Mode omits the Publisher settings and Developer menu items entirely; they are not disabled or
-rendered as empty pages.
+Mode omits only the Publisher settings menu item. The Developer page and Content management tools
+are available in both modes.
 
 - Publisher settings owns restoring and writing the complete distributed defaults.
-- Content owns Character, palette, Stage, LifeBar/HUD, and Development-only Catalog management.
+- Content owns Character, palette, Stage, LifeBar/HUD, Catalog management, and Catalog Generator.
+- Content also owns the Development/Public Share URL field generated from the live Character and Stage Catalog IDs.
 - General owns round time, Infinite Power, Practice Mode, and other match behavior.
 - Input owns the live monitor, control summary, keyboard/gamepad mappings, and reset action.
 - Audio owns browser audio activation, test controls, master volume, and mute.
-- Display owns logical viewport size and Development-only visual diagnostic overlays.
+- Display owns logical viewport size and optional visual diagnostic overlays.
 - Developer owns frame timing, Human/AI logs, retention mode, and hit lifecycle diagnostics.
 
 Page selection is local UI state. The settings values remain owned by the existing parent state, so
@@ -85,6 +86,8 @@ Edit `public/config/default-settings.json` to change defaults for first-time use
 
 In Development Mode, the Publisher settings page exposes **Use current settings as publisher defaults**. After confirmation, the browser sends the normalized complete settings object to the local Vite-only `/__webmugen/default-settings` endpoint, which overwrites the fixed `public/config/default-settings.json` target. Public builds render neither the Publisher settings menu nor its actions, do not provide the development middleware endpoint, and the client handler checks the same feature flag before making a request.
 
-Arbitrary Character source loading and source editing are Development Mode features. Public Mode keeps the Character Files page read-only, rejects edit handlers, and loads characters through the publisher catalog. This is a distribution boundary rather than authentication; only publisher-catalog content should be deployed with a public build.
+Arbitrary Character source loading and source editing are Development Mode features. Public Mode keeps the Character Files page read-only, rejects edit handlers, and loads characters through the validated Catalog selection. This is a distribution boundary rather than authentication; only content intended for public access should be deployed.
 
-Public Mode also strips saved diagnostic flags and does not persist newly attempted developer-only values. See `build-mode.md` for the complete feature table and deployment checklist.
+Public Mode retains saved diagnostic and Catalog settings. Direct Stage source settings remain publisher-controlled, and server-writer features remain Development-only. See `build-mode.md` for the complete feature table and deployment checklist.
+
+Catalog management fetches validated same-origin JSON and does not write server files. Catalog Generator can download a generated file or, after an explicit browser permission grant, write `catalog.json` only to a user-selected local directory. It has no deployment-server write path.

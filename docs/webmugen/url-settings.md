@@ -1,5 +1,7 @@
 # URL content settings
 
+Updated: 2026-08-23
+
 WebMUGEN accepts catalog IDs in the query string:
 
 ```text
@@ -17,3 +19,11 @@ URL selections are session overrides and are not automatically written to localS
 Changing an unrelated setting, such as Practice Mode, audio, input, or round behavior, keeps the active URL-selected Character and Stage in the live session while persisting only the ordinary setting change. Explicitly selecting a different Character or Stage clears only that kind's URL override; the other URL-selected kind remains active.
 
 Unknown IDs, wrong-kind IDs, empty or overlong values, and duplicate keys are ignored, falling back to the stored/default selection. Examples such as `?character=../../file`, `?stage=https://example.com/x`, or `?character=fresh` cannot cause arbitrary loading. Development mode appends the acceptance/fallback diagnostic to the catalog status; public mode does not expose that detail.
+
+## Share URL generation
+
+The Content settings page displays a Share URL for the currently selected Character and Stage in both Development and Public builds. It uses the same `character` and `stage` Catalog ID query keys described above; paths and custom query formats are not generated.
+
+The URL is based on `window.location.origin` and the current pathname. It therefore retains a root deployment such as `https://example.com/` and a subdirectory deployment such as `https://example.com/WebMUGEN/` without a configured domain. Existing query parameters and fragments are replaced by the two content-selection parameters.
+
+Changing either Content selector updates the displayed URL immediately. A Character or Stage selected by the startup URL is also reflected in the generated URL because the field reads the resolved live selection. The Copy button uses the browser Clipboard API when available; the readonly URL field remains selectable for manual copying when clipboard access is unavailable or rejected.

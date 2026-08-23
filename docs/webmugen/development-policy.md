@@ -10,6 +10,14 @@ The goal is not only to make KFM move. The goal is to preserve the behavior expe
 
 Compatibility comes before convenience, local shortcuts, or KFM-only fixes.
 
+## Application version
+
+The WebMUGEN application version is managed as a semantic version in the root `package.json`.
+Vite reads that value at startup and injects it into both Development and Public builds; the app
+header displays the same value as `Ver. <version>`. Do not duplicate or manually synchronize a second
+version constant in application code. Update `package.json` and `package-lock.json` together when
+releasing a new version.
+
 ## Non-negotiable rules
 
 ### Do not modify `public/chars/common1.cns`

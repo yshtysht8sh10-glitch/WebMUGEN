@@ -177,7 +177,15 @@ import {
   type ContentCatalog,
   type ContentCatalogReadResult,
 } from './ContentCatalog';
-import { applyUrlContentOverrides, applyUrlContentSelection, getUrlContentOverrides, type ContentSelectionSource, type UrlContentOverrides } from './UrlContentSelection';
+import {
+  applyUrlContentOverrides,
+  applyUrlContentSelection,
+  createUrlContentSelectionUrl,
+  getUrlContentOverrides,
+  type ContentSelectionSource,
+  type UrlContentOverrides,
+  type UrlContentSelectionBase,
+} from './UrlContentSelection';
 import { CatalogGeneratorPanel } from '../content/catalog-generator/CatalogGeneratorPanel';
 import { resolveRuntimeFrameTick } from './RuntimeFrameScheduler';
 
@@ -1540,8 +1548,11 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
     <UiLanguageProvider language={uiLanguage}>
     <div className="app-shell" lang={uiLanguage}>
       <header className="app-header">
-        <div>
-          <h1>WebMUGEN</h1>
+        <div className="app-brand">
+          <div className="app-title-row">
+            <h1>WebMUGEN</h1>
+            <span className="app-version" aria-label={`WebMUGEN version ${__WEBMUGEN_VERSION__}`}>Ver. {__WEBMUGEN_VERSION__}</span>
+          </div>
           <p>{uiLanguage === 'ja' ? 'キャラクターローダー統合版' : 'Character loader integration'}</p>
         </div>
         <button
@@ -1689,6 +1700,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
               showDeveloperRuntimeSettings={WEBMUGEN_FEATURES.runtimeDebug}
               canManageCatalog={WEBMUGEN_FEATURES.catalogManagement}
               canGenerateCatalog={WEBMUGEN_FEATURES.catalogGenerator}
+              canShareUrl={WEBMUGEN_FEATURES.shareUrl}
             />
           </section>
         ) : null}
@@ -1834,6 +1846,7 @@ function SettingsPanel({
   showDeveloperRuntimeSettings,
   canManageCatalog,
   canGenerateCatalog,
+  canShareUrl,
 }: {
   contentCatalog: ContentCatalog;
   contentSettings: WebMugenSettings['content'];
@@ -1864,6 +1877,7 @@ function SettingsPanel({
   showDeveloperRuntimeSettings: boolean;
   canManageCatalog: boolean;
   canGenerateCatalog: boolean;
+  canShareUrl: boolean;
 }) {
   const { text } = useUiLanguage();
   const [activeSettingsPage, setActiveSettingsPage] = useState<SettingsPageId>(canPublishDefaults ? 'publisher' : 'content');
@@ -1909,6 +1923,7 @@ function SettingsPanel({
         selectionSource={contentSelectionSource}
         canManage={canManageCatalog}
         canGenerate={canGenerateCatalog}
+        canShare={canShareUrl}
         onSelect={onCatalogSelectionChange}
         onPaletteChange={onCharacterPaletteChange}
         onPathChange={onCatalogPathChange}
@@ -1960,6 +1975,8 @@ export function ContentCatalogPanel({
   selectionSource,
   canManage,
   canGenerate,
+  canShare = true,
+  shareUrlBase,
   onSelect,
   onPaletteChange,
   onPathChange,
@@ -1971,6 +1988,8 @@ export function ContentCatalogPanel({
   selectionSource: { character: ContentSelectionSource; stage: ContentSelectionSource };
   canManage: boolean;
   canGenerate: boolean;
+  canShare?: boolean;
+  shareUrlBase?: UrlContentSelectionBase;
   onSelect: (kind: 'character' | 'stage' | 'lifebar', id: string) => void;
   onPaletteChange: (paletteNo: number) => void;
   onPathChange: (path: string) => void;
@@ -2045,6 +2064,7 @@ export function ContentCatalogPanel({
           {lifeBars.length === 0 ? <small>{text('The published fallback LifeBar remains active.', '公開者のfallbackライフバーを継続使用します。')}</small> : null}
         </label>
       </div>
+      {canShare ? <ContentShareUrl settings={settings} base={shareUrlBase} /> : null}
       {canManage ? <>
         <div className="settings-subsection-header">
           <h3>{text('Content list', 'コンテンツ一覧')}</h3>
@@ -2070,7 +2090,7 @@ export function ContentCatalogPanel({
         </details> : null}
         <div className="settings-subsection-header">
           <h3>{text('Content management', 'コンテンツ管理')}</h3>
-          <p>{text('Development Mode only. Runtime reads this JSON file and never scans its folders.', 'Development Mode専用です。RuntimeはこのJSONを読み込むだけで、フォルダ走査は行いません。')}</p>
+          <p>{text('Runtime reads this validated JSON file and never scans its folders.', 'Runtimeは検証済みのJSONファイルを読み込むだけで、フォルダ走査は行いません。')}</p>
         </div>
         <div className="catalog-management-row">
           <label className="settings-field">
@@ -2085,6 +2105,59 @@ export function ContentCatalogPanel({
       </> : null}
     </section>
   );
+}
+
+export function ContentShareUrl({
+  settings,
+  base = currentUrlContentSelectionBase(),
+}: {
+  settings: Pick<WebMugenSettings['content'], 'characterId' | 'stageId'>;
+  base?: UrlContentSelectionBase;
+}) {
+  const { text } = useUiLanguage();
+  const [copyStatus, setCopyStatus] = useState('');
+  const shareUrl = createUrlContentSelectionUrl(base, settings);
+
+  useEffect(() => setCopyStatus(''), [shareUrl]);
+
+  const copyShareUrl = async () => {
+    try {
+      await copyTextToClipboard(shareUrl);
+      setCopyStatus(text('Copied', 'コピーしました'));
+    } catch {
+      setCopyStatus(text('Copy unavailable; select the URL to copy it manually.', 'コピーできません。URLを選択して手動でコピーしてください。'));
+    }
+  };
+
+  return (
+    <div className="content-share-url">
+      <div className="settings-subsection-header">
+        <h3>{text('Share URL', '共有URL')}</h3>
+        <p>{text(
+          'Open the game with the currently selected Character and Stage.',
+          '現在選択中のCharacterとStageでゲームを開くURLです。',
+        )}</p>
+      </div>
+      <div className="content-share-url-row">
+        <input
+          aria-label="Share URL"
+          readOnly
+          type="url"
+          value={shareUrl}
+          onFocus={(event) => event.currentTarget.select()}
+        />
+        <button className="settings-secondary-button" type="button" onClick={copyShareUrl}>
+          {text('Copy', 'コピー')}
+        </button>
+      </div>
+      {copyStatus ? <small aria-live="polite" role="status">{copyStatus}</small> : null}
+    </div>
+  );
+}
+
+function currentUrlContentSelectionBase(): UrlContentSelectionBase {
+  if (typeof window === 'undefined') return { origin: 'http://localhost', pathname: '/' };
+  return { origin: window.location.origin, pathname: window.location.pathname };
 }
 
 function formatCatalogReadStatus(

@@ -18,14 +18,20 @@ describe('WebMUGEN build mode', () => {
       buildMode: 'public',
       characterFiles: true,
       characterEditor: false,
-      catalogManagement: false,
-      catalogGenerator: false,
+      catalogManagement: true,
+      catalogGenerator: true,
       publishDefaultsButton: false,
-      runtimeDebug: false,
-      detailedLogs: false,
+      runtimeDebug: true,
+      cnsTrace: true,
+      detailedLogs: true,
+      hitboxDebug: true,
+      inputHistoryDebug: true,
+      compatibilityMatrix: true,
+      shareUrl: true,
     });
     expect(createFeatureFlags('development')).toMatchObject({
       characterFiles: true, characterEditor: true, catalogManagement: true, catalogGenerator: true, publishDefaultsButton: true,
+      shareUrl: true,
     });
   });
 });

@@ -10,6 +10,7 @@ import { calculateTestTimeoutMs } from './src/testing/TestTimeoutBudget';
 const virtualCharacterManifestId = 'virtual:webmugen-character-manifest';
 const resolvedVirtualCharacterManifestId = `\0${virtualCharacterManifestId}`;
 const projectRoot = fileURLToPath(new URL('.', import.meta.url));
+const webMugenVersion = readPackageVersion(resolve(projectRoot, 'package.json'));
 const publicCharsRoot = resolve(projectRoot, 'public/chars');
 const characterFilesApiPath = '/__webmugen/character-files';
 const defaultSettingsPath = resolve(projectRoot, 'public/config/default-settings.json');
@@ -19,6 +20,14 @@ const testTimeoutMs = calculateTestTimeoutMs({
   dataCount: countSffImageEntries(publicCharsRoot),
   testCount: countTestCases(resolve(projectRoot, 'src')),
 });
+
+function readPackageVersion(packagePath: string): string {
+  const packageJson = JSON.parse(readFileSync(packagePath, 'utf8')) as { version?: unknown };
+  if (typeof packageJson.version !== 'string' || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(packageJson.version)) {
+    throw new Error('package.json must contain a valid semantic version.');
+  }
+  return packageJson.version;
+}
 
 function countSffImageEntries(directory: string): number {
   let count = 0;
@@ -322,6 +331,9 @@ function sendJson(response: import('node:http').ServerResponse, status: number, 
 export default defineConfig({
   plugins: [webMugenCharacterManifestPlugin(), react()],
   base: './',
+  define: {
+    __WEBMUGEN_VERSION__: JSON.stringify(webMugenVersion),
+  },
   test: {
     testTimeout: testTimeoutMs,
   },

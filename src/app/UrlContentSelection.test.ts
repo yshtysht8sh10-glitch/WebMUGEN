@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { ContentCatalog } from './ContentCatalog';
 import { FALLBACK_WEBMUGEN_SETTINGS, normalizeWebMugenSettings } from './WebMugenSettings';
-import { applyUrlContentOverrides, applyUrlContentSelection, getUrlContentOverrides } from './UrlContentSelection';
+import {
+  applyUrlContentOverrides,
+  applyUrlContentSelection,
+  createUrlContentSelectionUrl,
+  getUrlContentOverrides,
+} from './UrlContentSelection';
 
 const catalog: ContentCatalog = { version: 1, totalEntries: 4, rejectedEntries: 0, issues: [], entries: [
   { id: 'saved-char', name: 'Saved', kind: 'character', engine: 'winmugen', path: '/chars/saved.def' },
@@ -16,6 +21,31 @@ const saved = normalizeWebMugenSettings({
 });
 
 describe('URL content selection', () => {
+  it('generates the existing character and stage query format from Catalog IDs', () => {
+    expect(createUrlContentSelectionUrl(
+      { origin: 'https://example.com', pathname: '/' },
+      { characterId: 'itoko', stageId: 'fresh-clasic' },
+    )).toBe('https://example.com/?character=itoko&stage=fresh-clasic');
+  });
+
+  it('encodes Catalog IDs without changing the decoded selection', () => {
+    const url = createUrlContentSelectionUrl(
+      { origin: 'https://example.com', pathname: '/' },
+      { characterId: 'url char', stageId: 'url-stage' },
+    );
+    expect(url).toBe('https://example.com/?character=url+char&stage=url-stage');
+    const result = applyUrlContentSelection(saved, catalog, new URL(url).search);
+    expect(result.settings.content).toMatchObject({ characterId: 'url char', stageId: 'url-stage' });
+  });
+
+  it('preserves root and subdirectory deployment pathnames', () => {
+    const selection = { characterId: 'itoko', stageId: 'fresh-clasic' };
+    expect(createUrlContentSelectionUrl({ origin: 'https://example.com', pathname: '/' }, selection))
+      .toBe('https://example.com/?character=itoko&stage=fresh-clasic');
+    expect(createUrlContentSelectionUrl({ origin: 'https://example.com', pathname: '/WebMUGEN/' }, selection))
+      .toBe('https://example.com/WebMUGEN/?character=itoko&stage=fresh-clasic');
+  });
+
   it('keeps settings when no URL override is present', () => {
     const result = applyUrlContentSelection(saved, catalog, '');
     expect(result.settings.content).toMatchObject({ characterId: 'saved-char', stageId: 'saved-stage' });

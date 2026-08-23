@@ -261,18 +261,18 @@ describe('WebMugenApp runtime history', () => {
     expect(developer).not.toContain('Game time');
   });
 
-  it('removes Publisher settings and Developer menu items from the Public sidebar', () => {
+  it('keeps Developer settings in the Public sidebar while removing Publisher settings', () => {
     const development = renderToStaticMarkup(createElement(SettingsSidebar, {
       activePage: 'publisher', canPublishDefaults: true, showDeveloperSettings: true, onSelect: () => undefined,
     }));
     const publicBuild = renderToStaticMarkup(createElement(SettingsSidebar, {
-      activePage: 'content', canPublishDefaults: false, showDeveloperSettings: false, onSelect: () => undefined,
+      activePage: 'content', canPublishDefaults: false, showDeveloperSettings: true, onSelect: () => undefined,
     }));
 
     expect(development).toContain('Publisher settings');
     expect(development).toContain('Developer');
     expect(publicBuild).not.toContain('Publisher settings');
-    expect(publicBuild).not.toContain('Developer');
+    expect(publicBuild).toContain('Developer');
     expect(publicBuild).toContain('Content');
     expect(publicBuild).toContain('General');
     expect(publicBuild).toContain('Input');
@@ -326,6 +326,64 @@ describe('WebMugenApp runtime history', () => {
     expect(developmentHtml).toContain('>2</strong>');
   });
 
+  it('updates the shared URL when the selected Character or Stage changes', () => {
+    const catalog = { version: 1 as const, totalEntries: 5, rejectedEntries: 0, issues: [], entries: [
+      { id: 'itoko', name: 'Itoko', kind: 'character' as const, engine: 'winmugen' as const, path: '/chars/itoko.zip' },
+      { id: 'hero', name: 'Hero', kind: 'character' as const, engine: 'winmugen' as const, path: '/chars/hero.def' },
+      { id: 'fresh-clasic', name: 'Fresh Classic', kind: 'stage' as const, engine: 'webmugen' as const, path: 'builtin:stage:fresh-clasic' },
+      { id: 'arena', name: 'Arena', kind: 'stage' as const, engine: 'winmugen' as const, path: '/stages/arena.def' },
+      { id: 'fresh-hud', name: 'Fresh HUD', kind: 'lifebar' as const, engine: 'webmugen' as const, path: 'builtin:lifebar:fresh-hud' },
+    ] };
+    const renderContent = (characterId: string, stageId: string) => renderToStaticMarkup(createElement(ContentCatalogPanel, {
+      catalog,
+      settings: { catalogPath: '/content/catalog.json', characterId, stageId, lifeBarId: 'fresh-hud', characterPath: '/chars/itoko.zip', paletteNo: 1 },
+      readResult: null,
+      selectionSource: { character: 'settings', stage: 'settings' },
+      canManage: false,
+      canGenerate: false,
+      canShare: true,
+      shareUrlBase: { origin: 'https://example.com', pathname: '/WebMUGEN/' },
+      onSelect: () => undefined,
+      onPaletteChange: () => undefined,
+      onPathChange: () => undefined,
+      onReload: () => undefined,
+    }));
+
+    expect(renderContent('itoko', 'fresh-clasic'))
+      .toContain('value="https://example.com/WebMUGEN/?character=itoko&amp;stage=fresh-clasic"');
+    expect(renderContent('hero', 'fresh-clasic'))
+      .toContain('value="https://example.com/WebMUGEN/?character=hero&amp;stage=fresh-clasic"');
+    expect(renderContent('hero', 'arena'))
+      .toContain('value="https://example.com/WebMUGEN/?character=hero&amp;stage=arena"');
+  });
+
+  it('renders shared URL controls independently of content management', () => {
+    const catalog = { version: 1 as const, totalEntries: 3, rejectedEntries: 0, issues: [], entries: [
+      { id: 'itoko', name: 'Itoko', kind: 'character' as const, engine: 'winmugen' as const, path: '/chars/itoko.zip' },
+      { id: 'fresh-clasic', name: 'Fresh Classic', kind: 'stage' as const, engine: 'webmugen' as const, path: 'builtin:stage:fresh-clasic' },
+      { id: 'fresh-hud', name: 'Fresh HUD', kind: 'lifebar' as const, engine: 'webmugen' as const, path: 'builtin:lifebar:fresh-hud' },
+    ] };
+    const html = renderToStaticMarkup(createElement(ContentCatalogPanel, {
+      catalog,
+      settings: { catalogPath: '/content/catalog.json', characterId: 'itoko', stageId: 'fresh-clasic', lifeBarId: 'fresh-hud', characterPath: '/chars/itoko.zip', paletteNo: 1 },
+      readResult: null,
+      selectionSource: { character: 'settings', stage: 'settings' },
+      canManage: false,
+      canGenerate: false,
+      canShare: true,
+      shareUrlBase: { origin: 'https://example.com', pathname: '/' },
+      onSelect: () => undefined,
+      onPaletteChange: () => undefined,
+      onPathChange: () => undefined,
+      onReload: () => undefined,
+    }));
+
+    expect(html).toContain('Share URL');
+    expect(html).toContain('aria-label="Share URL"');
+    expect(html).toContain('>Copy</button>');
+    expect(html).not.toContain('Content management');
+  });
+
   it('keeps the game panel mounted while leaving hidden static and Settings content unmounted', () => {
     const html = renderToStaticMarkup(createElement(WebMugenApp));
 
@@ -352,6 +410,14 @@ describe('WebMugenApp runtime history', () => {
     expect(html).not.toContain('class="input-config-panel settings-section"');
     expect(html).toContain('Use current settings as publisher defaults');
     expect(html).toContain('Restore publisher defaults');
+  });
+
+  it('shows the package-managed application version beside the WebMUGEN title', () => {
+    const html = renderToStaticMarkup(createElement(WebMugenApp));
+
+    expect(html).toContain('<div class="app-title-row"><h1>WebMUGEN</h1>');
+    expect(html).toContain(`aria-label="WebMUGEN version ${__WEBMUGEN_VERSION__}"`);
+    expect(html).toContain(`>Ver. ${__WEBMUGEN_VERSION__}</span>`);
   });
 
   it('renders the user gesture and explicit no-audio start controls without tab navigation', () => {

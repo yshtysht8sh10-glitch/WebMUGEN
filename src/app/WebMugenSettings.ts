@@ -139,21 +139,21 @@ export function applyFeaturePolicyToSettings(
   publishedDefaults: WebMugenSettings,
   features: WebMugenFeatureFlags,
 ): WebMugenSettings {
-  if (features.buildMode === 'development') return normalizeWebMugenSettings(settings, publishedDefaults);
+  const normalized = normalizeWebMugenSettings(settings, publishedDefaults);
   return normalizeWebMugenSettings({
-    ...settings,
+    ...normalized,
     content: {
-      ...settings.content,
-      catalogPath: publishedDefaults.content.catalogPath,
+      ...normalized.content,
+      catalogPath: features.catalogManagement ? normalized.content.catalogPath : publishedDefaults.content.catalogPath,
     },
     runtime: {
-      ...settings.runtime,
-      stageArchivePath: publishedDefaults.runtime.stageArchivePath,
-      hitDiagnostics: false,
-      humanLogEnabled: false,
-      aiLogEnabled: false,
-      collisionBoxesVisible: false,
-      stateHistoryVisible: false,
+      ...normalized.runtime,
+      stageArchivePath: features.stageEditor ? normalized.runtime.stageArchivePath : publishedDefaults.runtime.stageArchivePath,
+      hitDiagnostics: features.detailedLogs ? normalized.runtime.hitDiagnostics : false,
+      humanLogEnabled: features.detailedLogs ? normalized.runtime.humanLogEnabled : false,
+      aiLogEnabled: features.detailedLogs ? normalized.runtime.aiLogEnabled : false,
+      collisionBoxesVisible: features.hitboxDebug ? normalized.runtime.collisionBoxesVisible : false,
+      stateHistoryVisible: features.inputHistoryDebug ? normalized.runtime.stateHistoryVisible : false,
     },
   }, publishedDefaults);
 }

@@ -29,6 +29,19 @@ body {
   font-size: 32px;
 }
 
+.app-title-row {
+  align-items: baseline;
+  display: flex;
+  gap: 10px;
+}
+
+.app-version {
+  color: #94a3b8;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .app-header p {
   margin: 4px 0 0;
   color: #cbd5e1;
@@ -2665,6 +2678,34 @@ button.readable-state-badge:disabled {
   line-height: 1.4;
 }
 
+.content-share-url {
+  margin-top: 18px;
+}
+
+.content-share-url-row {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.content-share-url-row input {
+  background: #0f172a;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  color: #f8fafc;
+  min-height: 36px;
+  min-width: 0;
+  padding: 7px;
+  width: 100%;
+}
+
+.content-share-url small {
+  color: #93c5fd;
+  display: block;
+  margin-top: 7px;
+}
+
 .content-count-grid {
   display: grid;
   gap: 10px;
@@ -3255,6 +3296,7 @@ button.readable-state-badge:disabled {
   .catalog-source-grid,
   .catalog-generator-results dl,
   .catalog-management-row,
+  .content-share-url-row,
   .settings-field-grid,
   .live-input-grid {
     grid-template-columns: 1fr;
