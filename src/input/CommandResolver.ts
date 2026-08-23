@@ -15,9 +15,18 @@ export function resolveCommands(
 ): CommandState {
   const activeCommandNames = new Set<string>();
   const frames = buffer ? buffer.getFrames() : [inputToFrame(input, facing)];
+  const heldButtons = new Set(
+    document.commands
+      .map((command) => directHeldButton(command.command))
+      .filter((button): button is string => button !== null),
+  );
 
   for (const command of document.commands) {
-    if (matchesCommand(command, frames)) {
+    const pressedButton = directPressedButton(command.command);
+    const commandFrames = buffer && pressedButton && heldButtons.has(pressedButton)
+      ? frames.slice(1)
+      : frames;
+    if (matchesCommand(command, commandFrames)) {
       activeCommandNames.add(command.name.toLowerCase());
     }
   }
@@ -27,6 +36,16 @@ export function resolveCommands(
   return {
     activeCommandNames,
   };
+}
+
+function directPressedButton(expression: string): string | null {
+  const match = expression.trim().match(/^([abcxyzs])$/i);
+  return match?.[1].toLowerCase() ?? null;
+}
+
+function directHeldButton(expression: string): string | null {
+  const match = expression.trim().match(/^\/([abcxyzs])$/i);
+  return match?.[1].toLowerCase() ?? null;
 }
 
 export function hasCommand(commandState: CommandState, commandName: string): boolean {

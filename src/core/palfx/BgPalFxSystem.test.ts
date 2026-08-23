@@ -1,8 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialGameState } from '../engine/GameState';
-import { applyBgPalFxEvents, resolveBgPalFxFilter, stepBgPalFx } from './BgPalFxSystem';
+import { applyBgPalFxEvents, applyPalFxToRgba, resolveBgPalFxFilter, stepBgPalFx } from './BgPalFxSystem';
 
 describe('BGPalFX runtime', () => {
+  it('applies add and multiply values independently per RGB channel', () => {
+    const pixels = new Uint8ClampedArray([80, 80, 80, 255]);
+    applyPalFxToRgba(pixels, {
+      duration: 10, remainingTime: 10, elapsedTime: 0, color: 256, invertAll: false, ownerEntityId: 1,
+      add: { red: 175, green: -190, blue: -190 },
+      multiply: { red: 256, green: 256, blue: 256 },
+      sinAdd: { red: 0, green: 0, blue: 0, period: 1 },
+    });
+
+    expect([...pixels]).toEqual([255, 0, 0, 255]);
+  });
+
   it('retains the effect for its configured duration and targets the background filter', () => {
     const result = applyBgPalFxEvents(createInitialGameState(), [{
       duration: 20,

@@ -1466,6 +1466,34 @@ damage = 10
     expect(activated.players[0].activeHitDef?.guardPauseTime).toBeUndefined();
   });
 
+  it('applies WinMUGEN cornerpush inheritance defaults when HitDef parameters are omitted', () => {
+    const activate = (attr: string) => {
+      const cns = parseCnsText(`
+[Statedef 200]
+type = S
+movetype = A
+physics = S
+[State 200, Hit]
+type = HitDef
+trigger1 = 1
+attr = ${attr}, NA
+ground.velocity = -5.5
+`);
+      const initial = createInitialGameState();
+      return stepCnsStateRuntime({
+        ...initial,
+        players: [{ ...initial.players[0], stateNo: 200, moveType: 'A' }, initial.players[1]],
+      }, cns).state.players[0].activeHitDef;
+    };
+
+    expect(activate('S')?.cornerPush).toEqual({
+      ground: -7.15, air: -7.15, down: -7.15, guard: -7.15, airGuard: -7.15,
+    });
+    expect(activate('A')?.cornerPush).toEqual({
+      ground: 0, air: 0, down: 0, guard: 0, airGuard: 0,
+    });
+  });
+
   it('diagnoses invalid evaluated HitDef parameters without discarding their names', () => {
     const cns = parseCnsText(`
 [Statedef 200]

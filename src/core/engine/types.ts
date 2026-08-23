@@ -233,6 +233,8 @@ export type PlayerState = {
     animTime: number;
   };
   hitPause: number;
+  /** P1 pause freezes StateTime; P2 hit-shake leaves StateTime running. */
+  hitPauseKind?: 'pause' | 'shake';
   afterImage?: AfterImageState;
   palFx?: BgPalFxState;
   drawAngle?: number;
@@ -284,6 +286,8 @@ export type PlayerState = {
     hitDefId: number;
   };
   stateOwnerId?: number;
+  /** Runtime entity whose CNS placed this player in the current borrowed State. */
+  stateOwnerEntityId?: number;
   selfStateOwnerId?: number;
   animationOwnerId?: 1 | 2;
   entityBind?: {

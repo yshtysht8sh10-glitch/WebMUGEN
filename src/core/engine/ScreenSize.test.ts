@@ -33,17 +33,17 @@ describe('screen size profiles', () => {
     expect(state.players.map((player) => player.x - camera.x)).toEqual([100, 300]);
   });
 
-  it('keeps both character push boxes inside the camera when their stage separation exceeds the viewport', () => {
+  it('keeps both character axes inside the camera when their stage separation exceeds the viewport', () => {
     const state = createInitialGameState(undefined, {}, [48, 912]);
     const next = applyViewportCameraRules(state, 400, 240);
     const camera = resolveViewportCamera(next, 400, 240);
     const diagnostics = next.hitDiagnosticLines ?? [];
 
-    expect(next.players[0].x).toBe(299);
-    expect(next.players[1].x).toBe(661);
+    expect(next.players[0].x).toBe(284);
+    expect(next.players[1].x).toBe(676);
     expect(camera.x).toBe(280);
-    expect(next.players[0].x - 15 - camera.x).toBeGreaterThanOrEqual(4);
-    expect(next.players[1].x + 15 - camera.x).toBeLessThanOrEqual(396);
+    expect(next.players[0].x - camera.x).toBeGreaterThanOrEqual(4);
+    expect(next.players[1].x - camera.x).toBeLessThanOrEqual(396);
     expect(diagnostics[diagnostics.length - 1]).toContain('clamped=p1,p2');
   });
 
@@ -185,7 +185,7 @@ describe('screen size profiles', () => {
     state = applyViewportCameraRules(state, 400, 240, undefined, camera);
 
     expect(resolveViewportCamera(state, 400, 240).x).toBe(286);
-    expect(state.players[0].x).toBe(305);
+    expect(state.players[0].x).toBe(300);
     expect(state.players[1].x).toBe(636);
 
     state = {
@@ -193,7 +193,9 @@ describe('screen size profiles', () => {
       players: [state.players[0], { ...state.players[1], x: 900 }],
     };
     state = applyViewportCameraRules(state, 400, 240, undefined, camera);
-    expect(resolveViewportCamera(state, 400, 240).x).toBe(512);
+    expect(resolveViewportCamera(state, 400, 240).x).toBe(286);
+    expect(state.players[0].x).toBe(300);
+    expect(state.players[1].x).toBe(682);
   });
 
   it('lets a normal Helper move the camera only after its own ScreenBound opts in', () => {

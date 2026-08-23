@@ -6,7 +6,7 @@ This document records the Issue #25 audit and the integration contract for the E
 
 ## Issue #30 implementation status
 
-Production `GameState` owns an `ExplodRuntimeState` with a monotonically allocated `runtimeId` independent from duplicate-capable MUGEN `id`. The normal `CnsStateRuntime` executor evaluates an Explod controller on its firing frame and emits an owner-scoped creation snapshot. The app coordinator applies that snapshot to `GameState.explods` and records `raw.explod_create` or `raw.explod_create_rejected` in Runtime History.
+Production `GameState` owns an `ExplodRuntimeState` with a monotonically allocated `runtimeId` independent from duplicate-capable MUGEN `id`. Each live entry also has a reusable allocation `drawSlot`; this preserves WinMUGEN `ontop` composition when an effect is removed and later recreated without recycling diagnostic identity. The normal `CnsStateRuntime` executor evaluates an Explod controller on its firing frame and emits an owner-scoped creation snapshot. The app coordinator applies that snapshot to `GameState.explods` and records `raw.explod_create` or `raw.explod_create_rejected` in Runtime History.
 
 The snapshot includes owner/animation source, anim, postype, resolved initial stage or screen position, Facing/vfacing, bind/removetime metadata, draw order, and the movement/render/pause fields scheduled for later Issues. P1/P2 ownership, duplicate MUGEN ids, expressions, all legacy postypes, invalid anim, round reset, and bundled KFM State 191 are covered by focused tests.
 
@@ -41,6 +41,7 @@ type RuntimeEntityRef = {
 
 type ExplodRuntimeEntry = {
   runtimeId: number;      // monotonically allocated internal identity
+  drawSlot: number;       // lowest free live allocation slot; used for ontop order
   mugenId: number;        // controller `id`; duplicates are allowed
   owner: RuntimeEntityRef;
   animationOwner: RuntimeEntityRef;

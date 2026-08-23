@@ -377,7 +377,7 @@ time = -2
     expect(next.players[1]).toMatchObject({ x: 135, y: -10, vx: 0, vy: 0, targetBind: { remaining: -1 } });
   });
 
-  it('keeps the target attached without consuming finite bind time during participant HitPause', () => {
+  it('consumes finite bind time during target-only HitPause', () => {
     const state = targetState();
     state.players[0] = { ...state.players[0], x: 100, vx: 8, physics: 'N', facing: 1 };
     state.players[1] = {
@@ -388,7 +388,20 @@ time = -2
     };
 
     const next = stepCnsPhysicsMotion(state);
-    expect(next.players[1]).toMatchObject({ x: 128, y: 10, vx: 8, vy: 0, hitPause: 0, targetBind: { remaining: 2 } });
+    expect(next.players[1]).toMatchObject({ x: 128, y: 10, vx: 8, vy: 0, hitPause: 0, targetBind: { remaining: 1 } });
+  });
+
+  it('freezes finite bind time while its owner is in HitPause', () => {
+    const state = targetState();
+    state.players[0] = { ...state.players[0], x: 100, vx: 8, physics: 'N', facing: 1, hitPause: 1 };
+    state.players[1] = {
+      ...state.players[1],
+      physics: 'N',
+      targetBind: { ownerId: 1, remaining: 2, offsetX: 20, offsetY: -10 },
+    };
+
+    const next = stepCnsPhysicsMotion(state);
+    expect(next.players[1]).toMatchObject({ x: 120, y: 10, vx: 8, vy: 0, targetBind: { remaining: 2 } });
   });
 
   it('safely does nothing when the owner has no registered target', () => {

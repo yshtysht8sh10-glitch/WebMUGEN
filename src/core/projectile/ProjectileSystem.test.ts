@@ -59,6 +59,13 @@ describe('ProjectileSystem', () => {
     expect(result.projectiles[0].lifeTime).toBe(1);
   });
 
+  it('keeps projremovetime=1 active for its creation tick', () => {
+    const first = stepProjectiles([{ ...createProjectile(), removeTime: 1 }]);
+    expect(first.projectiles).toHaveLength(1);
+    expect(first.projectiles[0].lifeTime).toBe(1);
+    expect(stepProjectiles(first.projectiles).projectiles).toHaveLength(0);
+  });
+
   it('mirrors and scales the projectile collision box with Facing', () => {
     const box = getProjectileWorldBox({
       ...createProjectile(), facing: -1, scaleX: 0.5, scaleY: 2,
@@ -87,6 +94,39 @@ describe('ProjectileSystem', () => {
       hitDefId: 1000,
       activeHitDefId: 1000,
     }]);
+  });
+
+  it('allows a new projectile to hit a defender during existing hitpause', () => {
+    const state = createInitialGameState();
+    const pausedDefender = {
+      ...state.players[1],
+      stateNo: 5070,
+      stateType: 'A' as const,
+      moveType: 'H' as const,
+      physics: 'N' as const,
+      hitPause: 75,
+    };
+    const projectile = {
+      ...createProjectile(),
+      id: 0,
+      hitDef: {
+        ...createProjectile().hitDef,
+        diagnosticId: 3066,
+        hitId: 3066,
+        pauseTime: { attacker: 0, defender: 0 },
+        hitFlag: 'MAFD',
+      },
+    };
+
+    const result = resolveProjectileHits([state.players[0], pausedDefender], [projectile]);
+
+    expect(result.hitEvents).toHaveLength(1);
+    expect(result.projectiles).toHaveLength(0);
+    expect(result.players[0]).toMatchObject({
+      projectileContacts: { 0: { hitTime: 1 } },
+      targets: [{ playerId: 2, hitDefId: 3066, activeHitDefId: 3066 }],
+    });
+    expect(result.players[1]).toMatchObject({ stateNo: 5030, hitPause: 0 });
   });
 
   it('does not set ProjHit or acquire a Target when a projectile misses', () => {
@@ -177,7 +217,7 @@ describe('ProjectileSystem', () => {
       1000: { hitTime: -1, guardedTime: 1 },
     });
     expect(guarded.players[0].targets).toEqual([]);
-    expect(guarded.players[1]).toMatchObject({ life: 980, power: 10, stateNo: 150, vx: -2, hitPause: 4 });
+    expect(guarded.players[1]).toMatchObject({ life: 980, power: 10, stateNo: 150, vx: 2, hitPause: 4 });
     expect(guarded.players[1].palFx).toBeUndefined();
     expect(guarded.hitEvents[0].guarded).toBe(true);
 
@@ -279,7 +319,7 @@ describe('ProjectileSystem', () => {
         hittime: 20,
         xvel: -20,
         yvel: -8,
-        yaccel: 0.6,
+        yaccel: 0.35,
       },
     });
     expect(defender.hitDiagnosticLines?.join('\n')).toContain('raw.projectile_hit_reaction');
@@ -310,7 +350,7 @@ y = 1
     launched = stepCnsPhysicsMotion(launched, common);
     launched = stepCnsStateRuntime(launched, common).state;
 
-    expect(launched.players[1].vy).toBeCloseTo(-7.4);
+    expect(launched.players[1].vy).toBeCloseTo(-7.65);
   });
 
   it('routes the Projectile HitDef spark through the attacker character AIR', () => {

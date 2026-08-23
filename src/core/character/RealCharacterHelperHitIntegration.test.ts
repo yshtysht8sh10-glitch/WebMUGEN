@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import { getMugenAnimEndTime } from '../animation/AnimationDuration';
 import { getAnimationTriggerInfo } from '../animation/AnimationPlayer';
-import { stepCnsStateRuntime } from '../cns/CnsStateRuntime';
+import { enterCnsStateAndRunTimeZero, stepCnsStateRuntime } from '../cns/CnsStateRuntime';
 import { createInitialGameState } from '../engine/GameState';
 import { resolveFallbackHits } from '../engine/FallbackHitResolver';
 import { pruneTargets } from '../hitdef/TargetState';
@@ -16,6 +16,49 @@ import { parseAirText } from '../../parser/air/AirParser';
 import { parseCnsText } from '../../parser/cns/CnsParser';
 
 describe('real character Helper HitDef integration', () => {
+  it('routes colliding itoko bag Helpers through their indefinite HitOverride instead of common itoko hit sprites', async () => {
+    const [cnsBytes, airBytes] = await Promise.all([
+      readFile('public/chars/itoko/itoko.cns'),
+      readFile('public/chars/itoko/itoko.air'),
+    ]);
+    const cns = parseCnsText(new TextDecoder('shift_jis').decode(cnsBytes));
+    const air = parseAirText(new TextDecoder('shift_jis').decode(airBytes));
+    const initial = createInitialGameState();
+    initial.players = [
+      { ...initial.players[0], stateNo: -999 },
+      { ...initial.players[1], stateNo: -999 },
+    ];
+    let helpers = spawnHelper(initial.helpers, {
+      helperId: 1101, rootEntityId: 1, parentEntityId: 1, ownerCharacterId: 1,
+      stateOwnerId: 1, animationOwnerId: 1, stateNo: 1101, x: 320, y: 200,
+      facing: 1, keyCtrl: false, ownPal: true, spawnFrame: -1, parent: initial.players[0],
+    }, cns);
+    helpers = spawnHelper(helpers, {
+      helperId: 1102, rootEntityId: 1, parentEntityId: 1, ownerCharacterId: 1,
+      stateOwnerId: 1, animationOwnerId: 1, stateNo: 1101, x: 320, y: 200,
+      facing: -1, keyCtrl: false, ownPal: true, spawnFrame: -1, parent: initial.players[0],
+    }, cns);
+    const activated = stepCnsStateRuntime({ ...initial, helpers }, cns, {
+      getAnimationDuration: (animNo) => getMugenAnimEndTime(air, animNo),
+      getAnimationTriggerInfo: (animNo, animTime) => getAnimationTriggerInfo(air, animNo, animTime),
+    }).state;
+
+    expect(activated.helpers.entries.map((entry) => entry.player.hitOverrides?.[0]?.remaining)).toEqual([-1, -1]);
+    const collided = resolveFallbackHits(
+      activated,
+      air,
+      true,
+      activated,
+      (player, opponent, stateNo) => enterCnsStateAndRunTimeZero(player, opponent, stateNo, cns),
+    );
+
+    expect(collided.helpers.entries.map((entry) => ({ stateNo: entry.player.stateNo, animNo: entry.player.animNo })))
+      .toEqual([{ stateNo: 1102, animNo: 1113 }, { stateNo: 1102, animNo: 1113 }]);
+    expect(collided.helpers.entries.every((entry) => entry.player.life === 1000)).toBe(true);
+    expect(collided.hitDiagnosticLines?.filter((line) => line.startsWith('raw.hit_override'))).toHaveLength(2);
+    expect(collided.helpers.entries.some((entry) => [5000, 5010, 5020].includes(entry.player.stateNo) || entry.player.animNo === 5030)).toBe(false);
+  });
+
   it('releases a KO target from T-H-M-A Darkness Finger shadow State 3675', async () => {
     const cnsBytes = await readFile('public/chars/T-H-M-A/T-H-M-A/T-H-M-Atyouhi.cns');
     const cns = parseCnsText(new TextDecoder('shift_jis').decode(cnsBytes));
@@ -116,9 +159,9 @@ describe('real character Helper HitDef integration', () => {
     expect(maximumCarryGap).toBeLessThanOrEqual(30);
     expect({ carriedFacing, carriedVelocity }).toEqual({ carriedFacing: -1, carriedVelocity: 8 });
     expect(state.players[1]).toMatchObject({ stateNo: 271, facing: 1, vx: -8 });
-    expect(state.players[1].x).toBeGreaterThan(870);
-    expect(state.players[1].x).toBeLessThan(880);
-    expect(resolveViewportCamera(state, 400, 240).x).toBe(512);
+    expect(state.players[1].x).toBeGreaterThan(800);
+    expect(state.players[1].x).toBeLessThan(810);
+    expect(resolveViewportCamera(state, 400, 240).x).toBeLessThan(512);
     expect(maximumVisible3030DuringCarry).toBeGreaterThan(2);
     expect(created3030.length).toBeGreaterThan(2);
     expect(new Set(created3030.map((event) => event.request.owner.entityId)).size).toBe(2);
@@ -192,7 +235,7 @@ describe('real character Helper HitDef integration', () => {
 
     const helperPass = stepCnsStateRuntime({ ...initial, helpers }, cns);
     expect(helperPass.state.helpers.entries[0].player.stateNo).toBe(3735);
-    expect(helperPass.state.players[1]).toMatchObject({ stateNo: 3738, stateOwnerId: 1 });
+    expect(helperPass.state.players[1]).toMatchObject({ stateNo: 3738, stateOwnerId: 1, stateOwnerEntityId: helpers.entries[0].entityId });
 
     const rootPass = stepCnsStateRuntime(helperPass.state, cns);
     expect(rootPass.state.players[0].stateNo).toBe(3730);

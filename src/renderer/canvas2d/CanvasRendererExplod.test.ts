@@ -73,6 +73,41 @@ describe('CanvasRenderer Explod integration', () => {
     expect(drawImage.mock.calls.map(([image]) => image)).toEqual([redImage, blueImage]);
   });
 
+  it('layers itoko ontop gauge underlay, blue bar, frame, and portrait in creation order', () => {
+    const drawImage = vi.fn();
+    const context = fakeContext({ drawImage, scale: vi.fn(), translate: vi.fn() });
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+    const state = createInitialGameState();
+    state.explods.entries = [
+      entry({ runtimeId: 1, animNo: 2221, spritePriority: 7, onTop: true }),
+      entry({ runtimeId: 2, animNo: 2225, spritePriority: 8, onTop: true }),
+      entry({ runtimeId: 3, animNo: 2200, spritePriority: 5, onTop: true }),
+      entry({ runtimeId: 4, animNo: 2230, spritePriority: 9, onTop: true }),
+    ];
+    const underlayImage = {} as HTMLImageElement;
+    const blueBarImage = {} as HTMLImageElement;
+    const frameImage = {} as HTMLImageElement;
+    const portraitImage = {} as HTMLImageElement;
+    const gaugeAir: AirDocument = { actions: [
+      { actionNo: 2221, elements: [{ groupNo: 2200, imageNo: 10, offsetX: 0, offsetY: 0, duration: 1, clsn1: [], clsn2: [] }], defaultClsn1: [], defaultClsn2: [] },
+      { actionNo: 2225, elements: [{ groupNo: 2200, imageNo: 100, offsetX: 0, offsetY: 0, duration: 1, clsn1: [], clsn2: [] }], defaultClsn1: [], defaultClsn2: [] },
+      { actionNo: 2200, elements: [{ groupNo: 2200, imageNo: 0, offsetX: 0, offsetY: 0, duration: 1, clsn1: [], clsn2: [] }], defaultClsn1: [], defaultClsn2: [] },
+      { actionNo: 2230, elements: [{ groupNo: 2230, imageNo: 0, offsetX: 0, offsetY: 0, duration: 1, clsn1: [], clsn2: [] }], defaultClsn1: [], defaultClsn2: [] },
+    ] };
+    const gaugeSprites: SpritePack = { sprites: new Map([
+      ['2200,10', { groupNo: 2200, imageNo: 10, src: '', xAxis: 0, yAxis: 0, image: underlayImage }],
+      ['2200,100', { groupNo: 2200, imageNo: 100, src: '', xAxis: 0, yAxis: 0, image: blueBarImage }],
+      ['2200,0', { groupNo: 2200, imageNo: 0, src: '', xAxis: 0, yAxis: 0, image: frameImage }],
+      ['2230,0', { groupNo: 2230, imageNo: 0, src: '', xAxis: 0, yAxis: 0, image: portraitImage }],
+    ]) };
+
+    new CanvasRenderer(canvas, undefined, null, null, { 2: { airDocument: gaugeAir, spritePack: gaugeSprites } }).render(state, undefined, undefined, undefined, { collisionBoxesVisible: false });
+
+    expect(drawImage.mock.calls.map(([image]) => image)).toEqual([
+      underlayImage, blueBarImage, frameImage, portraitImage,
+    ]);
+  });
+
   it('interleaves Explods and players by WinMUGEN sprpriority', () => {
     const drawImage = vi.fn();
     const context = fakeContext({ drawImage, scale: vi.fn(), translate: vi.fn() });
@@ -359,7 +394,7 @@ describe('CanvasRenderer Explod integration', () => {
 
     const diagnostics = new CanvasRenderer(canvas).render(state);
 
-    expect(stageFilters).toEqual(['invert(1) grayscale(1) brightness(0)']);
+    expect(stageFilters).toEqual(['none']);
     expect(diagnostics).toContainEqual(expect.stringContaining('raw.bgpalfx_draw owner=1 remaining=19'));
   });
 

@@ -1,5 +1,13 @@
 import type { ImageDataSpritePack } from '../../core/sprite/ImageDataSpriteTypes';
 import { spriteKey } from '../../core/sprite/SpritePackLoader';
+import type { AfterImageState, BgPalFxState } from '../../core/engine/types';
+import { applyPalFxToRgba } from '../../core/palfx/BgPalFxSystem';
+import { applyAfterImagePaletteToRgba } from '../../core/afterimage/AfterImageSystem';
+
+export type AfterImagePixelEffect = {
+  palette: AfterImageState['palette'];
+  historyIndex: number;
+};
 
 export class ImageDataSpriteRenderer {
   private readonly canvasCache = new Map<string, HTMLCanvasElement>();
@@ -13,6 +21,8 @@ export class ImageDataSpriteRenderer {
     imageNo: number,
     ownPalette = false,
     diagnosticsEnabled = true,
+    palFx?: BgPalFxState,
+    afterImage?: AfterImagePixelEffect,
   ): { canvas: HTMLCanvasElement; diagnostic: string } | undefined {
     if (!spritePack) return undefined;
     let assetId = this.assetIds.get(spritePack);
@@ -24,7 +34,10 @@ export class ImageDataSpriteRenderer {
     const spriteId = spriteKey(groupNo, imageNo);
     const sprite = spritePack.sprites.get(spriteId);
     if (!sprite) return undefined;
-    const key = `asset=${assetId};sprite=${spriteId};palette=${sprite.paletteKey ?? 'baked-rgba'};ownpal=${ownPalette ? 1 : 0}`;
+    const effectKey = palFx
+      ? `;palfx=${palFx.elapsedTime}:${palFx.color}:${palFx.invertAll ? 1 : 0}:${palFx.add.red},${palFx.add.green},${palFx.add.blue}:${palFx.multiply.red},${palFx.multiply.green},${palFx.multiply.blue}:${palFx.sinAdd.red},${palFx.sinAdd.green},${palFx.sinAdd.blue},${palFx.sinAdd.period}`
+      : afterImage ? `;afterimage=${afterImage.historyIndex}` : '';
+    const key = `asset=${assetId};sprite=${spriteId};palette=${sprite.paletteKey ?? 'baked-rgba'};ownpal=${ownPalette ? 1 : 0}${effectKey}`;
     const cached = this.canvasCache.get(key);
     let diagnostic = '';
     if (diagnosticsEnabled) {
@@ -44,8 +57,16 @@ export class ImageDataSpriteRenderer {
     const context = canvas.getContext('2d');
     if (!context) return undefined;
 
-    context.putImageData(sprite.imageData, 0, 0);
-    this.canvasCache.set(key, canvas);
+    if (palFx || afterImage) {
+      const transformed = context.createImageData(sprite.imageData.width, sprite.imageData.height);
+      transformed.data.set(sprite.imageData.data);
+      if (palFx) applyPalFxToRgba(transformed.data, palFx);
+      if (afterImage) applyAfterImagePaletteToRgba(transformed.data, afterImage.palette, afterImage.historyIndex);
+      context.putImageData(transformed, 0, 0);
+    } else {
+      context.putImageData(sprite.imageData, 0, 0);
+    }
+    if (!palFx && !afterImage) this.canvasCache.set(key, canvas);
     return { canvas, diagnostic };
   }
 

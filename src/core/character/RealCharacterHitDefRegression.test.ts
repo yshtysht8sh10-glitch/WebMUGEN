@@ -585,7 +585,7 @@ describe('T-H-M-A State 3430 TargetBind regression', () => {
     expect(next.players[0]).toMatchObject({ stateNo: 3430, stateTime: 0 });
   });
 
-  it('carries the target at AnimElem 2 with the attacker position and velocity', async () => {
+  it('carries the target at AnimElem 2 while synchronizing the owner velocity', async () => {
     const assets = await loadCharacterFromDef('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.def', createFileSystemFetcher());
     const state3430 = assets.cns.states.find((state) => state.stateNo === 3430);
     if (!state3430) throw new Error('State 3430 not found');

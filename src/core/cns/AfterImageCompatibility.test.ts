@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parseCnsText } from '../../parser/cns/CnsParser';
 import { createInitialGameState } from '../engine/GameState';
 import { stepCnsStateRuntime } from './CnsStateRuntime';
+import { createAfterImageState, stepAfterImage } from '../afterimage/AfterImageSystem';
 
 describe('AfterImage controller compatibility', () => {
   it('creates a configured frame-history effect when its trigger fires', () => {
@@ -56,5 +57,21 @@ trans = add1
     }, cns, { getAnimationTriggerInfo: () => ({ elementNo: 1, elementTime: 0, elementStarted: true, elementCount: 2, elementTimes: [0, 0] }) });
 
     expect(result.state.players[0].afterImage).toBeUndefined();
+  });
+
+  it('uses length as the history capacity and framegap as the display selector', () => {
+    const player = createInitialGameState().players[0];
+    let effect = createAfterImageState(-1, {
+      length: 20, timeGap: 2, frameGap: 4, transparency: 'add', palette: {
+        color: 256, invertAll: false,
+        bright: { red: 0, green: -250, blue: -250 }, contrast: { red: 256, green: 256, blue: 256 },
+        postBright: { red: 0, green: 0, blue: 0 }, add: { red: 0, green: -250, blue: -250 },
+        multiply: { red: 1, green: 1, blue: 1 },
+      },
+    });
+    for (let frame = 0; frame < 160; frame += 1) effect = stepAfterImage(effect, { ...player, x: frame });
+
+    expect(effect?.frames).toHaveLength(20);
+    expect(effect?.frames.filter((_, index) => index % 4 === 0)).toHaveLength(5);
   });
 });

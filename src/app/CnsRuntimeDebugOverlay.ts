@@ -9,7 +9,11 @@ export function formatCnsRuntimeDebugOverlay(traces: readonly CnsRuntimeTrace[])
     const controllers =
       trace.executedControllers.length > 0 ? trace.executedControllers.join(',') : '-';
 
-    return `cns p${trace.playerId} state=${trace.stateNo}->${trace.afterStateNo} anim=${
+    const entity = trace.helperId === undefined
+      ? `p${trace.playerId}`
+      : `p${trace.playerId} H${trace.helperId}#${trace.entityId ?? '-'}`;
+
+    return `cns ${entity} state=${trace.stateNo}->${trace.afterStateNo} anim=${
       trace.animNo
     }->${trace.afterAnimNo} time=${trace.stateTime}->${trace.afterStateTime} animtime=${
       trace.mugenAnimTime

@@ -64,6 +64,32 @@ describe('Explod render resolution', () => {
     expect(getExplodsInDrawOrder(frames).map((frame) => frame.entry.runtimeId)).toEqual([2, 1]);
   });
 
+  it('draws ontop Explods in creation order without applying sprpriority', () => {
+    const state = createInitialGameState();
+    state.explods.entries = [
+      entry({ runtimeId: 1, spritePriority: 7, onTop: true }),
+      entry({ runtimeId: 2, spritePriority: 8, onTop: true }),
+      entry({ runtimeId: 3, spritePriority: 5, onTop: true }),
+      entry({ runtimeId: 4, spritePriority: 9, onTop: true }),
+    ];
+    const frames = resolveExplodRenderFrames(state, { airDocument: air(100, 10, 0) }).frames;
+
+    expect(getExplodsInDrawOrder(frames).map((frame) => frame.entry.runtimeId)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('restores a recreated ontop Explod to its reused allocation slot', () => {
+    const state = createInitialGameState();
+    state.explods.entries = [
+      entry({ runtimeId: 1, drawSlot: 1, onTop: true }),
+      entry({ runtimeId: 3, drawSlot: 3, onTop: true }),
+      entry({ runtimeId: 4, drawSlot: 4, onTop: true }),
+      entry({ runtimeId: 5, drawSlot: 2, onTop: true }),
+    ];
+    const frames = resolveExplodRenderFrames(state, { airDocument: air(100, 10, 0) }).frames;
+
+    expect(getExplodsInDrawOrder(frames).map((frame) => frame.entry.runtimeId)).toEqual([1, 5, 3, 4]);
+  });
+
   it('extends an authored three-sprite WinMUGEN tile across only the wider viewport', () => {
     const state = createInitialGameState();
     state.explods.entries = [-799, -351, 97].map((x, index) => entry({ runtimeId: index + 1, position: { x, y: 100 } }));

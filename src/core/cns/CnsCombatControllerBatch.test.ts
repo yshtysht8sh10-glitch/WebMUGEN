@@ -111,6 +111,30 @@ y = GetHitVar(yaccel)
     expect(groundedOverride.hitDiagnosticLines?.join('\n')).toContain('getHitVarKind=ground');
   });
 
+  it('keeps time=-1 HitOverride active indefinitely', () => {
+    const cns = parseCnsText(`
+[Statedef 300]
+type = S
+physics = N
+anim = 0
+[State 300, permanent override]
+type = HitOverride
+trigger1 = Time = 0
+slot = 0
+attr = SCA, AA, AP, AT
+stateno = 900
+time = -1
+`);
+    const initial = createInitialGameState();
+    initial.players[1] = { ...initial.players[1], stateNo: 300, animNo: 0 };
+
+    const activated = stepCnsStateRuntime(initial, cns).state;
+    const later = stepCnsStateRuntime(activated, cns).state;
+
+    expect(activated.players[1].hitOverrides?.[0]?.remaining).toBe(-1);
+    expect(later.players[1].hitOverrides?.[0]?.remaining).toBe(-1);
+  });
+
   it('accepts WinMUGEN Any-class AA/AP filters without treating throws as attacks', () => {
     const defender = {
       ...createInitialGameState().players[1],

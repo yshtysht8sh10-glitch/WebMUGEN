@@ -4,14 +4,16 @@ Issue #58 Phase1 introduces a real Helper entity collection without replacing th
 
 Each entry separates its unique runtime `entityId` from the MUGEN `helperId`; duplicate MUGEN IDs are valid. It records `rootEntityId`, `parentEntityId`, character/State/animation ownership, `keyctrl`, `ownpal`, `pausemovetime`, `supermovetime`, spawn frame, and an independent PlayerState containing StateNo, PrevStateNo, StateTime, StateDef fields, position, velocity, Facing, Anim/AnimTime, Size scale, and variable maps. A newly-created Helper starts with sprite priority `0` unless its initial StateDef supplies `sprpriority`; it does not inherit the parent's live priority. Same-priority Helpers are queued behind the older root-player sprites, matching the T-H-M-A State 3900 cut-in. Helper Controller `size.xscale`/`size.yscale` are snapshotted at creation and apply to owner AIR/SFF rendering and the Helper's Size-derived collision geometry.
 
-The Phase1 frame order is:
+The Helper frame order is:
 
-1. evaluate the two root players and the Helper snapshot that existed at frame start;
+1. evaluate the two root players, then existing Helpers with descendant branches before their parents while preserving sibling creation order;
 2. collect Helper and DestroySelf requests without mutating the collection;
 3. remove destroyed entities and append spawned entities with monotonic runtime IDs;
 4. skip State/physics stepping for newly spawned entities in that frame;
 5. render a new Helper immediately only when its initial StateDef presentation is already stable; defer Helpers with presentation-changing controllers;
 6. begin the normal owner-CNS State pass on the next frame, then render every surviving Helper through owner-scoped AIR/SFF assets.
+
+Both roots complete their State pass before existing Helpers. A Helper's `root` redirect sees that same-tick completed root State. Issue #122 covers root State 1330 -> 1301 and H1350 State 1480 -> 1350 completing together without the destination State reading stale root State 1330 and re-entering 1480. A `parent` redirect whose parent is a root uses that root's frame-start State/Time at the transition boundary; this lets Issue #125 H3063 match root State 3030 Time 95 and destroy the zipper hook while the root enters State 3031. An existing descendant's completed State pass is visible through `helper(ID)` redirects when its parent is evaluated later in the same tick. If that pass executes `DestroySelf`, relationship redirects instead retain the descendant's frame-start position and velocity until destruction commits; final VelSet/PosSet cleanup therefore cannot hide a parent's return trigger. Redirected relationship triggers are rebound to that selected entity: `helper(1472), ParentDist X/Y` therefore measures H1472 against its immediate parent H1350 rather than measuring H1350 against the root. Issue #120 covers H1472 entering State 1474 on the exact frame that H1350 reaches its State 1470 timeout, the complete 1474 -> 1476 -> 1477 return, and the ground-catch H1462 empty-hand return selecting H1350 State 1461 before H1462 destruction. Unrelated sibling Helpers retain creation order so same-tick `NumHelper` allocation remains deterministic.
 
 State execution remains deferred, but visibility is conditional. A Helper whose initial State has
 `ChangeAnim`, `AngleDraw`, position, palette, Facing, priority, or other presentation controllers is
@@ -33,7 +35,7 @@ A normal Helper starts unbound and excluded from camera movement (`ScreenBound v
 
 During match Pause or SuperPause, a non-owner Helper may continue its CNS, physics, animation history, and State/Anim clocks while the matching `pausemovetime` or `supermovetime` allowance remains. The active allowance is consumed once per paused game frame; normal Pause never consumes the SuperPause allowance and vice versa. The match pause owner's ordinary `movetime` remains a separate permission path.
 
-Helper support remains Partial. Root/parent/helper/playerid redirects resolve unique runtime entities. BindToParent/Root and registered-target BindToTarget retain evaluated position/facing state, while ParentVarSet/Add mutate the unique immediate parent's validated var/fvar store at the entity commit point. Remaining work includes exact bind/ParentVar same-pass pause timing, complete keyctrl input rules, independent palette mutation, Helper push/body interaction, Helper-as-defender and Helper-vs-Helper combat, exact Helper/root Power ownership, child behavior after parent removal, and the general owner-removal policy for effects that were not explicitly removed.
+Helper support remains Partial. Root/parent/helper/playerid redirects resolve unique runtime entities. BindToParent/Root and registered-target BindToTarget retain evaluated position/facing state, while ParentVarSet/Add mutate the unique immediate parent's validated var/fvar store at the entity commit point. Remaining work includes exact bind/ParentVar same-pass pause timing, complete keyctrl input rules, independent palette mutation, Helper push/body interaction, team ordering, child behavior after parent removal, and the general owner-removal policy for effects that were not explicitly removed.
 
 ## Special State processing scope
 

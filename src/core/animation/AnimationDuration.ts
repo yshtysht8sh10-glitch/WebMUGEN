@@ -25,12 +25,9 @@ export function getMugenAnimEndTime(air: AirDocument | null | undefined, actionN
   }
 
   const infiniteIndex = action.elements.findIndex((element) => element.duration < 0);
-  if (infiniteIndex === 0) return -1;
-  if (infiniteIndex > 0) {
-    return action.elements
-      .slice(0, infiniteIndex)
-      .reduce((total, element) => total + Math.max(1, element.duration), 0);
-  }
+  // AIR defines an action containing a -1 element as having infinite
+  // looptime, even when finite elements precede that terminal hold.
+  if (infiniteIndex >= 0) return -1;
 
   return action.elements.reduce((total, element) => total + Math.max(1, element.duration), 0);
 }

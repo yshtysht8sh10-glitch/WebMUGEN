@@ -68,13 +68,23 @@ export function resolveExplodRenderFrames(
 }
 
 export function getExplodsInDrawOrder(frames: readonly ExplodRenderFrame[]): ExplodRenderFrame[] {
-  return [...frames].sort((a, b) =>
-    Number(a.entry.onTop) - Number(b.entry.onTop)
-    || a.entry.spritePriority - b.entry.spritePriority
-    // WinMUGEN places the earlier-created Explod in front when priorities tie.
-    // Canvas draws back-to-front, so newer runtime IDs must be emitted first.
-    || b.entry.runtimeId - a.entry.runtimeId,
-  );
+  return [...frames].sort((a, b) => {
+    const onTopOrder = Number(a.entry.onTop) - Number(b.entry.onTop);
+    if (onTopOrder !== 0) return onTopOrder;
+    if (a.entry.onTop) {
+      // ontop takes precedence over sprpriority. WinMUGEN orders this layer
+      // by reusable Explod allocation slots, so a removed/recreated HUD part
+      // returns to the first free slot instead of jumping to the foreground.
+      const slotOrder = (a.entry.drawSlot ?? a.entry.runtimeId) - (b.entry.drawSlot ?? b.entry.runtimeId);
+      if (slotOrder !== 0) return slotOrder;
+      return a.entry.runtimeId - b.entry.runtimeId;
+    }
+    const priorityOrder = a.entry.spritePriority - b.entry.spritePriority;
+    if (priorityOrder !== 0) return priorityOrder;
+    // Regular equal-priority Explods use the opposite tie order: the older
+    // entry stays in front, so Canvas must draw newer entries first.
+    return b.entry.runtimeId - a.entry.runtimeId;
+  });
 }
 
 export function completeExtendedViewportExplodTiles(

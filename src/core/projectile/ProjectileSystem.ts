@@ -1,6 +1,6 @@
 import type { HitEvent, PlayerState, ProjectileState, Rect } from '../engine/types';
 import { intersects } from '../collision/CollisionBox';
-import { createGetHitVarSnapshot, createHitEffectEvent, evaluateHitEligibility } from '../engine/FallbackHitResolver';
+import { createGetHitVarSnapshot, createHitEffectEvent, evaluateHitEligibility, isGuardReadyState } from '../engine/FallbackHitResolver';
 import { recordMoveContact } from '../hitdef/MoveContactState';
 import { addPlayerPower } from '../power/PowerGauge';
 import { registerTarget } from '../hitdef/TargetState';
@@ -36,7 +36,7 @@ export function stepProjectiles(projectiles: ProjectileState[]): ProjectileStepR
         (projectile) =>
           (projectile.phase === 'hit'
             ? projectile.animTime < (projectile.hitAnimDuration ?? 1)
-            : projectile.removeTime < 0 || projectile.lifeTime < projectile.removeTime) &&
+            : projectile.removeTime < 0 || projectile.lifeTime <= projectile.removeTime) &&
           projectile.x > -80 &&
           projectile.x < 1040 &&
           projectile.y > -80 &&
@@ -68,7 +68,7 @@ export function resolveProjectileHits(
     const projectileBox = getProjectileWorldBox(projectile);
     const targetBox = getPlayerFallbackBodyBox(target);
 
-    if (target.hitPause === 0 && intersects(projectileBox, targetBox)) {
+    if (intersects(projectileBox, targetBox)) {
       const eligibility = evaluateHitEligibility(projectile.hitDef, target);
       if (!eligibility.accepted) {
         const rejectedTarget = {
@@ -95,7 +95,7 @@ export function resolveProjectileHits(
             contactedOwner,
             hitTarget,
             projectile.hitDef.diagnosticId ?? projectile.id,
-            projectile.id,
+            projectile.hitDef.hitId ?? projectile.id,
           );
       if (projectile.ownerId === 1) {
         p1 = targetedOwner;
@@ -268,6 +268,7 @@ function applyHit(
     fallRecoverTime: getHitVars['fall.recovertime'],
     hitFallVelocity: fallVelocity,
     hitPause: hitDef.pauseTime.defender,
+    hitPauseKind: hitDef.pauseTime.defender > 0 ? 'shake' : undefined,
     palFx: hitDef.palFx && hitDef.palFx.duration !== 0
       ? {
           ...hitDef.palFx,
@@ -307,7 +308,7 @@ function applyHit(
 
 function canGuardProjectile(defender: PlayerState, projectile: ProjectileState): boolean {
   if (defender.stateType === 'L') return false;
-  if (!defender.guardIntent || !projectile.hitDef.guardFlag) return false;
+  if (!(defender.guardIntent || isGuardReadyState(defender.stateNo)) || !projectile.hitDef.guardFlag) return false;
   const flags = projectile.hitDef.guardFlag.toUpperCase();
   if (defender.stateType === 'A') return flags.includes('A');
   if (defender.stateType === 'C' || defender.guardCrouchIntent) return flags.includes('L') || flags.includes('M');
@@ -333,9 +334,10 @@ function applyProjectileGuard(defender: PlayerState, projectile: ProjectileState
     moveType: 'H',
     physics: 'N',
     ctrl: false,
-    vx: guardVelocity.x * projectile.facing,
+    vx: guardVelocity.x * -projectile.facing,
     vy: guardVelocity.y,
     hitPause: guardPause.defender,
+    hitPauseKind: guardPause.defender > 0 ? 'shake' : undefined,
     hitStun: {
       activeHitDefId: hitDef.diagnosticId ?? projectile.id,
       selectedHitTime: hitTime,
@@ -369,6 +371,9 @@ function applyProjectileOwnerContact(
   return {
     ...powered,
     hitPause: Math.max(powered.hitPause, pause),
+    hitPauseKind: Math.max(powered.hitPause, pause) <= 0
+      ? undefined
+      : pause >= powered.hitPause ? 'pause' : powered.hitPauseKind,
     projectileContacts: {
       ...(powered.projectileContacts ?? {}),
       [projectile.id]: projectileContact,

@@ -163,6 +163,65 @@ sprpriority = -3
     ]);
   });
 
+  it('lets a Helper observe its root parent at the frame-start State transition boundary', () => {
+    const transitionCns = parseCnsText(`
+[StateDef 0]
+type = S
+physics = N
+
+[StateDef 100]
+type = S
+physics = N
+
+[State 100, Finish]
+type = ChangeState
+trigger1 = time = 5
+value = 101
+
+[StateDef 101]
+type = S
+physics = N
+
+[StateDef 200]
+type = S
+physics = N
+
+[State 200, Parent finished]
+type = DestroySelf
+trigger1 = parent,stateno = 100
+trigger1 = parent,time = 5
+`);
+    const initial = createInitialGameState();
+    const p1 = {
+      ...initial.players[0],
+      stateNo: 100,
+      stateHeaderAppliedStateNo: 100,
+      stateTime: 5,
+    };
+    const helpers = spawnHelper(initial.helpers, {
+      helperId: 200,
+      rootEntityId: 1,
+      parentEntityId: 1,
+      ownerCharacterId: 1,
+      stateOwnerId: 1,
+      animationOwnerId: 1,
+      stateNo: 200,
+      x: p1.x,
+      y: p1.y,
+      facing: p1.facing,
+      keyCtrl: false,
+      ownPal: false,
+      spawnFrame: 0,
+      parent: p1,
+    }, transitionCns);
+
+    const result = stepCnsStateRuntime({ ...initial, players: [p1, initial.players[1]], helpers }, transitionCns);
+
+    expect(result.state.players[0].stateNo).toBe(101);
+    expect(result.state.helpers.entries).toHaveLength(0);
+    expect(result.traces.find((trace) => trace.entityId === 3)?.executedControllers).toContain('DestroySelf');
+  });
+
   it('converts screen-edge postypes into world coordinates once for both facings', () => {
     const edgeCns = parseCnsText(`
 [StateDef 0]
@@ -509,6 +568,36 @@ x = 5
     });
     expect(rootOwned.state.helpers.entries[0].player.x).toBe(100);
     expect(rootOwned.traces.find((trace) => trace.entityId === 3)?.debugLines.join('\n')).toContain('global_pause skip');
+  });
+
+  it('shares the root Power gauge with Helpers', () => {
+    const powerCns = parseCnsText(`
+[StateDef 100]
+type = S
+physics = N
+[State 100, Read shared Power]
+type = VarSet
+trigger1 = 1
+v = 0
+value = Power
+[State 100, Spend shared Power]
+type = PowerAdd
+trigger1 = 1
+value = -100
+`);
+    const initial = createInitialGameState();
+    initial.players[0] = { ...initial.players[0], power: 1800 };
+    const helpers = spawnHelper(initial.helpers, {
+      helperId: 2200, rootEntityId: 1, parentEntityId: 1, ownerCharacterId: 1,
+      stateOwnerId: 1, animationOwnerId: 1, stateNo: 100, x: 100, y: 0,
+      facing: 1, keyCtrl: false, ownPal: false, spawnFrame: 0, parent: initial.players[0],
+    }, powerCns);
+
+    const result = stepCnsStateRuntime({ ...initial, helpers }, powerCns);
+
+    expect(result.state.helpers.entries[0].player.vars?.[0]).toBe(1800);
+    expect(result.state.helpers.entries[0].player.power).toBe(1700);
+    expect(result.state.players[0].power).toBe(1700);
   });
 
   it('runs Helper CNS while its Helper pausemovetime allowance remains', () => {

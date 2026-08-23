@@ -61,6 +61,20 @@ describe('CnsRuntimeTrigger', () => {
     expect(evaluateCnsRuntimeTrigger('-atan(270 / 200) < 0', context)).toBe(true);
   });
 
+  it('evaluates redirected Command against the redirected root input', () => {
+    const state = createInitialGameState();
+    const helper = { ...state.players[0], helperId: 3270 };
+    const root = state.players[0];
+    const context = {
+      player: helper,
+      resolveRedirectEntity: () => root,
+      resolveRedirectCommands: (candidate: typeof root) => candidate === root ? new Set(['hold_c']) : undefined,
+    };
+
+    expect(evaluateCnsRuntimeTrigger('root, command = "hold_c"', context)).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('root, command != "hold_c"', context)).toBe(false);
+  });
+
   it('keeps a negative comparison operand unary inside numeric IfElse conditions', () => {
     const state = createInitialGameState();
     const player = { ...state.players[0], x: 320, facing: 1 as const };
@@ -217,6 +231,15 @@ describe('CnsRuntimeTrigger', () => {
     expect(evaluateCnsRuntimeTrigger('!GetHitVar(fall)', {
       player: { ...falling, getHitVars: { fall: 0 } },
     })).toBe(true);
+  });
+
+  it('uses the WinMUGEN 240p default yaccel when a get-hit State has no contact snapshot', () => {
+    const getHitPlayer = { ...player, moveType: 'H' as const, getHitVars: undefined };
+
+    expect(readNumberExpression('GetHitVar(yaccel)', { player: getHitPlayer })).toBe(0.35);
+    expect(readNumberExpression('GetHitVar(yaccel)', {
+      player: { ...getHitPlayer, getHitVars: { yaccel: 0 } },
+    })).toBe(0);
   });
 
   it('exposes Vel X relative to the player facing', () => {

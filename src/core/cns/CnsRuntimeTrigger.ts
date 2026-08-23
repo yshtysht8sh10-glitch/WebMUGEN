@@ -3,7 +3,7 @@ import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 import { selectTargets } from '../hitdef/TargetState';
 import { hitDefAttrMatches } from '../hitdef/HitAttribute';
 import type { CnsDocument, CnsTrigger } from '../../mugen/common/cnsTypes';
-import { readCnsConst } from './CnsConstants';
+import { readCnsConst, WINMUGEN_DEFAULT_HIT_Y_ACCELERATION } from './CnsConstants';
 import { readPlayerPowerMax } from '../power/PowerGauge';
 import { buildPushBox, buildScreenEdgeBox, FALLBACK_STAGE_LEFT, FALLBACK_STAGE_RIGHT } from '../engine/FallbackStageRules';
 import { worldXToMugenPosX } from './MugenPositionCoordinates';
@@ -12,6 +12,7 @@ export type CnsRuntimeTriggerContext = {
   player: PlayerState;
   opponent?: PlayerState;
   commands?: ReadonlySet<string>;
+  resolveRedirectCommands?: (player: PlayerState) => ReadonlySet<string> | undefined;
   animTime?: number;
   animElemNo?: number;
   animElemTime?: number;
@@ -51,7 +52,11 @@ export type CnsRuntimeTriggerContext = {
   projGuardedTime?: (projectileId: number) => number;
   projCancelTime?: (projectileId: number) => number;
   entityId?: number;
-  resolveRedirectEntity?: (kind: 'root' | 'parent' | 'helper' | 'playerid' | 'partner', argument?: number) => PlayerState | undefined;
+  resolveRedirectEntity?: (
+    kind: 'root' | 'parent' | 'helper' | 'playerid' | 'partner',
+    argument?: number,
+    redirectedSource?: PlayerState,
+  ) => PlayerState | undefined;
   playerIdExists?: (entityId: number) => boolean;
   getRedirectAnimationContext?: (player: PlayerState) => Pick<
     CnsRuntimeTriggerContext,
@@ -1064,6 +1069,7 @@ function createRedirectContext(context: CnsRuntimeTriggerContext, player: Player
     ...context,
     player,
     opponent: context.player,
+    commands: context.resolveRedirectCommands?.(player),
     isHelper: player.helperId !== undefined,
     helperId: player.helperId,
     animTime: animation?.animTime,
@@ -1072,6 +1078,7 @@ function createRedirectContext(context: CnsRuntimeTriggerContext, player: Player
     animElemStarted: animation?.animElemStarted,
     animElemCount: animation?.animElemCount,
     animElemTimes: animation?.animElemTimes,
+    resolveRedirectEntity: (kind, argument) => context.resolveRedirectEntity?.(kind, argument, player),
   };
 }
 
@@ -1371,6 +1378,7 @@ function readGetHitVar(player: PlayerState, name: string): number {
     case 'hittime': return 0;
     case 'slidetime': return 0;
     case 'ctrltime': return 0;
+    case 'yaccel': return WINMUGEN_DEFAULT_HIT_Y_ACCELERATION;
     default: return 0;
   }
 }

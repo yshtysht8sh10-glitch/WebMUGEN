@@ -122,6 +122,60 @@ ground.velocity=-2,0
     expect(result.hitDiagnosticLines).toContain('raw.helper_hit_collision entity=4 helperId=3320 root=p2 target=p1 result=accepted');
   });
 
+  it('records the unique Helper entity when p2stateno lends its State to a root target', () => {
+    const cns = parseCnsText(`
+[StateDef 1462]
+type=A
+movetype=A
+physics=N
+anim=200
+[State 1462, HitDef]
+type=HitDef
+trigger1=1
+attr=A,HT
+hitflag=M
+damage=0,0
+pausetime=0,0
+p2stateno=1465
+`);
+    const initial = createInitialGameState();
+    const helperPlayer = {
+      ...initial.players[0],
+      x: 350,
+      stateNo: 1462,
+      animNo: 200,
+      stateType: 'A' as const,
+      moveType: 'A' as const,
+      physics: 'N' as const,
+      ctrl: false,
+    };
+    const source = {
+      ...initial,
+      players: [{ ...initial.players[0], stateNo: -999 }, initial.players[1]] as typeof initial.players,
+      helpers: {
+        entries: [{
+          entityId: 3,
+          helperId: 1462,
+          rootEntityId: 1 as const,
+          parentEntityId: 1,
+          ownerCharacterId: 1 as const,
+          stateOwnerId: 1 as const,
+          animationOwnerId: 1 as const,
+          keyCtrl: false,
+          ownPal: false,
+          spawnFrame: -1,
+          player: helperPlayer,
+        }],
+        nextEntityId: 4,
+      },
+    };
+
+    const activated = stepCnsStateRuntime(source, cns).state;
+    const result = resolveFallbackHits(activated, air, true);
+
+    expect(result.players[1]).toMatchObject({ stateNo: 1465, stateOwnerId: 1, stateOwnerEntityId: 3 });
+  });
+
   it('selects ground.velocity.y for grounded targets and air.velocity.y only for airborne targets', () => {
     const configured = {
       groundVelocity: [-5.5, 0] as [number, number],
@@ -156,7 +210,7 @@ ground.velocity=-2,0
       xveladd: -4, yveladd: -1, xvel: -4, yvel: -1,
       type: 1, animtype: 1, airtype: 1, groundtype: 1,
       fall: 0, 'fall.damage': 0, 'fall.recover': 1,
-      hitid: 0, chainid: -1, guarded: 0, yaccel: 0.6,
+      hitid: 0, chainid: -1, guarded: 0, yaccel: 0.35,
     });
     const cns = parseCnsText(`
 [Statedef 5000]
@@ -283,7 +337,8 @@ physics = S
       targetStateType, guardFlag, targetCommands: new Set(commands), guardDamage: 5,
       guardVelocity: [-2, 0], guardPauseTime: [0, 0], guardHitTime: 6,
     });
-    expect(hit.players[1]).toMatchObject({ stateNo: guardState, life: 995, ctrl: false, vx: -2 });
+    expect(hit.players[1]).toMatchObject({ stateNo: guardState, life: 995, ctrl: false, vx: 2 });
+    expect(hit.players[1].animNo).toBe(guardState === 150 ? 150 : guardState === 152 ? 151 : 152);
     expect(hit.players[1].getHitVars?.guarded).toBe(1);
     expect(hit.players[0].moveContact).toMatchObject({ contact: true, hit: false, guarded: true, hitCount: 0 });
     expect(hit.hitDiagnosticLines?.join('\n')).toContain(`kind=${guardState === 150 ? 'stand' : guardState === 152 ? 'crouch' : 'air'}`);
@@ -295,7 +350,96 @@ physics = S
       guardVelocity: [-2, 0], guardPauseTime: [0, 0],
     });
     const targetIndex = 1;
-    expect(hit.players[targetIndex]).toMatchObject({ stateNo: 150, vx: -2 * attackerFacing });
+    expect(hit.players[targetIndex]).toMatchObject({ stateNo: 150, vx: 2 * attackerFacing });
+  });
+
+  it('resolves affectteam=B contact between friendly Helpers by entity id', () => {
+    const cns = parseCnsText(`
+[StateDef 1101]
+type=A
+movetype=A
+physics=N
+anim=200
+[State 1101, HitDef]
+type=HitDef
+trigger1=1
+attr=S,SP
+affectteam=B
+damage=50,0
+pausetime=0,0
+ground.velocity=-2,0
+`);
+    const initial = createInitialGameState();
+    const helper = (entityId: number, x: number, facing: 1 | -1) => ({
+      entityId, helperId: 1101, rootEntityId: 1 as const, parentEntityId: 1,
+      ownerCharacterId: 1 as const, stateOwnerId: 1 as const, animationOwnerId: 1 as const,
+      keyCtrl: false, ownPal: false, spawnFrame: -1,
+      player: {
+        ...initial.players[0], helperId: 1101, x, facing, stateNo: 1101, animNo: 200,
+        stateType: 'A' as const, moveType: 'A' as const, physics: 'N' as const,
+      },
+    });
+    const activated = stepCnsStateRuntime({
+      ...initial,
+      players: [{ ...initial.players[0], x: 80, stateNo: -999 }, { ...initial.players[1], x: 850, stateNo: -999 }],
+      helpers: { entries: [helper(3, 240, 1), helper(4, 290, -1)], nextEntityId: 5 },
+    }, cns).state;
+
+    const result = resolveFallbackHits(activated, air, true);
+
+    expect(result.helpers.entries.map((entry) => entry.player.life)).toEqual([950, 950]);
+    expect(result.helpers.entries.map((entry) => entry.player.moveContact?.hit)).toEqual([true, true]);
+    expect(result.hitDiagnosticLines?.join('\n')).toContain('targetEntity=4');
+    expect(result.hitDiagnosticLines?.join('\n')).toContain('targetEntity=3');
+  });
+
+  it('resolves a root HitDef against an opposing Helper body', () => {
+    const cns = parseCnsText(`
+[Statedef 200]
+type = S
+movetype = A
+physics = S
+[State 200, Hit]
+type = HitDef
+trigger1 = 1
+attr = S, NA
+hitflag = MAF
+damage = 37, 0
+pausetime = 0, 0
+`);
+    const initial = createInitialGameState();
+    const helperPlayer = { ...initial.players[1], x: 290, animNo: 0, helperId: 3270 };
+    const runtime = stepCnsStateRuntime({
+      ...initial,
+      players: [
+        { ...initial.players[0], x: 240, stateNo: 200, animNo: 200, moveType: 'A' },
+        { ...initial.players[1], x: 500, stateNo: -999 },
+      ],
+      helpers: {
+        entries: [{
+          entityId: 3, helperId: 3270, rootEntityId: 2, parentEntityId: 2,
+          ownerCharacterId: 2, stateOwnerId: 2, animationOwnerId: 2,
+          keyCtrl: false, ownPal: false, spawnFrame: -1, player: helperPlayer,
+        }],
+        nextEntityId: 4,
+      },
+    }, cns).state;
+
+    const result = resolveFallbackHits(runtime, air, true);
+
+    expect(result.players[1].life).toBe(1000);
+    expect(result.helpers.entries[0].player).toMatchObject({ life: 963, stateNo: 5000 });
+    expect(result.players[0].moveContact).toMatchObject({ hit: true, hitCount: 1 });
+    expect(result.hitDiagnosticLines).toContain('raw.helper_hit_collision entity=1 targetEntity=3 helperId=3270 root=p2 result=accepted');
+  });
+
+  it('keeps guarding from a common guard-ready state without requiring holdback', () => {
+    const hit = resolveConfiguredHit({
+      guardFlag: 'H', guardDamage: 5, guardVelocity: [-2, 0], guardPauseTime: [0, 0], targetStateNo: 120,
+    });
+
+    expect(hit.players[1]).toMatchObject({ stateNo: 150, life: 995, vx: 2 });
+    expect(hit.players[0].moveContact).toMatchObject({ hit: false, guarded: true });
   });
 
   it('does not guard without holdback or when guardflag/state kind and guard distance do not permit it', () => {
@@ -466,6 +610,31 @@ physics = S
     expect(borrowed.hitDiagnosticLines?.join('\n')).toContain('p2stateno=700 p2Owner=1 p2getp1state=1');
   });
 
+  it('runs a p2stateno external entry before defender hit-shake advances its clock', () => {
+    const entered = resolveConfiguredHit({
+      p2StateNo: 700,
+      pauseTime: [10, 9],
+      enterExternalState: (player, _opponent, stateNo) => ({
+        ...player,
+        stateNo,
+        stateHeaderAppliedStateNo: stateNo,
+        stateTime: 1,
+        animTime: 1,
+      }),
+    });
+
+    expect(entered.players[1]).toMatchObject({
+      stateNo: 700,
+      stateHeaderAppliedStateNo: 700,
+      stateTime: 1,
+      hitPause: 9,
+      hitPauseKind: 'shake',
+    });
+
+    const shaken = stepCnsPhysicsMotion(entered);
+    expect(shaken.players[1]).toMatchObject({ stateNo: 700, stateTime: 2, animTime: 1, hitPause: 8 });
+  });
+
   it('applies forcestand independently of custom-state ownership', () => {
     const result = resolveConfiguredHit({ targetStateType: 'A', hitFlag: 'A', p2StateNo: 700, p2GetP1State: true, forceStand: true, pauseTime: [0, 0] });
     expect(result.players[1]).toMatchObject({ stateNo: 700, stateOwnerId: 1, stateType: 'S' });
@@ -551,7 +720,7 @@ physics = S
     expect(diagnostics).toContain('soundAvailable=deferred');
   });
 
-  it('freezes motion and timers for exactly the defender pausetime then resumes', () => {
+  it('freezes motion and pending external-entry timers for exactly the defender pausetime then resumes', () => {
     let state = resolveConfiguredHit({ pauseTime: [0, 2], groundVelocity: [-4, 0] });
     const targetAtHit = state.players[1];
     state = stepCnsPhysicsMotion(state);
@@ -1392,6 +1561,18 @@ movetype = A
     expect(guarded.hitDiagnosticLines?.join('\n')).toContain('kind=guard atEdge=1 veloff=-4');
   });
 
+  it('pushes the attacker away from an edge with the omitted WinMUGEN cornerpush default', () => {
+    const guarded = resolveConfiguredHit({
+      attackerX: 862, targetX: 912, groundVelocity: [-5.5, 0], guardFlag: 'H',
+      targetCommands: new Set(['holdback']), guardPauseTime: [0, 0],
+    });
+    expect(guarded.players[0].vx).toBeCloseTo(-7.15);
+    expect(guarded.hitDiagnosticLines?.join('\n')).toContain('kind=guard atEdge=1 veloff=-7.15');
+
+    const middle = resolveConfiguredHit({ groundVelocity: [-5.5, 0], pauseTime: [0, 0] });
+    expect(middle.players[0].vx).toBe(0);
+  });
+
   it.each([
     { kind: 'air', targetStateType: 'A' as const, hitFlag: 'A', options: { airCornerPush: -5 } },
     { kind: 'down', targetStateType: 'L' as const, hitFlag: 'MAFD', options: { downCornerPush: -4 } },
@@ -1467,6 +1648,7 @@ function resolveConfiguredHit({
   groundHitTime,
   airHitTime,
   targetStateType = 'S',
+  targetStateNo,
   attackerId = 1,
   animType,
   airDocument = air,
@@ -1537,11 +1719,13 @@ function resolveConfiguredHit({
   envShake,
   fallEnvShake,
   affectTeam,
+  enterExternalState,
 }: {
   damage?: number;
   groundHitTime?: number;
   airHitTime?: number;
   targetStateType?: 'S' | 'C' | 'A' | 'L';
+  targetStateNo?: number;
   attackerId?: 1 | 2;
   animType?: string;
   airDocument?: typeof air;
@@ -1612,6 +1796,7 @@ function resolveConfiguredHit({
   envShake?: [number, number, number, number];
   fallEnvShake?: [number, number, number, number];
   affectTeam?: 'E' | 'F' | 'B';
+  enterExternalState?: Parameters<typeof resolveFallbackHits>[4];
 }) {
   const hitTimeLines = [
     groundHitTime === undefined ? '' : `ground.hittime = ${groundHitTime}`,
@@ -1722,6 +1907,7 @@ ${guardLines}
     x: targetX ?? (resolvedFacing === 1 ? 290 : 240),
     y: targetY ?? players[targetIndex].y,
     facing: targetFacing ?? players[targetIndex].facing,
+    stateNo: targetStateNo ?? players[targetIndex].stateNo,
     animNo: 0,
     life: targetLife ?? players[targetIndex].life,
     hitBy: targetHitBy,
@@ -1732,7 +1918,7 @@ ${guardLines}
     hitPause: targetHitPause ?? players[targetIndex].hitPause,
   };
   const runtime = stepCnsStateRuntime({ ...initial, players }, cns, attackerId === 1 ? { p2Commands: targetCommands } : { p1Commands: targetCommands }).state;
-  return resolveFallbackHits(runtime, airDocument);
+  return resolveFallbackHits(runtime, airDocument, true, undefined, enterExternalState);
 }
 
 function resolveSimultaneousHits(p1Priority: [number, string], p2Priority: [number, string]) {

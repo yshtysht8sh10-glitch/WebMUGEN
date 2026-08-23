@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseCnsText } from '../../parser/cns/CnsParser';
 import { createInitialGameState } from '../engine/GameState';
+import { spawnHelper } from '../helper/HelperSystem';
 import { stepCnsStateRuntime, type CnsRuntimeInput } from './CnsStateRuntime';
 
 const owner1 = parseCnsText(`
@@ -27,6 +28,18 @@ physics = N
 type = SelfState
 trigger1 = 1
 value = 900
+[Statedef 702]
+type = A
+movetype = H
+physics = N
+[State 702, Abort when the controller root is hit]
+type = SelfState
+trigger1 = root, movetype = H
+value = 900
+[State 702, Remain borrowed]
+type = VelSet
+trigger1 = 1
+x = 7
 `);
 
 const owner2 = parseCnsText(`
@@ -103,5 +116,49 @@ describe('CNS custom state ownership', () => {
       ],
     }, owner1, input).state;
     expect(missing.players[1].hitDiagnosticLines?.join('\n')).toContain('state=999 owner=1 result=missing reason=state_not_found');
+  });
+
+  it('resolves root from the Helper entity that supplied a borrowed State', () => {
+    let state = createInitialGameState();
+    state.helpers = spawnHelper(state.helpers, {
+      helperId: 1462,
+      rootEntityId: 1,
+      parentEntityId: 1,
+      ownerCharacterId: 1,
+      stateOwnerId: 1,
+      animationOwnerId: 1,
+      stateNo: -999,
+      x: 300,
+      y: 100,
+      facing: 1,
+      keyCtrl: false,
+      ownPal: false,
+      spawnFrame: -1,
+      parent: state.players[0],
+    }, owner1);
+    const helperEntityId = state.helpers.entries[0].entityId;
+    state.players = [
+      { ...state.players[0], moveType: 'I' },
+      {
+        ...state.players[1],
+        stateNo: 702,
+        stateOwnerId: 1,
+        stateOwnerEntityId: helperEntityId,
+        selfStateOwnerId: 2,
+        moveType: 'H',
+      },
+    ];
+
+    const held = stepCnsStateRuntime(state, owner1, input).state;
+    expect(held.players[1]).toMatchObject({ stateNo: 702, stateOwnerId: 1, stateOwnerEntityId: helperEntityId, vx: -7 });
+
+    const released = stepCnsStateRuntime({
+      ...held,
+      players: [{ ...held.players[0], moveType: 'H' }, held.players[1]],
+    }, owner1, input).state;
+    expect(released.players[1]).toMatchObject({ stateNo: 900, stateOwnerId: 2, vx: -7 });
+    expect(released.players[1].stateOwnerEntityId).toBeUndefined();
+    const executedSelf = stepCnsStateRuntime(released, owner1, input).state;
+    expect(executedSelf.players[1]).toMatchObject({ stateNo: 900, stateOwnerId: 2, vx: -3 });
   });
 });

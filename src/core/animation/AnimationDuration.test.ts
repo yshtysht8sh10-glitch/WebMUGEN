@@ -33,17 +33,30 @@ describe('AnimationDuration', () => {
     expect(calculateMugenAnimTime(5, null)).toBe(5);
   });
 
-  it('uses the first infinite AIR element as the special AnimTime=1 case', () => {
+  it('keeps AnimTime nonzero for an infinite AIR element at any position', () => {
     const infiniteAir: AirDocument = {
-      actions: [{
-        actionNo: 0,
-        elements: [{ group: 0, image: 0, x: 0, y: 0, duration: -1 }],
-        clsn2Default: [],
-        elementsWithCollision: [],
-      }],
+      actions: [
+        {
+          actionNo: 0,
+          elements: [{ group: 0, image: 0, x: 0, y: 0, duration: -1 }],
+          clsn2Default: [],
+          elementsWithCollision: [],
+        },
+        {
+          actionNo: 1,
+          elements: [
+            { group: 1, image: 0, x: 0, y: 0, duration: 3 },
+            { group: 1, image: 1, x: 0, y: 0, duration: -1 },
+          ],
+          clsn2Default: [],
+          elementsWithCollision: [],
+        },
+      ],
     };
 
     expect(getMugenAnimEndTime(infiniteAir, 0)).toBe(-1);
     expect(calculateMugenAnimTime(20, getMugenAnimEndTime(infiniteAir, 0))).toBe(1);
+    expect(getMugenAnimEndTime(infiniteAir, 1)).toBe(-1);
+    expect(calculateMugenAnimTime(20, getMugenAnimEndTime(infiniteAir, 1))).toBe(1);
   });
 });

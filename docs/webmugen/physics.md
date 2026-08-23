@@ -80,18 +80,22 @@ Important interactions:
 
 For ordinary `Physics=A`, the physics step reads `Const(movement.yaccel)` from the current character CNS and adds it exactly once before integrating Y. The previous unconditional `0.6` gravity is retained only as the existing missing-value fallback. `Physics=N` receives no automatic gravity, so common air-hit/fall states continue to use their explicit `VelAdd y = GetHitVar(yaccel)` controllers without a second acceleration.
 
+`GetHitVar(yaccel)` is HitDef acceleration, not `Const(movement.yaccel)`. An omitted HitDef value and a voluntarily entered get-hit State with no contact snapshot use WinMUGEN's 240p default `.35`; a contact snapshot still wins, including an explicit zero. Issue #126 covers bundled itoko State 197 setting `Vel Y = -8` at the wall, entering State 5050 without contact, and receiving `.35` per CNS tick until the velocity turns downward.
+
 `Physics=N` still integrates explicit X/Y velocity and has no automatic ground clamp. This permits data-authored below-ground routes such as T-H-M-A State 3710 reaching `Pos Y >= 400` before its ChangeState. T-H-M-A custom State 280 therefore keeps its
 `VelSet x = -12, y = -0.2` unchanged while moving each tick; the launch direction comes from the
 State's `P2Dist X < 0` Turn and Facing-relative VelSet, not from Physics=N.
 
-After roots and Helpers integrate motion, an active `TargetBind` reapplies its offset from the
-unique runtime owner's resulting position and Facing and copies the owner's resulting X/Y world velocity. A Helper owner therefore follows its own entity position instead of aliasing its root id. This
-prevents the owner movement and target CustomState velocity from creating a one-frame separation,
-and release retains the last copied velocity instead of restoring an older value or forcing zero.
-Stage clamp/push then performs a final bind correction. Positive durations count down on movable
-ticks, omitted `time` is one tick, zero cancels, any negative value is indefinite, and either
-participant's HitPause freezes the finite counter. Global Pause/movetime combinations and Helper-as-target
-ownership timing remain Partial.
+After roots and Helpers integrate motion, an active `TargetBind` reapplies its positional offset from
+the unique runtime owner's resulting position and Facing. A Helper owner therefore follows its own
+entity position instead of aliasing its root id. Effective bind ticks synchronize both position and
+velocity with that owner. A duration that reaches zero still receives its final owner correction;
+stage clamp/push repeats that correction and then clears the expired bind metadata.
+Positive durations count down on movable ticks, omitted `time` is one tick, zero cancels, and any
+negative value is indefinite. Owner P1 pause freezes the finite counter, while target-only P2
+hit-shake consumes it. This lets itoko's opening bind expire before Projectile 3066 launches P2,
+while its later ground bind clears the scripted downward velocity before release. Global
+Pause/movetime combinations and Helper-as-target ownership timing remain Partial.
 
 P1 Target controllers are committed before P2 CNS execution. On the Projectile-to-TargetState 280
 route, P2 therefore executes State 280's `Time = 0` VelSet before Physics=N integrates movement.
@@ -123,9 +127,9 @@ Issue #59 completes the 5000-family entry selection. HitDef recognizes Light, Me
 
 Air get-hit states with `MoveType = H` are not clamped before CNS sees their ground crossing. This preserves the `Pos Y`/`Vel Y` conditions used by common States 5030/5035/5040/5050 to choose recovery, fall, bounce, and down routes. `HitVelSet` restores the contact velocity after State 5020, while `HitFallVel` restores fall velocity during bounce. Non-hit air movement keeps the normal landing clamp behavior.
 
-Issue #60 audits the complete 5030 fall family against the unmodified common States. State 5030 restores contact velocity, 5035 handles the optional transition animation, 5040 handles non-fall recovery, and 5050 owns falling, recovery input, and contact with the ground. The number 5060 is an animation family selected by State 5050, not a `StateDef`. Trip State 5070 remains frozen through hitpause and enters 5071 only when `HitShakeOver`; 5071 then restores hit velocity and applies `GetHitVar(yaccel)`.
+Issue #60 audits the complete 5030 fall family against the unmodified common States. State 5030 restores contact velocity, 5035 handles the optional transition animation, 5040 handles non-fall recovery, and 5050 owns falling, recovery input, and contact with the ground. The number 5060 is an animation family selected by State 5050, not a `StateDef`. Trip State 5070 keeps motion and AnimTime frozen through defender hit-shake while StateTime follows game-time, and enters 5071 only when `HitShakeOver`; 5071 then restores hit velocity and applies `GetHitVar(yaccel)`.
 
-`raw.gethitvar_frame` includes position/velocity, yaccel, ground crossing, fall/recover window, recovery input, and the ground-clamp decision for these States. `raw.gethit_changestate_eval` reports each ChangeState controller index and result. `raw.fall_pause` records hitpause or global pause frames with frozen state/animation clocks.
+`raw.gethitvar_frame` includes position/velocity, yaccel, ground crossing, fall/recover window, recovery input, and the ground-clamp decision for these States. `raw.gethit_changestate_eval` reports each ChangeState controller index and result. `raw.fall_pause` records hitpause or global pause frames; defender P2 hit-shake advances StateTime while attacker P1 pause freezes it, and both freeze animation/motion. Match-level Pause retains its separate clock rules.
 
 Issue #61 separates lying-hit time from get-up time. A HitDef or Projectile permitted to contact `StateType = L` enters State 5080 and uses `down.velocity` plus `down.hittime`; nonzero Y launches through the 5090 animation and 5030, while zero Y slides through 5081. `down.bounce` decides whether a launched lying target receives one fall bounce. Omitted `down.velocity` inherits `air.velocity`.
 
@@ -133,7 +137,7 @@ Issue #62 keeps KO and fall recovery as separate common-state routes. State 5150
 
 State 5110 get-up scheduling uses an independent counter loaded from the defender's `[Data] liedown.time`. It freezes during hitpause/Pause, does not depend on StateTime or `down.hittime`, and never schedules 5120 at zero Life. Reaching the duration marks the player ready but leaves State 5110 intact through that render boundary. The following CNS pass performs the engine-owned 5110→5120 entry before State scans, allowing State 5120 Time=0 Controllers and an immediate character-defined route such as itoko State 730 to finish before the next draw. This avoids rendering one stale lying-animation frame under State 5120. `raw.down_clock` exposes elapsed/duration/remaining and the advance/frozen/ready/ko_hold result.
 
-HitDef `pausetime = p1, p2` initializes separate attacker and defender counters. WinMUGEN defaults an omitted pair to `0,0`; `guard.pausetime` inherits that normal pair when omitted. While a counter is positive, CNS controllers, position, velocity integration, StateTime, and AnimTime are frozen; the physics step decrements the counter once per game frame. HitPause is not collision immunity: an unpaused attacker with a different ActiveHitDef generation can still contact the frozen defender, while the generation/defender history rejects continued overlap from the already-consumed generation. A newly accepted contact replaces the defender's older counter with its own `p2` value; a same-frame trade keeps the longer of the two newly applied role counters. A counter of zero resumes normally without an extra frozen frame. Input buffering remains active outside this per-player freeze. Match-level Pause/SuperPause is separate: it freezes non-moving players and round/hit stepping, permits only the controller owner for `movetime`, and uses a resume guard before normal CNS execution restarts.
+HitDef `pausetime = p1, p2` initializes separate attacker-pause and defender-shake counters. WinMUGEN defaults an omitted pair to `0,0`; `guard.pausetime` inherits that normal pair when omitted. While either counter is positive, ordinary CNS controllers, position, velocity integration, AnimTime, and hit-stun clocks are frozen; `ignorehitpause = 1` controllers still execute. P1 pause also freezes StateTime, whereas P2 hit-shake advances it once per game frame after the State entry/Time=0 pass. Standard guard contact therefore still lets itoko State 150 Time=1 add exactly 3 to root `var(25)` for Issue #131, while the Projectile 3066 P1 pause keeps zipper State 3006 far enough from `Time = 25` for the target's launch arc in Issue #125. HitPause is not collision immunity: an unpaused attacker with a different ActiveHitDef generation can still contact the frozen defender, while the generation/defender history rejects continued overlap from the already-consumed generation. A newly accepted contact replaces the defender's older counter with its own `p2` value; a same-frame trade keeps the longer of the two newly applied role counters and its role. A counter of zero resumes normally without an extra frozen frame. Input buffering remains active outside this per-player freeze. Match-level Pause/SuperPause is separate: it freezes non-moving players and round/hit stepping, permits only the controller owner for `movetime`, and uses a resume guard before normal CNS execution restarts.
 
 ## Movement debugging
 
@@ -183,7 +187,7 @@ Built-in stages retain the quarter-strength jump camera. External stages instead
 
 ## HitDef cornerpush and snap
 
-Accepted HitDef contact selects `ground.cornerpush.veloff`, `air.cornerpush.veloff`, `down.cornerpush.veloff`, `guard.cornerpush.veloff`, or `airguard.cornerpush.veloff` from the defender contact class. It changes attacker world X velocity only when the defender is at the existing fallback stage boundary (48 or 912), with the CNS value converted once by attacker Facing. A middle-stage contact leaves velocity unchanged. Camera-relative screen edges and dynamic stage bounds remain Partial.
+Accepted HitDef contact selects `ground.cornerpush.veloff`, `air.cornerpush.veloff`, `down.cornerpush.veloff`, `guard.cornerpush.veloff`, or `airguard.cornerpush.veloff` from the defender contact class. Omitted values follow WinMUGEN inheritance: a non-air attack defaults ground cornerpush to `1.3 * guard.velocity` (whose X value itself defaults to `ground.velocity`), an air attack defaults it to zero, air/down/guard inherit ground, and airguard inherits guard. It changes attacker world X velocity only when the defender is at the existing fallback stage boundary (48 or 912), with the selected value converted once by attacker Facing. A middle-stage contact leaves velocity unchanged. Issue #133 covers the omitted-default guard regression. Camera-relative screen edges and dynamic stage bounds remain Partial.
 
 HitDef `snap` places the defender at attacker position plus the requested offset; X is Facing-relative and Y uses the runtime stage coordinate directly. Existing stage rules clamp/push later in the frame, so snap does not bypass stage safety.
 
@@ -219,3 +223,7 @@ When a physics test fails, print before/after state, position, velocity, state t
 ## Known caution
 
 Do not mark `physics` Complete only because the header is parsed. The matrix row remains Partial while real behavior is incomplete.
+
+## Current-viewport containment
+
+Issues #120/#126 use player-axis ScreenBound containment unless a Width controller supplies an explicit edge. When two enabled roots cannot fit, the camera retains its preceding valid position and the escaping root is clamped at that viewport instead of dragging the stationary root toward the Stage boundary. `FrontEdgeDist` therefore reaches the authored near-zero threshold at the visible edge; `FrontEdgeBodyDist` continues to include Size/Width body geometry.

@@ -1,5 +1,7 @@
 import type { CnsDocument } from '../../mugen/common/cnsTypes';
 
+export const WINMUGEN_DEFAULT_HIT_Y_ACCELERATION = 0.35;
+
 export function readCnsConst(document: CnsDocument | null | undefined, rawName: string): number {
   const name = rawName.trim().toLowerCase();
   const configured = readConfiguredConst(document, name);

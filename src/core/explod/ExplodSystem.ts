@@ -22,6 +22,8 @@ export type ExplodRenderSnapshot = {
 
 export type ExplodRuntimeEntry = {
   runtimeId: number;
+  /** Reusable WinMUGEN-style allocation slot used for same-layer draw order. */
+  drawSlot?: number;
   mugenId: number;
   owner: RuntimeEntityRef;
   animationOwner: RuntimeEntityRef | null;
@@ -59,7 +61,7 @@ export type ExplodRuntimeState = {
   nextRuntimeId: number;
 };
 
-export type ExplodCreateRequest = Omit<ExplodRuntimeEntry, 'runtimeId' | 'animTime' | 'animElement' | 'creationFrame' | 'age' | 'removeTimeElapsed' | 'removeTimeStartFrame' | 'removalReason'>;
+export type ExplodCreateRequest = Omit<ExplodRuntimeEntry, 'runtimeId' | 'drawSlot' | 'animTime' | 'animElement' | 'creationFrame' | 'age' | 'removeTimeElapsed' | 'removeTimeStartFrame' | 'removalReason'>;
 
 export type ExplodModifyPatch = {
   animation?: { source: 'owner' | 'fightfx'; animNo: number };
@@ -135,6 +137,7 @@ export function applyExplodCreateEvents(gameState: GameState, events: readonly E
     }
 
     const runtimeId = explods.nextRuntimeId;
+    const drawSlot = firstAvailableExplodDrawSlot(explods.entries);
     const randomOffset = {
       x: randomDisplacement(event.request.random.x, randomSource),
       y: randomDisplacement(event.request.random.y, randomSource),
@@ -156,6 +159,7 @@ export function applyExplodCreateEvents(gameState: GameState, events: readonly E
         offsetY: event.request.bind.offsetY + randomOffset.y,
       } : null,
       runtimeId,
+      drawSlot,
       animTime: 0,
       animElement: 0,
       creationFrame: gameState.frame,
@@ -169,13 +173,20 @@ export function applyExplodCreateEvents(gameState: GameState, events: readonly E
       nextRuntimeId: runtimeId + 1,
     };
     diagnosticLines.push(
-      `raw.explod_create owner=p${entry.owner.rootPlayerId} internalId=${entry.runtimeId} mugenId=${entry.mugenId}`,
+      `raw.explod_create owner=p${entry.owner.rootPlayerId} internalId=${entry.runtimeId} mugenId=${entry.mugenId} drawSlot=${entry.drawSlot}`,
       `  anim=${entry.animationSource === 'fightfx' ? 'F' : ''}${entry.animNo} postype=${entry.postype} pos=(${entry.offset.x},${entry.offset.y}) randomOffset=(${randomOffset.x},${randomOffset.y}) world=(${entry.position.x},${entry.position.y}) facing=${entry.facing} vfacing=${entry.verticalFacing}`,
       `  bindtime=${entry.bind?.remaining ?? 0} removetime=${entry.removeTime ?? -1} sprpriority=${entry.spritePriority} ontop=${entry.onTop ? 1 : 0}`,
     );
   }
 
   return { ...gameState, explods, hitDiagnosticLines: diagnosticLines };
+}
+
+function firstAvailableExplodDrawSlot(entries: readonly ExplodRuntimeEntry[]): number {
+  const occupied = new Set(entries.map((entry) => entry.drawSlot ?? entry.runtimeId));
+  let slot = 1;
+  while (occupied.has(slot)) slot += 1;
+  return slot;
 }
 
 function randomDisplacement(range: number, randomSource: () => number): number {

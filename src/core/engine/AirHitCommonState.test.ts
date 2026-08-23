@@ -171,7 +171,7 @@ describe('air hit common-state integration', () => {
     expect(result.state.players[1].hitDiagnosticLines?.join('\n')).toContain('state=5050');
   });
 
-  it('freezes the 5070 trip state during hitpause, then enters 5071 with the stored hit velocity', () => {
+  it('freezes the pending 5070 external entry during hitpause, then enters 5071 with the stored hit velocity', () => {
     const initial = createInitialGameState();
     let state: GameState = {
       ...initial,

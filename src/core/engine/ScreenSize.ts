@@ -80,24 +80,22 @@ export function applyViewportCameraRules(
   // Prefer moving the camera so every enabled root remains visible. Moving a
   // stationary opponent's world X merely to preserve the viewport makes it
   // look as though the retreating player drags the opponent across the stage.
-  const camera = useNativeTension
-    ? desiredCamera
-    : constrainCameraToPlayers(
-        state,
-        desiredCamera,
-        width,
-        leftInset,
-        rightInset,
-        stage ? resolveStageCameraXBounds(width, stage) : nativeCameraBounds ?? { minimum: 0, maximum: Math.max(0, 960 - width) },
-        state.camera?.viewportWidth === width && state.camera.viewportHeight === height
-          ? state.camera.x
-          : desiredCamera.x,
-        Boolean(stage),
-      );
+  const camera = constrainCameraToPlayers(
+    state,
+    desiredCamera,
+    width,
+    leftInset,
+    rightInset,
+    stage ? resolveStageCameraXBounds(width, stage) : nativeCameraBounds ?? { minimum: 0, maximum: Math.max(0, 960 - width) },
+    state.camera?.viewportWidth === width && state.camera.viewportHeight === height
+      ? state.camera.x
+      : desiredCamera.x,
+    true,
+  );
 
   // Only when the stage/camera bounds make it impossible to fit every player
   // do we clamp the root that is actually outside the final fixed viewport.
-  const result = keepPlayersInsideCamera(state, camera.x, width, leftInset, rightInset, Boolean(stage));
+  const result = keepPlayersInsideCamera(state, camera.x, width, leftInset, rightInset, true);
 
   return {
     ...state,
@@ -212,10 +210,7 @@ function constrainCameraToPlayers(
   // Once the roots no longer fit together, retain the preceding camera inside
   // the gap between their incompatible containment limits. This stops the
   // retreating root at its ScreenBound edge without moving the stationary root.
-  const retentionMinimum = Math.min(maximumCameraForPlayers, minimumCameraForPlayers);
-  const retentionMaximum = Math.max(maximumCameraForPlayers, minimumCameraForPlayers);
-  const retainedX = clamp(previousCameraX, retentionMinimum, retentionMaximum);
-  return { ...camera, x: clamp(retainedX, cameraBounds.minimum, cameraBounds.maximum) };
+  return { ...camera, x: clamp(previousCameraX, cameraBounds.minimum, cameraBounds.maximum) };
 }
 
 function resolveNativeCameraXBounds(width: number, camera: NativeCameraRules): { minimum: number; maximum: number } {

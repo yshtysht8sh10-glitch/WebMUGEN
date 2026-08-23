@@ -37,3 +37,24 @@ export function resolveBgPalFxFilter(state: BgPalFxState | undefined): string {
   const grayscale = Math.min(1, Math.max(0, 1 - state.color / 256));
   return `${state.invertAll ? 'invert(1) ' : ''}grayscale(${grayscale}) brightness(${brightness})`;
 }
+
+export function applyPalFxToRgba(data: Uint8ClampedArray, state: BgPalFxState | undefined): void {
+  if (!state) return;
+  const sinScale = state.sinAdd.period > 0
+    ? Math.sin(Math.PI * 2 * state.elapsedTime / state.sinAdd.period)
+    : 0;
+  const color = Math.max(0, Math.min(256, state.color));
+  for (let index = 0; index < data.length; index += 4) {
+    if (data[index + 3] === 0) continue;
+    let red = state.invertAll ? 255 - data[index] : data[index];
+    let green = state.invertAll ? 255 - data[index + 1] : data[index + 1];
+    let blue = state.invertAll ? 255 - data[index + 2] : data[index + 2];
+    const gray = (red + green + blue) / 3;
+    red = (gray * (256 - color) + red * color) / 256;
+    green = (gray * (256 - color) + green * color) / 256;
+    blue = (gray * (256 - color) + blue * color) / 256;
+    data[index] = red * state.multiply.red / 256 + state.add.red + state.sinAdd.red * sinScale;
+    data[index + 1] = green * state.multiply.green / 256 + state.add.green + state.sinAdd.green * sinScale;
+    data[index + 2] = blue * state.multiply.blue / 256 + state.add.blue + state.sinAdd.blue * sinScale;
+  }
+}

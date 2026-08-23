@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { MutableRefObject } from 'react';
 import type { CnsRuntimeTrace } from '../core/cns/CnsStateRuntime';
-import { AudioStartOverlay, CHARACTER_PATH_OPTIONS, CharacterSourceEditorLines, CharacterSourceFilesViewer, ContentCatalogPanel, HumanRuntimePanel, ManualPanel, RuntimeFrameIndexList, RuntimeSettingsPanel, SettingsSidebar, WebMugenApp, appendRuntimeHistoryIfNeeded, appendSourceViewHistory, calculateSourceLineWindow, createActPreviewImage, createReadableRuntimeTriggerChangeSignature, createRuntimeFrameIndexGridTemplate, createSourceNavigationTargets, createSourceOutline, createSourceViewHistoryEntry, drawAirPreview, findAirActionForLine, findAirActionSourceSelection, findStateDefSourceSelection, formatSatisfiedStateDefTriggers, parseControllerValueText, shouldEvaluateHumanLogFrame, stripReadableRuntimeValueSummaries } from './WebMugenApp';
+import { AudioStartOverlay, CHARACTER_PATH_OPTIONS, CharacterSourceEditorLines, CharacterSourceFilesViewer, ContentCatalogPanel, HumanRuntimePanel, ManualPanel, RuntimeFrameIndexList, RuntimeSettingsPanel, SettingsSidebar, WebMugenApp, appendRuntimeHistoryIfNeeded, appendSourceViewHistory, calculateSourceLineWindow, createActPreviewImage, createReadableRuntimeTriggerChangeSignature, createRuntimeFrameIndexGridTemplate, createSourceNavigationTargets, createSourceOutline, createSourceViewHistoryEntry, drawAirPreview, findAirActionForLine, findAirActionSourceSelection, findStateDefSourceSelection, formatSatisfiedStateDefTriggers, parseControllerValueText, searchCharacterSourceFiles, shouldEvaluateHumanLogFrame, stripReadableRuntimeValueSummaries } from './WebMugenApp';
 import { DEFAULT_RUNTIME_SETTINGS } from './RuntimeSettings';
 import type { ImageDataSpritePack } from '../core/sprite/ImageDataSpriteTypes';
 import { parseCnsText } from '../parser/cns/CnsParser';
@@ -474,6 +474,54 @@ describe('WebMugenApp runtime history', () => {
     expect(html).not.toContain('>Edit<');
     expect(html).not.toContain('>Save<');
     expect(html).not.toContain('aria-label="Character file editor"');
+  });
+
+  it('searches every text source by line, including unsaved overrides, while excluding binary files', () => {
+    const files = [
+      { path: 'Demo/Demo.cns', label: 'Demo.cns', text: 'type = Null\ntrigger1 = ctrl', kind: 'cns' as const },
+      { path: 'Demo/Demo.cmd', label: 'Demo.cmd', text: 'command = "a"', kind: 'cmd' as const },
+      { path: 'Demo/readme.txt', label: 'readme.txt', text: 'トリガーの説明', kind: 'text' as const },
+      { path: 'Demo/Demo.sff', label: 'Demo.sff', text: 'trigger must not be searched', kind: 'sff' as const },
+    ];
+
+    const result = searchCharacterSourceFiles(files, 'TRIGGER', {
+      'Demo/Demo.cmd': 'triggerall = command = "a"\ntrigger1 = ctrl',
+    });
+
+    expect(result.searchableFileCount).toBe(3);
+    expect(result.totalMatchCount).toBe(3);
+    expect(result.results).toMatchObject([
+      { path: 'Demo/Demo.cns', line: 2, sourceLine: 'trigger1 = ctrl', matchStart: 0, matchLength: 7 },
+      { path: 'Demo/Demo.cmd', line: 1, sourceLine: 'triggerall = command = "a"', matchStart: 0, matchLength: 7 },
+      { path: 'Demo/Demo.cmd', line: 2, sourceLine: 'trigger1 = ctrl', matchStart: 0, matchLength: 7 },
+    ]);
+    expect(result.results.some((match) => match.path.endsWith('.sff'))).toBe(false);
+  });
+
+  it('reports total cross-file matches when the rendered result list is limited', () => {
+    const result = searchCharacterSourceFiles([{
+      path: 'Demo/Demo.cns', label: 'Demo.cns', kind: 'cns', text: 'trigger1 = 1\ntrigger2 = 1\ntrigger3 = 1',
+    }], 'trigger', {}, 2);
+
+    expect(result.results).toHaveLength(2);
+    expect(result.totalMatchCount).toBe(3);
+    expect(result.truncated).toBe(true);
+  });
+
+  it('exposes Map and Search All Files tabs with the global search shortcut', () => {
+    const html = renderToStaticMarkup(createElement(CharacterSourceFilesViewer, {
+      files: [
+        { path: 'Demo/Demo.cns', label: 'Demo.cns', text: 'trigger1 = ctrl', kind: 'cns' as const },
+        { path: 'Demo/Demo.sff', label: 'Demo.sff', text: '', kind: 'sff' as const },
+      ],
+      selection: { path: 'Demo/Demo.cns', line: 1 },
+      onSelect: () => undefined,
+    }));
+
+    expect(html).toContain('role="tablist"');
+    expect(html).toContain('>Map<');
+    expect(html).toContain('>Search All Files<');
+    expect(html).toContain('aria-keyshortcuts="Control+Shift+F Meta+Shift+F"');
   });
 
   it('links constant animation and State destinations while browsing', () => {

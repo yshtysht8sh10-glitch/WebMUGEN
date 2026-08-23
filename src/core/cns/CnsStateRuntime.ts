@@ -1,7 +1,7 @@
 import type { CnsDocument, CnsStateController, CnsStateDefinition, CnsTrigger, CnsValue } from '../../mugen/common/cnsTypes';
 import { prepareCnsControllerTriggerGroups } from '../../mugen/common/CnsTriggerGroups';
 import { findCnsState } from '../../mugen/common/CnsStateIndex';
-import type { ActiveHitDef, GameState, HelperRuntimeState, PlayerState, ProjectileState } from '../engine/types';
+import type { ActiveHitDef, GameState, HelperEntity, HelperRuntimeState, PlayerState, ProjectileState } from '../engine/types';
 import { readCnsConst } from './CnsConstants';
 import { calculateMugenAnimTime } from '../animation/AnimationDuration';
 import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
@@ -54,6 +54,7 @@ export type CnsRuntimeTrace = {
   executedControllerRefs?: CnsExecutedControllerRef[];
   debugLines: string[];
   entityId?: number;
+  helperId?: number;
   externalEntryFromStateNo?: number;
 };
 
@@ -112,6 +113,8 @@ export type CnsRuntimeInput = {
   numProj?: (projectileId?: number) => number;
   numExplod?: (explodId?: number) => number;
   resolveEntity?: (context: RuntimeEntityContext, kind: 'root' | 'parent' | 'helper' | 'playerid' | 'partner', argument?: number) => PlayerState | undefined;
+  resolveEntityContext?: (entityId: number) => RuntimeEntityContext | undefined;
+  resolveEntityForPlayer?: (player: PlayerState, kind: 'root' | 'parent' | 'helper' | 'playerid' | 'partner', argument?: number) => PlayerState | undefined;
   playerIdExists?: (entityId: number) => boolean;
   onHelperSpawn?: (request: HelperSpawnRequest) => void;
   onHelperDestroy?: (entityId: number) => void;
@@ -142,6 +145,7 @@ type ControllerResult = { player: PlayerState; executed: boolean; name: string; 
 
 type ControllerExecutionResult = {
   player: PlayerState;
+  redirectedOpponent: PlayerState;
   executedControllers: string[];
   executedControllerRefs: CnsExecutedControllerRef[];
   debugLines: string[];
@@ -206,7 +210,12 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
   const pendingSpawns: HelperSpawnRequest[] = [];
   const pendingDestroys = new Set<number>();
   const pendingParentVars: Array<{ targetEntityId: number; kind: 'var' | 'fvar'; index: number; value: number; add: boolean }> = [];
-  const helperInput = (context: RuntimeEntityContext): CnsRuntimeInput => ({
+  const helperInput = (
+    context: RuntimeEntityContext,
+    visibleHelpers: HelperRuntimeState = initialHelpers,
+    visiblePlayers: GameState['players'] = state.players,
+    parentPlayers: GameState['players'] = visiblePlayers,
+  ): CnsRuntimeInput => ({
     ...input,
     gameTime: state.frame,
     entityContext: context,
@@ -214,7 +223,7 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
     // though the new Helper's own State pass begins on the next frame. This
     // lets later entities in the same tick allocate distinct Helper-ID slots.
     numHelper: (helperId) => countVisibleHelpers(
-      initialHelpers,
+      visibleHelpers,
       pendingSpawns,
       pendingDestroys,
       context.rootEntityId,
@@ -229,8 +238,25 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
     onHelperSpawn: (request) => pendingSpawns.push(request),
     onHelperDestroy: (entityId) => pendingDestroys.add(entityId),
     onParentVarChange: (operation) => pendingParentVars.push(operation),
-    resolveEntity: (source, kind, argument) => resolveRuntimeEntity(state, initialHelpers, source, kind, argument),
-    playerIdExists: (entityId) => entityId === 1 || entityId === 2 || initialHelpers.entries.some((entry) => entry.entityId === entityId),
+    resolveEntity: (source, kind, argument) => resolveRuntimeEntity(
+      kind === 'parent' ? parentPlayers : visiblePlayers,
+      visibleHelpers,
+      source,
+      kind,
+      argument,
+    ),
+    resolveEntityContext: (entityId) => runtimeEntityContextForId(entityId, visibleHelpers),
+    resolveEntityForPlayer: (sourcePlayer, kind, argument) => {
+      const source = runtimeEntityContextForPlayer(sourcePlayer, visibleHelpers);
+      return source ? resolveRuntimeEntity(
+        kind === 'parent' ? parentPlayers : visiblePlayers,
+        visibleHelpers,
+        source,
+        kind,
+        argument,
+      ) : undefined;
+    },
+    playerIdExists: (entityId) => entityId === 1 || entityId === 2 || visibleHelpers.entries.some((entry) => entry.entityId === entityId),
   });
   const p1Context: RuntimeEntityContext = { kind: 'root', entityId: 1, rootEntityId: 1, parentEntityId: null, ownerCharacterId: 1 };
   const p2Context: RuntimeEntityContext = { kind: 'root', entityId: 2, rootEntityId: 2, parentEntityId: null, ownerCharacterId: 2 };
@@ -239,30 +265,42 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
 
   // WinMUGEN processes P1 before P2. Apply P1's Target controllers now so a
   // TargetState destination gets its Time=0 CNS pass before this tick's physics.
-  const afterP1Targets = applyTargetOperations([p1.player, state.players[1]], p1.targetOperations, cns, input);
+  const afterP1Targets = applyTargetOperations([p1.player, state.players[1]], p1.targetOperations, cns, helperInput(p1Context));
   const p2Cns = resolvePlayerCns(afterP1Targets[1], cns, input);
   const p2 = stepPlayer(afterP1Targets[1], afterP1Targets[0], 2, p2Cns, { ...helperInput(p2Context), constants: p2Cns }, input.p2Commands, state.frame);
-  let players = applyTargetOperations([afterP1Targets[0], p2.player], p2.targetOperations, cns, input);
+  let players = applyTargetOperations([afterP1Targets[0], p2.player], p2.targetOperations, cns, helperInput(p2Context));
   const helperTraces: CnsRuntimeTrace[] = [];
   const helperTargetOperations: TargetOperation[] = [];
-  let helpers: HelperRuntimeState = {
-    ...initialHelpers,
-    entries: initialHelpers.entries.map((helper) => {
+  const steppedHelpers = new Map<number, HelperEntity>();
+  let visibleHelpers = initialHelpers;
+  // WinMUGEN lets a parent Helper observe its descendant's committed State
+  // change in the same tick. Preserve sibling creation order, but finish each
+  // descendant branch before stepping its parent.
+  for (const helper of orderHelpersDescendantsFirst(initialHelpers.entries)) {
       const helperCns = resolveCnsByOwner(helper.stateOwnerId, cns, input);
       const opponent = players[helper.rootEntityId === 1 ? 1 : 0];
+      const rootIndex = helper.rootEntityId - 1;
+      const root = players[rootIndex];
       const context: RuntimeEntityContext = {
         kind: 'helper', entityId: helper.entityId, helperId: helper.helperId, rootEntityId: helper.rootEntityId,
         parentEntityId: helper.parentEntityId, ownerCharacterId: helper.ownerCharacterId,
       };
       const commands = helper.keyCtrl ? (helper.rootEntityId === 1 ? input.p1Commands : input.p2Commands) : undefined;
       const canMoveDuringPause = input.pauseState ? canHelperMoveDuringPause(input.pauseState, helper) : true;
+      const parentPlayers = players.map((player, index) => ({
+        ...player,
+        stateNo: state.players[index].stateNo,
+        stateTime: state.players[index].stateTime,
+      })) as [PlayerState, PlayerState];
       const stepped = stepPlayer(
-        helper.player,
+        { ...helper.player, power: root.power, powerMax: root.powerMax },
         opponent,
         helper.rootEntityId,
         helperCns,
         {
-          ...helperInput(context),
+          // Parent observes the root's frame-start State/Time at a transition
+          // boundary. Root redirects retain their established same-tick view.
+          ...helperInput(context, visibleHelpers, players, parentPlayers),
           constants: helperCns,
           canMoveDuringPause,
         },
@@ -273,18 +311,36 @@ export function stepCnsStateRuntime(state: GameState, cns?: CnsDocument | null, 
       stepped.trace.entityId = helper.entityId;
       helperTraces.push(stepped.trace);
       helperTargetOperations.push(...stepped.targetOperations);
+      if (stepped.player.power !== root.power || stepped.player.powerMax !== root.powerMax) {
+        players = players.map((entry, index) => index === rootIndex
+          ? { ...entry, power: stepped.player.power, powerMax: stepped.player.powerMax }
+          : entry) as [PlayerState, PlayerState];
+      }
       const stateOwnerId = stepped.player.stateOwnerId === 1 || stepped.player.stateOwnerId === 2
         ? stepped.player.stateOwnerId
         : helper.stateOwnerId;
-      return {
+      const steppedHelper = {
         ...helper,
         stateOwnerId,
         hasCompletedInitialStatePass: helper.hasCompletedInitialStatePass === true || canMoveDuringPause,
         player: stepped.player,
       };
-    }),
+      steppedHelpers.set(helper.entityId, steppedHelper);
+      visibleHelpers = {
+        ...initialHelpers,
+        entries: initialHelpers.entries.map((entry) => (
+          // DestroySelf commits after the destroying Helper's pass. Keep its
+          // frame-start values visible to later relationship redirects; the
+          // final VelSet/PosSet cleanup must not erase a parent's return test.
+          pendingDestroys.has(entry.entityId) ? entry : steppedHelpers.get(entry.entityId) ?? entry
+        )),
+      };
+  }
+  let helpers: HelperRuntimeState = {
+    ...initialHelpers,
+    entries: initialHelpers.entries.map((helper) => steppedHelpers.get(helper.entityId) ?? helper),
   };
-  players = applyTargetOperations(players, helperTargetOperations, cns, input, true);
+  players = applyTargetOperations(players, helperTargetOperations, cns, helperInput(p1Context, visibleHelpers), true);
   for (const entityId of pendingDestroys) helpers = destroyHelper(helpers, entityId);
   for (const request of pendingSpawns) {
     helpers = spawnHelper(helpers, request, resolveCnsByOwner(request.stateOwnerId, cns, input));
@@ -368,6 +424,8 @@ function stepPlayer(
   };
   const trace: CnsRuntimeTrace = {
     playerId,
+    entityId: input.entityContext?.kind === 'helper' ? input.entityContext.entityId : undefined,
+    helperId: input.entityContext?.helperId,
     stateNo: player.stateNo,
     afterStateNo: player.stateNo,
     animNo: player.animNo,
@@ -400,7 +458,8 @@ function stepPlayer(
         traceDiagnosticsEnabled,
         undefined,
         runtimeFrame,
-        (controller) => (num(controller, 'ignorehitpause', next, input, commands, opponent) ?? 0) !== 0,
+        (controller) => (num(controller, 'ignorehitpause', next, input, commands, opponent) ?? 0) !== 0
+          || isAutomaticStateMinusTwoChangeState(pausedState, controller),
       );
       next = result.player;
       if (traceDiagnosticsEnabled) trace.executedControllers.push(...result.executedControllers);
@@ -514,7 +573,7 @@ function stepPlayer(
       if (debugEnabled) appendDebug(trace, `enter target S${enteredState.stateNo} state=${next.stateNo}`);
       if (debugEnabled) appendDebug(trace, formatStateDefOverview(enteredState));
       const enteredStateNo = next.stateNo;
-      const enteredResult = executeStateControllers(next, opponent, enteredState, cns, input, commands, debugEnabled, traceDiagnosticsEnabled, undefined, runtimeFrame);
+      const enteredResult = executeStateControllers(next, result.redirectedOpponent, enteredState, cns, input, commands, debugEnabled, traceDiagnosticsEnabled, undefined, runtimeFrame);
       next = enteredResult.player;
       if (next.stateNo !== enteredStateNo && next.stateTime === 0) {
         // This second destination has not run its own controllers yet. Keep its
@@ -668,7 +727,7 @@ function executeStateControllers(
   }
 
   if (debugEnabled) pushDebug(debugLines, executedControllers, `return S${stateDef.stateNo} state=${next.stateNo}`);
-  return { player: next, executedControllers, executedControllerRefs, debugLines, targetOperations };
+  return { player: next, redirectedOpponent, executedControllers, executedControllerRefs, debugLines, targetOperations };
 }
 
 function applyTargetOperations(
@@ -697,17 +756,18 @@ function applyTargetOperations(
             ownerCharacterId: player.id,
           },
         };
+        const stateSource = { ...player, stateOwnerEntityId: operation.ownerId };
         const entered = runTimeZeroForStateEntry
           ? enterCnsStateAndRunTimeZero(
-              player,
+              stateSource,
               owner,
               operation.value,
               ownerCns,
               stateInput,
               player.id === 1 ? input.p1Commands : input.p2Commands,
             )
-          : enterState(player, owner, operation.value, ownerCns, stateInput);
-        return { ...entered, stateOwnerId: ownerId };
+          : enterState(stateSource, owner, operation.value, ownerCns, stateInput);
+        return { ...entered, stateOwnerId: ownerId, stateOwnerEntityId: operation.ownerId };
       }
       if (operation.kind === 'velSet') return { ...player, vx: operation.x ?? player.vx, vy: operation.y ?? player.vy };
       if (operation.kind === 'velAdd') return { ...player, vx: player.vx + (operation.x ?? 0), vy: player.vy + (operation.y ?? 0) };
@@ -886,6 +946,26 @@ function countVisibleHelpers(
   return committed + spawned;
 }
 
+function orderHelpersDescendantsFirst(entries: readonly HelperEntity[]): HelperEntity[] {
+  const childrenByParent = new Map<number, HelperEntity[]>();
+  for (const entry of entries) {
+    if (entry.parentEntityId === 1 || entry.parentEntityId === 2) continue;
+    const children = childrenByParent.get(entry.parentEntityId) ?? [];
+    children.push(entry);
+    childrenByParent.set(entry.parentEntityId, children);
+  }
+  const ordered: HelperEntity[] = [];
+  const visited = new Set<number>();
+  const visit = (entry: HelperEntity): void => {
+    if (visited.has(entry.entityId)) return;
+    visited.add(entry.entityId);
+    for (const child of childrenByParent.get(entry.entityId) ?? []) visit(child);
+    ordered.push(entry);
+  };
+  for (const entry of entries) visit(entry);
+  return ordered;
+}
+
 export function enterCnsStateAndRunTimeZeroWithTrace(
   player: PlayerState,
   opponent: PlayerState,
@@ -936,13 +1016,14 @@ export function enterCnsStateAndRunTimeZeroWithTrace(
 }
 
 export function advanceExternalCnsStateEntryFrame(player: PlayerState): PlayerState {
-  if (player.hitPause > 0) return player;
   return {
     ...player,
     stateTime: player.stateTime + 1,
     animTime: player.animTime + 1,
     // Collision runs after the regular physics phase. Preserve the contact
     // position and stored velocity, then make the next CNS pass observe Time 1.
+    // A newly applied HitPause freezes subsequent frames, but does not erase
+    // the entry frame whose Time=0 controllers already ran after collision.
     positionFrozen: false,
   };
 }
@@ -1090,6 +1171,9 @@ function createTriggerContext(
   opponent?: PlayerState,
 ): CnsRuntimeTriggerContext {
   const animationInfo = input.getAnimationTriggerInfo?.(player.animNo, player.animTime) ?? null;
+  const redirectContext = player.stateOwnerEntityId === undefined
+    ? input.entityContext
+    : input.resolveEntityContext?.(player.stateOwnerEntityId) ?? input.entityContext;
   return {
     player,
     opponent,
@@ -1130,8 +1214,13 @@ function createTriggerContext(
     projHitTime: (projectileId) => readProjectileElapsed(player, projectileId, 'hitTime'),
     projGuardedTime: (projectileId) => readProjectileElapsed(player, projectileId, 'guardedTime'),
     projCancelTime: (projectileId) => readProjectileElapsed(player, projectileId, 'cancelTime'),
-    resolveRedirectEntity: (kind, argument) => input.entityContext && input.resolveEntity
-      ? input.resolveEntity(input.entityContext, kind, argument)
+    resolveRedirectEntity: (kind, argument, redirectedSource) => redirectedSource && input.resolveEntityForPlayer
+      ? input.resolveEntityForPlayer(redirectedSource, kind, argument)
+      : redirectContext && input.resolveEntity
+        ? input.resolveEntity(redirectContext, kind, argument)
+        : undefined,
+    resolveRedirectCommands: (candidate) => candidate.helperId === undefined
+      ? candidate.id === 1 ? input.p1Commands : input.p2Commands
       : undefined,
     playerIdExists: input.playerIdExists,
     getRedirectAnimationContext: (candidate) => {
@@ -1149,17 +1238,17 @@ function createTriggerContext(
 }
 
 function resolveRuntimeEntity(
-  state: GameState,
+  players: GameState['players'],
   helpers: GameState['helpers'],
   source: RuntimeEntityContext,
   kind: 'root' | 'parent' | 'helper' | 'playerid' | 'partner',
   argument?: number,
 ): PlayerState | undefined {
-  if (kind === 'root') return state.players[source.rootEntityId - 1];
+  if (kind === 'root') return players[source.rootEntityId - 1];
   if (kind === 'partner') return undefined;
   if (kind === 'parent') {
     if (source.parentEntityId === null) return undefined;
-    if (source.parentEntityId === 1 || source.parentEntityId === 2) return state.players[source.parentEntityId - 1];
+    if (source.parentEntityId === 1 || source.parentEntityId === 2) return players[source.parentEntityId - 1];
     return helpers.entries.find((entry) => entry.entityId === source.parentEntityId)?.player;
   }
   if (kind === 'helper') {
@@ -1167,8 +1256,57 @@ function resolveRuntimeEntity(
       entry.rootEntityId === source.rootEntityId && (argument === undefined || entry.helperId === argument)
     ))?.player;
   }
-  if (argument === 1 || argument === 2) return state.players[argument - 1];
+  if (argument === 1 || argument === 2) return players[argument - 1];
   return helpers.entries.find((entry) => entry.entityId === argument)?.player;
+}
+
+function runtimeEntityContextForPlayer(
+  player: PlayerState,
+  helpers: HelperRuntimeState,
+): RuntimeEntityContext | undefined {
+  const helper = helpers.entries.find((entry) => entry.player === player);
+  if (helper) {
+    return {
+      kind: 'helper',
+      entityId: helper.entityId,
+      helperId: helper.helperId,
+      rootEntityId: helper.rootEntityId,
+      parentEntityId: helper.parentEntityId,
+      ownerCharacterId: helper.ownerCharacterId,
+    };
+  }
+  if (player.helperId !== undefined) return undefined;
+  return {
+    kind: 'root',
+    entityId: player.id,
+    rootEntityId: player.id,
+    parentEntityId: null,
+    ownerCharacterId: player.id,
+  };
+}
+
+function runtimeEntityContextForId(
+  entityId: number,
+  helpers: HelperRuntimeState,
+): RuntimeEntityContext | undefined {
+  if (entityId === 1 || entityId === 2) {
+    return {
+      kind: 'root',
+      entityId,
+      rootEntityId: entityId,
+      parentEntityId: null,
+      ownerCharacterId: entityId,
+    };
+  }
+  const helper = helpers.entries.find((entry) => entry.entityId === entityId);
+  return helper ? {
+    kind: 'helper',
+    entityId: helper.entityId,
+    helperId: helper.helperId,
+    rootEntityId: helper.rootEntityId,
+    parentEntityId: helper.parentEntityId,
+    ownerCharacterId: helper.ownerCharacterId,
+  } : undefined;
 }
 
 function readProjectileElapsed(
@@ -1215,12 +1353,34 @@ function getHitStunControllerBlock(
   const value = num(controller, 'value', player, input, commands, opponent);
   if (value === null) return null;
   if (stateDef.stateNo === -1) {
+    if (isAutomaticStateMinusOneChangeState(stateDef, controller)) return null;
     return { key: `input:${controller.sourceLine ?? '-'}:${value}`, value, reason: 'input_changestate_during_hitstun' };
   }
   if (value === 0 || value === 52) {
     return { key: `recovery:${stateDef.stateNo}:${controller.sourceLine ?? '-'}:${value}`, value, reason: 'early_recovery_state_during_hitstun' };
   }
   return null;
+}
+
+function isAutomaticStateMinusOneChangeState(
+  stateDef: CnsStateDefinition,
+  controller: CnsStateController,
+): boolean {
+  return stateDef.stateNo === -1
+    && controller.type.toLowerCase() === 'changestate'
+    && !controller.triggers.some((trigger) => /\bcommand\b/i.test(trigger.expression));
+}
+
+function isAutomaticStateMinusTwoChangeState(
+  stateDef: CnsStateDefinition,
+  controller: CnsStateController,
+): boolean {
+  // WinMUGEN lets root-global automatic routes commit during guard HitPause.
+  // Keep command routing and every non-ChangeState controller on the normal
+  // ignorehitpause gate; bundled itoko relies on this before its reset VarSet.
+  return stateDef.stateNo === -2
+    && controller.type.toLowerCase() === 'changestate'
+    && !controller.triggers.some((trigger) => /\bcommand\b/i.test(trigger.expression));
 }
 
 function forceHitStunControl(player: PlayerState, source: string, diagnosticsEnabled: boolean): PlayerState {
@@ -1482,6 +1642,7 @@ function executeController(
     return withPlayer({
       ...enterState(player, opponent, value, selfCns, { ...input, constants: selfCns }, commands),
       stateOwnerId: selfOwnerId,
+      stateOwnerEntityId: undefined,
       animationOwnerId: selfOwnerId as 1 | 2,
     }, true, 'SelfState');
   }
@@ -2679,6 +2840,10 @@ function currentRuntimeEntityRef(player: PlayerState, input: CnsRuntimeInput): R
 
 function normalizeExplodPostype(value: string | null): ExplodPostype {
   const normalized = value?.toLowerCase();
+  // WinMUGEN-era characters commonly use the r/l typo "light" for the
+  // screen-left origin. WinMUGEN accepts it as the left enum; falling back to
+  // p1 instead incorrectly moves P2 HUD Explods into stage space.
+  if (normalized === 'light') return 'left';
   return normalized === 'p2' || normalized === 'front' || normalized === 'back' || normalized === 'left' || normalized === 'right' || normalized === 'none'
     ? normalized
     : 'p1';
@@ -2812,6 +2977,11 @@ function evaluateHitDefSnapshot(
   const attrValues = Array.isArray(attrParts) ? attrParts.map(String) : attrParts === undefined ? [] : String(attrParts).split(',');
   const normalizedAttr = attrValues.length > 0 ? normalizeHitAttribute(attrValues[0], attrValues.slice(1)) : undefined;
   if (attrValues.length > 0 && !normalizedAttr) invalidParameters.push('attr');
+  const effectiveGroundVelocityX = groundVelocity[0] ?? -3.5;
+  const effectiveGuardVelocityX = guardVelocity[0] ?? effectiveGroundVelocityX;
+  const defaultGroundCornerPush = normalizedAttr?.stateType === 'A' ? 0 : 1.3 * effectiveGuardVelocityX;
+  const groundCornerPush = numValue('ground.cornerpush.veloff') ?? defaultGroundCornerPush;
+  const guardCornerPush = numValue('guard.cornerpush.veloff') ?? groundCornerPush;
   const fallVelocity = pairValue('fall.velocity');
   const downVelocity = pairValue('down.velocity');
   const sparkOffset = pairValue('sparkxy');
@@ -2840,11 +3010,11 @@ function evaluateHitDefSnapshot(
     },
     numHits: Math.max(0, Math.trunc(numValue('numhits') ?? 1)),
     cornerPush: {
-      ground: numValue('ground.cornerpush.veloff'),
-      air: numValue('air.cornerpush.veloff'),
-      down: numValue('down.cornerpush.veloff'),
-      guard: numValue('guard.cornerpush.veloff'),
-      airGuard: numValue('airguard.cornerpush.veloff'),
+      ground: groundCornerPush,
+      air: numValue('air.cornerpush.veloff') ?? groundCornerPush,
+      down: numValue('down.cornerpush.veloff') ?? groundCornerPush,
+      guard: guardCornerPush,
+      airGuard: numValue('airguard.cornerpush.veloff') ?? guardCornerPush,
     },
     snap: snap[0] === undefined && snap[1] === undefined ? undefined : { x: snap[0] ?? 0, y: snap[1] ?? 0 },
     p1SprPriority: numValue('p1sprpriority') ?? 1,
@@ -2893,7 +3063,7 @@ function evaluateHitDefSnapshot(
         },
     hitOnce: boolValue('hitonce') ?? normalizedAttr?.attackTypes.some((value) => value.endsWith('T')) ?? false,
     pauseTime: { attacker: Math.max(0, pause[0] ?? 0), defender: Math.max(0, pause[1] ?? 0) },
-    groundVelocity: { x: groundVelocity[0] ?? -3.5, y: groundVelocity[1] ?? 0 },
+    groundVelocity: { x: effectiveGroundVelocityX, y: groundVelocity[1] ?? 0 },
     airVelocity: { x: airVelocity[0] ?? -2.5, y: airVelocity[1] ?? -5.5 },
     downVelocity: { x: downVelocity[0] ?? airVelocity[0] ?? -2.5, y: downVelocity[1] ?? airVelocity[1] ?? -5.5 },
     downHitTime: nonNegative(numValue('down.hittime')) ?? 20,
@@ -3275,13 +3445,14 @@ function hitOverride(
   const stateNo = num(controller, 'stateno', player, input, commands, opponent);
   if (!attr || stateNo === null) return withPlayer(player, true, 'HitOverride');
   const slot = Math.max(0, Math.min(7, Math.trunc(num(controller, 'slot', player, input, commands, opponent) ?? 0)));
+  const requestedTime = Math.trunc(num(controller, 'time', player, input, commands, opponent) ?? 1);
   const entries = [...(player.hitOverrides ?? [])];
   while (entries.length <= slot) entries.push(null);
   entries[slot] = {
     slot,
     attr,
     stateNo: Math.trunc(stateNo),
-    remaining: Math.max(0, Math.trunc(num(controller, 'time', player, input, commands, opponent) ?? 1)),
+    remaining: requestedTime === -1 ? -1 : Math.max(0, requestedTime),
     forceAir: (num(controller, 'forceair', player, input, commands, opponent) ?? 0) !== 0,
     stateOwnerId: (player.selfStateOwnerId ?? player.id) as 1 | 2,
   };
@@ -3289,10 +3460,10 @@ function hitOverride(
 }
 
 function tickHitOverrides(player: PlayerState): PlayerState {
-  if (!player.hitOverrides?.some((entry) => entry && entry.remaining > 0)) return player;
-  const entries = player.hitOverrides.map((entry) => entry && entry.remaining > 1
-    ? { ...entry, remaining: entry.remaining - 1 }
-    : null);
+  if (!player.hitOverrides?.some((entry) => entry && (entry.remaining === -1 || entry.remaining > 0))) return player;
+  const entries = player.hitOverrides.map((entry) => entry?.remaining === -1
+    ? entry
+    : entry && entry.remaining > 1 ? { ...entry, remaining: entry.remaining - 1 } : null);
   return { ...player, hitOverrides: entries };
 }
 

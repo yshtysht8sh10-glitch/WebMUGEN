@@ -14,6 +14,7 @@ import type { SpritePack } from '../../core/sprite/SpriteTypes';
 import type { ImageDataSpritePack } from '../../core/sprite/ImageDataSpriteTypes';
 import { getPlayerPowerRatio } from '../../core/power/PowerGauge';
 import { ImageDataSpriteRenderer } from './ImageDataSpriteRenderer';
+import type { AfterImagePixelEffect } from './ImageDataSpriteRenderer';
 import { getScreenShakeOffset, type HitFeedbackState } from '../../core/engine/HitFeedback';
 import { HitFeedbackRenderer } from './HitFeedbackRenderer';
 import type { RoundState } from '../../core/engine/RoundState';
@@ -26,7 +27,7 @@ import {
   type CharacterRenderAssets,
   type ExplodRenderFrame,
 } from './ExplodRender';
-import { resolveBgPalFxFilter } from '../../core/palfx/BgPalFxSystem';
+import { applyPalFxToRgba, resolveBgPalFxFilter } from '../../core/palfx/BgPalFxSystem';
 import {
   resolveCanvasViewport,
   resolveViewportCamera,
@@ -105,12 +106,13 @@ export class CanvasRenderer {
     const globalFlags = new Set(state.players.flatMap((player) => player.assertSpecialFlags ?? []).map((flag) => flag.trim().toLowerCase()));
     if (!globalFlags.has('nobg')) {
       ctx.save();
-      ctx.filter = bgPalFxFilter;
+      ctx.filter = 'none';
       if (this.stageRuntime) {
         this.stageRuntime.render({ ctx, viewportWidth: viewport.logicalWidth, viewportHeight: viewport.logicalHeight, cameraX: camera.x, cameraY: camera.y });
       } else {
         this.drawStage(ctx, viewport.logicalWidth, viewport.logicalHeight, camera.x, camera.y, stageTheme);
       }
+      this.applyCanvasPalFx(ctx, state.bgPalFx);
       ctx.restore();
     }
     if (state.envColor?.under) this.drawEnvironmentColor(ctx, state.envColor.color, viewport.logicalWidth, viewport.logicalHeight);
@@ -136,7 +138,7 @@ export class CanvasRenderer {
     const renderDiagnostics = [
       ...(diagnosticsEnabled && globalFlags.has('nobg') ? ['raw.assertspecial_draw flag=noBG target=stage result=hidden'] : []),
       ...(diagnosticsEnabled && hideBars ? ['raw.assertspecial_draw flag=nobardisplay target=hud result=hidden'] : []),
-      ...(diagnosticsEnabled && state.bgPalFx ? [`raw.bgpalfx_draw owner=${state.bgPalFx.ownerEntityId} remaining=${state.bgPalFx.remainingTime} color=${state.bgPalFx.color} invertall=${state.bgPalFx.invertAll ? 1 : 0} mul=(${state.bgPalFx.multiply.red},${state.bgPalFx.multiply.green},${state.bgPalFx.multiply.blue}) filter=${bgPalFxFilter} result=drawn limitation=canvas_filter_approximated`] : []),
+      ...(diagnosticsEnabled && state.bgPalFx ? [`raw.bgpalfx_draw owner=${state.bgPalFx.ownerEntityId} remaining=${state.bgPalFx.remainingTime} color=${state.bgPalFx.color} invertall=${state.bgPalFx.invertAll ? 1 : 0} mul=(${state.bgPalFx.multiply.red},${state.bgPalFx.multiply.green},${state.bgPalFx.multiply.blue}) mode=rgb_channels result=drawn limitation=indexed_palette_rounding_unverified`] : []),
       ...explodResolution.diagnosticLines,
       ...(diagnosticsEnabled && explodFrames.length > explodResolution.frames.length
         ? [`raw.explod_tile_extend viewport=${viewport.logicalWidth} authored=${explodResolution.frames.length} supplemental=${explodFrames.length - explodResolution.frames.length} result=drawn`]
@@ -189,13 +191,12 @@ export class CanvasRenderer {
         ctx.save();
         ctx.translate(-camera.x, -camera.y);
         renderDiagnostics.push(...this.drawAfterImages(ctx, drawable.player, diagnosticsEnabled, drawable.scaleX, drawable.scaleY));
-        const palFxFilter = resolveBgPalFxFilter(drawable.player.palFx);
         ctx.save();
-        ctx.filter = palFxFilter;
+        ctx.filter = 'none';
         const diagnostic = this.drawPlayer(ctx, drawable.player, drawable.player.id === 1 ? '#66ccff' : '#ff99aa', diagnosticsEnabled, drawable.scaleX, drawable.scaleY);
         ctx.restore();
         if (diagnostic) renderDiagnostics.push(diagnostic);
-        if (diagnosticsEnabled && drawable.player.palFx) renderDiagnostics.push(`raw.palfx_draw entity=p${drawable.player.id} remaining=${drawable.player.palFx.remainingTime} filter=${palFxFilter} result=drawn limitation=canvas_filter_approximated`);
+        if (diagnosticsEnabled && drawable.player.palFx) renderDiagnostics.push(`raw.palfx_draw entity=p${drawable.player.id} remaining=${drawable.player.palFx.remainingTime} mode=rgb_channels result=drawn limitation=indexed_palette_rounding_unverified`);
         ctx.restore();
       } else {
         const diagnostic = this.drawExplod(ctx, drawable.frame, diagnosticsEnabled);
@@ -449,6 +450,7 @@ export class CanvasRenderer {
           scaleX: player.drawScale?.x ?? 1,
           scaleY: player.drawScale?.y ?? 1,
         } : undefined,
+        player.palFx,
       );
       ctx.restore();
 
@@ -479,15 +481,20 @@ export class CanvasRenderer {
       ? [`raw.afterimage_draw entity=p${player.id} result=hidden reason=animation_owner_missing`]
       : [];
 
-    const displayed = afterImage.frames.filter((_, index) => index % afterImage.frameGap === 0).reverse();
+    const displayed = afterImage.frames
+      .map((frame, historyIndex) => ({ frame, historyIndex }))
+      .filter(({ historyIndex }) => historyIndex % afterImage.frameGap === 0)
+      .reverse();
     const blend = resolveSpriteBlend(afterImage.transparency, null);
     let drawn = 0;
-    for (const [displayIndex, frame] of displayed.entries()) {
+    for (const [displayIndex, { frame }] of displayed.entries()) {
       const currentElement = getCurrentAnimationElement(assets.airDocument, frame.animNo, frame.animTime);
       if (!currentElement || currentElement.element.groupNo < 0 || currentElement.element.imageNo < 0) continue;
       ctx.save();
       applySpriteBlend(ctx, blend);
-      ctx.filter = resolveAfterImageFilter(afterImage, displayed.length - displayIndex - 1);
+      const paletteIndex = displayed.length - displayIndex - 1;
+      const exactPalette = Boolean(assets.imageDataSpritePack);
+      ctx.filter = exactPalette ? 'none' : resolveAfterImageFilter(afterImage, paletteIndex);
       const result = this.drawSpriteByElement(
         ctx,
         currentElement.element.groupNo,
@@ -510,12 +517,14 @@ export class CanvasRenderer {
           scaleX: frame.drawScale?.x ?? 1,
           scaleY: frame.drawScale?.y ?? 1,
         } : undefined,
+        undefined,
+        exactPalette ? { palette: afterImage.palette, historyIndex: paletteIndex } : undefined,
       );
       ctx.restore();
       if (result.drawn) drawn += 1;
     }
     if (!diagnosticsEnabled) return [];
-    return [`raw.afterimage_draw entity=p${player.id} captured=${afterImage.frames.length} displayed=${displayed.length} drawn=${drawn} time=${afterImage.remainingTime} timegap=${afterImage.timeGap} framegap=${afterImage.frameGap} trans=${blend.mode || 'none'} composite=${describeSpriteComposite(blend)} palette=canvas_filter_approximated${blend.limitation ? ` limitation=${blend.limitation}` : ''}`];
+    return [`raw.afterimage_draw entity=p${player.id} captured=${afterImage.frames.length} displayed=${displayed.length} drawn=${drawn} time=${afterImage.remainingTime} timegap=${afterImage.timeGap} framegap=${afterImage.frameGap} trans=${blend.mode || 'none'} composite=${describeSpriteComposite(blend)} palette=${assets.imageDataSpritePack ? 'rgba_channels' : 'canvas_filter_approximated'}${blend.limitation ? ` limitation=${blend.limitation}` : ''}`];
   }
 
   private drawPowerBars(ctx: CanvasRenderingContext2D, state: GameState, diagnosticsEnabled: boolean, viewportWidth = this.canvas.width, theme: HudTheme = 'fresh'): string[] {
@@ -616,6 +625,8 @@ export class CanvasRenderer {
     diagnosticsEnabled = true,
     subtractive = false,
     drawTransform?: { angleRadians: number; scaleX: number; scaleY: number },
+    palFx?: PlayerState['palFx'],
+    afterImage?: AfterImagePixelEffect,
   ): { drawn: boolean; diagnostic: string } {
     const flipX = flip.toUpperCase().includes('H');
     const flipY = flip.toUpperCase().includes('V');
@@ -623,7 +634,7 @@ export class CanvasRenderer {
 
     const imageDataSprite = assets.imageDataSpritePack?.sprites.get(key);
     if (imageDataSprite) {
-      const resolved = this.imageDataSpriteRenderer.resolveCanvas(assets.imageDataSpritePack, groupNo, imageNo, ownPalette, diagnosticsEnabled);
+      const resolved = this.imageDataSpriteRenderer.resolveCanvas(assets.imageDataSpritePack, groupNo, imageNo, ownPalette, diagnosticsEnabled, palFx, afterImage);
       if (!resolved) return { drawn: false, diagnostic: '' };
 
       this.drawSpriteCanvas(
@@ -668,6 +679,13 @@ export class CanvasRenderer {
     this.applySpriteTransform(ctx, x, y, scaleX, scaleY, offsetX, offsetY, drawTransform);
     ctx.drawImage(source, drawX, drawY);
     ctx.restore();
+  }
+
+  private applyCanvasPalFx(ctx: CanvasRenderingContext2D, palFx: GameState['bgPalFx']): void {
+    if (!palFx || typeof ctx.getImageData !== 'function' || typeof ctx.putImageData !== 'function') return;
+    const pixels = ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
+    applyPalFxToRgba(pixels.data, palFx);
+    ctx.putImageData(pixels, 0, 0);
   }
 
   private applySpriteTransform(

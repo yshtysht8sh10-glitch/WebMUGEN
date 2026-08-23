@@ -10,7 +10,7 @@ describe('Explod production runtime model', () => {
       { runtimeId: 1, mugenId: 1000 }, { runtimeId: 2, mugenId: 1000 },
     ]);
     expect(first.explods.entries[0]).toMatchObject({ age: 0, animTime: 0, creationFrame: 0, removeTime: -2 });
-    expect(first.hitDiagnosticLines?.join('\n')).toContain('raw.explod_create owner=p1 internalId=1 mugenId=1000');
+    expect(first.hitDiagnosticLines?.join('\n')).toContain('raw.explod_create owner=p1 internalId=1 mugenId=1000 drawSlot=1');
   });
 
   it('keeps owners separate and records rejected animation diagnostics without allocating an ID', () => {
@@ -24,6 +24,38 @@ describe('Explod production runtime model', () => {
     expect(result.explods.entries.map((entry) => entry.owner.rootPlayerId)).toEqual([1, 2]);
     expect(result.explods.nextRuntimeId).toBe(3);
     expect(result.hitDiagnosticLines?.join('\n')).toContain('raw.explod_create_rejected owner=p1 reason=missing_anim');
+  });
+
+  it('reuses the first free draw slot while keeping runtime IDs monotonic', () => {
+    const request = createRequest({ mugenId: 2221, onTop: true });
+    const created = applyExplodCreateEvents(createInitialGameState(), [
+      { type: 'create', request },
+      { type: 'create', request: { ...request, mugenId: 2225 } },
+      { type: 'create', request: { ...request, mugenId: 2200 } },
+      { type: 'create', request: { ...request, mugenId: 2230 } },
+    ]);
+    const withoutBlueBar = {
+      ...created,
+      explods: {
+        ...created.explods,
+        entries: created.explods.entries.filter((entry) => entry.mugenId !== 2225),
+      },
+    };
+    const recreated = applyExplodCreateEvents(withoutBlueBar, [
+      { type: 'create', request: { ...request, mugenId: 2225 } },
+    ]);
+
+    expect(recreated.explods.entries.map((entry) => ({
+      mugenId: entry.mugenId,
+      runtimeId: entry.runtimeId,
+      drawSlot: entry.drawSlot,
+    }))).toEqual([
+      { mugenId: 2221, runtimeId: 1, drawSlot: 1 },
+      { mugenId: 2200, runtimeId: 3, drawSlot: 3 },
+      { mugenId: 2230, runtimeId: 4, drawSlot: 4 },
+      { mugenId: 2225, runtimeId: 5, drawSlot: 2 },
+    ]);
+    expect(recreated.explods.nextRuntimeId).toBe(6);
   });
 
   it('synchronizes bound positions after the owner finishes physics and stage correction', () => {

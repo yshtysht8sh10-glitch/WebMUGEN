@@ -48,7 +48,7 @@ describe('common down and getup states', () => {
     expect((commonState.players[1] as PlayerState & { sysVars?: Record<number, number> }).sysVars?.[2]).toBe(5080);
     expect(commonState.players[1].animNo).toBe(5080);
   });
-  it('uses data.liedown.time on an independent clock and freezes it during hitpause', () => {
+  it('uses data.liedown.time on an independent clock and freezes a pending entry during hitpause', () => {
     let state = gameWithP2(downPlayer(5110, { hitPause: 1, stateTime: 40, animNo: 5110 }));
 
     state = stepCnsPhysicsMotion(state, shortLieDown);

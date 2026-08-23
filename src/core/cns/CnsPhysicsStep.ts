@@ -83,9 +83,11 @@ function applyTargetBindMaintenance(
     const owner = resolveRuntimePlayer(players, helpers, bind.ownerId);
     if (!owner) return { ...player, targetBind: undefined };
 
-    const previousPlayer = previousPlayers.find((candidate) => candidate.id === player.id);
     const previousOwner = resolveRuntimePlayer(previousPlayers, previousHelpers, bind.ownerId);
-    const frozen = (previousPlayer?.hitPause ?? 0) > 0 || (previousOwner?.hitPause ?? 0) > 0;
+    // TargetBind belongs to the controller owner. A target-only HitPause must
+    // not extend its finite lifetime: itoko's two-tick zipper bind otherwise
+    // lasts for the defender's full 100-tick pause and erases the launch.
+    const frozen = (previousOwner?.hitPause ?? 0) > 0;
     const remaining = bind.remaining < 0 || frozen ? bind.remaining : Math.max(0, bind.remaining - 1);
     return {
       ...player,
@@ -138,10 +140,16 @@ function applyCommonDownRecovery(player: PlayerState, cns: CnsDocument | null | 
 export function stepPlayerCnsPhysics(player: PlayerState, cns?: CnsDocument | null): PlayerState {
   const palFx = stepBgPalFx(player.palFx);
   if (player.hitPause > 0) {
+    const remainingHitPause = Math.max(0, player.hitPause - 1);
+    const advanceStateTime = player.hitPauseKind !== 'pause'
+      && player.stateHeaderAppliedStateNo === player.stateNo
+      && player.stateTime > 0;
     return {
       ...player,
       palFx,
-      hitPause: Math.max(0, player.hitPause - 1),
+      hitPause: remainingHitPause,
+      hitPauseKind: remainingHitPause > 0 ? player.hitPauseKind : undefined,
+      stateTime: advanceStateTime ? player.stateTime + 1 : player.stateTime,
     };
   }
 
