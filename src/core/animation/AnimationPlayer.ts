@@ -86,17 +86,21 @@ export function getAnimationTriggerInfo(
   const current = getCurrentAnimationElement(document, actionNo, animTime);
   if (!current) return null;
 
-  const previous = animTime > 0
-    ? getCurrentAnimationElement(document, actionNo, animTime - 1)
-    : null;
-  const elementStarted = animTime === 0 || previous?.elementIndex !== current.elementIndex;
-  const normalizedTime = normalizeAnimationTime(current.action, animTime);
+  const safeTime = Math.max(0, animTime);
   let cursor = 0;
-  const elementTimes = current.action.elements.map((element, index) => {
-    const time = normalizedTime - cursor;
+  const elementTimes = current.action.elements.map((element) => {
+    const time = safeTime - cursor;
     cursor += Math.max(1, element.duration);
-    return elementStarted && index === current.elementIndex ? 0 : time;
+    return time;
   });
+  // A finite action without LoopStart repeats from its first element and bare
+  // AnimElem controllers re-enter on each displayed pass. Explicit LoopStart
+  // and a negative-duration terminal hold retain the original trigger timeline.
+  const implicitlyLooped = (current.action.loopStartIndex === null || current.action.loopStartIndex === undefined)
+    && current.action.elements.every((element) => element.duration >= 0);
+  const elementStarted = implicitlyLooped
+    ? current.localTime === 0
+    : elementTimes[current.elementIndex] === 0;
 
   return {
     elementNo: current.elementIndex + 1,

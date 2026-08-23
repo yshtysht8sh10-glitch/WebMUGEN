@@ -6,7 +6,7 @@ This document records the Issue #25 audit and the integration contract for the E
 
 ## Issue #30 implementation status
 
-Production `GameState` owns an `ExplodRuntimeState` with a monotonically allocated `runtimeId` independent from duplicate-capable MUGEN `id`. The normal `CnsStateRuntime` executor evaluates an Explod controller on its firing frame and emits an owner-scoped creation snapshot. The app coordinator applies that snapshot to `GameState.explods` and records `raw.explod_create` or `raw.explod_create_rejected` in Runtime History.
+Production `GameState` owns an `ExplodRuntimeState` with a monotonically allocated `runtimeId` independent from duplicate-capable MUGEN `id`. Each live entry also has a reusable allocation `drawSlot`; this preserves WinMUGEN `ontop` composition when an effect is removed and later recreated without recycling diagnostic identity. The normal `CnsStateRuntime` executor evaluates an Explod controller on its firing frame and emits an owner-scoped creation snapshot. The app coordinator applies that snapshot to `GameState.explods` and records `raw.explod_create` or `raw.explod_create_rejected` in Runtime History.
 
 The snapshot includes owner/animation source, anim, postype, resolved initial stage or screen position, Facing/vfacing, bind/removetime metadata, draw order, and the movement/render/pause fields scheduled for later Issues. P1/P2 ownership, duplicate MUGEN ids, expressions, all legacy postypes, invalid anim, round reset, and bundled KFM State 191 are covered by focused tests.
 
@@ -41,6 +41,7 @@ type RuntimeEntityRef = {
 
 type ExplodRuntimeEntry = {
   runtimeId: number;      // monotonically allocated internal identity
+  drawSlot: number;       // lowest free live allocation slot; used for ontop order
   mugenId: number;        // controller `id`; duplicates are allowed
   owner: RuntimeEntityRef;
   animationOwner: RuntimeEntityRef;
@@ -95,7 +96,7 @@ The request queue is frame-local output from CNS execution, not durable state. T
 ## Coordinate and animation rules
 
 - Controller `pos` is evaluated in CNS/MUGEN coordinates, then converted once according to `postype` and owner Facing.
-- Stage Y uses the same MUGEN-to-internal conversion as player position controllers; screen space must not reuse stage ground offsets.
+- P1/P2 Stage Y follows its referenced entity. Explod `front/back/left/right` Y starts at the viewport top; this intentionally differs from Helper screen-edge postypes, whose Y remains relative to P1's axis. Neither path reapplies the camera during rendering.
 - Owner binding stores an offset and duration. It does not overwrite the Explod's MUGEN id.
 - `animationOwner` selects AIR/SFF resources. Initially it equals the creating entity; common fightfx and custom-State animation ownership remain explicit later scopes.
 - Renderer receives an already resolved world/screen origin plus the AIR element offset. It must not mutate runtime position.
@@ -114,8 +115,9 @@ The request queue is frame-local output from CNS execution, not durable state. T
 - Round restart creates an empty Explod collection and resets `nextRuntimeId` deterministically.
 - A removed entry is absent before rendering in the same frame when removal is applied before the step/render pass.
 - Explicit RemoveExplod filters all exact owner/id matches immediately. Later same-frame modify/bind operations therefore cannot find removed entries; an earlier modify is observable before a later removal diagnostic.
-- ExplodBindTime replaces only bind duration/target metadata. Time 0 releases at the current world position; positive time follows for the finite lifecycle; negative time follows indefinitely. Rebinding resolves the stored postype/offset against the current owner/opponent.
+- ExplodBindTime replaces only bind duration/target metadata. Time 0 releases at the current world position; positive time follows for the finite lifecycle; negative time follows indefinitely. Rebinding resolves the stored postype/offset against the current owner/opponent. The app performs a non-counting final bind-position synchronization after physics and Stage correction so rendering does not trail a moving owner by one frame.
 - After hit collision resolves, `removeongethit=1` filters Explods owned by an actually hit defender before Canvas. Guarded contact does not trigger this path.
+- The 400-wide and 960-wide extension profiles retain authored WinMUGEN 320-wide tiling. When at least three same-frame, same-owner Explods use one sprite at an even interval matching its rendered width, Canvas adds render-only edge tiles if camera motion leaves an extension strip uncovered. The authored runtime entries, Classic 320 output, and ordinary/uneven Explods are unchanged.
 
 ## Issue boundaries
 

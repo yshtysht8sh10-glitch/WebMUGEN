@@ -1,6 +1,6 @@
 # Debug Overlay
 
-Updated: 2026-07-30
+Updated: 2026-08-16
 
 The Debug Overlay is part of the compatibility workflow. It is not only a UI convenience; it is how WebMUGEN identifies which runtime layer failed.
 
@@ -32,13 +32,13 @@ keys=ArrowRight
 sys R=0
 p1 L=0 R=1 U=0 D=0 A=0 PROJ=0
 cmd p1=fwd,holdfwd
-phys p1 state=20 type=S physics=S ctrl=1 facing=1 power=0 juggle=4 juggleRemaining=9/15 pos=(220,285) vel=(2.4,0) time=12 anim=20:4
+phys p1 state=20 type=S physics=S ctrl=1 facing=1 life=875 power=0/3000 mul=0.8/1 juggle=4 juggleRemaining=9/15 pos=(220,285) vel=(2.4,0) time=12 anim=20:4
 cns p1 state=0->20 anim=0->20 time=0->0 found=1 exec=ChangeState,VelSet,ChangeAnim
 ```
 
 Each line should answer a specific question:
 
-The live physics line shows `power=current/max`. Canvas renders a bottom Power gauge from the same PlayerState values; a value change emits `raw.power_hud` with both ratios and resolved widths.
+The live physics line shows `life`, `power=current/max`, and the current `attack/defense` multiplier pair as `mul`. This keeps a stalled KO route distinguishable from a failed State trigger or a non-finite damage value. Canvas renders a bottom Power gauge from the same PlayerState values; a value change emits `raw.power_hud` with both ratios and resolved widths.
 
 | Line | Question answered |
 |---|---|
@@ -66,7 +66,11 @@ Editing can be cancelled. Cancelling or selecting another file while the draft d
 
 The file list is shown as a compact multi-column list above the source reader. The source reader itself is on the next row with a summary pane on the left and text on the right. Every non-SFF Map has a label/line search, and text source has a case-insensitive string search with previous/next navigation. The summary pane exposes useful jump points such as AIR `Begin Action`, CNS `StateDef`, CMD `Command`, and DEF sections. CNS maps use a collapsed one-level tree: each `StateDef` is a parent and every owned State Controller is its child, labeled with `type` and header name. Disclosure buttons open individual parents; `Expand all` and `Collapse all` control the complete tree. Parent and child source items both jump to their corresponding source line.
 
-In read mode, constant integer `anim` assignments and `value` assignments owned by a `ChangeAnim` controller link to the matching AIR `Begin Action`. Constant integer `stateno` assignments and `value` assignments owned by a `ChangeState` controller link to the matching CNS/CMD `StateDef`, preferring the current file when duplicate State numbers exist. Navigable values use a subtle underline. Expressions are left as plain highlighted text because their runtime result cannot be resolved statically. These links are disabled in edit mode. The editor keeps a visible line-number gutter aligned with the syntax-highlight layer.
+The summary pane switches between `Map` and `Search All Files`. `Ctrl+Shift+F` (or `Command+Shift+F`) opens the cross-file search and focuses its input. The case-insensitive literal search covers every loaded text source, including the current unsaved draft, while SFF/SND/ACT and unknown binary files remain explicitly counted but excluded from content matching. Results are grouped by Character/Engine file and show the matching line number, source excerpt, and highlighted term. Selecting a result keeps the result list open and uses the normal file/line navigation and View History path. At most 2,000 matching lines are rendered; the complete match count and a truncation notice remain visible. The source toolbar's separate search is labeled `Current file` to distinguish its previous/next behavior from the cross-file result list.
+
+In read mode, constant integer `anim` assignments and `value` assignments owned by a `ChangeAnim` or `ChangeAnim2` controller link to the matching AIR `Begin Action`. Constant integer `stateno`, `p1stateno`, and `p2stateno` assignments and `value` assignments owned by a `ChangeState` controller link to the matching CNS/CMD `StateDef`, preferring the current file when duplicate State numbers exist. A `p2stateno` destination is linked only when that StateDef exists in the currently loaded character files; the viewer cannot statically resolve another character's StateDef when `p2getp1state = 0`. Navigable values use a subtle underline. Expressions are left as plain highlighted text because their runtime result cannot be resolved statically. These links are disabled in edit mode. The editor keeps a visible line-number gutter aligned with the syntax-highlight layer.
+
+Navigation destinations are indexed once per loaded file set rather than rescanning every CNS/AIR file for every numeric assignment. Read mode virtualizes text files above 2,000 lines into an 800-line window with height-preserving spacers; a selected runtime-log destination is mounted immediately, and manual scrolling moves the window. Editing retains the complete textarea. This keeps large single-file characters such as itoko responsive without changing StateDef/AIR resolution priority or source line numbers.
 
 The source line-number gutter is interactive in read mode. Clicking a line number, an inline source link, a Map item, a search result, or another source-opening control selects and highlights its destination line. Highlighted locations are recorded in a bounded, newest-first View History in the Map pane. Reopening an existing location moves it to the front instead of creating duplicates, and each history entry links back to its retained file and line. A draggable, keyboard-adjustable horizontal splitter allocates height between the Map and View History while preserving a usable minimum for both. The history is cleared when another character is loaded.
 
@@ -117,7 +121,11 @@ Runtime history is exposed as top-level tabs:
 - `実行履歴人間用`: compact StateNo / AnimNo / State状況 view plus the StateNo transition list.
 - `実行履歴AI用`: dense copyable diagnostics for Codex/debug work.
 
-The human view shows the CNS-post, pre-physics state so `Time = 0` controller routes are visible on the frame a StateDef is entered.
+The human view normally shows the CNS-post, pre-physics state so `Time = 0` controller routes are visible on the frame a StateDef is entered. HitDef custom-state destinations are committed after the ordinary physics pass; those entries use the post-collision state and append their external Time=0 trace, so short-lived routes such as T-H-M-A `0 -> 3425 -> 3434` are not omitted from readable history.
+
+Helper detail logs evaluate triggers with that Helper's MUGEN ID, unique entity ID, root/parent relation, committed sibling count, and redirect resolver. Thus `IsHelper(ID)`, `Root`, `Parent`, `Helper(ID)`, and `PlayerID(ID)` results shown in the human log match the runtime entity context instead of being reconstructed as root-player expressions.
+
+AI runtime CNS trace summaries also identify Helpers as `pN helper=H<ID> entityId=<runtime-id>` instead of labeling every Helper only as its root `pN`. This keeps same-root entities distinguishable when comparing parent/child State and animation timing, such as itoko H1350 waiting on H1472.
 
 ## Investigation tab / notes
 

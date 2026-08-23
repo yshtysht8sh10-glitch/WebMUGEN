@@ -33,6 +33,7 @@ export function spawnHelper(state: HelperRuntimeState, request: HelperSpawnReque
   const player: PlayerState = {
     ...request.parent,
     id: request.rootEntityId,
+    helperId: request.helperId,
     x: request.x,
     y: request.y,
     vx: stateDef?.velocitySet?.x ? stateDef.velocitySet.x * request.facing : 0,
@@ -45,6 +46,10 @@ export function spawnHelper(state: HelperRuntimeState, request: HelperSpawnReque
     moveType: normalizeMoveType(stateDef?.moveType) ?? 'I',
     physics: normalizePhysics(stateDef?.physics) ?? 'N',
     ctrl: stateDef?.ctrl ?? false,
+    // Helpers start as independent players in WinMUGEN. In particular, they
+    // do not inherit the parent's current sprite priority before entering
+    // their initial StateDef.
+    sprPriority: stateDef?.sprPriority ?? 0,
     animNo: stateDef?.initialAnim ?? request.stateNo,
     animTime: 0,
     hitPause: 0,
@@ -61,6 +66,9 @@ export function spawnHelper(state: HelperRuntimeState, request: HelperSpawnReque
     sysVars: {},
     sysFVars: {},
     hitDiagnosticLines: [],
+    // Normal Helpers are not screen-bound and do not move the camera unless
+    // their own one-tick ScreenBound controller explicitly opts in.
+    screenBound: { value: false, moveCameraX: false, moveCameraY: false },
     collisionWidth: {
       groundFront: request.parent.collisionWidth?.groundFront ?? readCnsConst(cns, 'size.ground.front'),
       groundBack: request.parent.collisionWidth?.groundBack ?? readCnsConst(cns, 'size.ground.back'),
@@ -84,9 +92,38 @@ export function spawnHelper(state: HelperRuntimeState, request: HelperSpawnReque
     pauseMoveTime: Math.max(0, Math.trunc(request.pauseMoveTime ?? 0)),
     superMoveTime: Math.max(0, Math.trunc(request.superMoveTime ?? 0)),
     spawnFrame: request.spawnFrame,
+    hasCompletedInitialStatePass: false,
+    canRenderBeforeInitialStatePass: hasStableInitialPresentation(stateDef),
     player,
   };
   return { entries: [...state.entries, entity], nextEntityId: state.nextEntityId + 1 };
+}
+
+const INITIAL_PRESENTATION_CONTROLLER_TYPES = new Set([
+  'allpalfx',
+  'angledraw',
+  'angleset',
+  'assertspecial',
+  'bindtoparent',
+  'bindtoroot',
+  'bindtotarget',
+  'changeanim',
+  'changeanim2',
+  'offset',
+  'palfx',
+  'posadd',
+  'posset',
+  'remappal',
+  'sprpriority',
+  'trans',
+  'turn',
+]);
+
+function hasStableInitialPresentation(stateDef: ReturnType<typeof findCnsState>): boolean {
+  if (!stateDef || stateDef.initialAnimExpression) return false;
+  return !stateDef.controllers.some((controller) => (
+    INITIAL_PRESENTATION_CONTROLLER_TYPES.has(controller.type.trim().toLowerCase())
+  ));
 }
 
 export function destroyHelper(state: HelperRuntimeState, entityId: number): HelperRuntimeState {

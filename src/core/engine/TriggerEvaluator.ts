@@ -1,12 +1,15 @@
 import type { PlayerInput, PlayerState } from './types';
 import type { TriggerExpression } from '../../parser/cns/TriggerExpression';
 import { DEFAULT_GROUND_Y } from './GroundClamp';
+import { worldXToMugenPosX } from '../cns/MugenPositionCoordinates';
 
 export type TriggerEvaluationContext = {
   player: PlayerState;
   input: PlayerInput;
   animLength: number;
   moveHit: boolean;
+  cameraX?: number;
+  screenWidth?: number;
 };
 
 export function evaluateTriggerExpression(
@@ -61,7 +64,7 @@ function evaluateIdentifier(
       return context.moveHit;
 
     case 'pos x':
-      return context.player.x;
+      return worldXToMugenPosX(context.player.x, context.cameraX, context.screenWidth);
 
     case 'pos y':
       return context.player.y - DEFAULT_GROUND_Y;

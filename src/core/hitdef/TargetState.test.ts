@@ -11,10 +11,16 @@ describe('TargetState', () => {
     expect(selectTargets(owner, 42)[0]).toMatchObject({ playerId: 2, hitDefId: 42, activeHitDefId: 10 });
   });
 
-  it('removes destroyed or KO targets', () => {
+  it('removes absent targets but retains an acquired target after KO', () => {
     const state = createInitialGameState();
     const owner = registerTarget(state.players[0], state.players[1], 10, 42);
     expect(removeTarget(owner, 2).targets).toEqual([]);
-    expect(pruneTargets(owner, [{ ...state.players[1], life: 0 }]).targets).toEqual([]);
+    expect(pruneTargets(owner, [{ ...state.players[1], life: 0 }]).targets).toEqual(owner.targets);
+    expect(pruneTargets(owner, [])).toEqual({ ...owner, targets: [] });
+  });
+
+  it('does not acquire a new target that was already KO', () => {
+    const state = createInitialGameState();
+    expect(registerTarget(state.players[0], { ...state.players[1], life: 0 }, 10, 42).targets).toEqual([]);
   });
 });

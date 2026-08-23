@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parseCnsText } from '../../parser/cns/CnsParser';
 import { createInitialGameState } from '../engine/GameState';
 import { createInitialHelperState, spawnHelper } from '../helper/HelperSystem';
-import { stepCnsStateRuntime } from './CnsStateRuntime';
+import { enterCnsStateAndRunTimeZeroWithTrace, stepCnsStateRuntime } from './CnsStateRuntime';
 
 describe('binding and ownership controllers', () => {
   it('binds a Helper to its root and commits ParentVarSet/Add to the actual parent entity', () => {
@@ -94,5 +94,37 @@ value = 901
 `);
     const restored = stepCnsStateRuntime(borrowed.state, changeAnimCns);
     expect(restored.state.players[0]).toMatchObject({ animNo: 901, animationOwnerId: 1 });
+  });
+
+  it('retains a trace for Time=0 controllers executed by an external custom-state entry', () => {
+    const cns = parseCnsText(`
+[Statedef 3425]
+type = A
+movetype = H
+physics = N
+[State 3425, borrowed animation]
+type = ChangeAnim2
+trigger1 = Time = 0
+value = 3425
+`);
+    const initial = createInitialGameState();
+    const result = enterCnsStateAndRunTimeZeroWithTrace(
+      initial.players[1],
+      initial.players[0],
+      3425,
+      cns,
+      { traceDiagnostics: true },
+    );
+
+    expect(result.player).toMatchObject({ stateNo: 3425, stateTime: 0, animNo: 3425 });
+    expect(result.trace).toMatchObject({
+      playerId: 2,
+      externalEntryFromStateNo: 0,
+      stateNo: 3425,
+      afterStateNo: 3425,
+      stateTime: 0,
+      afterStateTime: 0,
+      executedControllers: ['ChangeAnim2'],
+    });
   });
 });

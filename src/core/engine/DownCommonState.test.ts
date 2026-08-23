@@ -48,7 +48,7 @@ describe('common down and getup states', () => {
     expect((commonState.players[1] as PlayerState & { sysVars?: Record<number, number> }).sysVars?.[2]).toBe(5080);
     expect(commonState.players[1].animNo).toBe(5080);
   });
-  it('uses data.liedown.time on an independent clock and freezes it during hitpause', () => {
+  it('uses data.liedown.time on an independent clock and freezes a pending entry during hitpause', () => {
     let state = gameWithP2(downPlayer(5110, { hitPause: 1, stateTime: 40, animNo: 5110 }));
 
     state = stepCnsPhysicsMotion(state, shortLieDown);
@@ -58,8 +58,15 @@ describe('common down and getup states', () => {
       expect(state.players[1]).toMatchObject({ stateNo: 5110, lieDownElapsed: elapsed, lieDownTime: 3 });
     }
     state = stepCnsPhysicsMotion(state, shortLieDown);
-    expect(state.players[1]).toMatchObject({ stateNo: 5120, stateTime: 0, moveType: 'I', ctrl: false });
+    expect(state.players[1]).toMatchObject({ stateNo: 5110, lieDownElapsed: 3, lieDownTime: 3 });
     expect(state.players[1].hitDiagnosticLines?.join('\n')).toContain('duration=3 remaining=0');
+
+    state = stepCnsStateRuntime(state, shortLieDown, {
+      getAnimationDuration: (animNo) => animNo === 5120 ? 2 : null,
+    }).state;
+    expect(state.players[1]).toMatchObject({ stateNo: 5120, stateTime: 0, moveType: 'I', ctrl: false, animNo: 5120 });
+    expect(state.players[1].lieDownElapsed).toBeUndefined();
+    expect(state.players[1].lieDownTime).toBeUndefined();
   });
 
   it('does not schedule State 5120 for a KO player', () => {

@@ -1,5 +1,6 @@
 import type { AirDocument } from '../../parser/air/AirTypes';
 import { findAction, getCurrentAnimationElement } from '../animation/AnimationPlayer';
+import { getPresentedAnimationTime } from '../animation/PresentedAnimation';
 import type { PlayerState } from '../engine/types';
 import type { ImageDataSpritePack } from './ImageDataSpriteTypes';
 import type { SpritePack } from './SpriteTypes';
@@ -47,7 +48,7 @@ function createPlayerSpriteDebugInfo(
 ): PlayerSpriteDebugInfo {
   const action = airDocument ? findAction(airDocument, player.animNo) : undefined;
   const currentElement = airDocument
-    ? getCurrentAnimationElement(airDocument, player.animNo, player.animTime)
+    ? getCurrentAnimationElement(airDocument, player.animNo, getPresentedAnimationTime(player))
     : null;
 
   if (!currentElement) {

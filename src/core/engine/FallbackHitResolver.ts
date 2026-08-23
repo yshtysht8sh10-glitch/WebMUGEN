@@ -1,5 +1,5 @@
 import type { AirDocument } from '../../parser/air/AirTypes';
-import { readCnsConst } from '../cns/CnsConstants';
+import { readCnsConst, WINMUGEN_DEFAULT_HIT_Y_ACCELERATION } from '../cns/CnsConstants';
 import {
   anyIntersects,
   getPlayerAttackBoxes,
@@ -25,7 +25,8 @@ type PriorityDecision = {
   opponentType: string;
 };
 
-type HitEligibility = { accepted: boolean; reason: string; targetClass: string };
+export type HitEligibility = { accepted: boolean; reason: string; targetClass: string };
+type TeamRelation = 'enemy' | 'friendly';
 
 export function resolveFallbackHits(
   state: GameState,
@@ -86,39 +87,137 @@ export function resolveFallbackHits(
   hitDiagnosticLines.push(...p2Result.diagnosticLines);
   if (p2Result.hitEvent) hitEvents.push(p2Result.hitEvent);
 
-  p1 = mergeCombatRoles(p1Result.attacker, p2Result.target, Boolean(p2Result.hitEvent) || p2Result.contactApplied === true);
-  p2 = mergeCombatRoles(p2Result.attacker, p1Result.target, Boolean(p1Result.hitEvent) || p1Result.contactApplied === true);
+  const p1Contacted = Boolean(p1Result.hitEvent) || p1Result.contactApplied === true;
+  const p2Contacted = Boolean(p2Result.hitEvent) || p2Result.contactApplied === true;
+  p1 = mergeCombatRoles(p1Result.attacker, p2Result.target, p2Contacted, p1Contacted);
+  p2 = mergeCombatRoles(p2Result.attacker, p1Result.target, p1Contacted, p2Contacted);
 
-  const helpers = state.helpers.entries.map((helper) => {
-    const target = helper.rootEntityId === 1 ? p2 : p1;
-    const attacker = pruneTargets(helper.player, [target]);
+  let helpers = state.helpers.entries.map((helper) => {
+    let attacker = pruneTargets(helper.player, [p1, p2]);
     const snapshotHelper = animationSnapshot?.helpers.entries.find((entry) => entry.entityId === helper.entityId)?.player;
     const collisionAttacker = withSnapshotAnimation(attacker, snapshotHelper);
-    const snapshotTarget = helper.rootEntityId === 1 ? animationSnapshot?.players[1] : animationSnapshot?.players[0];
-    const collisionTarget = withSnapshotAnimation(target, snapshotTarget);
     const helperCanResolveHit = canEntityResolveHit(helper.entityId);
+    const attackBoxes = helperCanResolveHit ? getPlayerAttackBoxes(collisionAttacker, airDocument) : [];
+    // Resolve the ordinary opposing root first. This preserves the normal P2
+    // target preference when a B/F HitDef also makes friendly roots eligible.
+    const targetIds: Array<1 | 2> = [helper.rootEntityId === 1 ? 2 : 1, helper.rootEntityId];
+    for (const targetId of targetIds) {
+      const target = targetId === 1 ? p1 : p2;
+      const snapshotTarget = animationSnapshot?.players[targetId - 1];
+      const relation: TeamRelation = targetId === helper.rootEntityId ? 'friendly' : 'enemy';
+      const result = resolveAttack(
+        attacker,
+        target,
+        attackBoxes,
+        getPlayerBodyBoxes(withSnapshotAnimation(target, snapshotTarget), airDocument),
+        airDocument,
+        diagnosticsEnabled,
+        undefined,
+        enterOverrideState,
+        helperCanResolveHit,
+        relation,
+        helper.entityId,
+      );
+      attacker = result.attacker;
+      hitDiagnosticLines.push(...result.diagnosticLines);
+      if (result.hitEvent || result.contactApplied) {
+        if (result.hitEvent) hitEvents.push(result.hitEvent);
+        hitDiagnosticLines.push(`raw.helper_hit_collision entity=${helper.entityId} helperId=${helper.helperId} root=p${helper.rootEntityId} target=p${target.id} result=accepted`);
+        if (targetId === 1) p1 = result.target;
+        else p2 = result.target;
+      } else if (diagnosticsEnabled && attacker.activeHitDef && hitDefAffectsTeam(attacker.activeHitDef, relation)) {
+        hitDiagnosticLines.push(`raw.helper_hit_collision entity=${helper.entityId} helperId=${helper.helperId} root=p${helper.rootEntityId} target=p${target.id} result=no_contact`);
+      }
+    }
+    return { ...helper, player: attacker };
+  });
+
+  // Helpers have their own collision identity even though their PlayerState
+  // retains the owning root's team id. Resolve them as defenders after the
+  // root pass so HitDef consumption and chain history stay entity-specific.
+  const resolveAgainstHelper = (
+    attacker: PlayerState,
+    attackerEntityId: number,
+    targetIndex: number,
+    relation: TeamRelation,
+  ): PlayerState => {
+    const targetEntry = helpers[targetIndex];
+    const snapshotTarget = animationSnapshot?.helpers.entries.find((entry) => entry.entityId === targetEntry.entityId)?.player;
+    const snapshotAttacker = attackerEntityId <= 2
+      ? animationSnapshot?.players[attackerEntityId - 1]
+      : animationSnapshot?.helpers.entries.find((entry) => entry.entityId === attackerEntityId)?.player;
     const result = resolveAttack(
       attacker,
-      target,
-      helperCanResolveHit ? getPlayerAttackBoxes(collisionAttacker, airDocument) : [],
-      getPlayerBodyBoxes(collisionTarget, airDocument),
+      targetEntry.player,
+      getPlayerAttackBoxes(withSnapshotAnimation(attacker, snapshotAttacker), airDocument),
+      getPlayerBodyBoxes(withSnapshotAnimation(targetEntry.player, snapshotTarget), airDocument),
       airDocument,
       diagnosticsEnabled,
       undefined,
       enterOverrideState,
-      helperCanResolveHit,
+      canEntityResolveHit(attackerEntityId),
+      relation,
+      attackerEntityId,
+      targetEntry.entityId,
+      false,
     );
     hitDiagnosticLines.push(...result.diagnosticLines);
+    if (result.hitEvent) hitEvents.push(result.hitEvent);
     if (result.hitEvent || result.contactApplied) {
-      if (result.hitEvent) hitEvents.push(result.hitEvent);
-      hitDiagnosticLines.push(`raw.helper_hit_collision entity=${helper.entityId} helperId=${helper.helperId} root=p${helper.rootEntityId} target=p${target.id} result=accepted`);
-      if (helper.rootEntityId === 1) p2 = result.target;
-      else p1 = result.target;
-    } else if (diagnosticsEnabled && attacker.activeHitDef) {
-      hitDiagnosticLines.push(`raw.helper_hit_collision entity=${helper.entityId} helperId=${helper.helperId} root=p${helper.rootEntityId} target=p${target.id} result=no_contact`);
+      helpers[targetIndex] = { ...targetEntry, player: result.target };
+      hitDiagnosticLines.push(`raw.helper_hit_collision entity=${attackerEntityId} targetEntity=${targetEntry.entityId} helperId=${targetEntry.helperId} root=p${targetEntry.rootEntityId} result=accepted`);
     }
-    return { ...helper, player: result.attacker };
-  });
+    return result.attacker;
+  };
+
+  for (let rootId = 1 as 1 | 2; rootId <= 2; rootId = (rootId + 1) as 1 | 2) {
+    let attacker = rootId === 1 ? p1 : p2;
+    for (let targetIndex = 0; targetIndex < helpers.length; targetIndex += 1) {
+      const relation: TeamRelation = helpers[targetIndex].rootEntityId === rootId ? 'friendly' : 'enemy';
+      attacker = resolveAgainstHelper(attacker, rootId, targetIndex, relation);
+    }
+    if (rootId === 1) p1 = attacker;
+    else p2 = attacker;
+  }
+
+  for (let firstIndex = 0; firstIndex < helpers.length; firstIndex += 1) {
+    for (let secondIndex = firstIndex + 1; secondIndex < helpers.length; secondIndex += 1) {
+      const first = helpers[firstIndex];
+      const second = helpers[secondIndex];
+      const relation: TeamRelation = first.rootEntityId === second.rootEntityId ? 'friendly' : 'enemy';
+      const firstSnapshot = animationSnapshot?.helpers.entries.find((entry) => entry.entityId === first.entityId)?.player;
+      const secondSnapshot = animationSnapshot?.helpers.entries.find((entry) => entry.entityId === second.entityId)?.player;
+      const firstResult = resolveAttack(
+        first.player, second.player,
+        getPlayerAttackBoxes(withSnapshotAnimation(first.player, firstSnapshot), airDocument),
+        getPlayerBodyBoxes(withSnapshotAnimation(second.player, secondSnapshot), airDocument),
+        airDocument, diagnosticsEnabled, undefined, enterOverrideState, canEntityResolveHit(first.entityId), relation,
+        first.entityId, second.entityId, false,
+      );
+      const secondResult = resolveAttack(
+        second.player, first.player,
+        getPlayerAttackBoxes(withSnapshotAnimation(second.player, secondSnapshot), airDocument),
+        getPlayerBodyBoxes(withSnapshotAnimation(first.player, firstSnapshot), airDocument),
+        airDocument, diagnosticsEnabled, undefined, enterOverrideState, canEntityResolveHit(second.entityId), relation,
+        second.entityId, first.entityId, false,
+      );
+      hitDiagnosticLines.push(...firstResult.diagnosticLines, ...secondResult.diagnosticLines);
+      if (firstResult.hitEvent) hitEvents.push(firstResult.hitEvent);
+      if (secondResult.hitEvent) hitEvents.push(secondResult.hitEvent);
+      const firstContacted = Boolean(firstResult.hitEvent) || firstResult.contactApplied === true;
+      const secondContacted = Boolean(secondResult.hitEvent) || secondResult.contactApplied === true;
+      helpers[firstIndex] = {
+        ...first,
+        player: mergeCombatRoles(firstResult.attacker, secondResult.target, secondContacted, firstContacted),
+      };
+      helpers[secondIndex] = {
+        ...second,
+        player: mergeCombatRoles(secondResult.attacker, firstResult.target, firstContacted, secondContacted),
+      };
+      if (firstContacted) hitDiagnosticLines.push(`raw.helper_hit_collision entity=${first.entityId} targetEntity=${second.entityId} helperId=${second.helperId} root=p${second.rootEntityId} result=accepted`);
+      if (secondContacted) hitDiagnosticLines.push(`raw.helper_hit_collision entity=${second.entityId} targetEntity=${first.entityId} helperId=${first.helperId} root=p${first.rootEntityId} result=accepted`);
+    }
+  }
 
   return {
     ...state,
@@ -139,6 +238,10 @@ function resolveAttack(
   priorityDecision: PriorityDecision = { allowed: true, reason: 'no_clash', own: 4, opponent: 4, ownType: 'Hit', opponentType: 'Hit' },
   enterOverrideState?: (player: PlayerState, opponent: PlayerState, stateNo: number) => PlayerState,
   canResolveHit = true,
+  teamRelation: TeamRelation = 'enemy',
+  attackerEntityId: number = attacker.id,
+  targetEntityId: number = target.id,
+  registerContactTarget = true,
 ): { attacker: PlayerState; target: PlayerState; hitEvent: HitEvent | null; diagnosticLines: string[]; contactApplied?: boolean } {
   const diagnosticLines: string[] = [];
   if (!canResolveHit) {
@@ -164,13 +267,20 @@ function resolveAttack(
     );
     return { attacker, target, hitEvent: null, diagnosticLines };
   }
+  if (!hitDefAffectsTeam(active, teamRelation)) {
+    if (diagnosticsEnabled) diagnosticLines.push(
+      `raw.hit_collision attacker=p${attacker.id} target=p${target.id}`,
+      `${collisionHeader} result=rejected reason=affectteam affectteam=${active.affectTeam ?? 'E'} relation=${teamRelation}`,
+    );
+    return { attacker, target, hitEvent: null, diagnosticLines };
+  }
   const overlap = findOverlap(attackBoxes, bodyBoxes);
   const collided = overlap !== null;
   const damage = active.damage;
   const guardDamage = active.damageValues?.[1] ?? 0;
   const source = 'active_hitdef';
 
-  const alreadyHitTarget = hasConsumedHitTarget(attacker, target, active);
+  const alreadyHitTarget = hasConsumedHitTarget(attacker, targetEntityId, active);
   if (alreadyHitTarget) {
     if (diagnosticsEnabled && collided && activeHitDefId !== null && !active?.rejectedLogged) {
       diagnosticLines.push(
@@ -193,8 +303,8 @@ function resolveAttack(
     return { attacker, target, hitEvent: null, diagnosticLines };
   }
 
-  const previousHitDefId = target.lastHitAttackerId === attacker.id
-    ? target.lastHitDefByAttacker?.[attacker.id]
+  const previousHitDefId = target.lastHitAttackerId === attackerEntityId
+    ? target.lastHitDefByAttacker?.[attackerEntityId]
     : undefined;
   const chainDecision = evaluateHitChain(active, previousHitDefId);
   if (diagnosticsEnabled) diagnosticLines.push(
@@ -225,12 +335,28 @@ function resolveAttack(
   if (!priorityDecision.allowed) return { attacker, target, hitEvent: null, diagnosticLines };
 
   const override = target.hitOverrides?.find((entry) => entry
-    && entry.remaining > 0
+    && (entry.remaining === -1 || entry.remaining > 0)
     && hitAttributeMatchesFilter(active.attr, entry.attr));
   if (override) {
+    const overrideHitTimeKind = override.forceAir
+      ? 'air'
+      : target.stateType === 'L' ? 'down' : target.stateType === 'A' ? 'air' : 'ground';
+    const overrideHitTime = overrideHitTimeKind === 'down'
+      ? active.downHitTime ?? 28
+      : overrideHitTimeKind === 'air' ? active.airHitTime ?? 28 : active.groundHitTime ?? 28;
+    const overrideVelocity = overrideHitTimeKind === 'down'
+      ? active.downVelocity ?? active.airVelocity
+      : overrideHitTimeKind === 'air' ? active.airVelocity : active.groundVelocity;
+    const overrideGetHitVars = createGetHitVarSnapshot(
+      active,
+      damage,
+      overrideHitTime,
+      overrideHitTimeKind,
+      overrideVelocity,
+    );
     const marked = activeHitDefId === null
       ? attacker
-      : recordMoveContact(markAttackerHit(attacker, activeHitDefId, target.id, active.hitId, active.pauseTime.attacker), activeHitDefId, 'hit');
+      : recordMoveContact(markAttackerHit(attacker, activeHitDefId, targetEntityId, active.hitId, active.pauseTime.attacker), activeHitDefId, 'hit');
     let overriddenTarget: PlayerState = {
       ...target,
       prevStateNo: target.stateNo,
@@ -242,14 +368,21 @@ function resolveAttack(
       stateType: override.forceAir ? 'A' : target.stateType,
       stateOwnerId: override.stateOwnerId,
       selfStateOwnerId: target.selfStateOwnerId ?? target.id,
+      // HitOverride replaces normal damage/reaction, but WinMUGEN still exposes
+      // the incoming HitDef through GetHitVar in the destination State.
+      getHitVars: overrideGetHitVars,
+      getHitVarUnsupportedKeys: ['fall.time', 'zoff'],
       // WinMUGEN clears P2's inherited hitpause before entering the
       // HitOverride destination. The attacker's P1 pausetime still applies.
       hitPause: 0,
+      hitPauseKind: undefined,
     };
     if (enterOverrideState) overriddenTarget = enterOverrideState(overriddenTarget, attacker, override.stateNo);
     if (diagnosticsEnabled) diagnosticLines.push(
       `raw.hit_override attacker=p${attacker.id} target=p${target.id}`,
-      `  activeHitDefId=${activeHitDefId ?? 'none'} slot=${override.slot} attr=${override.attr} state=${override.stateNo} forceair=${override.forceAir ? 1 : 0} remaining=${override.remaining} result=accepted damage=0`,
+      `  activeHitDefId=${activeHitDefId ?? 'none'} slot=${override.slot} attr=${override.attr} state=${override.stateNo} forceair=${override.forceAir ? 1 : 0} remaining=${override.remaining} result=accepted damage=0 getHitVarKind=${overrideHitTimeKind}`,
+      `raw.gethitvar_snapshot target=p${target.id}`,
+      `  activeHitDefId=${activeHitDefId ?? 'none'} keys=${Object.keys(overrideGetHitVars).sort().join(',')} unsupportedKeys=fall.time,zoff source=hitoverride`,
     );
     return { attacker: marked, target: overriddenTarget, hitEvent: null, diagnosticLines, contactApplied: true };
   }
@@ -258,10 +391,11 @@ function resolveAttack(
   const guardKind = attackerFlags.has('unguardable') ? null : selectGuardKind(target, active.guardFlag);
   const guardDistance = active.guardDistance ?? 160;
   const withinGuardDistance = Math.abs(target.x - attacker.x) <= guardDistance;
-  if (guardKind && target.guardIntent && withinGuardDistance) {
+  const guarding = target.guardIntent || isGuardReadyState(target.stateNo);
+  if (guardKind && guarding && withinGuardDistance) {
     const guardPause = active.guardPauseTime ?? active.pauseTime;
     const guardVelocity = active.guardVelocity ?? active.groundVelocity;
-    const appliedGuardVelocity = { x: guardVelocity.x * attacker.facing, y: guardVelocity.y };
+    const appliedGuardVelocity = { x: guardVelocity.x * -attacker.facing, y: guardVelocity.y };
     const guardHitTime = active.guardHitTime ?? active.groundHitTime ?? 12;
     const guardState = guardKind === 'stand' ? 150 : guardKind === 'crouch' ? 152 : 154;
     const lifeBefore = target.life;
@@ -275,15 +409,15 @@ function resolveAttack(
       : appliedGuardVelocity;
     const reactionAnim = guardKo
       ? commonHitShakeAnim(target.stateType === 'A' ? active.airAnimType ?? active.animType : active.animType, target.stateType === 'A' ? active.airType : active.groundType, airDocument)
-      : reactionState;
+      : guardKind === 'stand' ? 150 : guardKind === 'crouch' ? 151 : 152;
     const guardGetHitVars = createGetHitVarSnapshot(active, guardDamage, guardHitTime, target.stateType === 'A' ? 'air' : 'ground', guardKo ? koVelocity : guardVelocity);
     if (guardKo) guardGetHitVars.fall = 1;
-    const guardedAttacker = markAttackerHit(attacker, activeHitDefId, target.id, active.hitId, guardPause.attacker);
+    const guardedAttacker = markAttackerHit(attacker, activeHitDefId, targetEntityId, active.hitId, guardPause.attacker);
     const contactedAttacker = applyAttackerRequestedState(
       activeHitDefId === null ? guardedAttacker : recordMoveContact(guardedAttacker, activeHitDefId, 'guarded'),
       active,
     );
-    const guardedTarget = applyTargetRequestedState(applyGuardHit(applyHitDefSnap(target, attacker, active), guardDamage, active.guardKill !== false, reactionState, reactionVelocity, guardPause.defender, {
+    let guardedTarget = applyGuardHit(applyHitDefSnap(target, attacker, active), guardDamage, active.guardKill !== false, reactionState, reactionVelocity, guardPause.defender, {
       activeHitDefId,
       selectedHitTime: guardHitTime,
       kind: target.stateType === 'A' ? 'air' : 'ground',
@@ -293,7 +427,18 @@ function resolveAttack(
       lastStateNo: reactionState,
       selectedAnim: reactionAnim,
       ...(active.guardHitTime === undefined ? { fallbackReason: 'missing_guard_hittime' } : {}),
-    }, guardGetHitVars), active, attacker.id);
+    }, guardGetHitVars);
+    if (enterOverrideState && active.p2StateNo === undefined) {
+      guardedTarget = enterOverrideState(guardedTarget, attacker, reactionState);
+    }
+    guardedTarget = applyTargetRequestedState(guardedTarget, active, attacker.id, attackerEntityId);
+    if (enterOverrideState && active.p2StateNo !== undefined) {
+      guardedTarget = enterOverrideState(
+        { ...guardedTarget, stateNo: target.stateNo },
+        contactedAttacker,
+        active.p2StateNo,
+      );
+    }
     const auxiliary = applyHitDefAuxiliary(contactedAttacker, guardedTarget, attacker, target, active, true);
     const idText = activeHitDefId === null ? 'none' : String(activeHitDefId);
     const hitEvent = createContactHitEvent(attacker, target, active, true, guardDamage, overlap, attackBoxes, bodyBoxes, airDocument);
@@ -319,14 +464,14 @@ function resolveAttack(
       diagnosticLines,
     };
   }
-  if (diagnosticsEnabled && target.guardIntent) diagnosticLines.push(
+  if (diagnosticsEnabled && guarding) diagnosticLines.push(
     `raw.guard_check attacker=p${attacker.id} target=p${target.id}`,
     `  activeHitDefId=${activeHitDefId ?? 'none'} guardflag=${active.guardFlag ?? '-'} intent=holdback stateType=${target.stateType} crouchIntent=${target.guardCrouchIntent ? 1 : 0} kind=${guardKind ?? 'none'} distance=${Math.abs(target.x - attacker.x)} guardDistance=${guardDistance} result=rejected reason=${guardKind ? 'out_of_guard_distance' : 'guardflag_mismatch'}`,
   );
 
   const isAirJuggle = target.stateType === 'A';
   const juggleCost = Math.max(0, attacker.juggle ?? 0);
-  const juggleAlreadyConsumed = attacker.juggleConsumedTargetIds?.includes(target.id) ?? false;
+  const juggleAlreadyConsumed = attacker.juggleConsumedTargetIds?.includes(targetEntityId) ?? false;
   const juggleCharge = juggleAlreadyConsumed || attackerFlags.has('nojugglecheck') ? 0 : juggleCost;
   const juggleMax = target.juggleMax ?? 15;
   const juggleBefore = target.juggleRemaining ?? juggleMax;
@@ -376,8 +521,8 @@ function resolveAttack(
   const animSource = active?.animTypeSource ?? 'winmugen_default';
   const animationExists = airDocumentHasAction(airDocument, selectedAnim);
   const hitAttacker = markJuggleChainContact(
-    markAttackerHit(attacker, activeHitDefId, target.id, active.hitId, active.pauseTime.attacker),
-    target.id,
+    markAttackerHit(attacker, activeHitDefId, targetEntityId, active.hitId, active.pauseTime.attacker),
+    targetEntityId,
     isAirJuggle,
   );
   const contactedAttacker = applyAttackerRequestedState(
@@ -406,7 +551,14 @@ function resolveAttack(
     airVelocityAtHit: { ...active.airVelocity },
     fallYVelocityAtHit: active.fall?.yVelocity ?? 0,
     ...(activeHitTime === undefined ? { fallbackReason: hitTimeFallbackReason } : {}),
-  }, hitGetHitVars), active, attacker.id), attacker.id, active.hitId);
+  }, hitGetHitVars), active, attacker.id, attackerEntityId), attackerEntityId, active.hitId);
+  if (enterOverrideState && active.p2StateNo !== undefined) {
+    hitTarget = enterOverrideState(
+      { ...hitTarget, stateNo: target.stateNo },
+      contactedAttacker,
+      active.p2StateNo,
+    );
+  }
   if (active.palFx && active.palFx.duration !== 0) {
     hitTarget = {
       ...hitTarget,
@@ -420,7 +572,7 @@ function resolveAttack(
   }
   const idText = activeHitDefId === null ? 'none' : String(activeHitDefId);
   const auxiliary = applyHitDefAuxiliary(contactedAttacker, hitTarget, attacker, target, active, false);
-  const targetedAttacker = activeHitDefId === null
+  const targetedAttacker = activeHitDefId === null || !registerContactTarget
     ? auxiliary.attacker
     : registerTarget(auxiliary.attacker, auxiliary.target, activeHitDefId, active.hitId ?? 0);
   const fallbackReason = '-';
@@ -471,6 +623,11 @@ function resolveAttack(
   };
 }
 
+function hitDefAffectsTeam(active: NonNullable<PlayerState['activeHitDef']>, relation: TeamRelation): boolean {
+  const affectTeam = active.affectTeam ?? 'E';
+  return affectTeam === 'B' || (affectTeam === 'E' ? relation === 'enemy' : relation === 'friendly');
+}
+
 function resolveReversal(
   reverser: PlayerState,
   attacker: PlayerState,
@@ -488,6 +645,7 @@ function resolveReversal(
   let nextReverser: PlayerState = {
     ...reverser,
     hitPause: reversal.pauseTime.p1,
+    hitPauseKind: reversal.pauseTime.p1 > 0 ? 'pause' : undefined,
     moveContact: {
       activeHitDefId: reversal.hitDefId,
       contact: true,
@@ -515,6 +673,7 @@ function resolveReversal(
     activeHitDef: null,
     hitDefUsed: true,
     hitPause: reversal.pauseTime.p2,
+    hitPauseKind: reversal.pauseTime.p2 > 0 ? 'shake' : undefined,
   };
   if (reversal.p2StateNo !== undefined) {
     nextAttacker = {
@@ -546,7 +705,7 @@ function isPriorityCandidate(
   bodyBoxes: ReturnType<typeof getPlayerBodyBoxes>,
 ): boolean {
   const active = attacker.activeHitDef;
-  const alreadyConsumed = active ? hasConsumedHitTarget(attacker, target, active) : false;
+  const alreadyConsumed = active ? hasConsumedHitTarget(attacker, target.id, active) : false;
   return attacker.moveType === 'A'
     && attacker.hitPause <= 0
     && Boolean(attacker.activeHitDef)
@@ -668,7 +827,12 @@ function applyAttackerRequestedState(attacker: PlayerState, hitDef: NonNullable<
   };
 }
 
-function applyTargetRequestedState(target: PlayerState, hitDef: NonNullable<PlayerState['activeHitDef']>, attackerId: number): PlayerState {
+function applyTargetRequestedState(
+  target: PlayerState,
+  hitDef: NonNullable<PlayerState['activeHitDef']>,
+  attackerId: number,
+  attackerEntityId: number,
+): PlayerState {
   const selfOwnerId = target.selfStateOwnerId ?? target.id;
   const stateNo = hitDef.p2StateNo ?? target.stateNo;
   // WinMUGEN defaults p2getp1state to 1 whenever p2stateno is present.
@@ -681,6 +845,7 @@ function applyTargetRequestedState(target: PlayerState, hitDef: NonNullable<Play
     stateNo,
     stateTime: hitDef.p2StateNo === undefined ? target.stateTime : 0,
     stateOwnerId,
+    stateOwnerEntityId: hitDef.p2StateNo !== undefined && getsP1State ? attackerEntityId : undefined,
     stateType: hitDef.forceStand ? 'S' : target.stateType,
   };
 }
@@ -738,11 +903,13 @@ function normalizePriorityType(value: string | undefined): 'Hit' | 'Miss' | 'Dod
   return 'Unsupported';
 }
 
-function evaluateHitEligibility(hitDef: NonNullable<PlayerState['activeHitDef']>, target: PlayerState): HitEligibility {
+export function evaluateHitEligibility(hitDef: NonNullable<PlayerState['activeHitDef']>, target: PlayerState): HitEligibility {
   const targetClass = classifyHitTarget(target);
   if (target.life <= 0) return { accepted: false, reason: 'target_ko', targetClass };
   const hitFlag = (hitDef.hitFlag ?? 'MAF').replace(/\s+/g, '').toUpperCase();
-  if (!/^[HLAFDMP+-]+$/.test(hitFlag)) return { accepted: false, reason: 'unsupported_hitflag', targetClass };
+  if (!/^[HLAFDMP+-]+$/.test(hitFlag) || !/[HLAM]/.test(hitFlag)) {
+    return { accepted: false, reason: 'unsupported_hitflag', targetClass };
+  }
   if (hitFlag.includes('+') && target.moveType !== 'H') return { accepted: false, reason: 'hitflag_requires_hit_state', targetClass };
   if (hitFlag.includes('-') && target.moveType === 'H') return { accepted: false, reason: 'hitflag_excludes_hit_state', targetClass };
   const requiredFlag = targetClass === 'stand' ? ['H', 'M']
@@ -774,11 +941,21 @@ function formatActiveAttr(hitDef: NonNullable<PlayerState['activeHitDef']>): str
   return hitDef.attr ? `${hitDef.attr.stateType},${hitDef.attr.attackTypes.join('|')}` : '-';
 }
 
-function mergeCombatRoles(attackerResult: PlayerState, targetResult: PlayerState, wasTargeted: boolean): PlayerState {
+function mergeCombatRoles(
+  attackerResult: PlayerState,
+  targetResult: PlayerState,
+  wasTargeted: boolean,
+  alsoContacted: boolean,
+): PlayerState {
   if (!wasTargeted) return attackerResult;
   return {
     ...targetResult,
-    hitPause: Math.max(attackerResult.hitPause, targetResult.hitPause),
+    // A later HitDef replaces an older defender pause. Only a same-frame trade
+    // must retain the longer of this player's attacker and defender pauses.
+    hitPause: alsoContacted ? Math.max(attackerResult.hitPause, targetResult.hitPause) : targetResult.hitPause,
+    hitPauseKind: alsoContacted && attackerResult.hitPause >= targetResult.hitPause
+      ? attackerResult.hitPauseKind
+      : targetResult.hitPauseKind,
     hitTargets: attackerResult.hitTargets,
     moveContact: attackerResult.moveContact,
     targets: attackerResult.targets,
@@ -816,6 +993,7 @@ function markAttackerHit(
   return {
     ...player,
     hitPause: pauseTime,
+    hitPauseKind: pauseTime > 0 ? 'pause' : undefined,
     hitDefUsed: true,
     hitTargets: activeHitDefId === null ? (player.hitTargets ?? []) : [
       ...(player.hitTargets ?? []),
@@ -880,6 +1058,11 @@ function applyHitDefAuxiliary(
   const target = {
     ...targetAfterContact,
     ...(hitDef.p2SprPriority === undefined ? {} : { sprPriority: hitDef.p2SprPriority }),
+    ...(!guarded && hitDef.p2Facing
+      // WinMUGEN defines p2facing relative to P1's Facing, not world position:
+      // positive faces P2 opposite P1; negative faces P2 the same way as P1.
+      ? { facing: (attackerBefore.facing * (hitDef.p2Facing > 0 ? -1 : 1)) as 1 | -1 }
+      : {}),
   };
   return {
     attacker: attackerPower === undefined ? attacker : addPlayerPower(attacker, attackerPower),
@@ -916,18 +1099,22 @@ function formatHitAuxiliaryDiagnostics(
     `raw.hit_sprpriority attacker=p${attackerBefore.id} target=p${targetBefore.id}`,
     `  activeHitDefId=${activeHitDefId ?? 'none'} p1=${hitDef.p1SprPriority ?? '-'} p2=${hitDef.p2SprPriority ?? '-'} result=applied`,
   );
+  if (!guarded && hitDef.p2Facing) lines.push(
+    `raw.hit_facing attacker=p${attackerBefore.id} target=p${targetBefore.id}`,
+    `  activeHitDefId=${activeHitDefId ?? 'none'} p2facing=${hitDef.p2Facing} attackerFacing=${attackerBefore.facing} targetBefore=${targetBefore.facing} targetAfter=${result.target.facing} result=applied`,
+  );
   return lines;
 }
 
 function hasConsumedHitTarget(
   attacker: PlayerState,
-  target: PlayerState,
+  targetEntityId: number,
   hitDef: NonNullable<PlayerState['activeHitDef']>,
 ): boolean {
   const currentGeneration = (attacker.hitTargets ?? []).filter(
     (record) => record.activeHitDefId === hitDef.diagnosticId,
   );
-  return currentGeneration.some((record) => record.defenderId === target.id)
+  return currentGeneration.some((record) => record.defenderId === targetEntityId)
     || (hitDef.hitOnce === true && currentGeneration.length > 0);
 }
 
@@ -993,6 +1180,7 @@ function applyFallbackHit(
     fallRecoverTime: getHitVars['fall.recovertime'],
     hitFallVelocity: fallVelocity,
     hitPause: pauseTime,
+    hitPauseKind: pauseTime > 0 ? 'shake' : undefined,
     hitDefUsed: false,
     activeHitDef: null,
     hitStun,
@@ -1028,6 +1216,7 @@ function applyGuardHit(
     hitVelX: velocity.x,
     hitVelY: velocity.y,
     hitPause: pauseTime,
+    hitPauseKind: pauseTime > 0 ? 'shake' : undefined,
     hitDefUsed: false,
     activeHitDef: null,
     hitFall: false,
@@ -1044,6 +1233,10 @@ function selectGuardKind(player: PlayerState, guardFlag: string | undefined): 's
   if (player.stateType === 'A') return !special.has('noairguard') && flags.includes('A') ? 'air' : null;
   if (player.stateType === 'C' || player.guardCrouchIntent) return !special.has('nocrouchguard') && (flags.includes('L') || flags.includes('M')) ? 'crouch' : null;
   return !special.has('nostandguard') && (flags.includes('H') || flags.includes('M')) ? 'stand' : null;
+}
+
+export function isGuardReadyState(stateNo: number): boolean {
+  return stateNo >= 120 && stateNo <= 132;
 }
 
 function normalizedAssertSpecialFlags(player: PlayerState): Set<string> {
@@ -1096,7 +1289,7 @@ export function createGetHitVarSnapshot(
     guarded: 0,
     kill: hitDef.kill === false ? 0 : 1,
     'guard.kill': hitDef.guardKill === false ? 0 : 1,
-    yaccel: hitDef.yAcceleration ?? 0.6,
+    yaccel: hitDef.yAcceleration ?? WINMUGEN_DEFAULT_HIT_Y_ACCELERATION,
     'down.xvel': hitDef.downVelocity?.x ?? 0,
     'down.yvel': hitDef.downVelocity?.y ?? 0,
     'down.hittime': hitDef.downHitTime ?? 20,

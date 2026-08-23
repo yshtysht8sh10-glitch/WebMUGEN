@@ -58,6 +58,9 @@ trigger1 = 1
 attr = S, NA
 damage = 80, 0
 pausetime = 2, 3
+ground.velocity = -3, 2
+air.velocity = -5, -6
+yaccel = .75
 [Statedef 300]
 type = S
 physics = N
@@ -70,6 +73,14 @@ attr = SCA, NA
 stateno = 900
 time = 5
 forceair = 1
+[Statedef 900]
+type = A
+movetype = H
+physics = N
+[State 900, inherited gravity]
+type = VelAdd
+trigger1 = 1
+y = GetHitVar(yaccel)
 `);
     const initial = createInitialGameState();
     initial.players = [
@@ -80,9 +91,48 @@ forceair = 1
     const result = resolveFallbackHits(activated, air, true);
 
     expect(result.players[1]).toMatchObject({ life: 1000, stateNo: 900, stateType: 'A', hitPause: 0 });
+    expect(result.players[1].getHitVars).toMatchObject({ damage: 80, xvel: -5, yvel: -6, yaccel: 0.75 });
     expect(result.players[0]).toMatchObject({ hitPause: 2 });
     expect(result.players[0].moveContact).toMatchObject({ contact: true, hit: true });
     expect(result.hitDiagnosticLines?.join('\n')).toContain('raw.hit_override attacker=p1 target=p2');
+    expect(result.hitDiagnosticLines?.join('\n')).toContain('source=hitoverride');
+
+    const destinationTick = stepCnsStateRuntime(result, cns).state;
+    expect(destinationTick.players[1]).toMatchObject({ stateNo: 900, vy: 0.75 });
+
+    const groundedOverride = resolveFallbackHits({
+      ...activated,
+      players: [activated.players[0], {
+        ...activated.players[1],
+        hitOverrides: activated.players[1].hitOverrides?.map((entry) => entry ? { ...entry, forceAir: false } : null),
+      }],
+    }, air, true);
+    expect(groundedOverride.players[1].getHitVars).toMatchObject({ damage: 80, xvel: -3, yvel: 2, yaccel: 0.75 });
+    expect(groundedOverride.hitDiagnosticLines?.join('\n')).toContain('getHitVarKind=ground');
+  });
+
+  it('keeps time=-1 HitOverride active indefinitely', () => {
+    const cns = parseCnsText(`
+[Statedef 300]
+type = S
+physics = N
+anim = 0
+[State 300, permanent override]
+type = HitOverride
+trigger1 = Time = 0
+slot = 0
+attr = SCA, AA, AP, AT
+stateno = 900
+time = -1
+`);
+    const initial = createInitialGameState();
+    initial.players[1] = { ...initial.players[1], stateNo: 300, animNo: 0 };
+
+    const activated = stepCnsStateRuntime(initial, cns).state;
+    const later = stepCnsStateRuntime(activated, cns).state;
+
+    expect(activated.players[1].hitOverrides?.[0]?.remaining).toBe(-1);
+    expect(later.players[1].hitOverrides?.[0]?.remaining).toBe(-1);
   });
 
   it('accepts WinMUGEN Any-class AA/AP filters without treating throws as attacks', () => {

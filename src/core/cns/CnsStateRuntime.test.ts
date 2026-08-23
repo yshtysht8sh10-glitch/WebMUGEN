@@ -210,6 +210,35 @@ juggle = 6
     expect(result.traces[0].executedControllers).toContain('ChangeState');
   });
 
+  it('applies StateDef sprpriority on entry and leaves it unchanged when omitted', () => {
+    const cns = parseCnsText(`
+[Statedef -1]
+
+[State -1, Priority]
+type = ChangeState
+trigger1 = command = "x"
+value = 210
+
+[Statedef 210]
+type = S
+sprpriority = 2
+
+[State 210, Continue]
+type = ChangeState
+trigger1 = command = "y"
+value = 211
+
+[Statedef 211]
+type = S
+`);
+    const state = createInitialGameState();
+    const entered = stepCnsStateRuntime(state, cns, { p1Commands: new Set(['x']) }).state;
+    const continued = stepCnsStateRuntime(entered, cns, { p1Commands: new Set(['y']) }).state;
+
+    expect(entered.players[0]).toMatchObject({ stateNo: 210, sprPriority: 2 });
+    expect(continued.players[0]).toMatchObject({ stateNo: 211, sprPriority: 2 });
+  });
+
   it('executes target state time-zero controllers after a command ChangeState', () => {
     const cns = parseCnsText(`
 [Statedef -1]
@@ -1410,7 +1439,7 @@ p2sprpriority = 3
     expect(afterHit.players[0].activeHitDef).toEqual(hitDef);
   });
 
-  it('defaults an omitted HitDef pausetime to WinMUGEN 0,0', () => {
+  it('applies WinMUGEN defaults for omitted HitDef pausetime and sprite priorities', () => {
     const cns = parseCnsText(`
 [Statedef 200]
 type = S
@@ -1431,8 +1460,38 @@ damage = 10
 
     expect(activated.players[0].activeHitDef).toMatchObject({
       pauseTime: { attacker: 0, defender: 0 },
+      p1SprPriority: 1,
+      p2SprPriority: 0,
     });
     expect(activated.players[0].activeHitDef?.guardPauseTime).toBeUndefined();
+  });
+
+  it('applies WinMUGEN cornerpush inheritance defaults when HitDef parameters are omitted', () => {
+    const activate = (attr: string) => {
+      const cns = parseCnsText(`
+[Statedef 200]
+type = S
+movetype = A
+physics = S
+[State 200, Hit]
+type = HitDef
+trigger1 = 1
+attr = ${attr}, NA
+ground.velocity = -5.5
+`);
+      const initial = createInitialGameState();
+      return stepCnsStateRuntime({
+        ...initial,
+        players: [{ ...initial.players[0], stateNo: 200, moveType: 'A' }, initial.players[1]],
+      }, cns).state.players[0].activeHitDef;
+    };
+
+    expect(activate('S')?.cornerPush).toEqual({
+      ground: -7.15, air: -7.15, down: -7.15, guard: -7.15, airGuard: -7.15,
+    });
+    expect(activate('A')?.cornerPush).toEqual({
+      ground: 0, air: 0, down: 0, guard: 0, airGuard: 0,
+    });
   });
 
   it('diagnoses invalid evaluated HitDef parameters without discarding their names', () => {
@@ -1455,6 +1514,63 @@ guard.hittime = unknown value
     expect(result.players[0].activeHitDef?.invalidParameters).toEqual(expect.arrayContaining(['priority', 'guard.hittime']));
     expect(result.players[0].hitDiagnosticLines?.join('\n')).toContain('raw.hitdef_invalid');
     expect(result.players[0].hitDiagnosticLines?.join('\n')).toContain('reason=evaluation_failed');
+  });
+});
+
+describe('Width controller compatibility', () => {
+  it('evaluates front/back pairs and resets them on the next tick', () => {
+    const cns = parseCnsText(`
+[StateDef 200]
+type = S
+movetype = A
+physics = N
+
+[State 200, Width]
+type = Width
+trigger1 = Time = 0
+edge = 70, 3
+player = 8, 6
+`);
+    const initial = createInitialGameState();
+    const first = stepCnsStateRuntime({
+      ...initial,
+      players: [{ ...initial.players[0], stateNo: 200, stateTime: 0 }, initial.players[1]],
+    }, cns).state.players[0];
+
+    expect(first.widthOverride).toEqual({
+      edge: { front: 70, back: 3 },
+      player: { front: 8, back: 6 },
+    });
+
+    const second = stepCnsStateRuntime({
+      ...initial,
+      players: [{ ...first, stateTime: 1 }, initial.players[1]],
+    }, cns).state.players[0];
+    expect(second.widthOverride).toBeUndefined();
+  });
+
+  it('applies value shorthand to both width bars', () => {
+    const cns = parseCnsText(`
+[StateDef 200]
+type = S
+movetype = A
+physics = N
+
+[State 200, Width]
+type = Width
+trigger1 = 1
+value = 12, 9
+`);
+    const initial = createInitialGameState();
+    const player = stepCnsStateRuntime({
+      ...initial,
+      players: [{ ...initial.players[0], stateNo: 200 }, initial.players[1]],
+    }, cns).state.players[0];
+
+    expect(player.widthOverride).toEqual({
+      edge: { front: 12, back: 9 },
+      player: { front: 12, back: 9 },
+    });
   });
 });
 

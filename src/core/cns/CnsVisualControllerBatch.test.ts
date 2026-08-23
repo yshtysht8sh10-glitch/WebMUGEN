@@ -63,6 +63,68 @@ scale = 1.5, .5
     expect(result.state.players[0]).toMatchObject({ drawAngle: undefined, drawScale: undefined });
   });
 
+  it('evaluates AngleSet, AngleMul, and AngleAdd values in the current player context', () => {
+    const cns = parseCnsText(`
+[Statedef 200]
+type = S
+physics = N
+[State 200, Set]
+type = AngleSet
+trigger1 = 1
+value = fvar(10)
+[State 200, Multiply]
+type = AngleMul
+trigger1 = 1
+value = 2
+[State 200, Add]
+type = AngleAdd
+trigger1 = 1
+value = -.42-fvar(10)/5
+[State 200, Draw]
+type = AngleDraw
+trigger1 = 1
+`);
+    const initial = createInitialGameState();
+    const result = stepCnsStateRuntime({
+      ...initial,
+      players: [{ ...initial.players[0], stateNo: 200, fvars: { 10: 1 } }, initial.players[1]],
+    }, cns);
+
+    expect(result.state.players[0].drawAngle).toBeCloseTo(1.38);
+    expect(result.traces[0].executedControllers).toEqual(['AngleSet', 'AngleMul', 'AngleAdd', 'AngleDraw']);
+  });
+
+  it('applies angle controllers that follow AngleDraw to the same rendered tick', () => {
+    const cns = parseCnsText(`
+[StateDef 200]
+type = S
+physics = N
+[State 200, Draw]
+type = AngleDraw
+trigger1 = 1
+[State 200, Set]
+type = AngleSet
+trigger1 = 1
+value = 20
+[State 200, Multiply]
+type = AngleMul
+trigger1 = 1
+value = 2
+[State 200, Add]
+type = AngleAdd
+trigger1 = 1
+value = 5
+`);
+    const initial = createInitialGameState();
+    const result = stepCnsStateRuntime({
+      ...initial,
+      players: [{ ...initial.players[0], stateNo: 200 }, initial.players[1]],
+    }, cns);
+
+    expect(result.state.players[0].drawAngle).toBe(45);
+    expect(result.traces[0].executedControllers).toEqual(['AngleDraw', 'AngleSet', 'AngleMul', 'AngleAdd']);
+  });
+
   it('emits timed EnvColor and legacy fightfx effects through shared runtime events', () => {
     const cns = parseCnsText(`
 [Statedef 200]

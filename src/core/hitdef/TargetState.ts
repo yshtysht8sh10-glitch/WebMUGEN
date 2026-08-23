@@ -18,8 +18,10 @@ export function removeTarget(player: PlayerState, playerId: number): PlayerState
 }
 
 export function pruneTargets(player: PlayerState, players: readonly PlayerState[]): PlayerState {
-  const liveIds = new Set(players.filter((candidate) => candidate.life > 0).map((candidate) => candidate.id));
-  return { ...player, targets: (player.targets ?? []).filter((entry) => liveIds.has(entry.playerId as 1 | 2)) };
+  const existingIds = new Set(players.map((candidate) => candidate.id));
+  // WinMUGEN keeps an already-acquired Target selectable after lethal damage.
+  // Custom KO sequences can still need a later TargetState to release P2.
+  return { ...player, targets: (player.targets ?? []).filter((entry) => existingIds.has(entry.playerId as 1 | 2)) };
 }
 
 export function selectTargets(player: PlayerState, hitDefId?: number): TargetEntry[] {

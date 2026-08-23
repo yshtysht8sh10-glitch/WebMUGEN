@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createInitialGameState } from './GameState';
 import { applyViewportCameraRules, getScreenSizeProfile, resolveCanvasViewport, resolveViewportCamera } from './ScreenSize';
 import type { MugenStage } from '../stage/MugenStage';
+import { spawnHelper } from '../helper/HelperSystem';
 
 describe('screen size profiles', () => {
   it('keeps 2x Hi-Res scaling while offering extended and classic horizontal viewports', () => {
@@ -32,17 +33,17 @@ describe('screen size profiles', () => {
     expect(state.players.map((player) => player.x - camera.x)).toEqual([100, 300]);
   });
 
-  it('keeps both character push boxes inside the camera when their stage separation exceeds the viewport', () => {
+  it('keeps both character axes inside the camera when their stage separation exceeds the viewport', () => {
     const state = createInitialGameState(undefined, {}, [48, 912]);
     const next = applyViewportCameraRules(state, 400, 240);
     const camera = resolveViewportCamera(next, 400, 240);
     const diagnostics = next.hitDiagnosticLines ?? [];
 
-    expect(next.players[0].x).toBe(299);
-    expect(next.players[1].x).toBe(661);
+    expect(next.players[0].x).toBe(284);
+    expect(next.players[1].x).toBe(676);
     expect(camera.x).toBe(280);
-    expect(next.players[0].x - 15 - camera.x).toBeGreaterThanOrEqual(4);
-    expect(next.players[1].x + 15 - camera.x).toBeLessThanOrEqual(396);
+    expect(next.players[0].x - camera.x).toBeGreaterThanOrEqual(4);
+    expect(next.players[1].x - camera.x).toBeLessThanOrEqual(396);
     expect(diagnostics[diagnostics.length - 1]).toContain('clamped=p1,p2');
   });
 
@@ -174,6 +175,89 @@ describe('screen size profiles', () => {
     const next = applyViewportCameraRules(state, 400, 240);
     expect(next.players[0].x).toBe(48);
     expect(next.players[0].vx).toBe(0);
+  });
+
+  it('uses native Stage tension to follow a wall-carried player until the Stage camera bound', () => {
+    const camera = { left: -400, right: 400, verticalFollow: 0, tension: 50 };
+    let state = createInitialGameState(undefined, {}, [300, 636]);
+    state.camera = { x: 263, y: 65, viewportWidth: 400, viewportHeight: 240 };
+
+    state = applyViewportCameraRules(state, 400, 240, undefined, camera);
+
+    expect(resolveViewportCamera(state, 400, 240).x).toBe(286);
+    expect(state.players[0].x).toBe(300);
+    expect(state.players[1].x).toBe(636);
+
+    state = {
+      ...state,
+      players: [state.players[0], { ...state.players[1], x: 900 }],
+    };
+    state = applyViewportCameraRules(state, 400, 240, undefined, camera);
+    expect(resolveViewportCamera(state, 400, 240).x).toBe(286);
+    expect(state.players[0].x).toBe(300);
+    expect(state.players[1].x).toBe(682);
+  });
+
+  it('lets a normal Helper move the camera only after its own ScreenBound opts in', () => {
+    const initial = createInitialGameState(undefined, {}, [380, 580]);
+    const spawned = spawnHelper(initial.helpers, {
+      helperId: 3725, rootEntityId: 1, parentEntityId: 1, ownerCharacterId: 1,
+      stateOwnerId: 1, animationOwnerId: 1, stateNo: 3725, x: 900, y: 100,
+      facing: 1, keyCtrl: false, ownPal: false, spawnFrame: -1, parent: initial.players[0],
+    });
+    expect(spawned.entries[0].player.screenBound).toEqual({ value: false, moveCameraX: false, moveCameraY: false });
+
+    const withoutOptIn = applyViewportCameraRules({ ...initial, helpers: spawned }, 400, 240);
+    expect(resolveViewportCamera(withoutOptIn, 400, 240)).toEqual({ x: 280, y: 65 });
+
+    const optedIn = {
+      ...spawned,
+      entries: spawned.entries.map((entry) => ({
+        ...entry,
+        player: { ...entry.player, screenBound: { value: false, moveCameraX: true, moveCameraY: true } },
+      })),
+    };
+    const followed = applyViewportCameraRules({ ...initial, helpers: optedIn }, 400, 240);
+    expect(resolveViewportCamera(followed, 400, 240).x).toBeGreaterThan(280);
+    expect(resolveViewportCamera(followed, 400, 240).y).toBeLessThan(65);
+  });
+
+  it('retains the previous camera when every entity disables movecamera', () => {
+    const state = createInitialGameState(undefined, {}, [700, 900]);
+    state.camera = { x: 280, y: 65, viewportWidth: 400, viewportHeight: 240 };
+    state.players = state.players.map((player) => ({
+      ...player,
+      y: 85,
+      screenBound: { value: false, moveCameraX: false, moveCameraY: false },
+    })) as typeof state.players;
+
+    const native = applyViewportCameraRules(state, 400, 240, undefined, { left: -400, right: 400, verticalFollow: 1 });
+    expect(resolveViewportCamera(native, 400, 240)).toEqual({ x: 280, y: 65 });
+
+    const external = applyViewportCameraRules(state, 400, 240, beachStage());
+    expect(resolveViewportCamera(external, 400, 240)).toEqual({ x: 280, y: 65 });
+  });
+
+  it('keeps a dynamic Width edge bar inside the native viewport', () => {
+    const camera = { left: -400, right: 400, verticalFollow: 0 };
+    const state = createInitialGameState(undefined, {}, [876, 956]);
+    state.camera = { x: 512, y: 65, viewportWidth: 400, viewportHeight: 240 };
+    state.players[0] = {
+      ...state.players[0],
+      widthOverride: {
+        edge: { front: 70, back: 0 },
+        player: { front: 0, back: 0 },
+      },
+    };
+    state.players[1] = {
+      ...state.players[1],
+      screenBound: { value: false, moveCameraX: false, moveCameraY: false },
+    };
+
+    const next = applyViewportCameraRules(state, 400, 240, undefined, camera);
+    expect(resolveViewportCamera(next, 400, 240).x).toBe(512);
+    expect(next.players[0].x).toBe(838);
+    expect(next.players[0].x + 70).toBe(908);
   });
 
   it('maps an external Stage camera origin to the extended viewport center', () => {

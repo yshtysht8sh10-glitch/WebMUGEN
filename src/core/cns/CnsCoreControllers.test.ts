@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseCnsText } from '../../parser/cns/CnsParser';
 import { createInitialGameState } from '../engine/GameState';
+import { stepCnsPhysicsMotion } from './CnsPhysicsStep';
 import { stepCnsStateRuntime } from './CnsStateRuntime';
 
 describe('CNS core controllers phase49', () => {
@@ -35,6 +36,30 @@ physics = A
       physics: 'A',
     });
     expect(result.traces[0].executedControllers).toEqual(['StateTypeSet']);
+  });
+
+  it('keeps StateTypeSet overrides after the Time 0 entry tick', () => {
+    const cns = parseCnsText(`
+[Statedef 300]
+type = S
+movetype = I
+physics = N
+
+[State 300, Airborne]
+type = StateTypeSet
+trigger1 = Time = 0
+statetype = A
+physics = A
+`);
+    const initial = createInitialGameState();
+    const entered = stepCnsStateRuntime({
+      ...initial,
+      players: [{ ...initial.players[0], stateNo: 300, y: 200 }, initial.players[1]],
+    }, cns).state;
+    const nextTick = stepCnsStateRuntime(stepCnsPhysicsMotion(entered, cns), cns).state;
+
+    expect(entered.players[0]).toMatchObject({ stateType: 'A', physics: 'A' });
+    expect(nextTick.players[0]).toMatchObject({ stateNo: 300, stateType: 'A', physics: 'A' });
   });
 
   it('executes MoveTypeSet', () => {

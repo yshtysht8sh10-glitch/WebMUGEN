@@ -1,6 +1,7 @@
 import type { GameState, PlayerState } from './types';
 import { clampPlayersToGround, DEFAULT_GROUND_Y } from './GroundClamp';
 import { advanceMoveContact } from '../hitdef/MoveContactState';
+import { snapshotPresentedAnimation } from '../animation/PresentedAnimation';
 
 const GRAVITY = 0.6;
 const FRICTION = 0.82;
@@ -38,5 +39,6 @@ function stepPlayerMotion(player: PlayerState): PlayerState {
     vy: nextVy,
     stateTime: player.stateTime + 1,
     animTime: player.animTime + 1,
+    presentedAnimation: snapshotPresentedAnimation(player),
   };
 }

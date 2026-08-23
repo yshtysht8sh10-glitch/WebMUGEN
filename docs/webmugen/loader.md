@@ -1,6 +1,6 @@
 # Loader
 
-Updated: 2026-07-27
+Updated: 2026-08-10
 
 This document describes how WebMUGEN loads and merges character files.
 
@@ -41,6 +41,10 @@ Local editing uses the development-only `/__webmugen/character-files` endpoint. 
 Development/Public feature flags also gate the browser entry points. Public Mode does not render Character Files or character path/select/Load controls, its handlers reject direct calls, and startup ignores a saved Development Mode character path in favor of the publisher's normalized default selection.
 
 ## CNS loading policy
+
+The CNS parser accepts both canonical controller headers such as `[State 200, Hit]` and real WinMUGEN label-only forms such as `[State Turn]` or `[state that transparensizes impact on team play]` when they occur inside the current StateDef. These forms start a new Controller rather than an unrelated metadata section; bundled T-H-M-A State 3935 depends on this to execute its Time 0 `Turn` before applying facing-relative launch velocity.
+
+Within a State Controller, duplicate non-trigger parameters use WinMUGEN's first-value-wins rule; later occurrences are ignored. Trigger lines remain repeatable. Bundled T-H-M-A State 3630 depends on the first `postype = back` surviving a later stale `postype = p1` line so its 320x240 Action 3603 background remains screen-aligned beneath the subtractive Action 3635 lightning.
 
 ```text
 character CNS files

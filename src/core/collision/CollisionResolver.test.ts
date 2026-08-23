@@ -64,6 +64,23 @@ Clsn1: 2
     expect(getPlayerBodyBoxes(player, airDocument)).toEqual([]);
   });
 
+  it('uses the CNS-presented AIR element after physics advances AnimTime', () => {
+    const player = {
+      ...createInitialGameState().players[0],
+      stateNo: 200,
+      stateTime: 4,
+      animNo: 200,
+      animTime: 4,
+      facing: 1 as const,
+      presentedAnimation: { stateNo: 200, stateTime: 3, animNo: 200, animTime: 3 },
+    };
+
+    expect(getPlayerAttackBoxes(player, airDocument)).toEqual([
+      { kind: 'attack', source: 'element', animNo: 200, elementIndex: 1, boxIndex: 0, x: player.x - 3, y: player.y - 8, width: 10, height: 10 },
+      { kind: 'attack', source: 'element', animNo: 200, elementIndex: 1, boxIndex: 1, x: player.x + 16, y: player.y - 18, width: 10, height: 15 },
+    ]);
+  });
+
   it('detects intersection', () => {
     expect(
       anyIntersects(

@@ -1,5 +1,5 @@
 import { CanvasRenderer } from './CanvasRenderer';
-import { resolveCanvasViewport, resolveViewportCamera } from '../../core/engine/ScreenSize';
+import { MUGEN_GROUND_Y, resolveCanvasViewport, resolveViewportCamera } from '../../core/engine/ScreenSize';
 import type { GameState, PlayerState } from '../../core/engine/types';
 import type { HitFeedbackState } from '../../core/engine/HitFeedback';
 import type { RoundState } from '../../core/engine/RoundState';
@@ -29,7 +29,6 @@ type PatchableRenderer = {
 
 const prototype = CanvasRenderer.prototype as unknown as PatchableRenderer;
 const originalRender = prototype.render;
-const cachedOffsets = new WeakMap<object, number>();
 
 prototype.render = function renderWithResponsiveBuiltInStagePlacement(
   state,
@@ -44,17 +43,7 @@ prototype.render = function renderWithResponsiveBuiltInStagePlacement(
 
   const viewport = resolveCanvasViewport(this.canvas.width, this.canvas.height);
   const camera = resolveViewportCamera(state, viewport.logicalWidth, viewport.logicalHeight);
-  const groundedPlayerYs = resolveBuiltInStageGroundReferenceYs(state.players);
-
-  let visualOffset = cachedOffsets.get(this) ?? 0;
-  if (groundedPlayerYs.length > 0) {
-    visualOffset = resolveBuiltInStageWorldVisualOffset(
-      groundedPlayerYs,
-      camera.y,
-      viewport.logicalHeight,
-    );
-    cachedOffsets.set(this, visualOffset);
-  }
+  const visualOffset = resolveBuiltInStageWorldVisualOffset(viewport.logicalHeight);
 
   if (Math.abs(visualOffset) < 0.001) {
     return originalRender.call(this, state, hitFeedback, roundState, roundScore, options);
@@ -73,12 +62,6 @@ export function usesResponsiveBuiltInStagePlacement(stageTheme: StageTheme): boo
     || stageTheme === 'cyber'
     || stageTheme === 'fresh-clasic'
     || stageTheme === 'cyber-clasic';
-}
-
-export function resolveBuiltInStageGroundReferenceYs(players: readonly PlayerState[]): number[] {
-  return players
-    .filter((player) => player.stateType === 'S' || player.stateType === 'C')
-    .map((player) => player.y);
 }
 
 export function shiftBuiltInStageWorldVisuals(state: GameState, offsetY: number): GameState {
@@ -103,16 +86,17 @@ export function shiftBuiltInStageWorldVisuals(state: GameState, offsetY: number)
 }
 
 export function resolveBuiltInStageWorldVisualOffset(
-  groundedPlayerYs: readonly number[],
-  cameraY: number,
   viewportHeight: number,
 ): number {
-  if (groundedPlayerYs.length === 0) return 0;
-  const currentGround = Math.max(...groundedPlayerYs.map((y) => y - cameraY));
-  const bottomMargin = viewportHeight <= 240
-    ? 18
-    : Math.max(28, Math.round(viewportHeight * 0.055));
-  return clamp(viewportHeight - bottomMargin - currentGround, -180, 180);
+  // WinMUGEN-compatible logical viewports already use the authored 240-line
+  // coordinate space and must not receive a character-derived displacement.
+  if (viewportHeight <= 240) return 0;
+
+  // The 960x540 profile is a WebMUGEN presentation extension. Anchor its
+  // world once from the fixed stage ground instead of following S/C roots;
+  // special states may intentionally move a standing-typed axis vertically.
+  const bottomMargin = Math.max(28, Math.round(viewportHeight * 0.055));
+  return clamp(viewportHeight - bottomMargin - MUGEN_GROUND_Y, -180, 180);
 }
 
 function shiftHitFeedback(feedback: HitFeedbackState, offsetY: number): HitFeedbackState {

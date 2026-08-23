@@ -52,7 +52,7 @@ LoopStart
     expect(getCurrentAnimationElement(air, 10, 15)?.element.imageNo).toBe(1);
   });
 
-  it('reports a new element start again after explicit and default loops', () => {
+  it('restarts AnimElem on a finite implicit loop but not after explicit LoopStart', () => {
     const explicit = parseAirText(`
 Begin Action 10
 10,0, 0,0, 2
@@ -61,7 +61,7 @@ LoopStart
 10,2, 0,0, 2
 `);
     expect(getAnimationTriggerInfo(explicit, 10, 2)).toMatchObject({ elementNo: 2, elementTime: 0, elementStarted: true });
-    expect(getAnimationTriggerInfo(explicit, 10, 6)).toMatchObject({ elementNo: 2, elementTime: 0, elementStarted: true });
+    expect(getAnimationTriggerInfo(explicit, 10, 6)).toMatchObject({ elementNo: 2, elementTime: 4, elementStarted: false });
 
     const defaultLoop = parseAirText(`
 Begin Action 20
@@ -69,7 +69,8 @@ Begin Action 20
 20,1, 0,0, 2
 `);
     expect(getAnimationTriggerInfo(defaultLoop, 20, 0)).toMatchObject({ elementNo: 1, elementTime: 0, elementStarted: true });
-    expect(getAnimationTriggerInfo(defaultLoop, 20, 5)).toMatchObject({ elementNo: 1, elementTime: 0, elementStarted: true });
+    expect(getAnimationTriggerInfo(defaultLoop, 20, 5)).toMatchObject({ elementNo: 1, elementTime: 5, elementStarted: false });
+    expect(getAnimationTriggerInfo(defaultLoop, 20, 6)).toMatchObject({ elementNo: 2, elementTime: 4, elementStarted: true });
   });
 
   it('keeps duration -1 element forever', () => {
@@ -81,6 +82,8 @@ Begin Action 5000
 
     expect(getAnimationLength(air, 5000)).toBe(Number.POSITIVE_INFINITY);
     expect(getCurrentAnimationElement(air, 5000, 500)?.element.imageNo).toBe(1);
+    expect(getAnimationTriggerInfo(air, 5000, 5)).toMatchObject({ elementNo: 2, elementStarted: true });
+    expect(getAnimationTriggerInfo(air, 5000, 500)).toMatchObject({ elementNo: 2, elementStarted: false });
   });
 
   it('returns null for missing action', () => {

@@ -31,4 +31,27 @@ describe('HelperSystem entity identity', () => {
     expect(state.entries[0].player).toMatchObject({ stateNo: 192, stateTime: 0, animNo: 3645, animTime: 0 });
     expect((state.entries[0].player as { vars?: Record<number, number> }).vars).toEqual({});
   });
+
+  it('marks only creation-frame presentations that need no visual State initialization as renderable', () => {
+    const cns = {
+      metadataSections: [],
+      states: [
+        {
+          stateNo: 100,
+          initialAnim: 100,
+          controllers: [{ type: 'VelSet', triggers: [], params: { x: 20 } }],
+        },
+        {
+          stateNo: 101,
+          initialAnim: 101,
+          controllers: [{ type: 'ChangeAnim', triggers: [], params: { value: 102 } }],
+        },
+      ],
+    };
+
+    let state = spawnHelper(createInitialHelperState(), request(100, 100), cns);
+    state = spawnHelper(state, request(101, 101), cns);
+
+    expect(state.entries.map((entry) => entry.canRenderBeforeInitialStatePass)).toEqual([true, false]);
+  });
 });

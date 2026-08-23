@@ -313,10 +313,16 @@ function readHitDef(controller: CnsStateController): ActiveHitDef {
   return {
     damage: damage[0],
     guardDamage: damage[1],
+    affectTeam: normalizeAffectTeam(readString(controller, 'affectteam', 'E')),
     pauseTime: { attacker: pauseTime[0], defender: pauseTime[1] },
     groundVelocity: { x: groundVelocity[0], y: groundVelocity[1] },
     airVelocity: { x: airVelocity[0], y: airVelocity[1] },
   };
+}
+
+function normalizeAffectTeam(value: string): ActiveHitDef['affectTeam'] {
+  const normalized = value.trim().toUpperCase();
+  return normalized === 'F' || normalized === 'B' ? normalized : 'E';
 }
 
 function readNumber(controller: CnsStateController, key: string, fallback: number): number {

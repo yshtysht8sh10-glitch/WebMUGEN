@@ -10,7 +10,7 @@ The CNS runtime evaluates parameters on every firing frame and emits an owner-sc
 
 Character loading gives DEF-selected `stcommon` StateDefs precedence over external `common1.cns`, while `common.cmd` remains a routing layer rather than a replacement State-body source. This is regression-tested with bundled T-H-M-A State 40, whose `Time = 1` controller emits character sample `S40,0` during jump startup.
 
-Issue #54 connects `AnimElem` to AIR element starts instead of global animation time. Repeating AIR loops therefore re-emit PlaySnd events at each configured element start; bundled T-H-M-A State 101 is covered for `AnimElem = 1` and `AnimElem = 4` across multiple loops. No dash-specific timer, State number, or SND number is hard-coded in the runtime.
+`AnimElem` is connected to AIR element timing instead of a State- or sound-specific timer. In WinMUGEN-compatible finite actions, later visual loop passes do not restart that trigger timeline, so bundled T-H-M-A State 101 emits its element 1 and 4 footsteps only on the first pass unless CNS supplies an explicit retrigger condition. No dash-specific timer, State number, or SND number is hard-coded in the runtime.
 
 ## Supported syntax
 

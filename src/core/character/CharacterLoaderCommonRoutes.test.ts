@@ -391,4 +391,26 @@ describe('CharacterLoader common movement routes', () => {
     });
     expect(result.traces[0].executedControllers).toContain('ChangeState');
   });
+
+  it('does not route a character-owned crouching state through common State 12', async () => {
+    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createCommonRouteTestFetcher());
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime(
+      {
+        ...state,
+        players: [
+          { ...state.players[0], stateNo: 131, animNo: 131, stateType: 'C', physics: 'C', ctrl: false },
+          state.players[1],
+        ],
+      },
+      character.cns,
+      {
+        p1Commands: new Set(['holdback']),
+        p2Commands: new Set(),
+      },
+    );
+
+    expect(result.state.players[0].stateNo).toBe(131);
+    expect(result.traces[0].executedControllers).not.toContain('ChangeState');
+  });
 });

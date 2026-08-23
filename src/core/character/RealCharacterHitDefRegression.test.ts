@@ -585,7 +585,7 @@ describe('T-H-M-A State 3430 TargetBind regression', () => {
     expect(next.players[0]).toMatchObject({ stateNo: 3430, stateTime: 0 });
   });
 
-  it('carries the target at AnimElem 2 with the attacker position and velocity', async () => {
+  it('carries the target at AnimElem 2 while synchronizing the owner velocity', async () => {
     const assets = await loadCharacterFromDef('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.def', createFileSystemFetcher());
     const state3430 = assets.cns.states.find((state) => state.stateNo === 3430);
     if (!state3430) throw new Error('State 3430 not found');
@@ -621,6 +621,37 @@ describe('T-H-M-A State 3430 TargetBind regression', () => {
     const moved = applyFallbackStageRules(stepCnsPhysicsMotion(activated, focusedCns));
     expect(moved.players[0]).toMatchObject({ x: 405, y: 98, vx: 5, vy: -2 });
     expect(moved.players[1]).toMatchObject({ x: 475, y: 8, vx: 5, vy: -2, targetBind: { remaining: 9 } });
+  });
+
+  it.each(['S', 'A'] as const)('finishes the State 3430 KO route from StateType %s', async (stateType) => {
+    const assets = await loadCharacterFromDef('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.def', createFileSystemFetcher());
+    const states = assets.cns.states.filter((state) => [3430, 3437, 3440].includes(state.stateNo));
+    expect(states.map((state) => state.stateNo)).toEqual([3430, 3437, 3440]);
+    const focusedCns = assets.cns;
+    const initial = createInitialGameState();
+    let state: GameState = {
+      ...initial,
+      players: [{
+        ...initial.players[0],
+        stateNo: 3430, stateHeaderAppliedStateNo: 3430, stateTime: 170,
+        stateType, moveType: 'A', physics: 'N', ctrl: false,
+        animNo: 3430, animTime: 170,
+        targets: [{ playerId: 2, hitDefId: 0, activeHitDefId: 1 }],
+      }, {
+        ...initial.players[1],
+        life: 1, stateNo: 3436, stateTime: 160, stateType: 'A', moveType: 'H', physics: 'N', ctrl: false,
+      }],
+    };
+
+    state = stepCnsStateRuntime(state, focusedCns).state;
+    expect(state.players[1]).toMatchObject({ life: 0, stateNo: 3437, stateOwnerId: 1 });
+
+    state = {
+      ...state,
+      players: [{ ...state.players[0], stateTime: 200 }, state.players[1]],
+    };
+    state = stepCnsStateRuntime(state, focusedCns).state;
+    expect(state.players[0].stateNo).not.toBe(3430);
   });
 });
 
@@ -793,7 +824,7 @@ describe('T-H-M-A State 3169 defender-hitpause regression', () => {
     }, assets.air, true);
 
     expect(contact.hitEvents, contact.hitDiagnosticLines?.join('\n')).toHaveLength(1);
-    expect(contact.players[1]).toMatchObject({ life: 920, hitPause: 30 });
+    expect(contact.players[1]).toMatchObject({ life: 920, hitPause: 7 });
     expect(contact.players[0].moveContact).toMatchObject({ hit: true, hitCount: 1, activeHitDefId });
     expect(contact.hitDiagnosticLines?.join('\n')).toContain('previous=3165');
     expect(contact.hitDiagnosticLines?.join('\n')).not.toContain('target_hitpause');

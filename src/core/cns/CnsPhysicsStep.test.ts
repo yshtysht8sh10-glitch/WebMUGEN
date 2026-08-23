@@ -5,7 +5,7 @@ import { parseCnsText } from '../../parser/cns/CnsParser';
 import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 
 describe('CnsPhysicsStep', () => {
-  it('advances defender PalFX duration during HitPause without advancing State time', () => {
+  it('advances defender PalFX while a pending external State entry remains at Time 0', () => {
     const state = createInitialGameState();
     const affected = {
       ...state.players[0], hitPause: 1,
@@ -16,7 +16,37 @@ describe('CnsPhysicsStep', () => {
       },
     };
     const next = stepCnsPhysicsMotion({ ...state, players: [affected, state.players[1]] });
-    expect(next.players[0]).toMatchObject({ hitPause: 0, stateTime: 0, palFx: { remainingTime: 49, elapsedTime: 1 } });
+    expect(next.players[0]).toMatchObject({ hitPause: 0, stateTime: 0, animTime: 0, palFx: { remainingTime: 49, elapsedTime: 1 } });
+  });
+
+  it('freezes StateTime together with animation and motion during HitPause', () => {
+    const state = createInitialGameState();
+    const paused = {
+      ...state.players[0], stateNo: 3006, stateHeaderAppliedStateNo: 3006,
+      stateTime: 2, animTime: 7, hitPause: 2, hitPauseKind: 'pause' as const, vx: 3, vy: -10,
+    };
+
+    const next = stepCnsPhysicsMotion({ ...state, players: [paused, state.players[1]] });
+
+    expect(next.players[0]).toMatchObject({
+      stateTime: 2, animTime: 7, hitPause: 1,
+      x: paused.x, y: paused.y, vx: 3, vy: -10,
+    });
+  });
+
+  it('advances StateTime during defender hit-shake while freezing animation and motion', () => {
+    const state = createInitialGameState();
+    const shaken = {
+      ...state.players[0], stateNo: 150, stateHeaderAppliedStateNo: 150,
+      stateTime: 1, animTime: 1, hitPause: 2, hitPauseKind: 'shake' as const, vx: -4,
+    };
+
+    const next = stepCnsPhysicsMotion({ ...state, players: [shaken, state.players[1]] });
+
+    expect(next.players[0]).toMatchObject({
+      stateTime: 2, animTime: 1, hitPause: 1,
+      x: shaken.x, vx: -4,
+    });
   });
 
   it('freezes Projectile contact times during attacker HitPause and advances them afterward', () => {
@@ -111,6 +141,82 @@ describe('CnsPhysicsStep', () => {
       y: DEFAULT_GROUND_Y - 23,
       vx: 2,
       vy: -3,
+    });
+  });
+
+  it.each(['S', 'C'] as const)('does not teleport an authored below-ground %s entity back to the floor', (physics) => {
+    const state = createInitialGameState();
+    const next = stepCnsPhysicsMotion({
+      ...state,
+      players: [
+        {
+          ...state.players[0],
+          stateNo: 3730,
+          stateType: 'S',
+          physics,
+          y: 400,
+          vy: -0.1,
+        },
+        state.players[1],
+      ],
+    });
+
+    expect(next.players[0]).toMatchObject({
+      y: 399.9,
+      vy: -0.1,
+      stateType: 'S',
+      physics,
+    });
+  });
+
+  it.each(['S', 'C'] as const)('lets airborne StateType A keep its Y motion under %s friction physics', (physics) => {
+    const state = createInitialGameState();
+    const next = stepCnsPhysicsMotion({
+      ...state,
+      players: [
+        {
+          ...state.players[0],
+          stateNo: 3401,
+          stateType: 'A',
+          physics,
+          y: DEFAULT_GROUND_Y - 85,
+          vx: 4,
+          vy: 1.5,
+        },
+        state.players[1],
+      ],
+    });
+
+    expect(next.players[0]).toMatchObject({
+      x: state.players[0].x + 4,
+      y: DEFAULT_GROUND_Y - 83.5,
+      vy: 1.5,
+      stateType: 'A',
+      physics,
+    });
+  });
+
+  it('does not clamp Physics=N movement below the ground axis', () => {
+    const state = createInitialGameState();
+    const next = stepCnsPhysicsMotion({
+      ...state,
+      players: [
+        {
+          ...state.players[0],
+          stateType: 'A',
+          physics: 'N',
+          y: DEFAULT_GROUND_Y + 398,
+          vy: 4,
+        },
+        state.players[1],
+      ],
+    });
+
+    expect(next.players[0]).toMatchObject({
+      y: DEFAULT_GROUND_Y + 402,
+      vy: 4,
+      stateType: 'A',
+      physics: 'N',
     });
   });
 

@@ -85,7 +85,7 @@ Examples:
 - comparison operators: `=`, `!=`, `<`, `<=`, `>`, `>=`;
 - range comparisons: `= [a,b]`, `!= [a,b]`;
 - boolean operators: `&&`, `||`, `!`;
-- math operators: `+`, `-`, `*`, `/`, `%`;
+- math operators: `+`, `-`, `*`, `/`, `%`, including unary `-` on grouped, function, and redirected numeric expressions;
 - math constants/functions: `Pi`, `E`, `ACos`, `ASin`, `ATan`, `Sin`, `Cos`, `Tan`, `Exp`, `Ln`, `Log(base, value)`, `IfElse`, `Cond`.
 
 `IfElse` and `Cond` preserve a leading WinMUGEN redirect condition as one argument even though the
@@ -101,17 +101,24 @@ bottom when its condition is bottom and evaluates only its selected branch. `IfE
 branches but returns bottom only when its condition or selected branch is bottom, matching the
 WinMUGEN expression rules relevant to Controller execution.
 
+Unary `-` is also preserved after comparison and boolean operators. This matters when a comparison
+such as `P2Dist X < -1` is nested inside a numeric `IfElse`: the negative threshold is one operand,
+not binary subtraction from the comparison result. Bundled itoko State 1301 uses this form to select
+Actions 1315-1318 for forward/back movement on either side of P2.
+
 When adding expression support, update Expression rows in the matrix, not unrelated Trigger rows.
 
 ## Velocity coordinates
 
 `PlayerState.vx` is stored in world coordinates, but the CNS `Vel X` trigger is facing-relative. The evaluator multiplies world X velocity by the player's facing when exposing `Vel X`; `Vel Y` remains unchanged.
 
+`Pos X` is relative to the current screen center, not the internal world origin. The evaluator subtracts `cameraX + screenWidth / 2` from the entity world X. `PosSet X` applies the inverse conversion with the same frame camera snapshot, including while the camera is scrolling. Redirected forms such as `Enemy(0), Pos X` retain that shared camera context.
+
 ## Edge body distance
 
-`BackEdgeDist`/`FrontEdgeDist` select the current viewport edge behind/in front from current Facing. Their Body variants measure from the character Size-derived ground/air push box. Imported WinMUGEN stages and built-in WebMUGEN stages both supply the current scrolling viewport edges; built-in camera limits are constrained so that viewport edges coincide with the fallback arena limits where player physics stops. `ScreenPos X` independently uses the same camera origin. Dynamic Width overrides remain Partial.
+`BackEdgeDist`/`FrontEdgeDist` select the current viewport edge behind/in front from current Facing. Their Body variants measure from the tick's `Width edge` front/back pair when present, otherwise from the character Size-derived ground/air width. Imported WinMUGEN stages and built-in WebMUGEN stages both supply the current scrolling viewport edges; built-in camera limits are constrained so that viewport edges coincide with the fallback arena limits where player physics stops. `ScreenPos X` independently uses the same camera origin.
 
-The remaining approximation is dynamic `Width` controller consumption; static character Size is included in Body-distance calculations.
+Negative `Width` values and broader non-root ownership remain approximations; positive dynamic widths and static character Size are included in Body-distance calculations.
 
 ## Player body distance
 
@@ -162,14 +169,15 @@ Safe defaults are useful but should not be overclaimed.
 Examples:
 
 - `CanRecover` reads snapshotted `fall.recover` and `fall.recovertime` during an air-fall reaction. Common recovery states still require the CNS `Command = "recovery"` trigger; `CanRecover` alone must not auto-enter States 5200/5210;
-- `NumHelper` counts committed Helpers owned by the current root and optionally filters by MUGEN Helper ID; same-frame pending spawns become visible only at the commit point;
+- `NumHelper` counts Helpers owned by the current root and optionally filters by MUGEN Helper ID; a spawn queued by an earlier entity/controller in the same tick is immediately count-visible, although the new Helper's State pass begins on the next frame;
+- `IsHelper` returns whether the evaluated entity is a Helper, and `IsHelper(expr)` additionally requires its MUGEN Helper ID to equal the truncated numeric expression;
 - projectile contact time may return -1 before projectile contact is integrated.
 
 These should generally remain Partial.
 
 ## GetHitVar snapshot
 
-Successful HitDef contact stores numeric get-hit values on the defender so common get-hit states can read them after State changes. The current snapshot covers damage, selected hittime/slidetime/ctrltime, velocity values, type/animtype/airtype/groundtype codes, fall values including `fall.damage`/`fall.kill`, basic down velocity/hittime, hit/chain id, guarded, combo `hitcount`, snap `xoff`/`yoff`, and yaccel. It persists through the air fall/down path and is cleared after leaving get-hit states. Unsupported `zoff`/fall-time keys return the existing safe zero and are listed in contact diagnostics; therefore GetHitVar remains Partial.
+Successful HitDef contact stores numeric get-hit values on the defender so common get-hit states can read them after State changes. The current snapshot covers damage, selected hittime/slidetime/ctrltime, velocity values, type/animtype/airtype/groundtype codes, fall values including `fall.damage`/`fall.kill`, basic down velocity/hittime, hit/chain id, guarded, combo `hitcount`, snap `xoff`/`yoff`, and yaccel. It persists through the air fall/down path and is cleared after leaving get-hit states. When CNS voluntarily enters a `MoveType = H` State without contact, an absent `GetHitVar(yaccel)` uses WinMUGEN's 240p HitDef default `.35`; an explicitly snapshotted zero remains zero. Omitted HitDef `yaccel` uses the same default. This lets bundled itoko State 197 enter State 5050 and turn its `Vel Y = -8` wall launch into a fall instead of rising forever. Unsupported `zoff`/fall-time keys return the existing safe zero and are listed in contact diagnostics; therefore GetHitVar remains Partial.
 
 For `GetHitVar(yvel)`, contact StateType S/C selects `ground.velocity.y` and A selects `air.velocity.y`; `fall.yvelocity` is exposed only as `GetHitVar(fall.yvel)`. Numeric trigger terms use MUGEN boolean truthiness, so `GetHitVar(fall)` and `!GetHitVar(fall)` correctly distinguish zero and nonzero values in common States 5000/5010.
 
@@ -179,13 +187,13 @@ For `GetHitVar(yvel)`, contact StateType S/C selects `ground.velocity.y` and A s
 
 ## Real-character audit findings
 
-The three-character HitDef audit observed `BackEdgeBodyDist`, `FrontEdgeBodyDist`, `ScreenPos`, `StateTime`, and `TimeMod`. Body-edge distance now uses the current horizontal viewport wall and Size geometry. `ScreenPos X` subtracts the same camera origin; `ScreenPos Y` remains an internal-coordinate approximation. T-H-M-A Darkness Finger verifies that State 3420 reaches its `FrontEdgeBodyDist <= 20` wall transition on both the scrolling Material 22 viewport and built-in WebMUGEN stages without accelerating indefinitely or changing to its wall state away from the rendered edge. `StateTime` aliases current `Time`, and `TimeMod = divisor, remainder` evaluates State-time modulo for a positive divisor; both remain Partial pending broader WinMUGEN-version syntax audit. These names have separate Matrix rows so their presence in real CNS files is not hidden by a generic safe default.
+The three-character HitDef audit observed `BackEdgeBodyDist`, `FrontEdgeBodyDist`, `ScreenPos`, `StateTime`, and `TimeMod`. Body-edge distance uses the current horizontal viewport wall and the tick's dynamic Width edge bar, falling back to Size geometry. `ScreenPos X` subtracts the same camera origin; `ScreenPos Y` remains an internal-coordinate approximation. T-H-M-A Darkness Finger verifies that State 3920's `edge = 70,0` reaches its `FrontEdgeBodyDist <= 20` wall transition before the target-bound impact Explods leave the rendered edge. `StateTime` aliases current `Time`. After the State's Time=0 pass, defender P2 hit-shake advances it while attacker P1 pause freezes it; AnimTime and motion freeze in both roles. A deferred raw external entry retains Time=0 until its first pass. Issue #131 verifies the P2 GuardHit Time=1 path, and Issue #125 verifies the P1 Projectile-pause freeze in itoko State 3006. `TimeMod = divisor, remainder` evaluates State-time modulo for a positive divisor and remains Partial pending broader WinMUGEN-version syntax audit. These names have separate Matrix rows so their presence in real CNS files is not hidden by a generic safe default.
 
 ## AnimElem timing
 
-`AnimElem = N` is evaluated from the current AIR action, using 1-based element numbering. It is true only when element N starts, including when the animation reaches that element again after an explicit `LoopStart` or a default whole-action loop. `AnimElem = N, op T` compares the element-relative time with `=`, `!=`, `<`, `>`, `<=`, or `>=`; an invalid element number returns false. `AnimElemTime(N)` reads the same AIR-relative timeline.
+`AnimElem = N` is evaluated from the current AIR action, using 1-based element numbering. It is true when element N starts. A finite action without `LoopStart` repeats the whole action and bare `AnimElem = N` becomes true again on each pass. Explicit `LoopStart` and negative-duration holds retain the original non-resetting trigger timeline, so a terminal `-1` element does not continuously retrigger. `AnimElem = N, op T` compares the original element-relative time with `=`, `!=`, `<`, `>`, `<=`, or `>=`; an invalid element number returns false. `AnimElemTime(N)` reads the same original timeline. Bundled T-H-M-A Helper State 3031 and State 3940 cover the finite-repeat and infinite-hold distinction.
 
-Issue #54 identified the previous implementation error: bare `AnimElem` compared N with global `player.animTime`, so T-H-M-A State 101 emitted its `S100,1` footstep at the first global times only and never on later AIR loops. The production app now supplies AIR element timing to CNS evaluation, and focused real-character regression covers repeated elements 1 and 4.
+Issue #111 corrected the finite-loop behavior introduced by Issue #54. The production app still supplies AIR element timing to CNS evaluation, but a repeated visual pass no longer makes bare `AnimElem` true again. T-H-M-A State 3010 is covered by a real-character regression proving that its `AnimElem = 3` Helper controller runs once instead of once per loop.
 
 ## Move contact results
 
@@ -210,7 +218,13 @@ cancel animation, Pause/SuperPause parity, and Helper-owned Projectile ordering 
 Root, Parent, Helper, and PlayerID redirects resolve committed runtime entities instead of falling
 back to self. Root players have no Parent, missing lookups return SFalse, MUGEN Helper IDs remain
 separate from unique entity IDs, and `ID` / `PlayerIDExist(expr)` use the unique entity ID space.
-`ParentDist X/Y` and `RootDist X/Y` use these same resolvers: X is relative to the evaluating entity's Facing, Y is axis-space, and a missing Parent does not fall back to self or root. `LifeMax` reads owner constants, while `UniqHitCount` counts accepted ActiveHitDef-generation/defender pairs rather than `numhits` weighting.
+Helpers execute after both roots and therefore resolve `root` and a root-valued `parent` from the
+root's completed State for the current tick. Issue #122 verifies that itoko H1350 entering State
+1350 observes the root's same-tick State 1330 -> 1301 transition instead of re-entering State 1480
+from a stale root snapshot.
+`ParentDist X/Y` and `RootDist X/Y` use these same resolvers: X is relative to the evaluating entity's Facing, Y is axis-space, and a missing Parent does not fall back to self or root. A preceding redirect rebinds the relationship source, so `helper(ID), ParentDist` measures the selected Helper against its own immediate parent. For WinMUGEN compatibility, `ParentDist X/Y` truncates the resolved fractional distance toward zero before CNS comparison; this lets legacy Helpers use `ParentDist X = 0` as a sub-pixel settling condition. Issue #120 verifies the compound redirect with itoko H1472's return to H1350. `LifeMax` reads owner constants, while `UniqHitCount` counts accepted ActiveHitDef-generation/defender pairs rather than `numhits` weighting.
+
+Borrowed custom States keep unredirected trigger values on the controlled target, but Root/Parent/Helper relationships begin from the unique root or Helper entity that supplied the State. HitDef `p2stateno` and TargetState both record this entity; SelfState clears it. Issue #120 verifies that itoko State 1465's `root,movetype = H` reads Helper 1462's P1 root rather than the controlled P2 itself.
 
 Production RoundState supplies `RoundNo`, `RoundsExisted`, KO/time/draw winner data, and end reason.
 `WinKO`, `WinTime`, `WinPerfect`, `LoseKO`, and `LoseTime` are derived symmetrically from that state.
@@ -225,9 +239,11 @@ Old-style `ProjHit[ID] = value` reads the same history. Its simple form reports 
 
 ## Target lookup
 
-Successful HitDef contact registers `{playerId, hitDefId, activeHitDefId}` on the attacker. NumTarget optionally filters by HitDef id; TargetID and TargetStateNo select the first matching entry. The storage permits multiple targets and is pruned for KO/destroyed players; round restart creates an empty list. Current TargetStateNo lookup is verified for the two-player runtime, while Helper/multi-player lookup remains Partial.
+Successful HitDef contact registers `{playerId, hitDefId, activeHitDefId}` on the attacker. NumTarget optionally filters by HitDef id; TargetID and TargetStateNo select the first matching entry. The storage permits multiple targets. An already acquired Target remains selectable after its Life reaches zero so delayed custom-State release controllers can run; missing entities are pruned and round restart creates an empty list. Current TargetStateNo lookup is verified for the two-player runtime, while Helper/multi-player lookup remains Partial.
 
-Issue #65 connects that same registry to redirect expressions. `target(ID), MoveType` treats `ID` as the HitDef `id`, selects the first matching live Target entry, resolves its runtime player, and then evaluates `MoveType` on that player. It does not compare `ID` with StateNo or runtime entity id. A missing id/player produces SFalse for both equality and inequality instead of falling back to self or the ordinary opponent.
+Issue #65 connects that same registry to redirect expressions. `target(ID), MoveType` treats `ID` as the HitDef `id`, selects the first matching live Target entry, resolves its runtime player, and then evaluates `MoveType` on that player. It does not compare `ID` with StateNo or runtime entity id. Root and Helper attackers use their own Target registry when selecting the opposing root. Later controllers in the same State pass observe a preceding Target controller mutation, including `TargetState` followed by `target(ID),StateNo`. A missing id/player produces SFalse for both equality and inequality instead of falling back to self or the ordinary opponent.
+
+Direct redirected numeric operands are parsed as a comparison before the generic redirected-boolean path. For WinMUGEN ordering operators (`>`, `>=`, `<`, `<=`), an unresolved direct redirect participates with numeric value zero; equality and inequality against an unresolved redirect remain SFalse. This distinction is used by itoko State 1102 to rank the remaining bag Helpers after one or more sibling bags have already been destroyed.
 
 Trigger record grouping remains `triggerall` AND every numbered group, repeated records with the same `triggerN` are AND, and different numbered groups are OR. `PrevStateNo` is written from the immediate source on every State entry, including multiple same-frame ChangeState entries; `MoveHit` remains owned by the accepted ActiveHitDef contact lifecycle described above. `raw.target_composite_trigger` records the three layers together for routes such as T-H-M-A 1015 -> 1016.
 
@@ -275,3 +291,7 @@ Trigger tests should include:
 | Re-parsing formatted trigger strings instead of parsed records | Parser/formatter discrepancies can break routes. |
 | Marking safe defaults Complete | Matrix overstates compatibility. |
 | Hiding trigger fixes in state-specific TypeScript | KFM may work but real characters break. |
+
+## Redirected Command ownership
+
+Issues #118/#127 verify that a redirect changes the command source as well as the PlayerState source. In a non-keyctrl Helper, bare `Command` has no root input, while `root, Command = "..."` reads the root's resolved command set. This is general redirect execution behavior and contains no itoko state-number branch.

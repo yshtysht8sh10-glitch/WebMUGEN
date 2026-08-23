@@ -1,6 +1,6 @@
 # Trigger Compatibility Notes
 
-Updated: 2026-07-22
+Updated: 2026-08-17
 
 This document summarizes Trigger implementation notes. The compatibility matrix remains the source of truth:
 
@@ -31,18 +31,18 @@ Do not mark safe defaults as Complete.
 |---|---|---|---|
 | `BodyDist X` | Partial | Compatibility alias of `P2BodyDist X`; measures Facing-relative front-to-front distance using each player's ground/air Size width and XScale. Real T-H-M-A x/a near/far CMD routes are covered. | Team selection, mixed coordinate spaces, and Helper redirects need audit. |
 | `BodyDist Y` | Partial | Evaluates opponent/player Y coordinate difference like `P2BodyDist Y`. | Precise body-edge height and airborne body bounds need audit. |
-| `BackEdgeBodyDist` | Partial 90% | The compiled evaluator selects the Facing-relative current viewport edge and measures from the Size-derived ground/air push box. Built-in camera limits align that viewport with their player-containment arena. Focused viewport/both-Facing tests and State 250 to 281 cover it. | Dynamic Width overrides remain incomplete. |
-| `FrontEdgeBodyDist` | Partial 90% | The compiled evaluator selects the Facing-relative current viewport edge and measures from the Size-derived ground/air push box. Built-in camera limits align that viewport with their player-containment arena. Focused viewport/both-Facing tests, State 250 to 281, and T-H-M-A Darkness Finger State 3420 to 3430 on both Stage paths cover it. | Dynamic Width overrides remain incomplete. |
+| `BackEdgeBodyDist` | Partial 95% | The compiled evaluator selects the Facing-relative current viewport edge and measures from the tick-scoped Width edge pair, falling back to Size-derived ground/air geometry. Built-in camera limits align that viewport with their player-containment arena. Focused viewport/both-Facing/dynamic-Width tests and State 250 to 281 cover it. | Negative Width values and broader non-root ownership remain incomplete. |
+| `FrontEdgeBodyDist` | Partial 95% | The compiled evaluator selects the Facing-relative current viewport edge and measures from the tick-scoped Width edge pair, falling back to Size-derived ground/air geometry. Built-in camera limits align that viewport with their player-containment arena. Focused viewport/both-Facing/dynamic-Width tests, State 250 to 281, and T-H-M-A Darkness Finger State 3920 to 3930 cover it. | Negative Width values and broader non-root ownership remain incomplete. |
 | `AnimExist` | Partial | Uses runtime animation lookup when provided. | AIR ownership, redirect behavior, and missing animation edge cases need audit. |
 | `SelfAnimExist` | Partial | Uses runtime self-animation lookup when provided. | Redirect-specific AIR ownership and helper/custom-state behavior need audit. |
-| `AnimElem` | Complete | Uses 1-based AIR element starts, comparison-time syntax, invalid-element false, and loop re-entry. | Focused trigger/AIR tests and bundled T-H-M-A State 101 PlaySnd regression cover the runtime path. |
+| `AnimElem` | Complete | Uses 1-based AIR element starts, comparison-time syntax, invalid-element false, and WinMUGEN finite-loop non-retrigger semantics. | Focused trigger/AIR tests plus bundled T-H-M-A State 101 PlaySnd and State 3010 Helper regressions cover the runtime path. |
 | `AnimElemNo` | Partial | Uses runtime animation element lookup when provided. | AIR timing edge cases and exact WinMUGEN element numbering need audit. |
 | `AnimElemTime` | Complete | Uses AIR element-relative times shared with `AnimElem`. | Focused positive, negative, and invalid-element tests cover comparison behavior. |
 | `Command` | Complete | Basic command set matching works. | CMD syntax/timing remains partially covered elsewhere. |
 | `StateNo` | Complete | Numeric state comparison. | None known for simple comparisons. |
 | `StateType` | Complete | Basic S/C/A/L comparison. | State header correctness still matters. |
 | `Ctrl` | Complete | Bare `Ctrl` and numeric `Ctrl = 1` / `Ctrl = 0` comparisons are covered, including the bundled T-H-M-A State -1 route. | Control handoff semantics depend on state/controller flow. |
-| `Time` | Complete | State time comparison. | Previous-state and transition timing still need broader route tests. |
+| `Time` | Complete | State time comparison distinguishes HitDef roles: defender P2 hit-shake advances Time, while attacker P1 pause freezes it. Bundled itoko verifies both the GuardHit Time=1 guard-break update and the State 3006 zipper delay. | Previous-state and uncommon custom-transition timing still need broader route tests. |
 | `Power` / `PowerMax` | Partial | Reads the evaluated P1/P2 player's durable current value and `[Data] power`-derived maximum; focused tests cover threshold routes and 9000 limits. | Helper/root redirect ownership awaits the Helper runtime. |
 | `Var` / `FVar` / `SysVar` / `SysFVar` | Partial | Evaluates variable indexes, reads current redirected-player storage, and enforces WinMUGEN ranges (0..59, 0..39, and 0..4 for system variables); invalid indexes produce bottom. | Broader redirect/entity ownership and bottom propagation remain under audit. |
 | `Name` / `AuthorName` / `P1Name` / `P2Name` | Partial | Production DEF `[Info]` metadata is copied into root PlayerState; P1Name aliases the evaluating player and P2Name reads the primary opponent. | Team slots and broader Helper/custom-state metadata ownership remain incomplete. |
@@ -50,9 +50,12 @@ Do not mark safe defaults as Complete.
 | `PalNo` | Partial | Reports the Settings `p1`-`p12` choice; production loading applies the matching DEF ACT and preserves the requested number when the ACT is absent. | Independent P1/P2 choices and in-match palette remapping are not implemented. |
 | `MoveContact` / `MoveHit` / `MoveGuarded` / `HitCount` | Partial | Reads move-level contact/hit/guard state and State-local hit count. MoveContact/MoveHit/MoveGuarded return zero outside `MoveType = A`, including delayed Projectile contact retained after the owner becomes idle. Root, Helper, and Projectile contacts are connected; bundled T-H-M-A State 1005, 1011, and damage-counter Helper 5506 lifecycle routes are tested. | MoveReversed and broader WinMUGEN lifetime cases remain incomplete. |
 | `HitDefAttr` | Partial | Compares requested State/category sets with the normalized ActiveHitDef attr shared by HitBy/NotHitBy collision filtering. | Redirect and malformed multi-attr edge cases remain incomplete. |
-| `GetHitVar` | Partial | Reads a contact snapshot for damage, hit/slide/control time, velocities, type/animation codes, fall values, ids, guarded, and yaccel across get-hit State changes. | Offset/fall-time keys and later guard/fall semantics still use diagnosed safe defaults. |
-| `NumTarget` / `TargetID` / `TargetStateNo` | Partial | Reads a multi-entry attacker Target list, supports HitDef id filtering, and returns current two-player target State. `target(ID),MoveType` uses the same registry and SFalse on lookup failure. | Helper/team/multi-player selection and other redirected trigger families remain incomplete. |
+| `GetHitVar` | Partial | Reads a contact snapshot for damage, hit/slide/control time, velocities, type/animation codes, fall values, ids, guarded, and yaccel across get-hit State changes. An absent `yaccel` in a voluntarily entered get-hit State uses the WinMUGEN 240p default `.35`, while an explicit zero remains zero; bundled itoko State 197 -> 5050 verifies the resulting fall. | Offset/fall-time keys and later guard/fall semantics still use diagnosed safe defaults. |
+| `NumTarget` / `TargetID` / `TargetStateNo` | Partial | Reads a multi-entry attacker Target list, supports HitDef id filtering, and returns current two-player target State. `target(ID),MoveType` uses the same registry and SFalse on lookup failure. Root and Helper attackers can select the opposing root, and later same-pass redirects observe preceding Target controller mutations. | Helper-as-target, team/multi-player selection, and other redirected trigger families remain incomplete. |
 | `PrevStateNo` | Partial | Stores the immediate source State on entry, including re-entry and multiple same-frame transitions; round reset starts without stale history. | Helper/custom-state ownership and broader real-character routes remain incomplete. |
+| `NumHelper` | Partial | Counts root-owned Helpers with optional MUGEN ID filtering. Same-tick spawns are visible to later counts before their first State pass, and pending destroys are excluded; this covers itoko's simultaneous H1105/H1106/H1107 slot allocation. | Redirect/team/custom-state edge audit remains incomplete. |
+| `IsHelper` | Partial | Bare form distinguishes root and Helper evaluation; `IsHelper(expr)` evaluates and compares the Helper's MUGEN ID, including redirected PlayerState context. Direct missing-Helper numeric redirects retain SFalse for `=`/`!=` and participate as zero in ordering comparisons, covering itoko's surviving-bag ranking. | Broader custom-state and non-player entity audit remains incomplete. |
+| `ParentDist X/Y` | Partial 95% | Resolves the immediate parent, including after a `helper(ID)` redirect, applies the redirected entity's Facing to X, and truncates fractional distance toward zero before CNS comparison as WinMUGEN does. Bundled itoko coverage verifies H1360 settling and Issue #120's H1472 return to parent H1350. | Same-pass parent removal and version-specific MUGEN 1.x precise-distance behavior remain incomplete. |
 | `enemy` / `enemynear` redirects | Partial | Root P1/P2, index 0, numeric/string/boolean/AIR child context, SFalse failure, grouping, diagnostics, bundled 3405/3415, and redirected `IfElse` conditions in T-H-M-A State 233 are tested. | Team/multiple-enemy nearest/index ordering and Helper ownership remain incomplete. |
 | Projectile triggers | Partial | `ProjContact`/`ProjHit`/`ProjGuarded` and their elapsed-time forms read owner-local histories, including ID 0/omitted selection, multiple IDs, repeated contacts, and HitPause freezing. Opposing projectile priority cancellation records `ProjCancelTime`; bundled T-H-M-A State -2 execution is covered. | Helper-owned Projectiles, cancel animation details, and exact Pause/SuperPause ordering remain incomplete. |
 
@@ -85,6 +88,13 @@ Matrix rows retain their prior status because no Trigger result is intentionally
 
 For example, adding math support for `+`, `-`, `*`, `/`, `%`, `Sin`, `Cos`, or `IfElse` should update Expression rows, not arbitrary Trigger rows.
 
+Unary minus is evaluated after additive and multiplicative splitting, so it binds to the following
+numeric term rather than negating an entire surrounding expression. This covers function and Redirect
+operands such as itoko State 1210's `-atan(...) * 180 / pi + 90` AngleSet value.
+Comparison and boolean operators also establish a unary-sign boundary. Consequently a nested numeric
+condition such as itoko State 1301's `ifelse(P2Dist X < -1, 1, 0)` compares against negative one;
+the evaluator must not reinterpret it as subtraction from the comparison result.
+
 The numeric evaluator enforces WinMUGEN-style bottom propagation for invalid math domains and
 non-finite arithmetic. `Log` takes the documented two arguments (`base`, `value`), `Cond` skips its
 unused branch, and `IfElse` evaluates both branches while ignoring bottom from the unselected result.
@@ -109,3 +119,5 @@ For animation-related triggers, tests should include both existing and missing a
 ## Three-character audit
 
 The 2026-07-13 KFM/T-H-M-A/Yes030_e-rada audit checks every observed trigger classification against both Matrix mirrors. It exposed missing rows for `BackEdgeBodyDist`, `FrontEdgeBodyDist`, `StateTime`, and `TimeMod`; they are now tracked individually. A T-H-M-A `TimeMod = 7, 3` route produced a focused regression failure, so `TimeMod` and the observed `StateTime` alias were connected with positive/negative tests and remain Partial pending wider syntax/version verification. See `hitdef-real-character-regression.md` for the command and scope.
+
+Issue #118/#127 coverage verifies redirected command ownership: a non-keyctrl Helper cannot consume root commands through bare `Command`, but `root, Command` evaluates with the root command set. Issue #124 verifies that bare `Power` in a Helper observes the shared root gauge.

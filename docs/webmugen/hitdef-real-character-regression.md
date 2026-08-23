@@ -1,6 +1,6 @@
 # HitDef Real-Character Regression
 
-Updated: 2026-07-13
+Updated: 2026-08-13
 
 This is the evidence record for GitHub Issue #23. It does not claim complete WinMUGEN combat compatibility; it records which real-character paths were exercised and which limitations remain Partial or Unsupported in the canonical Matrix.
 
@@ -90,6 +90,24 @@ the omitted default, explicit `p2getp1state = 0` and `1`, and that `-` rejects a
 while `+` requires one.
 
 Focused engine tests from Issues #3-#22 remain the behavioral evidence for multihit/chain persistence, Target mutation, custom-State ownership, guard/down/recovery, juggle, KO, power, cornerpush, snap, effects, and diagnostics. This harness proves those layers accept multiple real WinMUGEN data layouts and are not tied to KFM State numbers.
+
+## 2026-08-13 Issue #114 p2facing verification
+
+WinMUGEN real-machine comparison establishes that HitDef `p2facing` is relative to P1 Facing and
+does not derive from either fighter's world-coordinate position. A positive value makes P2 face
+opposite P1; a negative value makes P2 face the same direction as P1. Focused tests cover both P1
+Facing directions, both parameter signs, both coordinate orders, nonzero HitPause, custom-State
+entry, and the guard path where P2 Facing must remain unchanged. The implementation is confined to
+the shared HitDef resolver; no character data was changed.
+
+## 2026-08-16 interrupted Shinuchi HitOverride regression
+
+HitOverride now preserves the matching incoming HitDef's `GetHitVar` snapshot while continuing to
+suppress normal damage and common get-hit reaction. `forceair = 1` selects air hittime/velocity
+fields; without it, the defender's current StateType selects the snapshot. Bundled T-H-M-A State
+3970 therefore receives a nonzero `GetHitVar(yaccel)`, advances its Y velocity, and reaches State
+5100 instead of remaining indefinitely at ground level with StateTime increasing. No character
+asset was modified.
 
 ## Known constraints
 

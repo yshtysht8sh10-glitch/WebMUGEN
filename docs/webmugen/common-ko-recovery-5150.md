@@ -17,7 +17,7 @@ Normal `kill`, guarded `guard.kill`, and fall `fall.kill` independently decide w
 
 A lethal normal or guarded contact sets the get-hit fall flag. A guarded KO leaves the contact classified as guarded for MoveGuarded/effects but enters the normal ground/crouch/air get-hit reaction instead of returning through States 150-155. Both cases then use the unmodified common 5000/5030/5100/5110 route into 5150; the engine does not jump directly to a numbered dead state.
 
-Hit pause remains authoritative. CNS state controllers and physics do not advance while the defender counter is positive, so the State 5110-to-5150 route executes only after hit pause reaches zero. An already-KO player is rejected before new hit eligibility and is pruned from registered Target selection. State 5150's `NotHitBy` remains active as the data-defined exclusion layer.
+Hit pause remains authoritative. CNS state controllers and physics do not advance while the defender counter is positive, so the State 5110-to-5150 route executes only after hit pause reaches zero. An already-KO player is rejected before new hit eligibility and cannot become a new Target. An existing Target registration survives lethal damage so an attacker-owned custom-State sequence can still issue its delayed release; explicit TargetDrop, entity disappearance, or round restart clears it. State 5150's `NotHitBy` remains active as the data-defined exclusion layer.
 
 ## Round integration
 

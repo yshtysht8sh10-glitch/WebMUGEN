@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode } from 'react';
+import { memo, useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode } from 'react';
 import { CanvasRenderer } from '../renderer/canvas2d/CanvasRenderer';
 import { createInitialGameState } from '../core/engine/GameState';
 import type { GameState, PlayerState, ProjectileState, Rect } from '../core/engine/types';
@@ -24,7 +24,7 @@ import { createAudioStartGate, type AudioStartGate, type AudioStartGateGesture, 
 import type { SoundRuntimeEvent } from '../core/audio/SoundEvent';
 import { processSoundRuntimeEvents } from '../core/audio/SoundRuntimeBridge';
 import { adjustMasterVolumeFromKey, normalizeAudioSettings, type AudioSettings } from './AudioSettings';
-import { applyExplodControllerEvents, removeExplodsOnOwnerHit, stepExplodRuntime, type ExplodControllerEvent } from '../core/explod/ExplodSystem';
+import { applyExplodControllerEvents, removeExplodsOnOwnerHit, stepExplodRuntime, synchronizeBoundExplodPositions, type ExplodControllerEvent } from '../core/explod/ExplodSystem';
 import type { AirAction, AirDocument, AirElement } from '../parser/air/AirTypes';
 import type { ImageDataSprite, ImageDataSpritePack } from '../core/sprite/ImageDataSpriteTypes';
 import { spriteKey } from '../core/sprite/SpritePackLoader';
@@ -103,7 +103,7 @@ import { analyzeCnsCoverage } from '../core/cns/CnsCoverageDiagnostics';
 import type { CnsCoverageDiagnostics } from '../core/cns/CnsCoverageDiagnostics';
 import {
   advanceExternalCnsStateEntryFrame,
-  enterCnsStateAndRunTimeZero,
+  enterCnsStateAndRunTimeZeroWithTrace,
   stepCnsStateRuntime,
   type CnsExecutedControllerRef,
   type CnsRuntimeTrace,
@@ -767,6 +767,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
             pauseState: pauseAtFrameStart,
             screenWidth: cnsScreenProfile.logicalWidth,
             cameraX: cnsCamera.x,
+            cameraY: cnsCamera.y,
             screenLeft: cnsScreenLeft,
             screenRight: cnsScreenRight,
             roundState: winMugenRoundState(nextRoundState),
@@ -834,6 +835,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
           const processedProjectileEventCount = projectileEvents.length;
           let pauseDuringFrame = nextState.pause ?? createInitialPauseState();
           let pausedThisFrame = isGamePaused(pauseDuringFrame);
+          const externalStateEntryTraces: CnsRuntimeTrace[] = [];
           const beforePhysicsState = nextState;
           if (ENABLE_RUNTIME_FALLBACKS) {
             nextState = stepFallbackMotion(nextState);
@@ -861,12 +863,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
               character.air,
               aiLogEnabled && runtimeSettingsRef.current.hitDiagnostics,
               beforePhysicsState,
-              (player, opponent, stateNo) => advanceExternalCnsStateEntryFrame(enterCnsStateAndRunTimeZero(
-                player,
-                opponent,
-                stateNo,
-                character.cns,
-                {
+              (player, opponent, stateNo) => {
+                const entry = enterCnsStateAndRunTimeZeroWithTrace(player, opponent, stateNo, character.cns, {
                   gameTime: nextState.frame,
                   getAnimationDuration: (animNo) => getMugenAnimEndTime(character.air, animNo),
                   getAnimationElementNo: (animNo, animTime) => {
@@ -875,6 +873,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
                   },
                   getAnimationTriggerInfo: (animNo, animTime) => getAnimationTriggerInfo(character.air, animNo, animTime),
                   hitDiagnostics: aiLogEnabled && runtimeSettingsRef.current.hitDiagnostics,
+                  traceDiagnostics: traceDiagnosticsEnabled,
                   onSoundPlay: (event) => soundEvents.push(event),
                   onSoundStop: (event) => soundEvents.push(event),
                   onSoundPan: (event) => soundEvents.push(event),
@@ -895,6 +894,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
                   pauseState: pauseDuringFrame,
                   screenWidth: cnsScreenProfile.logicalWidth,
                   cameraX: cnsCamera.x,
+                  cameraY: cnsCamera.y,
                   screenLeft: cnsScreenLeft,
                   screenRight: cnsScreenRight,
                   roundState: winMugenRoundState(nextRoundState),
@@ -903,9 +903,10 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
                   roundWinner: nextRoundState.winner,
                   roundEndReason: nextRoundState.endReason,
                   teamMode: 'single',
-                },
-                player.id === 1 ? p1Commands : p2Commands,
-              )),
+                }, player.id === 1 ? p1Commands : p2Commands);
+                externalStateEntryTraces.push(entry.trace);
+                return advanceExternalCnsStateEntryFrame(entry.player);
+              },
               (entityId) => {
                 if (!pausedThisFrame) return true;
                 const helper = nextState.helpers.entries.find((entry) => entry.entityId === entityId);
@@ -973,6 +974,13 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
             nextState = hitEffects.state;
             runtimeEventDiagnosticLines.push(...processSoundRuntimeEvents(hitEffects.soundEvents, character.sounds, null, audioRuntimeRef.current, aiLogEnabled));
             nextState = applyFallbackHitRecovery(nextState, aiLogEnabled && runtimeSettingsRef.current.hitDiagnostics);
+            if (externalStateEntryTraces.length > 0) {
+              nextCnsTraces = [...nextCnsTraces, ...externalStateEntryTraces];
+              // HitDef custom-state entry occurs after the ordinary CNS and
+              // physics passes. Preserve that committed state in the readable
+              // history so its Time=0 controllers do not disappear.
+              nextReadableHistoryState = nextState;
+            }
           }
           if (runtimeEventDiagnosticLines.length > 0) {
             nextState = { ...nextState, hitDiagnosticLines: [...(nextState.hitDiagnosticLines ?? []), ...runtimeEventDiagnosticLines] };
@@ -1026,6 +1034,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
           }
         }
         for (const event of environmentShakeEvents) nextFeedback = startEnvironmentShake(nextFeedback, event);
+
+        nextState = synchronizeBoundExplodPositions(nextState);
 
         restartPressedRef.current = inputSnapshot.system.restartRound;
         presentationSkipInputHeldRef.current = presentationKeys.size > 0;
@@ -3628,6 +3638,7 @@ export function CharacterSourceFilesViewer({
   const detailRef = useRef<HTMLDivElement | null>(null);
   const summaryRef = useRef<HTMLDivElement | null>(null);
   const editorHighlightRef = useRef<HTMLPreElement | null>(null);
+  const sourceSearchInputRef = useRef<HTMLInputElement | null>(null);
   const resizingRef = useRef(false);
   const historyResizingRef = useRef(false);
   const rowResizingRef = useRef<'file-list' | 'detail' | null>(null);
@@ -3636,6 +3647,7 @@ export function CharacterSourceFilesViewer({
   const [fileListHeight, setFileListHeight] = useState(() => calculateCharacterFileListHeight(files));
   const [detailHeight, setDetailHeight] = useState(560);
   const [historyHeight, setHistoryHeight] = useState(140);
+  const [summaryTab, setSummaryTab] = useState<'map' | 'search'>('map');
   const [syntaxTheme, setSyntaxTheme] = useState<CharacterSyntaxTheme>('vscode-dark-2026');
   const [editingPath, setEditingPath] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -3644,12 +3656,18 @@ export function CharacterSourceFilesViewer({
   const [selectedSndSampleKey, setSelectedSndSampleKey] = useState<string | null>(null);
   const [sffZoom, setSffZoom] = useState(1);
   const [sffPan, setSffPan] = useState({ x: 0, y: 0 });
+  const [sourceViewport, setSourceViewport] = useState({ path: '', selectedLine: 1, viewportLine: 1 });
   const fallbackSelection = files[0] ? { path: files[0].path, line: 1 } : null;
   const effectiveSelection = selection && files.some((file) => file.path === selection.path) ? selection : fallbackSelection;
   const selectedFile = effectiveSelection ? files.find((file) => file.path === effectiveSelection.path) : null;
   const selectedLineId = effectiveSelection ? cnsSourceLineId(effectiveSelection.path, effectiveSelection.line) : null;
   const selectedPath = selectedFile?.path ?? '';
   const selectedLine = effectiveSelection?.line ?? 1;
+  const sourceLines = useMemo(() => selectedFile?.text.split(/\r?\n/) ?? [], [selectedFile?.text]);
+  const sourceViewportLine = sourceViewport.path === selectedPath && sourceViewport.selectedLine === selectedLine
+    ? sourceViewport.viewportLine
+    : selectedLine;
+  const sourceLineWindow = calculateSourceLineWindow(sourceLines.length, selectedLine, sourceViewportLine);
   const sourceOutline = useMemo(
     () => selectedFile ? createSourceOutline(selectedFile) : [],
     [selectedFile],
@@ -3686,6 +3704,17 @@ export function CharacterSourceFilesViewer({
   }, [fileInventorySignature, files]);
 
   useEffect(() => {
+    const handleSearchShortcut = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || !event.shiftKey || event.key.toLowerCase() !== 'f') return;
+      event.preventDefault();
+      setSummaryTab('search');
+      requestAnimationFrame(() => sourceSearchInputRef.current?.focus());
+    };
+    window.addEventListener('keydown', handleSearchShortcut);
+    return () => window.removeEventListener('keydown', handleSearchShortcut);
+  }, []);
+
+  useEffect(() => {
     const codeElement = codeRef.current;
     if (!codeElement || !effectiveSelection) return;
     const frameId = requestAnimationFrame(() => {
@@ -3711,12 +3740,18 @@ export function CharacterSourceFilesViewer({
   const handleCodeScroll = () => {
     if (!selectedPath || !codeRef.current) return;
     effectiveScrollPositionsRef.current[selectedPath] = codeRef.current.scrollTop;
+    if (sourceLines.length <= SOURCE_LINE_VIRTUALIZATION_THRESHOLD) return;
+    const approximateLine = Math.max(1, Math.floor(codeRef.current.scrollTop / SOURCE_LINE_HEIGHT) + 1);
+    if (approximateLine < sourceLineWindow.start + SOURCE_LINE_WINDOW_EDGE
+      || approximateLine > sourceLineWindow.end - SOURCE_LINE_WINDOW_EDGE) {
+      setSourceViewport({ path: selectedPath, selectedLine, viewportLine: approximateLine });
+    }
   };
 
   const handleOutlineClick = (item: SourceOutlineItem) => {
     if (!selectedFile) return;
     if (item.kind === 'air-action') setSelectedAirActionNo(Number(item.value));
-    onSelect({ path: selectedFile.path, line: item.line });
+    selectSource({ path: selectedFile.path, line: item.line });
   };
 
   const handleResizePointerMove = (clientX: number) => {
@@ -3756,15 +3791,22 @@ export function CharacterSourceFilesViewer({
     setSaveStatus(null);
   };
 
-  const selectFile = (path: string) => {
-    if (isEditing && isDirty && selectedFile && path !== selectedFile.path) {
-      if (!window.confirm(text('Discard the unsaved changes and open another file?', '未保存の変更を破棄して別のファイルを開きますか？'))) return;
+  function selectSource(nextSelection: Exclude<CnsSourceSelection, null>): boolean {
+    if (isEditing && isDirty && selectedFile && nextSelection.path !== selectedFile.path) {
+      if (!window.confirm(text('Discard the unsaved changes and open another file?', '未保存の変更を破棄して別のファイルを開きますか？'))) return false;
       setDrafts((current) => ({ ...current, [selectedFile.path]: selectedFile.text }));
       setEditingPath(null);
     }
-    setSelectedSffSpriteKey(null);
-    setSelectedSndSampleKey(null);
-    onSelect({ path, line: 1 });
+    if (nextSelection.path !== selectedFile?.path) {
+      setSelectedSffSpriteKey(null);
+      setSelectedSndSampleKey(null);
+    }
+    onSelect(nextSelection);
+    return true;
+  }
+
+  const selectFile = (path: string) => {
+    selectSource({ path, line: 1 });
   };
 
   if (files.length === 0) {
@@ -3785,7 +3827,6 @@ export function CharacterSourceFilesViewer({
     );
   }
 
-  const lines = selectedFile.text.split(/\r?\n/);
   return (
     <section className={`cns-source-viewer character-source-viewer syntax-theme-${syntaxTheme}`}>
       <h2>{text('Character Files', 'キャラクターファイル')}</h2>
@@ -3843,8 +3884,34 @@ export function CharacterSourceFilesViewer({
           style={{ '--character-summary-width': `${summaryWidth}px`, height: `${detailHeight}px` } as CSSProperties}
         >
           <div className="character-source-summary" ref={summaryRef}>
-            <h3>{text('Map', 'マップ')}</h3>
-            {selectedFile.kind === 'sff' ? (
+            <div className="character-source-summary-tabs" role="tablist" aria-label={text('Source navigation', 'ソースナビゲーション')}>
+              <button
+                aria-selected={summaryTab === 'map'}
+                onClick={() => setSummaryTab('map')}
+                role="tab"
+                type="button"
+              >
+                {text('Map', 'マップ')}
+              </button>
+              <button
+                aria-keyshortcuts="Control+Shift+F Meta+Shift+F"
+                aria-selected={summaryTab === 'search'}
+                onClick={() => setSummaryTab('search')}
+                role="tab"
+                type="button"
+              >
+                {text('Search All Files', '全ファイル検索')}
+              </button>
+            </div>
+            {summaryTab === 'search' ? (
+              <CharacterSourceSearch
+                files={files}
+                inputRef={sourceSearchInputRef}
+                onSelect={selectSource}
+                selected={effectiveSelection}
+                sourceOverrides={drafts}
+              />
+            ) : selectedFile.kind === 'sff' ? (
               <SffSpriteMap
                 entries={sffEntries}
                 error={selectedSff.error}
@@ -3869,7 +3936,7 @@ export function CharacterSourceFilesViewer({
                 selectedLine={selectedLine}
               />
             )}
-            {selectedFile.kind === 'air' ? (
+            {summaryTab === 'map' && selectedFile.kind === 'air' ? (
               <AirAnimationPreview
                 actionNo={effectiveAirActionNo}
                 air={air ?? null}
@@ -3901,7 +3968,7 @@ export function CharacterSourceFilesViewer({
               role="separator"
               tabIndex={0}
             />
-            <SourceViewHistory entries={history} height={historyHeight} onSelect={onSelect} selected={effectiveSelection} />
+            <SourceViewHistory entries={history} height={historyHeight} onSelect={selectSource} selected={effectiveSelection} />
           </div>
           <div
             aria-label={text('Resize summary and file view', '概要とファイル表示の幅を変更')}
@@ -3975,7 +4042,7 @@ export function CharacterSourceFilesViewer({
           {selectedFile.editable ? (
             <TextSourceSearch
               key={selectedFile.path}
-              onSelectLine={(line) => onSelect({ path: selectedFile.path, line })}
+              onSelectLine={(line) => selectSource({ path: selectedFile.path, line })}
               selectedLine={selectedLine}
               source={selectedDraft}
             />
@@ -4014,8 +4081,11 @@ export function CharacterSourceFilesViewer({
             </div>
           ) : (
             <div className="cns-source-code" ref={codeRef} onScroll={handleCodeScroll}>
-              {lines.map((line, index) => {
-                const lineNo = index + 1;
+              {sourceLineWindow.start > 0 ? (
+                <div aria-hidden="true" className="cns-source-line-spacer" style={{ height: sourceLineWindow.start * SOURCE_LINE_HEIGHT }} />
+              ) : null}
+              {sourceLines.slice(sourceLineWindow.start, sourceLineWindow.end).map((line, index) => {
+                const lineNo = sourceLineWindow.start + index + 1;
                 const selected = lineNo === effectiveSelection?.line;
                 return (
                   <div
@@ -4026,7 +4096,7 @@ export function CharacterSourceFilesViewer({
                     <button
                       aria-label={`${text('Highlight line', '行を強調')} ${lineNo}`}
                       className="cns-source-line-no"
-                      onClick={() => onSelect({ path: selectedFile.path, line: lineNo })}
+                      onClick={() => selectSource({ path: selectedFile.path, line: lineNo })}
                       title={`${text('Highlight line', '行を強調')} ${lineNo}`}
                       type="button"
                     >
@@ -4037,12 +4107,15 @@ export function CharacterSourceFilesViewer({
                         kind={selectedFile.kind}
                         line={line}
                         navigationTarget={sourceNavigationTargets.get(lineNo)}
-                        onNavigate={onSelect}
+                        onNavigate={(selection) => selection && selectSource(selection)}
                       />
                     </code>
                   </div>
                 );
               })}
+              {sourceLineWindow.end < sourceLines.length ? (
+                <div aria-hidden="true" className="cns-source-line-spacer" style={{ height: (sourceLines.length - sourceLineWindow.end) * SOURCE_LINE_HEIGHT }} />
+              ) : null}
             </div>
           ) : (
             <div className="character-source-binary-empty">
@@ -4155,7 +4228,7 @@ function SourceViewHistory({
 }: {
   entries: readonly SourceViewHistoryEntry[];
   height: number;
-  onSelect: (selection: CnsSourceSelection) => void;
+  onSelect: (selection: Exclude<CnsSourceSelection, null>) => void;
   selected: CnsSourceSelection;
 }) {
   const { text } = useUiLanguage();
@@ -4181,6 +4254,176 @@ function SourceViewHistory({
           })}
         </div>
       ) : <div className="source-view-history-empty">{text('No highlighted locations yet.', '強調表示した箇所はまだありません。')}</div>}
+    </section>
+  );
+}
+
+const CHARACTER_SOURCE_SEARCH_RESULT_LIMIT = 2_000;
+
+export type CharacterSourceSearchResult = {
+  external: boolean;
+  fileLabel: string;
+  line: number;
+  matchLength: number;
+  matchStart: number;
+  path: string;
+  sourceLine: string;
+};
+
+export type CharacterSourceSearchResults = {
+  matchedFileCount: number;
+  results: CharacterSourceSearchResult[];
+  searchableFileCount: number;
+  totalMatchCount: number;
+  truncated: boolean;
+};
+
+export function searchCharacterSourceFiles(
+  files: readonly CharacterSourceFile[],
+  query: string,
+  sourceOverrides: Readonly<Record<string, string>> = {},
+  resultLimit = CHARACTER_SOURCE_SEARCH_RESULT_LIMIT,
+): CharacterSourceSearchResults {
+  const normalizedQuery = query.trim().toLowerCase();
+  const searchableFiles = files.filter(isSearchableCharacterSourceFile);
+  if (!normalizedQuery) {
+    return { matchedFileCount: 0, results: [], searchableFileCount: searchableFiles.length, totalMatchCount: 0, truncated: false };
+  }
+
+  const results: CharacterSourceSearchResult[] = [];
+  const matchedPaths = new Set<string>();
+  let totalMatchCount = 0;
+  for (const file of searchableFiles) {
+    const source = sourceOverrides[file.path] ?? file.text;
+    const lines = source.split(/\r?\n/);
+    for (let index = 0; index < lines.length; index += 1) {
+      const sourceLine = lines[index] ?? '';
+      const matchStart = sourceLine.toLowerCase().indexOf(normalizedQuery);
+      if (matchStart < 0) continue;
+      matchedPaths.add(file.path);
+      totalMatchCount += 1;
+      if (results.length >= resultLimit) continue;
+      results.push({
+        external: Boolean(file.external),
+        fileLabel: file.label,
+        line: index + 1,
+        matchLength: normalizedQuery.length,
+        matchStart,
+        path: file.path,
+        sourceLine,
+      });
+    }
+  }
+
+  return {
+    matchedFileCount: matchedPaths.size,
+    results,
+    searchableFileCount: searchableFiles.length,
+    totalMatchCount,
+    truncated: totalMatchCount > results.length,
+  };
+}
+
+function isSearchableCharacterSourceFile(file: CharacterSourceFile): boolean {
+  return file.kind !== 'sff' && file.kind !== 'snd' && file.kind !== 'act' && file.kind !== 'binary';
+}
+
+function CharacterSourceSearch({
+  files,
+  inputRef,
+  onSelect,
+  selected,
+  sourceOverrides,
+}: {
+  files: readonly CharacterSourceFile[];
+  inputRef: MutableRefObject<HTMLInputElement | null>;
+  onSelect: (selection: Exclude<CnsSourceSelection, null>) => boolean;
+  selected: CnsSourceSelection;
+  sourceOverrides: Readonly<Record<string, string>>;
+}) {
+  const { text } = useUiLanguage();
+  const [query, setQuery] = useState('');
+  const deferredQuery = useDeferredValue(query);
+  const searchResults = useMemo(
+    () => searchCharacterSourceFiles(files, deferredQuery, sourceOverrides),
+    [deferredQuery, files, sourceOverrides],
+  );
+  const groupedResults = useMemo(() => {
+    const groups = new Map<string, CharacterSourceSearchResult[]>();
+    for (const result of searchResults.results) {
+      groups.set(result.path, [...(groups.get(result.path) ?? []), result]);
+    }
+    return Array.from(groups.entries());
+  }, [searchResults.results]);
+
+  return (
+    <section className="character-source-search">
+      <label>
+        <input
+          aria-keyshortcuts="Control+Shift+F Meta+Shift+F"
+          aria-label={text('Search all text files', '全テキストファイルを検索')}
+          onChange={(event) => setQuery(event.currentTarget.value)}
+          placeholder={text('Search all files', '全ファイルから検索')}
+          ref={inputRef}
+          type="search"
+          value={query}
+        />
+      </label>
+      <div className="character-source-search-meta">
+        <output>
+          {deferredQuery.trim()
+            ? text(
+              `${searchResults.matchedFileCount} files / ${searchResults.totalMatchCount} matches`,
+              `${searchResults.matchedFileCount}ファイル・${searchResults.totalMatchCount}件`,
+            )
+            : text('Enter a search term', '検索語を入力してください')}
+        </output>
+        <span>{text(
+          `${searchResults.searchableFileCount} text / ${files.length} total files`,
+          `テキスト${searchResults.searchableFileCount} / 全${files.length}ファイル`,
+        )}</span>
+      </div>
+      {searchResults.truncated ? (
+        <div className="character-source-search-limit">
+          {text(
+            `Showing the first ${searchResults.results.length} matching lines.`,
+            `先頭${searchResults.results.length}件の該当行を表示しています。`,
+          )}
+        </div>
+      ) : null}
+      <div className="character-source-search-results">
+        {groupedResults.map(([path, results]) => (
+          <section className="character-source-search-group" key={path}>
+            <h4 title={path}>
+              <span>{results[0]?.external ? text('Engine', 'エンジン') : text('Character', 'キャラ')}</span>
+              <strong>{results[0]?.fileLabel ?? path}</strong>
+              <small>{results.length}</small>
+            </h4>
+            {results.map((result) => {
+              const active = selected?.path === result.path && selected.line === result.line;
+              return (
+                <button
+                  className={active ? 'active' : ''}
+                  key={`${result.path}:${result.line}`}
+                  onClick={() => onSelect({ path: result.path, line: result.line })}
+                  title={`${result.path}:${result.line}`}
+                  type="button"
+                >
+                  <span className="character-source-search-line">{result.line}</span>
+                  <code>
+                    {result.sourceLine.slice(0, result.matchStart)}
+                    <mark>{result.sourceLine.slice(result.matchStart, result.matchStart + result.matchLength)}</mark>
+                    {result.sourceLine.slice(result.matchStart + result.matchLength)}
+                  </code>
+                </button>
+              );
+            })}
+          </section>
+        ))}
+        {deferredQuery.trim() && searchResults.totalMatchCount === 0 ? (
+          <div className="character-source-summary-empty">{text('No matches found.', '該当箇所はありません。')}</div>
+        ) : null}
+      </div>
     </section>
   );
 }
@@ -4275,6 +4518,7 @@ function SourceOutlineMap({
 }
 
 function TextSourceSearch({ source, selectedLine, onSelectLine }: { source: string; selectedLine: number; onSelectLine: (line: number) => void }) {
+  const { text } = useUiLanguage();
   const [query, setQuery] = useState('');
   const matchingLines = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -4289,10 +4533,10 @@ function TextSourceSearch({ source, selectedLine, onSelectLine }: { source: stri
   };
   return (
     <div className="text-source-search">
-      <label>文字列検索 <input aria-label="Text search" onChange={(event) => setQuery(event.currentTarget.value)} value={query} /></label>
-      <output>{matchingLines.length > 0 ? `${currentIndex + 1}/${matchingLines.length}` : '0件'}</output>
-      <button disabled={matchingLines.length === 0} onClick={() => move(-1)} type="button">前へ</button>
-      <button disabled={matchingLines.length === 0} onClick={() => move(1)} type="button">次へ</button>
+      <label>{text('Current file', 'このファイル内')} <input aria-label={text('Search current file', '現在のファイルを検索')} onChange={(event) => setQuery(event.currentTarget.value)} value={query} /></label>
+      <output>{matchingLines.length > 0 ? `${currentIndex + 1}/${matchingLines.length}` : text('0 matches', '0件')}</output>
+      <button disabled={matchingLines.length === 0} onClick={() => move(-1)} type="button">{text('Previous', '前へ')}</button>
+      <button disabled={matchingLines.length === 0} onClick={() => move(1)} type="button">{text('Next', '次へ')}</button>
     </div>
   );
 }
@@ -4854,6 +5098,23 @@ export function createSourceNavigationTargets(
   files: readonly CharacterSourceFile[],
 ): Map<number, SourceNavigationTarget> {
   const targets = new Map<number, SourceNavigationTarget>();
+  const stateSelections = new Map<number, CnsSourceSelection>();
+  const preferredStateSelections = new Map<number, CnsSourceSelection>();
+  const animationSelections = new Map<number, CnsSourceSelection>();
+  for (const candidate of files) {
+    const outline = createSourceOutline(candidate);
+    for (const item of outline) {
+      const value = Number(item.value);
+      if (!Number.isFinite(value)) continue;
+      const selection = { path: candidate.path, line: item.line };
+      if (item.kind === 'statedef') {
+        if (!stateSelections.has(value)) stateSelections.set(value, selection);
+        if (candidate.path === file.path && !preferredStateSelections.has(value)) preferredStateSelections.set(value, selection);
+      } else if (item.kind === 'air-action' && !animationSelections.has(value)) {
+        animationSelections.set(value, selection);
+      }
+    }
+  }
   const lines = file.text.split(/\r?\n/);
   let insideController = false;
   let controllerType = '';
@@ -4876,9 +5137,13 @@ export function createSourceNavigationTargets(
       continue;
     }
 
-    const navigable = key === 'anim' || (key === 'value' && insideController && controllerType === 'changeanim')
+    const navigable = key === 'anim'
+      || (key === 'value' && insideController && (controllerType === 'changeanim' || controllerType === 'changeanim2'))
       ? 'animation'
-      : key === 'stateno' || (key === 'value' && insideController && controllerType === 'changestate')
+      : key === 'stateno'
+        || key === 'p1stateno'
+        || key === 'p2stateno'
+        || (key === 'value' && insideController && controllerType === 'changestate')
         ? 'state'
         : null;
     if (!navigable) continue;
@@ -4887,8 +5152,8 @@ export function createSourceNavigationTargets(
     const value = Number(valueMatch[1]);
     const start = valueMatch.index + valueMatch[0].lastIndexOf(valueMatch[1]);
     const selection = navigable === 'animation'
-      ? findAirActionSourceSelection(files, value)
-      : findStateDefSourceSelection(files, value, file.path);
+      ? animationSelections.get(value) ?? null
+      : preferredStateSelections.get(value) ?? stateSelections.get(value) ?? null;
     if (!selection) continue;
     targets.set(index + 1, {
       end: start + valueMatch[1].length,
@@ -4900,6 +5165,22 @@ export function createSourceNavigationTargets(
   }
 
   return targets;
+}
+
+const SOURCE_LINE_HEIGHT = 18;
+const SOURCE_LINE_VIRTUALIZATION_THRESHOLD = 2_000;
+const SOURCE_LINE_WINDOW_SIZE = 800;
+const SOURCE_LINE_WINDOW_EDGE = 120;
+
+export function calculateSourceLineWindow(
+  lineCount: number,
+  selectedLine: number,
+  viewportLine = selectedLine,
+): { start: number; end: number } {
+  if (lineCount <= SOURCE_LINE_VIRTUALIZATION_THRESHOLD) return { start: 0, end: lineCount };
+  const viewportIndex = Math.max(0, Math.min(lineCount - 1, Math.trunc(viewportLine) - 1));
+  let start = Math.max(0, Math.min(lineCount - SOURCE_LINE_WINDOW_SIZE, viewportIndex - Math.floor(SOURCE_LINE_WINDOW_SIZE / 2)));
+  return { start, end: Math.min(lineCount, start + SOURCE_LINE_WINDOW_SIZE) };
 }
 
 function findFollowingAssignment(
@@ -5582,8 +5863,11 @@ function formatCodexTraceSummaryLines(traces: readonly CnsRuntimeTrace[]): strin
     `traceCount=${traces.length}`,
     ...traces.map((trace) => {
       const executedControllers = actualExecutedControllers(trace);
+      const entity = trace.helperId === undefined
+        ? `p${trace.playerId}`
+        : `p${trace.playerId} helper=H${trace.helperId} entityId=${trace.entityId ?? '-'}`;
       return [
-        `trace p${trace.playerId}`,
+        `trace ${entity}`,
         `state=${trace.stateNo}->${trace.afterStateNo}`,
         `anim=${trace.animNo}->${trace.afterAnimNo}`,
         `time=${trace.stateTime}->${trace.afterStateTime}`,
@@ -5601,7 +5885,8 @@ export function shouldEvaluateHumanLogFrame(
   traces: readonly CnsRuntimeTrace[],
 ): boolean {
   if (mode === 'state-transition') {
-    return traces.some((trace) => trace.stateNo !== trace.afterStateNo);
+    return traces.some((trace) => trace.stateNo !== trace.afterStateNo
+      || (trace.externalEntryFromStateNo !== undefined && trace.externalEntryFromStateNo !== trace.stateNo));
   }
   if (mode !== 'controller-activated') return true;
   return traces.some((trace) => trace.executedControllers.some((name) => !name.startsWith('dbg ')));
@@ -5888,7 +6173,36 @@ function formatRuntimeEntitySatisfiedStateDefTriggerSummary(
   trace?: CnsRuntimeTrace,
 ): string {
   const mugenAnimTime = calculateMugenAnimTime(player.animTime, getAnimEndTime?.(player.animNo));
-  const context = { player, opponent, commands, animTime: mugenAnimTime, constants: cns, gameTime: state.frame };
+  const helper = state.helpers.entries.find((entry) => entry.player === player);
+  const rootEntityId = helper?.rootEntityId ?? player.id;
+  const resolveEntityById = (entityId: number) => {
+    if (entityId === 1 || entityId === 2) return state.players[entityId - 1];
+    return state.helpers.entries.find((entry) => entry.entityId === entityId)?.player;
+  };
+  const context: CnsRuntimeTriggerContext = {
+    player,
+    opponent,
+    commands,
+    animTime: mugenAnimTime,
+    constants: cns,
+    gameTime: state.frame,
+    isHelper: helper !== undefined || player.helperId !== undefined,
+    helperId: helper?.helperId ?? player.helperId,
+    entityId: helper?.entityId ?? player.id,
+    numHelper: (helperId) => state.helpers.entries.filter((entry) => (
+      entry.rootEntityId === rootEntityId && (helperId === undefined || entry.helperId === Math.trunc(helperId))
+    )).length,
+    resolveRedirectEntity: (kind, argument) => {
+      if (kind === 'root') return state.players[rootEntityId - 1];
+      if (kind === 'parent') return helper ? resolveEntityById(helper.parentEntityId) : undefined;
+      if (kind === 'helper') return state.helpers.entries.find((entry) => (
+        entry.rootEntityId === rootEntityId && (argument === undefined || entry.helperId === argument)
+      ))?.player;
+      if (kind === 'playerid' && argument !== undefined) return resolveEntityById(argument);
+      return undefined;
+    },
+    playerIdExists: (entityId) => resolveEntityById(entityId) !== undefined,
+  };
   const summaries = cns.states
     .filter((stateDef) => stateDef.stateNo === player.stateNo)
     .flatMap((stateDef) => formatSatisfiedStateDefTriggers(stateDef, context, trace?.executedControllerRefs));
@@ -6100,7 +6414,12 @@ function collectReadableTriggerGroups(triggers: readonly CnsTrigger[]): Array<[n
 
 function formatCodexTraceDetailLines(traces: readonly CnsRuntimeTrace[]): string[] {
   const lines = Array.from(new Set(traces.flatMap((trace) => (
-    formatMeaningfulAiTraceDebugLines(trace).map((line) => `trace p${trace.playerId} ${line}`)
+    formatMeaningfulAiTraceDebugLines(trace).map((line) => {
+      const entity = trace.helperId === undefined
+        ? `p${trace.playerId}`
+        : `p${trace.playerId} helper=H${trace.helperId} entityId=${trace.entityId ?? '-'}`;
+      return `trace ${entity} ${line}`;
+    })
   ))));
   const limit = 120;
   return lines.length <= limit

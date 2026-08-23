@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { MutableRefObject } from 'react';
 import type { CnsRuntimeTrace } from '../core/cns/CnsStateRuntime';
-import { AudioStartOverlay, CHARACTER_PATH_OPTIONS, CharacterSourceEditorLines, CharacterSourceFilesViewer, ContentCatalogPanel, HumanRuntimePanel, ManualPanel, RuntimeFrameIndexList, RuntimeSettingsPanel, SettingsSidebar, WebMugenApp, appendRuntimeHistoryIfNeeded, appendSourceViewHistory, createActPreviewImage, createReadableRuntimeTriggerChangeSignature, createRuntimeFrameIndexGridTemplate, createSourceNavigationTargets, createSourceOutline, createSourceViewHistoryEntry, drawAirPreview, findAirActionForLine, findAirActionSourceSelection, findStateDefSourceSelection, formatSatisfiedStateDefTriggers, parseControllerValueText, shouldEvaluateHumanLogFrame, stripReadableRuntimeValueSummaries } from './WebMugenApp';
+import { AudioStartOverlay, CHARACTER_PATH_OPTIONS, CharacterSourceEditorLines, CharacterSourceFilesViewer, ContentCatalogPanel, HumanRuntimePanel, ManualPanel, RuntimeFrameIndexList, RuntimeSettingsPanel, SettingsSidebar, WebMugenApp, appendRuntimeHistoryIfNeeded, appendSourceViewHistory, calculateSourceLineWindow, createActPreviewImage, createReadableRuntimeTriggerChangeSignature, createRuntimeFrameIndexGridTemplate, createSourceNavigationTargets, createSourceOutline, createSourceViewHistoryEntry, drawAirPreview, findAirActionForLine, findAirActionSourceSelection, findStateDefSourceSelection, formatSatisfiedStateDefTriggers, parseControllerValueText, searchCharacterSourceFiles, shouldEvaluateHumanLogFrame, stripReadableRuntimeValueSummaries } from './WebMugenApp';
 import { DEFAULT_RUNTIME_SETTINGS } from './RuntimeSettings';
 import type { ImageDataSpritePack } from '../core/sprite/ImageDataSpriteTypes';
 import { parseCnsText } from '../parser/cns/CnsParser';
@@ -101,6 +101,9 @@ describe('WebMugenApp runtime history', () => {
     ])).toBe(true);
     expect(shouldEvaluateHumanLogFrame('state-transition', [
       createTrace({ playerId: 1, entityId: 3, stateNo: 5504, afterStateNo: 5506 }),
+    ])).toBe(true);
+    expect(shouldEvaluateHumanLogFrame('state-transition', [
+      createTrace({ playerId: 2, externalEntryFromStateNo: 0, stateNo: 3425, afterStateNo: 3425 }),
     ])).toBe(true);
   });
 
@@ -473,23 +476,74 @@ describe('WebMugenApp runtime history', () => {
     expect(html).not.toContain('aria-label="Character file editor"');
   });
 
-  it('links constant Anim, ChangeState value, and stateno assignments while browsing', () => {
+  it('searches every text source by line, including unsaved overrides, while excluding binary files', () => {
+    const files = [
+      { path: 'Demo/Demo.cns', label: 'Demo.cns', text: 'type = Null\ntrigger1 = ctrl', kind: 'cns' as const },
+      { path: 'Demo/Demo.cmd', label: 'Demo.cmd', text: 'command = "a"', kind: 'cmd' as const },
+      { path: 'Demo/readme.txt', label: 'readme.txt', text: 'トリガーの説明', kind: 'text' as const },
+      { path: 'Demo/Demo.sff', label: 'Demo.sff', text: 'trigger must not be searched', kind: 'sff' as const },
+    ];
+
+    const result = searchCharacterSourceFiles(files, 'TRIGGER', {
+      'Demo/Demo.cmd': 'triggerall = command = "a"\ntrigger1 = ctrl',
+    });
+
+    expect(result.searchableFileCount).toBe(3);
+    expect(result.totalMatchCount).toBe(3);
+    expect(result.results).toMatchObject([
+      { path: 'Demo/Demo.cns', line: 2, sourceLine: 'trigger1 = ctrl', matchStart: 0, matchLength: 7 },
+      { path: 'Demo/Demo.cmd', line: 1, sourceLine: 'triggerall = command = "a"', matchStart: 0, matchLength: 7 },
+      { path: 'Demo/Demo.cmd', line: 2, sourceLine: 'trigger1 = ctrl', matchStart: 0, matchLength: 7 },
+    ]);
+    expect(result.results.some((match) => match.path.endsWith('.sff'))).toBe(false);
+  });
+
+  it('reports total cross-file matches when the rendered result list is limited', () => {
+    const result = searchCharacterSourceFiles([{
+      path: 'Demo/Demo.cns', label: 'Demo.cns', kind: 'cns', text: 'trigger1 = 1\ntrigger2 = 1\ntrigger3 = 1',
+    }], 'trigger', {}, 2);
+
+    expect(result.results).toHaveLength(2);
+    expect(result.totalMatchCount).toBe(3);
+    expect(result.truncated).toBe(true);
+  });
+
+  it('exposes Map and Search All Files tabs with the global search shortcut', () => {
+    const html = renderToStaticMarkup(createElement(CharacterSourceFilesViewer, {
+      files: [
+        { path: 'Demo/Demo.cns', label: 'Demo.cns', text: 'trigger1 = ctrl', kind: 'cns' as const },
+        { path: 'Demo/Demo.sff', label: 'Demo.sff', text: '', kind: 'sff' as const },
+      ],
+      selection: { path: 'Demo/Demo.cns', line: 1 },
+      onSelect: () => undefined,
+    }));
+
+    expect(html).toContain('role="tablist"');
+    expect(html).toContain('>Map<');
+    expect(html).toContain('>Search All Files<');
+    expect(html).toContain('aria-keyshortcuts="Control+Shift+F Meta+Shift+F"');
+  });
+
+  it('links constant animation and State destinations while browsing', () => {
     const cnsFile = {
       path: 'Demo/Demo.cns', label: 'Demo.cns', kind: 'cns' as const, editable: true,
-      text: '[StateDef 100]\nanim = 103\n[State 100, Route]\ntype = ChangeState\nvalue = 3201\n[State 100, Helper]\ntype = Helper\nstateno = 3201\n[State 100, Animation]\ntype = ChangeAnim\nvalue = 103\n[StateDef 3201]\ntype = S',
+      text: '[StateDef 100]\nanim = 103\n[State 100, Route]\ntype = ChangeState\nvalue = 3201\n[State 100, Helper]\ntype = Helper\nstateno = 3201\n[State 100, Animation]\ntype = ChangeAnim\nvalue = 103\n[State 100, Borrowed animation]\ntype = ChangeAnim2\nvalue = 104\n[State 100, Custom hit]\ntype = HitDef\np1stateno = 3201\np2stateno = 3202\n[StateDef 3201]\ntype = S\n[StateDef 3202]\ntype = A',
     };
     const airFile = {
       path: 'Demo/Demo.air', label: 'Demo.air', kind: 'air' as const, editable: true,
-      text: '[Begin Action 103]\n0,0,0,0,1',
+      text: '[Begin Action 103]\n0,0,0,0,1\n[Begin Action 104]\n0,0,0,0,1',
     };
     const files = [cnsFile, airFile];
     const targets = createSourceNavigationTargets(cnsFile, files);
 
     expect(targets.get(2)).toMatchObject({ kind: 'animation', value: 103, selection: { path: 'Demo/Demo.air', line: 1 } });
-    expect(targets.get(5)).toMatchObject({ kind: 'state', value: 3201, selection: { path: 'Demo/Demo.cns', line: 12 } });
-    expect(targets.get(8)).toMatchObject({ kind: 'state', value: 3201, selection: { path: 'Demo/Demo.cns', line: 12 } });
+    expect(targets.get(5)).toMatchObject({ kind: 'state', value: 3201, selection: { path: 'Demo/Demo.cns', line: 19 } });
+    expect(targets.get(8)).toMatchObject({ kind: 'state', value: 3201, selection: { path: 'Demo/Demo.cns', line: 19 } });
     expect(targets.get(11)).toMatchObject({ kind: 'animation', value: 103, selection: { path: 'Demo/Demo.air', line: 1 } });
-    expect(findStateDefSourceSelection(files, 3201, cnsFile.path)).toEqual({ path: 'Demo/Demo.cns', line: 12 });
+    expect(targets.get(14)).toMatchObject({ kind: 'animation', value: 104, selection: { path: 'Demo/Demo.air', line: 3 } });
+    expect(targets.get(17)).toMatchObject({ kind: 'state', value: 3201, selection: { path: 'Demo/Demo.cns', line: 19 } });
+    expect(targets.get(18)).toMatchObject({ kind: 'state', value: 3202, selection: { path: 'Demo/Demo.cns', line: 21 } });
+    expect(findStateDefSourceSelection(files, 3201, cnsFile.path)).toEqual({ path: 'Demo/Demo.cns', line: 19 });
 
     const html = renderToStaticMarkup(createElement(CharacterSourceFilesViewer, {
       files,
@@ -499,8 +553,26 @@ describe('WebMugenApp runtime history', () => {
     }));
     expect(html).toContain('title="Open Begin Action 103"');
     expect(html.match(/title="Open Begin Action 103"/g)).toHaveLength(2);
-    expect(html.match(/title="Open StateDef 3201"/g)).toHaveLength(2);
+    expect(html).toContain('title="Open Begin Action 104"');
+    expect(html.match(/title="Open StateDef 3201"/g)).toHaveLength(3);
+    expect(html).toContain('title="Open StateDef 3202"');
     expect(html).toContain('aria-label="Highlight line 1"');
+  });
+
+  it('windows large source files while keeping the selected line mounted', () => {
+    expect(calculateSourceLineWindow(100, 50)).toEqual({ start: 0, end: 100 });
+    expect(calculateSourceLineWindow(10_000, 5_000)).toEqual({ start: 4599, end: 5399 });
+    expect(calculateSourceLineWindow(10_000, 9_999, 10)).toEqual({ start: 0, end: 800 });
+
+    const text = Array.from({ length: 10_000 }, (_, index) => `line ${index + 1}`).join('\n');
+    const html = renderToStaticMarkup(createElement(CharacterSourceFilesViewer, {
+      files: [{ path: 'Demo/Large.cns', label: 'Large.cns', text, kind: 'cns' as const, editable: true }],
+      selection: { path: 'Demo/Large.cns', line: 5_000 },
+      onSelect: () => undefined,
+    }));
+    expect(html).toContain('aria-label="Highlight line 5000"');
+    expect(html).not.toContain('aria-label="Highlight line 1"');
+    expect(html.match(/class="cns-source-line /g)?.length).toBe(800);
   });
 
   it('deduplicates highlighted source locations in newest-first view history', () => {

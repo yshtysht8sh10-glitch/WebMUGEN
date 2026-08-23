@@ -7,8 +7,8 @@ import type { SoundPlayEvent } from '../audio/SoundEvent';
 import { createInitialGameState } from '../engine/GameState';
 import { stepCnsStateRuntime } from './CnsStateRuntime';
 
-describe('AnimElem PlaySnd loop regression', () => {
-  it('emits PlaySnd at the same element starts on every AIR loop', () => {
+describe('AnimElem finite-loop compatibility', () => {
+  it('emits PlaySnd again on each pass through a finite implicit AIR loop', () => {
     const air = parseAirText(`
 [Begin Action 101]
 101,0, 0,0, 2
@@ -28,10 +28,10 @@ trigger2 = AnimElem = 4
 value = S100,1
 `);
 
-    expect(collectEvents(cns, air, 17).map((event) => event.animTime)).toEqual([0, 6, 9, 14, 16]);
+    expect(collectEvents(cns, air, 17).map((event) => event.animTime)).toEqual([0, 6, 14, 16]);
   });
 
-  it('replays the bundled T-H-M-A dash footstep at elements 1 and 4 on later loops', async () => {
+  it('replays bundled T-H-M-A dash footsteps on later finite implicit loops', async () => {
     const [cnsBytes, airBytes] = await Promise.all([
       readFile('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.cns'),
       readFile('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.air'),
@@ -41,9 +41,7 @@ value = S100,1
     const air = parseAirText(decoder.decode(airBytes));
 
     const events = collectEvents(cns, air, 44);
-    expect(events.filter((event) => event.group === 100 && event.index === 1).map((event) => event.animTime)).toEqual([
-      0, 6, 13, 18, 24, 30, 36, 42,
-    ]);
+    expect(events.filter((event) => event.group === 100 && event.index === 1).map((event) => event.animTime)).toEqual([0, 6, 18, 24, 30, 36, 42]);
   });
 });
 

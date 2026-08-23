@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { createInitialGameState } from '../../core/engine/GameState';
 import { applyExplodCreateEvents, type ExplodCreateRequest } from '../../core/explod/ExplodSystem';
 import {
-  resolveBuiltInStageGroundReferenceYs,
   resolveBuiltInStageWorldVisualOffset,
   shiftBuiltInStageWorldVisuals,
   usesResponsiveBuiltInStagePlacement,
@@ -18,42 +17,22 @@ describe('responsive built-in stage world placement', () => {
     expect(usesResponsiveBuiltInStagePlacement('external')).toBe(false);
   });
 
-  it('keeps the intentional extended-view ground line without a second player-only offset', () => {
-    const offset = resolveBuiltInStageWorldVisualOffset([285, 285], 65, 240);
+  it('does not offset the authored world in a WinMUGEN logical viewport', () => {
+    const offset = resolveBuiltInStageWorldVisualOffset(240);
 
-    expect(offset).toBe(2);
-    expect(285 + offset - 65).toBe(222);
+    expect(offset).toBe(0);
   });
 
-  it('moves the wide-view Cyber ground toward the same lower presentation used by Fresh', () => {
-    const offset = resolveBuiltInStageWorldVisualOffset([285, 285], 0, 540);
+  it('moves the wide-view ground from the fixed stage axis instead of a player position', () => {
+    const offset = resolveBuiltInStageWorldVisualOffset(540);
 
     expect(offset).toBe(180);
     expect(285 + offset).toBe(465);
   });
 
-  it('does not move a standing player when a lying opponent uses below-floor bounce coordinates', () => {
-    const state = createInitialGameState();
-    const players = [
-      { ...state.players[0], stateType: 'S' as const, y: 285 },
-      { ...state.players[1], stateType: 'L' as const, y: 305 },
-    ];
-
-    const groundReferenceYs = resolveBuiltInStageGroundReferenceYs(players);
-    const offset = resolveBuiltInStageWorldVisualOffset(groundReferenceYs, 65, 240);
-
-    expect(groundReferenceYs).toEqual([285]);
-    expect(offset).toBe(2);
-  });
-
-  it('retains the prior visual floor when every player is airborne or lying down', () => {
-    const state = createInitialGameState();
-    const players = [
-      { ...state.players[0], stateType: 'A' as const, y: 180 },
-      { ...state.players[1], stateType: 'L' as const, y: 305 },
-    ];
-
-    expect(resolveBuiltInStageGroundReferenceYs(players)).toEqual([]);
+  it('does not let a standing-typed special-state position change the fixed offset', () => {
+    expect(resolveBuiltInStageWorldVisualOffset(240)).toBe(0);
+    expect(resolveBuiltInStageWorldVisualOffset(540)).toBe(180);
   });
 
   it('keeps stage-space p1/p2 Explods aligned while leaving screen-space Explods fixed', () => {

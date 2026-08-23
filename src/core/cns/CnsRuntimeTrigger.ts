@@ -3,14 +3,16 @@ import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 import { selectTargets } from '../hitdef/TargetState';
 import { hitDefAttrMatches } from '../hitdef/HitAttribute';
 import type { CnsDocument, CnsTrigger } from '../../mugen/common/cnsTypes';
-import { readCnsConst } from './CnsConstants';
+import { readCnsConst, WINMUGEN_DEFAULT_HIT_Y_ACCELERATION } from './CnsConstants';
 import { readPlayerPowerMax } from '../power/PowerGauge';
-import { buildPushBox, FALLBACK_STAGE_LEFT, FALLBACK_STAGE_RIGHT } from '../engine/FallbackStageRules';
+import { buildPushBox, buildScreenEdgeBox, FALLBACK_STAGE_LEFT, FALLBACK_STAGE_RIGHT } from '../engine/FallbackStageRules';
+import { worldXToMugenPosX } from './MugenPositionCoordinates';
 
 export type CnsRuntimeTriggerContext = {
   player: PlayerState;
   opponent?: PlayerState;
   commands?: ReadonlySet<string>;
+  resolveRedirectCommands?: (player: PlayerState) => ReadonlySet<string> | undefined;
   animTime?: number;
   animElemNo?: number;
   animElemTime?: number;
@@ -41,6 +43,7 @@ export type CnsRuntimeTriggerContext = {
   animationExists?: (animNo: number) => boolean;
   constants?: CnsDocument;
   isHelper?: boolean;
+  helperId?: number;
   numHelper?: (helperId?: number) => number;
   numProj?: (projectileId?: number) => number;
   numExplod?: (explodId?: number) => number;
@@ -49,7 +52,11 @@ export type CnsRuntimeTriggerContext = {
   projGuardedTime?: (projectileId: number) => number;
   projCancelTime?: (projectileId: number) => number;
   entityId?: number;
-  resolveRedirectEntity?: (kind: 'root' | 'parent' | 'helper' | 'playerid' | 'partner', argument?: number) => PlayerState | undefined;
+  resolveRedirectEntity?: (
+    kind: 'root' | 'parent' | 'helper' | 'playerid' | 'partner',
+    argument?: number,
+    redirectedSource?: PlayerState,
+  ) => PlayerState | undefined;
   playerIdExists?: (entityId: number) => boolean;
   getRedirectAnimationContext?: (player: PlayerState) => Pick<
     CnsRuntimeTriggerContext,
@@ -152,6 +159,13 @@ function compileBooleanExpression(expression: string): BooleanSource {
   if (trimmed === '1') return () => true;
   if (trimmed === '0') return () => false;
 
+  // Parse a comparison whose operands are direct numeric redirects before the
+  // generic redirect path. Otherwise `helper(ID),var(N) >= ...` is treated as
+  // one redirected boolean expression and an absent left-side Helper returns
+  // SFalse before WinMUGEN's numeric ordering semantics can be applied.
+  const numericComparison = compileNumericComparison(trimmed, true);
+  if (numericComparison) return numericComparison;
+
   const bareBoolean = getBooleanSource(trimmed);
   if (bareBoolean) return bareBoolean;
 
@@ -236,16 +250,8 @@ function compileComparison(expression: string): BooleanSource {
     };
   }
 
-  const numberComparison = splitTopLevelComparison(expression);
-  if (numberComparison) {
-    const actual = compileNumberExpression(numberComparison.left);
-    const expected = compileNumberExpression(numberComparison.right);
-    if (actual && expected) return (context) => {
-      const left = actual(context);
-      const right = expected(context);
-      return left !== null && right !== null && compareNumber(left, numberComparison.operator, right);
-    };
-  }
+  const numberComparison = compileNumericComparison(expression);
+  if (numberComparison) return numberComparison;
 
   const enumMatch = expression.match(/^(.+?)\s*(=|!=)\s*([a-z]+)$/i);
   if (enumMatch) {
@@ -290,6 +296,15 @@ function compileNumberExpression(rawExpression: string): NumberSource | null {
       if (multiplicative.operator === '*') return finiteOrNull(leftValue * rightValue);
       if (multiplicative.operator === '/') return rightValue === 0 ? null : finiteOrNull(leftValue / rightValue);
       return rightValue === 0 ? null : finiteOrNull(leftValue % rightValue);
+    };
+  }
+
+  if (expression.startsWith('-')) {
+    const operand = compileNumberExpression(expression.slice(1));
+    if (!operand) return null;
+    return (context) => {
+      const value = operand(context);
+      return value === null ? null : finiteOrNull(-value);
     };
   }
 
@@ -374,6 +389,9 @@ function evaluateBooleanExpression(expression: string, context: CnsRuntimeTrigge
   if (trimmed === '1') return true;
   if (trimmed === '0') return false;
 
+  const numericComparison = compileNumericComparison(trimmed, true);
+  if (numericComparison) return numericComparison(context);
+
   const bareBoolean = getBooleanSource(trimmed);
   if (bareBoolean) return bareBoolean(context);
 
@@ -441,14 +459,8 @@ function evaluateComparison(expression: string, context: CnsRuntimeTriggerContex
     return actual !== null && compareString(actual, stringMatch[2], stringMatch[3]);
   }
 
-  const numberComparison = splitTopLevelComparison(expression);
-  if (numberComparison) {
-    const actual = readNumberExpression(numberComparison.left, context);
-    const expected = readNumberExpression(numberComparison.right, context);
-    if (actual !== null && expected !== null) {
-      return compareNumber(actual, numberComparison.operator, expected);
-    }
-  }
+  const numberComparison = compileNumericComparison(expression);
+  if (numberComparison) return numberComparison(context);
 
   const enumMatch = expression.match(/^(.+?)\s*(=|!=)\s*([a-z]+)$/i);
   if (enumMatch) {
@@ -569,6 +581,11 @@ export function readNumberExpression(rawExpression: string, context: CnsRuntimeT
     return right === 0 ? null : finiteOrNull(left % right);
   }
 
+  if (expression.startsWith('-')) {
+    const value = readNumberExpression(expression.slice(1), context);
+    return value === null ? null : finiteOrNull(-value);
+  }
+
   const absMatch = expression.match(/^abs\((.+)\)$/);
   if (absMatch) {
     const value = readNumberExpression(absMatch[1], context);
@@ -680,6 +697,17 @@ function getNumberSource(rawName: string): NumberSource | null {
     };
   }
 
+  const isHelperMatch = name.match(/^ishelper(?:\((.+)\))?$/);
+  if (isHelperMatch) {
+    const helperIdSource = isHelperMatch[1] === undefined ? null : compileNumberExpression(isHelperMatch[1]);
+    return (context) => {
+      if (!context.isHelper) return 0;
+      if (isHelperMatch[1] === undefined) return 1;
+      const helperId = helperIdSource?.(context) ?? null;
+      return helperId !== null && context.helperId === Math.trunc(helperId) ? 1 : 0;
+    };
+  }
+
   const numExplodMatch = name.match(/^numexplod(?:\((.+)\))?$/);
   if (numExplodMatch) {
     const explodIdSource = numExplodMatch[1] === undefined ? null : compileNumberExpression(numExplodMatch[1]);
@@ -764,7 +792,7 @@ function getNumberSource(rawName: string): NumberSource | null {
     )));
     case 'facing': return (context) => context.player.facing;
     case 'posx':
-    case 'pos x': return (context) => context.player.x;
+    case 'pos x': return (context) => worldXToMugenPosX(context.player.x, context.cameraX, context.screenWidth);
     case 'posy':
     case 'pos y': return (context) => internalYToMugenY(context.player.y);
     case 'screenposx':
@@ -792,7 +820,6 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'numexplod': return (context) => context.numExplod?.() ?? 0;
     case 'numpartner': return (context) => context.numPartner ?? 0;
     case 'numcommand': return (context) => context.commands?.size ?? 0;
-    case 'ishelper': return (context) => context.isHelper ? 1 : 0;
     case 'id': return (context) => context.entityId ?? context.player.id;
     case 'backedgedist': return (context) => readEdgeDistance(context.player, resolveScreenEdges(context, false), 'back');
     case 'frontedgedist': return (context) => readEdgeDistance(context.player, resolveScreenEdges(context, false), 'front');
@@ -816,10 +843,15 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'parentdistx':
     case 'parentdist x': return (context) => {
       const parent = context.resolveRedirectEntity?.('parent');
-      return parent ? (parent.x - context.player.x) * context.player.facing : 0;
+      // WinMUGEN truncates relative-distance triggers toward zero before
+      // exposing them to CNS. Old characters use ParentDist X = 0 to settle
+      // Helpers once their axes are less than one authored pixel apart.
+      return parent ? Math.trunc((parent.x - context.player.x) * context.player.facing) : 0;
     };
     case 'parentdisty':
-    case 'parentdist y': return (context) => (context.resolveRedirectEntity?.('parent')?.y ?? context.player.y) - context.player.y;
+    case 'parentdist y': return (context) => Math.trunc(
+      (context.resolveRedirectEntity?.('parent')?.y ?? context.player.y) - context.player.y,
+    );
     case 'rootdistx':
     case 'rootdist x': return (context) => {
       const root = context.resolveRedirectEntity?.('root');
@@ -869,7 +901,7 @@ function readEdgeBodyDistance(
   screen: { left: number; right: number },
   edge: 'back' | 'front',
 ): number {
-  const box = buildPushBox(player);
+  const box = buildScreenEdgeBox(player);
   const leftDistance = box.left - screen.left;
   const rightDistance = screen.right - box.right;
   if (edge === 'back') return player.facing === 1 ? leftDistance : rightDistance;
@@ -1037,12 +1069,16 @@ function createRedirectContext(context: CnsRuntimeTriggerContext, player: Player
     ...context,
     player,
     opponent: context.player,
+    commands: context.resolveRedirectCommands?.(player),
+    isHelper: player.helperId !== undefined,
+    helperId: player.helperId,
     animTime: animation?.animTime,
     animElemNo: animation?.animElemNo,
     animElemTime: animation?.animElemTime,
     animElemStarted: animation?.animElemStarted,
     animElemCount: animation?.animElemCount,
     animElemTimes: animation?.animElemTimes,
+    resolveRedirectEntity: (kind, argument) => context.resolveRedirectEntity?.(kind, argument, player),
   };
 }
 
@@ -1217,7 +1253,8 @@ function isUnarySign(expression: string, index: number): boolean {
   const before = expression.slice(0, index).trimEnd();
   const previous = before.length > 0 ? before[before.length - 1] : undefined;
   return previous === undefined || previous === '(' || previous === '[' || previous === ',' ||
-    previous === '+' || previous === '-' || previous === '*' || previous === '/' || previous === '%';
+    previous === '+' || previous === '-' || previous === '*' || previous === '/' || previous === '%' ||
+    previous === '=' || previous === '!' || previous === '>' || previous === '<' || previous === '&' || previous === '|';
 }
 
 function stripOuterParentheses(expression: string): string {
@@ -1252,6 +1289,38 @@ function compareNumber(actual: number, operator: string, expected: number): bool
     case '<=': return actual <= expected;
     default: return false;
   }
+}
+
+function compileNumericComparison(expression: string, requireRedirectOperand = false): BooleanSource | null {
+  const comparison = splitTopLevelComparison(expression);
+  if (!comparison) return null;
+  if (requireRedirectOperand
+    && !parseRedirect(comparison.left.trim())
+    && !parseRedirect(comparison.right.trim())) return null;
+  const actual = compileNumberExpression(comparison.left);
+  const expected = compileNumberExpression(comparison.right);
+  if (!actual || !expected) return null;
+  return (context) => compareNumberWithRedirectSFalse(
+    actual(context), comparison.left, comparison.operator,
+    expected(context), comparison.right,
+  );
+}
+
+function compareNumberWithRedirectSFalse(
+  left: number | null,
+  leftExpression: string,
+  operator: string,
+  right: number | null,
+  rightExpression: string,
+): boolean {
+  if (left !== null && right !== null) return compareNumber(left, operator, right);
+  // WinMUGEN's SFalse remains false for equality tests, but direct numeric
+  // redirect operands participate as zero in ordering comparisons. Real 2002
+  // characters use this to rank optional Helpers that may not exist yet.
+  if (operator === '=' || operator === '!=') return false;
+  const orderedLeft = left ?? (parseRedirect(leftExpression.trim()) ? 0 : null);
+  const orderedRight = right ?? (parseRedirect(rightExpression.trim()) ? 0 : null);
+  return orderedLeft !== null && orderedRight !== null && compareNumber(orderedLeft, operator, orderedRight);
 }
 
 function compareString(actual: string, operator: string, expected: string): boolean {
@@ -1309,6 +1378,7 @@ function readGetHitVar(player: PlayerState, name: string): number {
     case 'hittime': return 0;
     case 'slidetime': return 0;
     case 'ctrltime': return 0;
+    case 'yaccel': return WINMUGEN_DEFAULT_HIT_Y_ACCELERATION;
     default: return 0;
   }
 }

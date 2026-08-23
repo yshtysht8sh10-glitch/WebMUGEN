@@ -52,10 +52,11 @@ export function parseCnsText(text: string, options: CnsParseOptions = {}): CnsDo
       }
 
       const controllerMatch = sectionName.match(/^state\s+(-?\d+)\s*,\s*(.+)$/i);
-      if (controllerMatch) {
+      const looseControllerMatch = currentState && /^state(?:\s+.+)?$/i.test(sectionName);
+      if (controllerMatch || looseControllerMatch) {
         if (!currentState) {
           currentState = {
-            stateNo: Number(controllerMatch[1]),
+            stateNo: Number(controllerMatch![1]),
             sourceFile: options.sourceFile,
             sourceLine: lineIndex + 1,
             controllers: [],
@@ -185,7 +186,11 @@ function applyControllerValue(
   value: CnsValue,
 ): void {
   if (key === 'type') {
-    controller.type = String(value);
+    // WinMUGEN keeps the first non-trigger parameter in a controller and
+    // ignores later duplicates. Some production characters rely on this for
+    // screen-space effects (for example, an early postype = back followed by
+    // a stale postype = p1 line).
+    if (!controller.type) controller.type = String(value);
     return;
   }
 
@@ -197,7 +202,9 @@ function applyControllerValue(
     return;
   }
 
-  controller.params[key] = value;
+  if (!Object.prototype.hasOwnProperty.call(controller.params, key)) {
+    controller.params[key] = value;
+  }
 }
 
 function stripComment(line: string): string {

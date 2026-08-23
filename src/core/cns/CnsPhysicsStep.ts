@@ -1,10 +1,11 @@
-import type { GameState, PlayerState } from '../engine/types';
+import type { GameState, HelperEntity, PlayerState } from '../engine/types';
 import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 import type { CnsDocument, CnsStateDefinition } from '../../mugen/common/cnsTypes';
 import { findCnsState } from '../../mugen/common/CnsStateIndex';
 import { readCnsConst } from './CnsConstants';
 import { advanceMoveContact } from '../hitdef/MoveContactState';
 import { stepBgPalFx } from '../palfx/BgPalFxSystem';
+import { snapshotPresentedAnimation } from '../animation/PresentedAnimation';
 
 const GROUND_FRICTION = 0.82;
 const COMMON_JUMP_LAND_STATE = 52;
@@ -16,8 +17,8 @@ export function stepCnsPhysicsMotion(state: GameState, cns?: CnsDocument | null)
     stepPlayerCnsPhysics(state.players[1], cns),
   ] as [PlayerState, PlayerState];
   const clampedPlayers = [
-    clampPlayerAfterCnsPhysics(movedPlayers[0]),
-    clampPlayerAfterCnsPhysics(movedPlayers[1]),
+    clampPlayerAfterCnsPhysics(movedPlayers[0], beforePlayers[0]),
+    clampPlayerAfterCnsPhysics(movedPlayers[1], beforePlayers[1]),
   ] as [PlayerState, PlayerState];
 
   const landedPlayers = [
@@ -28,7 +29,11 @@ export function stepCnsPhysicsMotion(state: GameState, cns?: CnsDocument | null)
     applyCommonDownRecovery(landedPlayers[0], cns, state.players[0].hitPause > 0),
     applyCommonDownRecovery(landedPlayers[1], cns, state.players[1].hitPause > 0),
   ] as [PlayerState, PlayerState];
-  const finalPlayers = applyTargetBindMaintenance(recoveredPlayers, state.players);
+  const nextHelpers = state.helpers.entries.map((helper) => ({
+    ...helper,
+    player: helper.spawnFrame === state.frame ? helper.player : stepPlayerCnsPhysics(helper.player, cns),
+  }));
+  const finalPlayers = applyTargetBindMaintenance(recoveredPlayers, state.players, nextHelpers, state.helpers.entries);
   const nextFrame = state.frame + 1;
 
   return {
@@ -36,10 +41,7 @@ export function stepCnsPhysicsMotion(state: GameState, cns?: CnsDocument | null)
     frame: nextFrame,
     helpers: {
       ...state.helpers,
-      entries: state.helpers.entries.map((helper) => ({
-        ...helper,
-        player: helper.spawnFrame === state.frame ? helper.player : stepPlayerCnsPhysics(helper.player, cns),
-      })),
+      entries: nextHelpers,
     },
     players: finalPlayers,
     // These diagnostics describe one game tick. Replacing instead of appending
@@ -69,6 +71,8 @@ function formatPhysicsPositionDiagnostic(
 function applyTargetBindMaintenance(
   players: [PlayerState, PlayerState],
   previousPlayers: [PlayerState, PlayerState],
+  helpers: HelperEntity[],
+  previousHelpers: HelperEntity[],
 ): [PlayerState, PlayerState] {
   return players.map((player) => {
     const bind = player.targetBind;
@@ -76,12 +80,14 @@ function applyTargetBindMaintenance(
       return bind?.remaining === 0 ? { ...player, targetBind: undefined } : player;
     }
 
-    const owner = players.find((candidate) => candidate.id === bind.ownerId);
+    const owner = resolveRuntimePlayer(players, helpers, bind.ownerId);
     if (!owner) return { ...player, targetBind: undefined };
 
-    const previousPlayer = previousPlayers.find((candidate) => candidate.id === player.id);
-    const previousOwner = previousPlayers.find((candidate) => candidate.id === bind.ownerId);
-    const frozen = (previousPlayer?.hitPause ?? 0) > 0 || (previousOwner?.hitPause ?? 0) > 0;
+    const previousOwner = resolveRuntimePlayer(previousPlayers, previousHelpers, bind.ownerId);
+    // TargetBind belongs to the controller owner. A target-only HitPause must
+    // not extend its finite lifetime: itoko's two-tick zipper bind otherwise
+    // lasts for the defender's full 100-tick pause and erases the launch.
+    const frozen = (previousOwner?.hitPause ?? 0) > 0;
     const remaining = bind.remaining < 0 || frozen ? bind.remaining : Math.max(0, bind.remaining - 1);
     return {
       ...player,
@@ -92,6 +98,15 @@ function applyTargetBindMaintenance(
       targetBind: { ...bind, remaining },
     };
   }) as [PlayerState, PlayerState];
+}
+
+function resolveRuntimePlayer(
+  players: [PlayerState, PlayerState],
+  helpers: HelperEntity[],
+  entityId: number,
+): PlayerState | undefined {
+  if (entityId === 1 || entityId === 2) return players[entityId - 1];
+  return helpers.find((helper) => helper.entityId === entityId)?.player;
 }
 
 function applyCommonDownRecovery(player: PlayerState, cns: CnsDocument | null | undefined, wasHitPaused: boolean): PlayerState {
@@ -110,34 +125,31 @@ function applyCommonDownRecovery(player: PlayerState, cns: CnsDocument | null | 
     hitDiagnosticLines: [
       ...(player.hitDiagnosticLines ?? []),
       `raw.down_clock target=p${player.id}`,
-      `  state=5110 elapsed=${lieDownElapsed} duration=${lieDownTime} remaining=${Math.max(0, lieDownTime - lieDownElapsed)} hitPause=${wasHitPaused ? 1 : 0} ko=${player.life <= 0 ? 1 : 0} result=${player.life <= 0 ? 'ko_hold' : lieDownElapsed >= lieDownTime ? 'getup' : wasHitPaused ? 'frozen' : 'advance'}`,
+      `  state=5110 elapsed=${lieDownElapsed} duration=${lieDownTime} remaining=${Math.max(0, lieDownTime - lieDownElapsed)} hitPause=${wasHitPaused ? 1 : 0} ko=${player.life <= 0 ? 1 : 0} result=${player.life <= 0 ? 'ko_hold' : lieDownElapsed >= lieDownTime ? 'ready' : wasHitPaused ? 'frozen' : 'advance'}`,
     ],
   };
   if (player.life <= 0 || lieDownElapsed < lieDownTime) return timed;
 
-  const getupState = findCnsState(cns, 5120);
-  if (!getupState) return timed;
-  return {
-    ...timed,
-    prevStateNo: 5110,
-    stateNo: 5120,
-    stateTime: 0,
-    stateType: toStateType(getupState.stateType) ?? 'L',
-    moveType: toMoveType(getupState.moveType) ?? 'I',
-    physics: toPhysics(getupState.physics) ?? 'N',
-    ctrl: getupState.ctrl ?? false,
-    lieDownElapsed: undefined,
-    lieDownTime: undefined,
-  } as PlayerState;
+  // Keep State 5110 through this render boundary. The next CNS pass performs
+  // the engine-owned 5110 -> 5120 entry before negative/current State scans,
+  // so State 5120 Time=0 Controllers (and an immediate custom get-up route)
+  // execute before the player is drawn again.
+  return timed;
 }
 
 export function stepPlayerCnsPhysics(player: PlayerState, cns?: CnsDocument | null): PlayerState {
   const palFx = stepBgPalFx(player.palFx);
   if (player.hitPause > 0) {
+    const remainingHitPause = Math.max(0, player.hitPause - 1);
+    const advanceStateTime = player.hitPauseKind !== 'pause'
+      && player.stateHeaderAppliedStateNo === player.stateNo
+      && player.stateTime > 0;
     return {
       ...player,
       palFx,
-      hitPause: Math.max(0, player.hitPause - 1),
+      hitPause: remainingHitPause,
+      hitPauseKind: remainingHitPause > 0 ? player.hitPauseKind : undefined,
+      stateTime: advanceStateTime ? player.stateTime + 1 : player.stateTime,
     };
   }
 
@@ -145,6 +157,7 @@ export function stepPlayerCnsPhysics(player: PlayerState, cns?: CnsDocument | nu
   const nextTime = {
     stateTime: player.stateTime + 1,
     animTime: player.animTime + 1,
+    presentedAnimation: snapshotPresentedAnimation(player),
   };
 
   if (player.positionFrozen) {
@@ -157,9 +170,11 @@ export function stepPlayerCnsPhysics(player: PlayerState, cns?: CnsDocument | nu
       ...advanced,
       palFx,
       x: player.x + player.vx,
-      y: DEFAULT_GROUND_Y,
+      // WinMUGEN S/C physics applies ground friction; it does not itself
+      // rewrite Pos Y. StateType and Physics are independent, and real
+      // characters intentionally combine StateType=A with Physics=S.
+      y: player.y + player.vy,
       vx: Math.abs(nextVx) < 0.01 ? 0 : nextVx,
-      vy: 0,
       ...nextTime,
     };
   }
@@ -198,8 +213,23 @@ function advanceProjectileContacts(player: PlayerState): PlayerState {
   };
 }
 
-function clampPlayerAfterCnsPhysics(player: PlayerState): PlayerState {
+function clampPlayerAfterCnsPhysics(player: PlayerState, previousPlayer: PlayerState): PlayerState {
   if (player.y < DEFAULT_GROUND_Y) {
+    return player;
+  }
+
+  // Physics=N has no automatic ground interaction. Characters use it for
+  // authored off-screen movement such as sinking below Pos Y = 0 before a
+  // ChangeState; only their CNS controllers decide when that motion stops.
+  if (player.physics === 'N') {
+    return player;
+  }
+
+  // S/C friction does not relocate an entity that CNS has already placed
+  // below the ground axis. Only clamp an S/C player that actually crossed the
+  // floor from above during this tick. T-H-M-A State 3730 deliberately enters
+  // Physics=S at Pos Y=400 so the thrower remains underneath its rock Helper.
+  if ((player.physics === 'S' || player.physics === 'C') && previousPlayer.y > DEFAULT_GROUND_Y) {
     return player;
   }
 
@@ -210,7 +240,7 @@ function clampPlayerAfterCnsPhysics(player: PlayerState): PlayerState {
   return {
     ...player,
     y: DEFAULT_GROUND_Y,
-    vy: player.physics === 'A' && player.vy > 0 ? 0 : player.vy,
+    vy: player.vy > 0 ? 0 : player.vy,
   };
 }
 
@@ -252,6 +282,8 @@ function enterLandingState(player: PlayerState, opponent: PlayerState, stateDef:
     vy: 0,
     activeHitDef: null,
     hitDefUsed: false,
+    drawAngle: undefined,
+    drawScale: undefined,
     facing: player.x <= opponent.x ? 1 : -1,
   } as PlayerState;
 }

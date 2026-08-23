@@ -1,4 +1,5 @@
 import type { AfterImageState, PlayerState } from '../engine/types';
+import { getPresentedAnimationTime } from '../animation/PresentedAnimation';
 
 type AfterImageOptions = Omit<AfterImageState, 'enabled' | 'remainingTime' | 'captureTick' | 'frames'>;
 
@@ -48,7 +49,9 @@ export function stepAfterImage(
     y: player.y,
     facing: player.facing,
     animNo: player.animNo,
-    animTime: player.animTime,
+    animTime: getPresentedAnimationTime(player),
+    drawAngle: player.drawAngle,
+    drawScale: player.drawScale,
     age: 0,
   }, ...agedFrames] : agedFrames).slice(0, state.length);
   const nextTime = state.remainingTime === -1 ? -1 : Math.max(0, state.remainingTime - 1);
@@ -64,8 +67,54 @@ export function stepAfterImage(
 
 export function setAfterImageTime(state: AfterImageState | undefined, time: number): AfterImageState | undefined {
   if (!state?.enabled) return state;
-  if (time === 0) return clearAfterImage();
   return { ...state, remainingTime: Math.trunc(time), enabled: true };
+}
+
+export function applyAfterImagePaletteToRgba(
+  data: Uint8ClampedArray,
+  palette: AfterImageState['palette'],
+  historyIndex: number,
+): void {
+  const color = clamp(palette.color, 0, 256);
+  const repetitions = Math.max(0, Math.trunc(historyIndex));
+  for (let index = 0; index < data.length; index += 4) {
+    if (data[index + 3] === 0) continue;
+    const sourceRed = data[index];
+    const sourceGreen = data[index + 1];
+    const sourceBlue = data[index + 2];
+    const gray = (sourceRed + sourceGreen + sourceBlue) / 3;
+    let red = mixColor(gray, sourceRed, color);
+    let green = mixColor(gray, sourceGreen, color);
+    let blue = mixColor(gray, sourceBlue, color);
+    if (palette.invertAll) {
+      red = 255 - red;
+      green = 255 - green;
+      blue = 255 - blue;
+    }
+    red = applyBasePalette(red, palette.bright.red, palette.contrast.red, palette.postBright.red);
+    green = applyBasePalette(green, palette.bright.green, palette.contrast.green, palette.postBright.green);
+    blue = applyBasePalette(blue, palette.bright.blue, palette.contrast.blue, palette.postBright.blue);
+    for (let repetition = 0; repetition < repetitions; repetition += 1) {
+      red = clamp((red + palette.add.red) * palette.multiply.red, 0, 255);
+      green = clamp((green + palette.add.green) * palette.multiply.green, 0, 255);
+      blue = clamp((blue + palette.add.blue) * palette.multiply.blue, 0, 255);
+    }
+    data[index] = red;
+    data[index + 1] = green;
+    data[index + 2] = blue;
+  }
+}
+
+function mixColor(gray: number, channel: number, color: number): number {
+  return (gray * (256 - color) + channel * color) / 256;
+}
+
+function applyBasePalette(channel: number, bright: number, contrast: number, postBright: number): number {
+  return clamp((channel + bright) * contrast / 256 + postBright, 0, 255);
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
 
 export function clearAfterImage(): AfterImageState {
