@@ -149,13 +149,30 @@ function webMugenPublicationIdFromFileName(string $fileName): ?string
     return preg_match('/^material-([0-9]+)-archive\.[^.]+$/i', $fileName, $match) ? $match[1] : null;
 }
 
-function webMugenFindPublicationArchive(array $config, string $publicationId): string
+function webMugenPublicationArchivePath(array $config, string $archiveFile): string
 {
-    if (!preg_match('/^[0-9]+$/', $publicationId)) throw new RuntimeException('publicationId must be numeric.', 400);
-    $matches = glob(rtrim((string)$config['storageDir'], '/\\') . DIRECTORY_SEPARATOR . 'material-' . $publicationId . '-archive.*') ?: [];
-    $matches = array_values(array_filter($matches, static fn(string $path): bool => strtolower(pathinfo($path, PATHINFO_EXTENSION)) === 'zip'));
-    if (count($matches) !== 1) throw new RuntimeException('Published Character ZIP was not found uniquely.', 404);
-    return $matches[0];
+    if (
+        $archiveFile === ''
+        || $archiveFile !== trim($archiveFile)
+        || str_contains($archiveFile, '..')
+        || str_contains($archiveFile, '/')
+        || str_contains($archiveFile, '\\')
+        || str_contains($archiveFile, '://')
+        || preg_match('/[\x00-\x1f\x7f]/', $archiveFile)
+        || preg_match('/\A[\pL\pN][\pL\pN._ ()+\-]*\.zip\z/ui', $archiveFile) !== 1
+    ) {
+        throw new RuntimeException('archiveFile must be a safe ZIP basename.', 400);
+    }
+    $path = rtrim((string)$config['storageDir'], '/\\') . DIRECTORY_SEPARATOR . $archiveFile;
+    $storageRoot = realpath((string)$config['storageDir']);
+    $resolved = realpath($path);
+    if ($storageRoot === false || $resolved === false || !is_file($resolved)) {
+        throw new RuntimeException('Published Character ZIP was not found.', 404);
+    }
+    if (!webMugenPathIsInside($resolved, $storageRoot)) {
+        throw new RuntimeException('Character archive is outside the configured storage root.', 403);
+    }
+    return $resolved;
 }
 
 function webMugenRebuildCatalog(array $config): array
@@ -168,17 +185,20 @@ function webMugenRebuildCatalog(array $config): array
     return ['catalog' => $document, 'entries' => $scan['entries'], 'excluded' => $scan['excluded']];
 }
 
-function webMugenPublishCharacter(array $config, string $publicationId, ?string $stageId = null): array
+function webMugenPublishCharacter(array $config, string $publicationId, string $archiveFile, ?string $stageId = null): array
 {
-    $entry = webMugenCatalogEntryForZip(webMugenFindPublicationArchive($config, $publicationId), $config, $publicationId);
+    if (!preg_match('/^[0-9]+$/', $publicationId)) throw new RuntimeException('publicationId must be numeric.', 400);
+    $entry = webMugenCatalogEntryForZip(webMugenPublicationArchivePath($config, $archiveFile), $config, $publicationId);
     $catalog = webMugenReadCatalog((string)$config['catalogPath']);
     $items = array_values(array_filter($catalog['items'], static fn(array $item): bool => ($item['id'] ?? null) !== $entry['id']));
     $items[] = $entry;
     $document = ['version' => 1, 'items' => $items];
+    $playUrl = webMugenBuildPlayUrl($config, $document, $entry['id'], $stageId ?? (string)$config['defaultStageId']);
+    webMugenValidateCatalog($document);
     webMugenWriteCatalogAtomic((string)$config['catalogPath'], $document);
     return [
         'entry' => $entry,
-        'playUrl' => webMugenBuildPlayUrl($config, $document, $entry['id'], $stageId ?? (string)$config['defaultStageId']),
+        'playUrl' => $playUrl,
     ];
 }
 

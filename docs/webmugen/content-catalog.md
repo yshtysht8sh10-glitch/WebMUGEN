@@ -113,7 +113,7 @@ Only the shared schema is part of the runtime contract. Do not make the browser 
 
 The supplied PHP endpoint `public/api/catalog.php` is the deployment adapter for the proxy-release workflow. It scans only the configured fixed storage root, validates each ZIP server-side, and rewrites the same version 1 Catalog consumed by the Runtime. It supports authenticated `POST` actions:
 
-- `publish-character`: validate one `publicationId`/archive and return its stable Character ID and play URL;
+- `publish-character`: validate one `publicationId` plus the actual `archiveFile` basename and return its stable Character ID, Character path, and play URL;
 - `rebuild`: rescan the fixed storage root and replace all `proxy-release-*` entries while retaining publisher/built-in entries;
 - `play-url`: return the current URL for an already cataloged publication.
 
@@ -126,7 +126,11 @@ Configure these server-side environment variables; never place the secret in Vit
 - `WEBMUGEN_PUBLIC_URL`: deployed WebMUGEN `index.html` URL;
 - `WEBMUGEN_DEFAULT_STAGE_ID`: stage ID included in generated play URLs.
 
-Archive names produced by proxy-release (`material-<publicationId>-archive.zip`) map to stable IDs `proxy-release-<publicationId>`. A valid Character DEF requires `[Info]`, `[Files]`, `cmd`, `anim`, and either `cns` or `st`. Zero or multiple structurally valid Character DEFs, corrupt archives, traversal paths, or unsafe names fail without changing the existing Catalog. Successful writes serialize a complete validated document to a temporary file and replace the Catalog atomically where the host filesystem supports it.
+`publish-character` accepts `publicationId`, `archiveFile`, and optional `stageId`. `publicationId` produces the stable ID `proxy-release-<publicationId>`; it is never inferred from `archiveFile`. `archiveFile` must be a `.zip` basename with no slash, backslash, `..`, URL syntax, absolute path, or control characters, and is resolved only below `WEBMUGEN_PROXY_STORAGE_DIR`. A valid Character DEF requires `[Info]`, `[Files]`, `cmd`, `anim`, and either `cns` or `st`. Zero or multiple structurally valid Character DEFs, corrupt archives, traversal paths, or unsafe names fail without changing the existing Catalog.
+
+Before writing, the endpoint builds the prospective Catalog, verifies that the requested Stage exists as a Stage entry, generates the standard `?character=<id>&stage=<id>` URL, and validates the complete document. Only then does it atomically replace `catalog.json`; an invalid Stage cannot leave a Character-only partial update. Rebuild continues to inspect every ZIP basename in the configured storage directory, replaces only `proxy-release-*` items, retains built-in/publisher items, and returns per-file exclusions.
+
+`WEBMUGEN_PROXY_STORAGE_DIR` is a PHP server filesystem setting. It is unrelated to Settings → External Character → Select folder, which grants the local browser Catalog Generator access to a directory on the user's PC. Public proxy publication never depends on that Development/authoring picker.
 
 ## Development and Public Mode UI
 

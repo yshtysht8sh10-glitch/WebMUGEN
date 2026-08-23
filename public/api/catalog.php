@@ -19,7 +19,8 @@ try {
 
     if ($action === 'publish-character') {
         $publicationId = (string)($payload['publicationId'] ?? '');
-        $result = webMugenPublishCharacter($config, $publicationId, isset($payload['stageId']) ? (string)$payload['stageId'] : null);
+        $archiveFile = (string)($payload['archiveFile'] ?? '');
+        $result = webMugenPublishCharacter($config, $publicationId, $archiveFile, isset($payload['stageId']) ? (string)$payload['stageId'] : null);
         echo json_encode([
             'success' => true,
             'characterId' => $result['entry']['id'],

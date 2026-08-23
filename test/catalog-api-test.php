@@ -21,12 +21,20 @@ try {
     createZip($storage . '/material-4-archive.zip', ['a.def' => $characterDef('A'), 'b/b.def' => $characterDef('B')]);
     createZip($storage . '/material-5-archive.zip', ['system.def' => "[Info]\nname=System\n[Files]\nspr=system.sff\n"]);
     file_put_contents($storage . '/material-6-archive.zip', 'broken');
+    createZip($storage . '/uploaded_938472.zip', ['package/sub/character.def' => $characterDef('Arbitrary Name Fighter')]);
+    createZip($root . '/outside.zip', ['outside.def' => $characterDef('Outside Fighter')]);
 
     $catalogPath = $content . '/catalog.json';
-    $builtin = ['version' => 1, 'items' => [[
-        'id' => 'cyber', 'name' => 'Cyber', 'kind' => 'stage', 'engine' => 'webmugen',
-        'source' => 'builtin', 'path' => 'builtin:stage:cyber',
-    ]]];
+    $builtin = ['version' => 1, 'items' => [
+        [
+            'id' => 'cyber', 'name' => 'Cyber', 'kind' => 'stage', 'engine' => 'webmugen',
+            'source' => 'builtin', 'path' => 'builtin:stage:cyber',
+        ],
+        [
+            'id' => 'default-cyber', 'name' => 'Cyber HUD', 'kind' => 'lifebar', 'engine' => 'webmugen',
+            'source' => 'builtin', 'path' => 'builtin:lifebar:default-cyber',
+        ],
+    ]];
     file_put_contents($catalogPath, json_encode($builtin, JSON_PRETTY_PRINT));
     $config = [
         'storageDir' => $storage,
@@ -37,21 +45,47 @@ try {
     ];
 
     $rebuilt = webMugenRebuildCatalog($config);
-    assertSame(3, count($rebuilt['entries']), 'three valid Character ZIPs are registered');
+    assertSame(4, count($rebuilt['entries']), 'all four valid Character ZIPs are registered regardless of file name');
     assertSame(3, count($rebuilt['excluded']), 'ambiguous, non-Character, and corrupt ZIPs are excluded');
-    assertSame(['proxy-release-1', 'proxy-release-2', 'proxy-release-3'], array_column($rebuilt['entries'], 'id'), 'publication IDs are stable Catalog IDs');
+    assertSame(1, count(array_filter($rebuilt['entries'], static fn(array $entry): bool => $entry['path'] === '/DotoEita/16_proxy_release/storage/data/uploaded_938472.zip')), 'rebuild scans an arbitrary ZIP filename');
     assertSame('different-name/subfolder/character.def', webMugenInspectCharacterZip($storage . '/material-3-archive.zip')['defPath'], 'Character DEF is selected by structure');
     assertSame('cyber', webMugenReadCatalog($catalogPath)['items'][0]['id'], 'built-in entry is preserved');
+    assertSame('default-cyber', webMugenReadCatalog($catalogPath)['items'][1]['id'], 'built-in LifeBar is preserved');
 
     $second = webMugenRebuildCatalog($config);
     assertSame(array_column($rebuilt['entries'], 'id'), array_column($second['entries'], 'id'), 'rebuild keeps IDs stable');
-    $published = webMugenPublishCharacter($config, '3');
-    assertSame('proxy-release-3', $published['entry']['id'], 'single publish returns target Character ID');
+    $published = webMugenPublishCharacter($config, '123', 'uploaded_938472.zip');
+    assertSame('proxy-release-123', $published['entry']['id'], 'publication ID is independent from the archive filename');
+    assertSame('/DotoEita/16_proxy_release/storage/data/uploaded_938472.zip', $published['entry']['path'], 'the actual archive filename is retained in the Catalog path');
     assertSame(
-        'https://example.test/DotoEita/50_WEBMUGEN/index.html?character=proxy-release-3&stage=cyber',
+        'https://example.test/DotoEita/50_WEBMUGEN/index.html?character=proxy-release-123&stage=cyber',
         $published['playUrl'],
         'play URL uses the WebMUGEN query contract',
     );
+
+    foreach (['../uploaded_938472.zip', 'sub/uploaded_938472.zip', 'sub\\uploaded_938472.zip', 'https://example.test/fighter.zip'] as $unsafeArchive) {
+        try {
+            webMugenPublicationArchivePath($config, $unsafeArchive);
+            throw new RuntimeException('expected unsafe archiveFile rejection');
+        } catch (RuntimeException $error) {
+            assertSame('archiveFile must be a safe ZIP basename.', $error->getMessage(), 'unsafe archiveFile is rejected');
+        }
+    }
+    try {
+        webMugenCatalogEntryForZip($root . '/outside.zip', $config, '125');
+        throw new RuntimeException('expected storage root rejection');
+    } catch (RuntimeException $error) {
+        assertSame('Character archive is outside the configured storage root.', $error->getMessage(), 'storage root escape is rejected');
+    }
+
+    $beforeInvalidStage = (string)file_get_contents($catalogPath);
+    try {
+        webMugenPublishCharacter($config, '124', 'uploaded_938472.zip', 'missing-stage');
+        throw new RuntimeException('expected missing Stage rejection');
+    } catch (RuntimeException $error) {
+        assertSame('stageId is not present as a Stage in the Catalog.', $error->getMessage(), 'missing Stage is rejected before writing');
+    }
+    assertSame($beforeInvalidStage, (string)file_get_contents($catalogPath), 'invalid Stage leaves the Catalog unchanged');
 
     $before = (string)file_get_contents($catalogPath);
     try {
