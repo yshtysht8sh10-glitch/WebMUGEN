@@ -1,5 +1,6 @@
 node_modules/
 dist/
+release/
 .env
 /public/config/catalog-config.php
 .DS_Store
