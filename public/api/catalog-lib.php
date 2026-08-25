@@ -23,6 +23,7 @@ function webMugenCatalogConfig(array $server = []): array
         'catalogPath' => (string)(getenv('WEBMUGEN_CATALOG_PATH') ?: dirname(__DIR__) . '/content/catalog.json'),
         'publicUrl' => rtrim((string)(getenv('WEBMUGEN_PUBLIC_URL') ?: $scheme . '://' . $host . $appPath . '/index.html'), '/'),
         'defaultStageId' => (string)(getenv('WEBMUGEN_DEFAULT_STAGE_ID') ?: 'cyber'),
+        'defaultCharacterId' => (string)(getenv('WEBMUGEN_DEFAULT_CHARACTER_ID') ?: 't-h-m-a'),
     ];
 }
 
@@ -174,10 +175,85 @@ function webMugenInspectCharacterZip(string $zipPath): array
         $zip->close();
     }
     if (count($candidates) === 0) throw new RuntimeException('ZIP contains no valid Character DEF.', 422);
-    if (count($candidates) > 1) {
-        throw new RuntimeException('ZIP contains multiple valid Character DEF files: ' . implode(', ', array_column($candidates, 'defPath')) . '.', 422);
+    return webMugenSelectPreferredDefCandidate($candidates);
+}
+
+function webMugenInspectStageZip(string $zipPath): array
+{
+    if (!class_exists('ZipArchive')) throw new RuntimeException('PHP ZipArchive extension is required.', 500);
+    $zip = new ZipArchive();
+    $opened = $zip->open($zipPath);
+    if ($opened !== true) throw new RuntimeException('ZIP is corrupt or unsupported.', 422);
+    $candidates = [];
+    try {
+        for ($index = 0; $index < $zip->numFiles; $index++) {
+            $name = (string)$zip->getNameIndex($index);
+            if ($name === '' || str_ends_with($name, '/')) continue;
+            $normalized = webMugenNormalizeArchivePath($name);
+            if ($normalized === null || !str_ends_with(strtolower($normalized), '.def')) continue;
+            $bytes = $zip->getFromIndex($index);
+            if (!is_string($bytes)) continue;
+            $candidate = webMugenInspectStageDef($normalized, webMugenDecodeText($bytes));
+            if ($candidate !== null) $candidates[] = $candidate;
+        }
+    } finally {
+        $zip->close();
     }
+    if ($candidates === []) throw new RuntimeException('ZIP contains no valid Stage DEF.', 422);
+    return webMugenSelectPreferredDefCandidate($candidates);
+}
+
+function webMugenInspectStageDef(string $path, string $text): ?array
+{
+    $sections = [];
+    $section = null;
+    foreach (preg_split('/\r\n|\r|\n/', preg_replace('/^\xEF\xBB\xBF/', '', $text) ?? $text) ?: [] as $rawLine) {
+        $line = trim((string)(preg_replace('/;.*/', '', $rawLine) ?? ''));
+        if ($line === '') continue;
+        if (preg_match('/^\[([^]]+)]$/', $line, $match)) {
+            $section = strtolower(trim($match[1]));
+            if (!isset($sections[$section])) $sections[$section] = [];
+            continue;
+        }
+        if ($section !== null && preg_match('/^([^=]+)=(.*)$/', $line, $match)) {
+            $sections[$section][strtolower(trim($match[1]))] = trim(trim($match[2]), "\"'");
+        }
+    }
+    if (
+        (!isset($sections['info']) && !isset($sections['stageinfo']))
+        || !isset($sections['camera'], $sections['playerinfo'], $sections['bound'], $sections['bgdef'])
+        || trim((string)($sections['bgdef']['spr'] ?? '')) === ''
+    ) return null;
+    $name = trim((string)($sections['info']['name'] ?? $sections['stageinfo']['name'] ?? pathinfo($path, PATHINFO_FILENAME)));
+    return ['defPath' => $path, 'name' => $name !== '' ? $name : pathinfo($path, PATHINFO_FILENAME)];
+}
+
+function webMugenSelectPreferredDefCandidate(array $candidates): array
+{
+    usort($candidates, static function (array $left, array $right): int {
+        $leftRank = webMugenDefCandidateRank((string)$left['defPath']);
+        $rightRank = webMugenDefCandidateRank((string)$right['defPath']);
+        foreach (['depth', 'nameComplexity', 'nameLength'] as $key) {
+            $comparison = $leftRank[$key] <=> $rightRank[$key];
+            if ($comparison !== 0) return $comparison;
+        }
+        return strcmp($leftRank['path'], $rightRank['path']);
+    });
     return $candidates[0];
+}
+
+function webMugenDefCandidateRank(string $path): array
+{
+    $normalized = trim(str_replace('\\', '/', $path), '/');
+    $stem = preg_replace('/\.[^.]+$/', '', basename($normalized)) ?? basename($normalized);
+    $complexity = preg_match_all('/[^\pL\pN]/u', $stem, $unused);
+    if ($complexity === false) $complexity = strlen((string)(preg_replace('/[A-Za-z0-9]/', '', $stem) ?? $stem));
+    return [
+        'depth' => substr_count($normalized, '/'),
+        'nameComplexity' => $complexity,
+        'nameLength' => function_exists('mb_strlen') ? mb_strlen($stem, 'UTF-8') : strlen($stem),
+        'path' => $normalized,
+    ];
 }
 
 function webMugenInspectCharacterDef(string $path, string $text): ?array
@@ -236,7 +312,7 @@ function webMugenScanCatalog(array $config): array
     foreach (new DirectoryIterator($storageDir) as $file) {
         if (!$file->isFile() || strtolower($file->getExtension()) !== 'zip') continue;
         try {
-            $entries[] = webMugenCatalogEntryForZip($file->getPathname(), $config);
+            $entries[] = webMugenCatalogEntryForAnyZip($file->getPathname(), $config);
         } catch (Throwable $error) {
             $excluded[] = ['file' => $file->getFilename(), 'code' => 'character.invalid', 'message' => $error->getMessage()];
         }
@@ -247,12 +323,37 @@ function webMugenScanCatalog(array $config): array
 
 function webMugenCatalogEntryForZip(string $zipPath, array $config, ?string $publicationId = null): array
 {
+    return webMugenCatalogEntryForKind($zipPath, $config, $publicationId, 'character');
+}
+
+function webMugenStageCatalogEntryForZip(string $zipPath, array $config, ?string $publicationId = null): array
+{
+    return webMugenCatalogEntryForKind($zipPath, $config, $publicationId, 'stage');
+}
+
+function webMugenCatalogEntryForAnyZip(string $zipPath, array $config, ?string $publicationId = null): array
+{
+    try {
+        return webMugenCatalogEntryForKind($zipPath, $config, $publicationId, 'character');
+    } catch (RuntimeException $characterError) {
+        if ($characterError->getCode() !== 422) throw $characterError;
+        try {
+            return webMugenCatalogEntryForKind($zipPath, $config, $publicationId, 'stage');
+        } catch (RuntimeException $stageError) {
+            if ($stageError->getCode() !== 422) throw $stageError;
+            throw new RuntimeException('ZIP contains no valid Character or Stage DEF.', 422);
+        }
+    }
+}
+
+function webMugenCatalogEntryForKind(string $zipPath, array $config, ?string $publicationId, string $kind): array
+{
     $storageRoot = realpath((string)$config['storageDir']);
     $resolved = realpath($zipPath);
     if ($storageRoot === false || $resolved === false || !is_file($resolved) || !webMugenPathIsInside($resolved, $storageRoot)) {
-        throw new RuntimeException('Character archive is outside the configured storage root.', 403);
+        throw new RuntimeException('Published archive is outside the configured storage root.', 403);
     }
-    $inspection = webMugenInspectCharacterZip($resolved);
+    $inspection = $kind === 'stage' ? webMugenInspectStageZip($resolved) : webMugenInspectCharacterZip($resolved);
     $fileName = basename($resolved);
     $publicId = $publicationId ?? webMugenPublicationIdFromFileName($fileName);
     $id = $publicId !== null
@@ -260,7 +361,7 @@ function webMugenCatalogEntryForZip(string $zipPath, array $config, ?string $pub
         : 'proxy-release-' . substr(hash_file('sha256', $resolved), 0, 20);
     return [
         'id' => $id,
-        'kind' => 'character',
+        'kind' => $kind,
         'engine' => 'winmugen',
         'source' => 'external',
         'name' => $inspection['name'],
@@ -291,10 +392,10 @@ function webMugenPublicationArchivePath(array $config, string $archiveFile): str
     $storageRoot = realpath((string)$config['storageDir']);
     $resolved = realpath($path);
     if ($storageRoot === false || $resolved === false || !is_file($resolved)) {
-        throw new RuntimeException('Published Character ZIP was not found.', 404);
+        throw new RuntimeException('Published ZIP was not found.', 404);
     }
     if (!webMugenPathIsInside($resolved, $storageRoot)) {
-        throw new RuntimeException('Character archive is outside the configured storage root.', 403);
+        throw new RuntimeException('Published archive is outside the configured storage root.', 403);
     }
     return $resolved;
 }
@@ -324,6 +425,20 @@ function webMugenPublishCharacter(array $config, string $publicationId, string $
         'entry' => $entry,
         'playUrl' => $playUrl,
     ];
+}
+
+function webMugenPublishStage(array $config, string $publicationId, string $archiveFile, ?string $characterId = null): array
+{
+    if (!preg_match('/^[0-9]+$/', $publicationId)) throw new RuntimeException('publicationId must be numeric.', 400);
+    $entry = webMugenStageCatalogEntryForZip(webMugenPublicationArchivePath($config, $archiveFile), $config, $publicationId);
+    $catalog = webMugenReadCatalog((string)$config['catalogPath']);
+    $items = array_values(array_filter($catalog['items'], static fn(array $item): bool => ($item['id'] ?? null) !== $entry['id']));
+    $items[] = $entry;
+    $document = ['version' => 1, 'items' => $items];
+    $playUrl = webMugenBuildPlayUrl($config, $document, $characterId ?? (string)$config['defaultCharacterId'], $entry['id']);
+    webMugenValidateCatalog($document);
+    webMugenWriteCatalogAtomic((string)$config['catalogPath'], $document);
+    return ['entry' => $entry, 'playUrl' => $playUrl];
 }
 
 function webMugenBuildPlayUrl(array $config, array $catalog, string $characterId, string $stageId): string

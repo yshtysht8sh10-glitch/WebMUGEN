@@ -2,6 +2,7 @@ import { unzipSync } from 'fflate';
 import { convertSffV1ToImageDataSpritePack } from '../core/sprite/SffSpritePackConverter';
 import type { MugenStage, MugenStageLayer } from '../core/stage/MugenStage';
 import { getDefSection, getDefValue, parseDefText } from '../parser/def/DefParser';
+import { selectPreferredDefCandidate } from '../content/DefCandidateSelection';
 
 export async function loadMugenStageZip(zipPath: string): Promise<MugenStage> {
   const response = await fetch(zipPath);
@@ -12,11 +13,13 @@ export async function loadMugenStageZip(zipPath: string): Promise<MugenStage> {
     if (!name.endsWith('/')) files.set(normalizePath(name), bytes);
   }
 
-  const defPath = Array.from(files.keys())
-    .filter((path) => path.toLowerCase().endsWith('.def'))
-    .sort((left, right) => left.localeCompare(right))[0];
-  if (!defPath) throw new Error('Stage ZIP does not contain a DEF file.');
-  const def = parseDefText(decodeText(files.get(defPath)!));
+  const candidates = Array.from(files.entries())
+    .filter(([path]) => path.toLowerCase().endsWith('.def'))
+    .map(([path, bytes]) => ({ path, def: parseDefText(decodeText(bytes)) }))
+    .filter(({ def }) => Boolean(getDefSection(def, 'BGDef') && getDefValue(def, 'BGDef', 'spr')));
+  if (candidates.length === 0) throw new Error('Stage ZIP does not contain a valid Stage DEF.');
+  const selected = selectPreferredDefCandidate(candidates);
+  const { path: defPath, def } = selected;
   const spriteName = getDefValue(def, 'BGDef', 'spr');
   if (!spriteName) throw new Error(`Stage DEF has no BGDef spr: ${defPath}`);
   const spritePath = resolveSibling(defPath, spriteName);

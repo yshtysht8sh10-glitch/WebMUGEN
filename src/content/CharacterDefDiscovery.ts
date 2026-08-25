@@ -1,4 +1,5 @@
 import { getCharacterDefFiles, getDefSection, getDefValue, parseDefText } from '../parser/def/DefParser';
+import { selectPreferredDefCandidate } from './DefCandidateSelection';
 
 export type CharacterDefCandidate = {
   path: string;
@@ -32,10 +33,7 @@ export function discoverCharacterDef(
   if (candidates.length === 0) {
     throw new Error('ZIP contains no valid Character DEF.');
   }
-  if (candidates.length > 1) {
-    throw new Error(`ZIP contains multiple valid Character DEF files: ${candidates.map((item) => item.path).join(', ')}.`);
-  }
-  return candidates[0];
+  return selectPreferredDefCandidate(candidates);
 }
 
 function fileStem(path: string): string {

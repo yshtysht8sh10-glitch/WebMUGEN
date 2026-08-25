@@ -58,7 +58,7 @@ Unknown kinds/engines, unsafe paths, duplicate IDs, invalid item shapes, and inc
 
 ## Runtime reading and fallback
 
-The Catalog path is stored as `content.catalogPath`. The publisher default is `content/catalog.json`, resolved from the directory containing the deployed `index.html`, so the same build works at the origin root or below a path such as `/DotoEita/50_WEBMUGEN/`. Safe same-origin absolute JSON paths are also accepted; arbitrary external URLs and traversal are rejected. Runtime reads use `cache: no-store` so a newly published Character is selectable without waiting for a stale browser cache to expire.
+The Catalog path is stored as `content.catalogPath`. The publisher default is `content/catalog.json`, resolved from the directory containing the deployed `index.html`, so the same build works at the origin root or below a path such as `/DotoEita/50_WebMUGEN/`. Safe same-origin absolute JSON paths are also accepted; arbitrary external URLs and traversal are rejected. Runtime reads use `cache: no-store` so a newly published Character is selectable without waiting for a stale browser cache to expire.
 
 On first load, a Catalog failure leaves the code/publisher Character, Stage, and LifeBar fallbacks available so the game can still start. On explicit reload, a failed request, 404, invalid JSON, version error, or timeout retains the previous successful Catalog. Development Mode displays the error and whether fallback was used.
 
@@ -114,6 +114,7 @@ Only the shared schema is part of the runtime contract. Do not make the browser 
 The supplied PHP endpoint `public/api/catalog.php` is the deployment adapter for the proxy-release workflow. It scans only the configured fixed storage root, validates each ZIP server-side, and rewrites the same version 1 Catalog consumed by the Runtime. It supports authenticated `POST` actions:
 
 - `publish-character`: validate one `publicationId` plus the actual `archiveFile` basename and return its stable Character ID, Character path, and play URL;
+- `publish-stage`: validate one Stage ZIP, upsert it with the stable publication ID, and return its Stage ID, Stage path, and a play URL using the configured default Character;
 - `rebuild`: rescan the fixed storage root and replace all `proxy-release-*` entries while retaining publisher/built-in entries;
 - `play-url`: return the current URL for an already cataloged publication.
 
@@ -139,8 +140,11 @@ Configure the remaining deployment values with these server-side environment var
 - `WEBMUGEN_CATALOG_PATH`: filesystem path to the deployed `content/catalog.json`;
 - `WEBMUGEN_PUBLIC_URL`: deployed WebMUGEN `index.html` URL;
 - `WEBMUGEN_DEFAULT_STAGE_ID`: stage ID included in generated play URLs.
+- `WEBMUGEN_DEFAULT_CHARACTER_ID`: character ID used when generating a play URL for a published Stage (default `t-h-m-a`).
 
-`publish-character` accepts `publicationId`, `archiveFile`, and optional `stageId`. `publicationId` produces the stable ID `proxy-release-<publicationId>`; it is never inferred from `archiveFile`. `archiveFile` must be a `.zip` basename with no slash, backslash, `..`, URL syntax, absolute path, or control characters, and is resolved only below `WEBMUGEN_PROXY_STORAGE_DIR`. A valid Character DEF requires `[Info]`, `[Files]`, `cmd`, `anim`, and either `cns` or `st`. Zero or multiple structurally valid Character DEFs, corrupt archives, traversal paths, or unsafe names fail without changing the existing Catalog.
+`publish-character` accepts `publicationId`, `archiveFile`, and optional `stageId`. `publicationId` produces the stable ID `proxy-release-<publicationId>`; it is never inferred from `archiveFile`. `archiveFile` must be a `.zip` basename with no slash, backslash, `..`, URL syntax, absolute path, or control characters, and is resolved only below `WEBMUGEN_PROXY_STORAGE_DIR`. A valid Character DEF requires `[Info]`, `[Files]`, `cmd`, `anim`, and either `cns` or `st`. Multiple valid definitions use the same shallowest/simplest deterministic ranking as the browser Character loader. A valid Stage DEF requires Stage metadata plus `[Camera]`, `[PlayerInfo]`, `[Bound]`, and `[BGDef] spr`; multiple Stage definitions use the same ranking. Zero valid definitions, corrupt archives, traversal paths, or unsafe names fail without changing the existing Catalog.
+
+`publish-stage` accepts `publicationId`, `archiveFile`, and optional `characterId`. It writes a `kind: "stage"`, `engine: "winmugen"` entry using stable ID `proxy-release-<publicationId>`. Before writing, it verifies that the selected Character exists and generates `?character=<id>&stage=proxy-release-<publicationId>`.
 
 Before writing, the endpoint builds the prospective Catalog, verifies that the requested Stage exists as a Stage entry, generates the standard `?character=<id>&stage=<id>` URL, and validates the complete document. Only then does it atomically replace `catalog.json`; an invalid Stage cannot leave a Character-only partial update. Rebuild continues to inspect every ZIP basename in the configured storage directory, replaces only `proxy-release-*` items, retains built-in/publisher items, and returns per-file exclusions.
 

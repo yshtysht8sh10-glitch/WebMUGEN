@@ -28,7 +28,7 @@ describe('Catalog Generator classification', () => {
     expect(classifyZipBytes(new Uint8Array([1, 2, 3]), 'broken.zip')).toMatchObject({ kind: 'unknown' });
     const ambiguous = classifyZipBytes(zipSync({ 'hero.def': strToU8(characterDef), 'arena.def': strToU8(stageDef) }), 'mixed.zip');
     expect(ambiguous.kind).toBe('unknown');
-    expect(ambiguous.errors[0]).toContain('multiple recognized entry DEF');
+    expect(ambiguous.errors[0]).toContain('multiple content kinds');
   });
 
   it('generates Catalog JSON, rejects unknown and duplicate IDs, and reports changes from an existing Catalog', () => {

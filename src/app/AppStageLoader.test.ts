@@ -28,7 +28,21 @@ describe('MUGEN stage ZIP loader', () => {
     const archive = zipSync({ 'readme.txt': strToU8('demo') });
     vi.stubGlobal('fetch', vi.fn(async () => new Response(archive)));
 
-    await expect(loadMugenStageZip('/stages/demo.zip')).rejects.toThrow('does not contain a DEF');
+    await expect(loadMugenStageZip('/stages/demo.zip')).rejects.toThrow('does not contain a valid Stage DEF');
+    vi.unstubAllGlobals();
+  });
+
+  it('prefers the shallowest and simplest valid Stage DEF', async () => {
+    const stageDef = (name: string, sprite: string) => `[Info]\nname = ${name}\n[BGDef]\nspr = ${sprite}\n[BG 0]\ntype = normal\nspriteno = 0,0`;
+    const archive = zipSync({
+      'arena/arena_extra.def': strToU8(stageDef('Extra', 'missing.sff')),
+      'arena/arena.def': strToU8(stageDef('Preferred', 'arena.sff')),
+      'arena/backup/a.def': strToU8(stageDef('Backup', 'missing.sff')),
+      'arena/arena.sff': new Uint8Array(512),
+    });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(archive)));
+
+    await expect(loadMugenStageZip('/stages/arena.zip')).rejects.not.toThrow('Stage SFF is missing');
     vi.unstubAllGlobals();
   });
 

@@ -55,6 +55,16 @@ try {
             'characterPath' => $result['entry']['path'],
             'playUrl' => $result['playUrl'],
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    } elseif ($action === 'publish-stage') {
+        $publicationId = (string)($payload['publicationId'] ?? '');
+        $archiveFile = (string)($payload['archiveFile'] ?? '');
+        $result = webMugenPublishStage($config, $publicationId, $archiveFile, isset($payload['characterId']) ? (string)$payload['characterId'] : null);
+        echo json_encode([
+            'success' => true,
+            'stageId' => $result['entry']['id'],
+            'stagePath' => $result['entry']['path'],
+            'playUrl' => $result['playUrl'],
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     } elseif ($action === 'rebuild') {
         $result = webMugenRebuildCatalog($config);
         echo json_encode(['success' => true, 'registered' => count($result['entries']), 'excluded' => $result['excluded']], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
@@ -71,15 +81,15 @@ try {
     http_response_code($status);
     echo json_encode([
         'success' => false,
-        'error' => ['code' => webMugenErrorCode($error, $status), 'message' => $error->getMessage()],
+        'error' => ['code' => webMugenErrorCode($error, $status, isset($action) ? (string)$action : ''), 'message' => $error->getMessage()],
     ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 }
 
-function webMugenErrorCode(Throwable $error, int $status): string
+function webMugenErrorCode(Throwable $error, int $status, string $action = ''): string
 {
     if ($status === 401) return 'auth.failed';
     if ($status === 404) return 'not_found';
-    if ($status === 422) return 'character.invalid';
+    if ($status === 422) return $action === 'publish-stage' ? 'stage.invalid' : 'character.invalid';
     if ($status === 405) return 'method.invalid';
     return 'catalog.failed';
 }

@@ -138,15 +138,22 @@ describe('AppCharacterLoader', () => {
     }
   });
 
-  it('rejects ZIPs with multiple valid Character DEF files instead of selecting the first', async () => {
-    const definition = '[Info]\nname = Fighter\n[Files]\ncmd = fighter.cmd\ncns = fighter.cns\nanim = fighter.air\n';
-    const zipBytes = zipSync({ 'a.def': strToU8(definition), 'b/b.def': strToU8(definition) });
+  it('selects the shallowest and simplest valid Character DEF deterministically', async () => {
+    const definition = (name: string) => `[Info]\nname = ${name}\n[Files]\ncmd = fighter.cmd\ncns = fighter.cns\nanim = fighter.air\n`;
+    const zipBytes = zipSync({
+      'fighter/fighter_extra.def': strToU8(definition('Extra')),
+      'fighter/fighter.def': strToU8(definition('Preferred')),
+      'fighter/backup/a.def': strToU8(definition('Backup')),
+      'fighter/fighter.cmd': strToU8('[Command]\nname = "a"\ncommand = a'),
+      'fighter/fighter.cns': strToU8('[Statedef 0]'),
+      'fighter/fighter.air': strToU8('[Begin Action 0]\n0,0,0,0,-1'),
+    });
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () => new Response(toArrayBuffer(zipBytes))) as typeof fetch;
     try {
       const result = await loadAppCharacter('/storage/ambiguous.zip');
-      expect(result.character).toBeNull();
-      expect(result.errorMessage).toContain('multiple valid Character DEF');
+      expect(result.errorMessage).toBeNull();
+      expect(readCharacterRuntimeMetadata(result.character!)).toMatchObject({ name: 'Preferred' });
     } finally {
       globalThis.fetch = originalFetch;
     }

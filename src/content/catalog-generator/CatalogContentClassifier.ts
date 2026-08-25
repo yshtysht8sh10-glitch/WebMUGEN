@@ -4,6 +4,7 @@ import { parseWebMugenStage } from '../../stage/webmugen/WebMugenStageLoader';
 import type { ContentKind } from '../catalog/ContentCatalogTypes';
 import type { CatalogClassificationResult, CatalogSourceFile } from './CatalogGeneratorTypes';
 import { inspectCharacterDef } from '../CharacterDefDiscovery';
+import { selectPreferredDefCandidate } from '../DefCandidateSelection';
 
 type ParsedDef = {
   sections: Map<string, Map<string, string>>;
@@ -52,9 +53,13 @@ export function classifyZipBytes(bytes: Uint8Array, entryFile = 'content.zip'): 
   }
   if (candidates.length === 0) return unknownResult(entryFile, 'ZIP contains no recognized entry DEF.');
   if (candidates.length > 1) {
-    return unknownResult(entryFile, `ZIP contains multiple recognized entry DEF files: ${candidates.map((item) => item.entryFile).join(', ')}.`);
+    const kinds = new Set(candidates.map((candidate) => candidate.kind));
+    if (kinds.size > 1) {
+      return unknownResult(entryFile, `ZIP contains multiple content kinds: ${candidates.map((item) => item.entryFile).join(', ')}.`);
+    }
   }
-  return { ...candidates[0], entryFile: candidates[0].entryFile, warnings: [] };
+  const selected = selectPreferredDefCandidate(candidates.map((candidate) => ({ ...candidate, path: candidate.entryFile })));
+  return { ...selected, entryFile: selected.entryFile, warnings: [] };
 }
 
 export function classifyWebMugenJson(text: string, entryFile: string): CatalogClassificationResult {
