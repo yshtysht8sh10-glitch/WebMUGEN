@@ -1,6 +1,6 @@
 # Loader
 
-Updated: 2026-08-23
+Updated: 2026-08-25
 
 This document describes how WebMUGEN loads and merges character files.
 
@@ -20,6 +20,15 @@ For ZIP Characters, the entry DEF is selected by Character structure rather than
 
 All ZIP references are resolved relative to the selected DEF directory. Backslashes, `.` segments, case differences, and safe `..` segments within the archive are normalized; traversal above the archive root and case-insensitive duplicate paths are rejected. A missing Character-owned referenced asset is fatal and cannot fall through to an HTTP path. Only WebMUGEN's explicit `/chars/common1.cns` and `/chars/common.cmd` engine assets use the HTTP fallback.
 
+HTTP Character assets under `/chars/` are resolved from the deployed application directory rather
+than the origin root. This keeps built-in Characters and the common CNS/CMD available when Public
+WebMUGEN is hosted below a path such as `/DotoEita/50_WebMUGEN/`; external proxy-release storage
+paths remain origin-absolute. ZIP entry names use the UTF-8 flag or Unicode Path extra field when
+present. Legacy names without either marker accept valid UTF-8 first and otherwise decode as
+Shift-JIS/CP932, so WinMUGEN-era Japanese filenames remain selectable and inspectable.
+
+Text contents are decoded independently for every DEF, CNS, CMD, AIR, ZSS, JSON, and inspectable text entry. UTF-8, UTF-16LE, and UTF-16BE BOMs take priority; without a BOM, a strict UTF-8 decode is attempted and valid UTF-8 is accepted, otherwise the bytes are decoded as Shift-JIS/CP932. The same detector is used by ZIP Characters, unpacked HTTP Characters, ZIP Stages, Catalog classification, and the development file inventory. This permits UTF-8 and CP932 files to coexist in one Character without passing different strings to the file viewer and runtime parser.
+
 ## Loaded asset types
 
 A character load may involve:
@@ -36,7 +45,7 @@ A character load may involve:
 
 ## Character-file inventory and local editing
 
-After the runtime-required assets have loaded, the app builds a separate file-browser inventory. HTTP characters enumerate every file beneath the selected DEF directory through the local Vite middleware. ZIP characters enumerate every archive entry. Known MUGEN text files and arbitrary text files retain decoded Shift-JIS text; SFF and ACT entries retain their binary bytes for sprite/palette inspection; other binary entries remain identifiable without being decoded as text.
+After the runtime-required assets have loaded, the app builds a separate file-browser inventory. HTTP characters enumerate every file beneath the selected DEF directory through the local Vite middleware. ZIP characters enumerate every archive entry. Known MUGEN text files and arbitrary text files use the same per-file UTF/CP932 detector as runtime loading; SFF and ACT entries retain their binary bytes for sprite/palette inspection; other binary entries remain identifiable without being decoded as text.
 
 The inventory does not alter parser input, runtime merge order, or compatibility behavior. Runtime-referenced files outside the character DEF directory are merged into the inventory and marked external so common CNS/CMD sources remain inspectable without appearing to belong to the character package.
 
@@ -184,6 +193,6 @@ When loader behavior changes, update:
 
 ## MUGEN stage ZIPs
 
-The application can select an external ZIP URL independently from the HUD design. `AppStageLoader` normalizes archive paths, decodes WinMUGEN-era Shift-JIS DEF text, selects the first DEF deterministically, resolves its sibling `[BGDef] spr` entry, and converts the referenced SFF v1 into the existing RGBA sprite pack. The supported static slice covers normal BG layers (`spriteno`, `start`, `delta`, and `layerno`), `StageInfo hires/zoffset/autoturn`, the Camera start/bounds/tension/verticalfollow/floortension fields, PlayerInfo starts/facings/bounds, and Bound screenleft/screenright. Omitted `autoturn` defaults to enabled; zero disables the common Facing update. For WinMUGEN D4 stages, `HiRes = 1` keeps BG `start` and SFF axes in the Hi-Res source coordinate space while low-resolution camera movement is multiplied by the authored BG `delta`. Stage `zoffset` maps the gameplay floor to the camera but is not added to BG `start`, which is relative to the screen's top center. The bundled beach sky therefore moves from Y -220 at camera Y 0 to Y 0 at `boundhigh = -110` with `delta.y = 2`, retaining full vertical coverage. Parsed horizontal camera bounds retain WinMUGEN's 320-coordinate viewport meaning: runtime insets them by 40 per side only for the extended 400-wide profile, while the classic profile consumes the DEF values unchanged. Missing DEF/SFF data or an archive without supported layers fails visibly and falls back to the selected built-in stage rather than silently producing a blank arena.
+The application can select an external ZIP URL independently from the HUD design. `AppStageLoader` normalizes archive paths, applies the shared per-file UTF/CP932 detector to DEF text, selects the first DEF deterministically, resolves its sibling `[BGDef] spr` entry, and converts the referenced SFF v1 into the existing RGBA sprite pack. The supported static slice covers normal BG layers (`spriteno`, `start`, `delta`, and `layerno`), `StageInfo hires/zoffset/autoturn`, the Camera start/bounds/tension/verticalfollow/floortension fields, PlayerInfo starts/facings/bounds, and Bound screenleft/screenright. Omitted `autoturn` defaults to enabled; zero disables the common Facing update. For WinMUGEN D4 stages, `HiRes = 1` keeps BG `start` and SFF axes in the Hi-Res source coordinate space while low-resolution camera movement is multiplied by the authored BG `delta`. Stage `zoffset` maps the gameplay floor to the camera but is not added to BG `start`, which is relative to the screen's top center. The bundled beach sky therefore moves from Y -220 at camera Y 0 to Y 0 at `boundhigh = -110` with `delta.y = 2`, retaining full vertical coverage. Parsed horizontal camera bounds retain WinMUGEN's 320-coordinate viewport meaning: runtime insets them by 40 per side only for the extended 400-wide profile, while the classic profile consumes the DEF values unchanged. Missing DEF/SFF data or an archive without supported layers fails visibly and falls back to the selected built-in stage rather than silently producing a blank arena.
 
 This is not yet a complete stage loader. BG animations/controllers, tiling, window clipping, foreground `layerno = 1`, exact PlayerInfo spawn/bound integration, shadow/reflection, and stage audio still require separate compatibility work.

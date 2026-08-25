@@ -1580,7 +1580,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
         aria-hidden={activePage !== 'play'}
       >
         <section className="stage-panel">
-            <div className="stage-viewport">
+            <div className="stage-viewport" style={{ width: `${screenSizeProfile.width}px` }}>
               <canvas
                 className="game-canvas"
                 ref={canvasRef}
@@ -2010,8 +2010,11 @@ export function ContentCatalogPanel({
           )}</p>
         </div>
       </div>
-      <h3>{text('Content in use', '使用するコンテンツ')}</h3>
-      <div className="content-selection-grid">
+      <section className="content-settings-group content-selection-group">
+        <div className="settings-subsection-header">
+          <h3>{text('Content selection', 'コンテンツ選択')}</h3>
+        </div>
+        <div className="content-selection-grid">
         <div className="content-selection-card">
           <span>{text('Character', 'キャラクター')}</span>
           <select
@@ -2063,44 +2066,44 @@ export function ContentCatalogPanel({
           </select>
           {lifeBars.length === 0 ? <small>{text('The published fallback LifeBar remains active.', '公開者のfallbackライフバーを継続使用します。')}</small> : null}
         </label>
-      </div>
-      {canShare ? <ContentShareUrl settings={settings} base={shareUrlBase} /> : null}
+        </div>
+        {canShare ? <ContentShareUrl settings={settings} base={shareUrlBase} /> : null}
+      </section>
       {canManage ? <>
-        <div className="settings-subsection-header">
-          <h3>{text('Content list', 'コンテンツ一覧')}</h3>
-          <p>{text('Validated entries currently available to the selection controls.', '選択欄で利用できる検証済みコンテンツです。')}</p>
-        </div>
-        <div className="content-count-grid" aria-label="Catalog content counts">
-          <div><span>{text('Characters', 'キャラクター')}</span><strong>{characters.length}</strong></div>
-          <div><span>{text('Stages', 'ステージ')}</span><strong>{stages.length}</strong></div>
-          <div><span>{text('LifeBars', 'ライフバー')}</span><strong>{lifeBars.length}</strong></div>
-        </div>
-        <div className={`catalog-read-status status-${readResult?.status ?? 'loading'}`} role="status">
-          <strong>{formatCatalogReadStatus(readResult, text)}</strong>
-          {readResult ? <span>{text(
-            `${readResult.catalog.totalEntries} total, ${readResult.catalog.entries.length} valid, ${readResult.catalog.rejectedEntries} excluded.`,
-            `${readResult.catalog.totalEntries}件中${readResult.catalog.entries.length}件有効、${readResult.catalog.rejectedEntries}件除外。`,
-          )}</span> : null}
-        </div>
-        {readResult && readResult.issues.length > 0 ? <details className="catalog-read-issues">
-          <summary>{text('Read errors and exclusions', '読込エラーと除外理由')} ({readResult.issues.length})</summary>
-          <ul>{readResult.issues.map((issue, index) => <li key={`${issue.code}-${issue.itemIndex ?? index}`}>
-            {issue.itemIndex === undefined ? '' : `#${issue.itemIndex + 1} `}{issue.message}
-          </li>)}</ul>
-        </details> : null}
-        <div className="settings-subsection-header">
-          <h3>{text('Content management', 'コンテンツ管理')}</h3>
-          <p>{text('Runtime reads this validated JSON file and never scans its folders.', 'Runtimeは検証済みのJSONファイルを読み込むだけで、フォルダ走査は行いません。')}</p>
-        </div>
-        <div className="catalog-management-row">
-          <label className="settings-field">
-            <span>{text('Content list file', 'コンテンツ一覧ファイル')}</span>
-            <input aria-label="Content list file" value={settings.catalogPath} onChange={(event) => onPathChange(event.target.value)} />
-          </label>
-          <button className="settings-secondary-button" type="button" onClick={onReload}>
-            {text('Reload content list', 'コンテンツ一覧を再読込')}
-          </button>
-        </div>
+        <section className="content-settings-group content-list-group">
+          <div className="settings-subsection-header">
+            <h3>{text('Content list', 'コンテンツ一覧')}</h3>
+            <p>{text('Runtime reads this validated JSON file and never scans its folders.', 'Runtimeは検証済みのJSONファイルを読み込むだけで、フォルダ走査は行いません。')}</p>
+          </div>
+          <div className="catalog-management-row">
+            <label className="settings-field">
+              <span>{text('Content list file', 'コンテンツ一覧ファイル')}</span>
+              <input aria-label="Content list file" value={settings.catalogPath} onChange={(event) => onPathChange(event.target.value)} />
+            </label>
+            <button className="settings-secondary-button" type="button" onClick={onReload}>
+              {text('Reload content list', 'コンテンツ一覧を再読込')}
+            </button>
+          </div>
+          <p className="content-list-description">{text('Validated entries currently available to the selection controls.', '選択欄で利用できる検証済みコンテンツです。')}</p>
+          <div className="content-count-grid" aria-label="Catalog content counts">
+            <div><span>{text('Characters', 'キャラクター')}</span><strong>{characters.length}</strong></div>
+            <div><span>{text('Stages', 'ステージ')}</span><strong>{stages.length}</strong></div>
+            <div><span>{text('LifeBars', 'ライフバー')}</span><strong>{lifeBars.length}</strong></div>
+          </div>
+          <div className={`catalog-read-status status-${readResult?.status ?? 'loading'}`} role="status">
+            <strong>{formatCatalogReadStatus(readResult, text)}</strong>
+            {readResult ? <span>{text(
+              `${readResult.catalog.totalEntries} total, ${readResult.catalog.entries.length} valid, ${readResult.catalog.rejectedEntries} excluded.`,
+              `${readResult.catalog.totalEntries}件中${readResult.catalog.entries.length}件有効、${readResult.catalog.rejectedEntries}件除外。`,
+            )}</span> : null}
+          </div>
+          {readResult && readResult.issues.length > 0 ? <details className="catalog-read-issues">
+            <summary>{text('Read errors and exclusions', '読込エラーと除外理由')} ({readResult.issues.length})</summary>
+            <ul>{readResult.issues.map((issue, index) => <li key={`${issue.code}-${issue.itemIndex ?? index}`}>
+              {issue.itemIndex === undefined ? '' : `#${issue.itemIndex + 1} `}{issue.message}
+            </li>)}</ul>
+          </details> : null}
+        </section>
         {canGenerate ? <CatalogGeneratorPanel catalog={catalog} /> : null}
       </> : null}
     </section>

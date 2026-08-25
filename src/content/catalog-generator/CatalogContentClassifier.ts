@@ -3,6 +3,7 @@ import { parseWebMugenLifeBar } from '../../lifebar/webmugen/WebMugenLifeBarLoad
 import { parseWebMugenStage } from '../../stage/webmugen/WebMugenStageLoader';
 import type { ContentKind } from '../catalog/ContentCatalogTypes';
 import type { CatalogClassificationResult, CatalogSourceFile } from './CatalogGeneratorTypes';
+import { decodeMugenText } from '../../parser/text/MugenTextDecoder';
 import { inspectCharacterDef } from '../CharacterDefDiscovery';
 import { selectPreferredDefCandidate } from '../DefCandidateSelection';
 
@@ -48,7 +49,7 @@ export function classifyZipBytes(bytes: Uint8Array, entryFile = 'content.zip'): 
   const candidates: CatalogClassificationResult[] = [];
   for (const [path, content] of Object.entries(archive)) {
     if (!path.toLowerCase().endsWith('.def') || path.endsWith('/')) continue;
-    const result = classifyDefText(decodeText(content), path);
+    const result = classifyDefText(decodeMugenText(content), path);
     if (result.kind !== 'unknown') candidates.push(result);
   }
   if (candidates.length === 0) return unknownResult(entryFile, 'ZIP contains no recognized entry DEF.');
@@ -93,8 +94,8 @@ export function classifyWebMugenJson(text: string, entryFile: string): CatalogCl
 export function classifyCatalogSourceFile(file: CatalogSourceFile): CatalogClassificationResult {
   const lower = file.name.toLowerCase();
   if (lower.endsWith('.zip')) return classifyZipBytes(file.bytes, file.path);
-  if (lower.endsWith('.def')) return classifyDefText(decodeText(file.bytes), file.path);
-  if (lower.endsWith('.json') && lower !== 'catalog.json') return classifyWebMugenJson(decodeText(file.bytes), file.path);
+  if (lower.endsWith('.def')) return classifyDefText(decodeMugenText(file.bytes), file.path);
+  if (lower.endsWith('.json') && lower !== 'catalog.json') return classifyWebMugenJson(decodeMugenText(file.bytes), file.path);
   return unknownResult(file.path, 'File type is not a supported Catalog entry candidate.');
 }
 
@@ -115,16 +116,6 @@ function parseDef(text: string): ParsedDef {
   }
   const name = sections.get('info')?.get('name');
   return { sections, ...(name ? { name } : {}) };
-}
-
-function decodeText(bytes: Uint8Array): string {
-  const utf8 = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
-  if (!utf8.includes('\uFFFD')) return utf8;
-  try {
-    return new TextDecoder('shift-jis', { fatal: false }).decode(bytes);
-  } catch {
-    return utf8;
-  }
 }
 
 function unknownResult(entryFile: string, error: string): CatalogClassificationResult {

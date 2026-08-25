@@ -3,6 +3,7 @@ import { convertSffV1ToImageDataSpritePack } from '../core/sprite/SffSpritePackC
 import type { MugenStage, MugenStageLayer } from '../core/stage/MugenStage';
 import { getDefSection, getDefValue, parseDefText } from '../parser/def/DefParser';
 import { selectPreferredDefCandidate } from '../content/DefCandidateSelection';
+import { decodeMugenText } from '../parser/text/MugenTextDecoder';
 
 export async function loadMugenStageZip(zipPath: string): Promise<MugenStage> {
   const response = await fetch(zipPath);
@@ -15,7 +16,7 @@ export async function loadMugenStageZip(zipPath: string): Promise<MugenStage> {
 
   const candidates = Array.from(files.entries())
     .filter(([path]) => path.toLowerCase().endsWith('.def'))
-    .map(([path, bytes]) => ({ path, def: parseDefText(decodeText(bytes)) }))
+    .map(([path, bytes]) => ({ path, def: parseDefText(decodeMugenText(bytes)) }))
     .filter(({ def }) => Boolean(getDefSection(def, 'BGDef') && getDefValue(def, 'BGDef', 'spr')));
   if (candidates.length === 0) throw new Error('Stage ZIP does not contain a valid Stage DEF.');
   const selected = selectPreferredDefCandidate(candidates);
@@ -84,14 +85,6 @@ export async function loadMugenStageZip(zipPath: string): Promise<MugenStage> {
     sprites: convertSffV1ToImageDataSpritePack(toArrayBuffer(spriteBytes)),
     layers: layers.sort((left, right) => left.layerNo - right.layerNo),
   };
-}
-
-function decodeText(bytes: Uint8Array): string {
-  try {
-    return new TextDecoder('shift-jis').decode(bytes);
-  } catch {
-    return new TextDecoder().decode(bytes);
-  }
 }
 
 function normalizePath(path: string): string {

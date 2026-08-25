@@ -72,18 +72,16 @@ URL Character and Stage IDs are accepted only when an entry of the correct kind 
 
 ## Catalog Generator
 
-The Development Mode Generator uses `showDirectoryPicker()` when supported:
+The Generator starts with a **Server / Local** source-location switch and renders only the controls used by the selected workflow:
 
-1. Independently choose external Character, Stage, and LifeBar folders. Any source may remain unset.
-2. Set the published same-origin URL base for each folder, such as `/chars`, `/stages`, or `/lifebars`. A local filesystem path is never treated as a Runtime URL.
-3. Add same-origin direct file paths when a desired DEF, ZIP, or JSON file is not obtained from folder scanning. A file name or relative path such as `itoko.zip` is resolved against that source's Published URL base (for example `/chars/itoko.zip`); an absolute same-origin path remains unchanged.
-4. The Generator recursively reads candidates and requires each result to match the source slot's expected kind.
-5. Publisher-shipped `source: "builtin"` items are always retained; generated items receive `source: "external"`. An unset source kind retains its currently loaded external items instead of silently deleting them.
-6. Structured classification results record kind, engine, confidence, entry file, warnings, and errors.
-7. Unknown/corrupt/ambiguous/wrong-kind entries, unsafe direct paths, and duplicate generated IDs are listed with reasons.
-8. Independently choose an optional Catalog output folder. With write permission, `catalog.json` is written there; without an output folder or permission it can be downloaded.
+- **Local:** uses `showDirectoryPicker()` when supported. Independently choose external Character, Stage, and LifeBar folders; any source may remain unset. The Generator recursively reads candidates and maps their relative paths to the default published bases `/chars`, `/stages`, and `/lifebars`. An optional output folder enables direct `catalog.json` writeback; download remains available as a fallback.
+- **Server:** accepts same-origin files that are already publicly reachable by WebMUGEN. Set the published URL base for each kind and add a file name, relative path, or absolute same-origin path. For example, `itoko.zip` under `/chars` resolves to `/chars/itoko.zip`. Server mode generates a downloadable Catalog and does not expose local folder pickers or output-folder writeback.
 
-The four `FileSystemDirectoryHandle` values are stored separately in IndexedDB when supported. A restored handle is used only after checking its current permission. Expired permission requests reauthorization; failure returns to explicit folder selection. Browsers without the File System Access API can still use same-origin direct paths, download a generated Catalog, run the game, or use a server/CLI-generated Catalog.
+Server mode does not scan a deployment server directory and does not receive server credentials. Rental-server rebuild scripts and the authenticated Catalog API remain separate server-side workflows.
+
+In both modes, each result must match its source slot's expected kind. Publisher-shipped `source: "builtin"` items are always retained; generated items receive `source: "external"`. An unset source kind retains its currently loaded external items instead of silently deleting them. Structured classification results record kind, engine, confidence, entry file, warnings, and errors. Unknown/corrupt/ambiguous/wrong-kind entries, unsafe direct paths, and duplicate generated IDs are listed with reasons.
+
+The four Local-mode `FileSystemDirectoryHandle` values are stored separately in IndexedDB when supported. A restored handle is used only after checking its current permission. Expired permission requests reauthorization; failure returns to explicit folder selection. Browsers without the File System Access API can switch to Server mode for same-origin direct paths, download a generated Catalog, run the game, or use a server/CLI-generated Catalog.
 
 ### Classification rules
 
@@ -97,7 +95,9 @@ Classification lives under `src/content/catalog-generator/`. The Runtime Reader 
 
 ## Local and server generation
 
-For local authoring, use the three Development Mode source pickers and the separate output picker. Folder scanning combines the configured public URL base with each relative file path. Direct paths must already be absolute same-origin Runtime URLs. This separation is required because a local `FileSystemDirectoryHandle` does not reveal or define the URL used after deployment.
+For local authoring, select Local and use the three source pickers plus the separate output picker. Local folder scanning uses the standard public bases for each content kind. A local `FileSystemDirectoryHandle` never reveals or defines a deployment-server path.
+
+For content already uploaded to the same WebMUGEN origin, select Server and add the published files by URL path. This is a browser-side read and download workflow, not a server filesystem scan or server write operation.
 
 For a server or rental-hosting environment, create or update `catalog.json` outside the runtime using any suitable tool:
 

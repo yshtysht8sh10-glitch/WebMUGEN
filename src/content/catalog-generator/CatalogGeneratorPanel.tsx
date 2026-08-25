@@ -18,16 +18,29 @@ const DEFAULT_PUBLIC_BASES: Record<ContentKind, string> = {
   lifebar: '/lifebars',
 };
 
-export function CatalogGeneratorPanel({ catalog }: { catalog: ContentCatalog }) {
+export type CatalogGeneratorMode = 'server' | 'local';
+
+export function CatalogGeneratorPanel({ catalog, initialMode = 'local' }: { catalog: ContentCatalog; initialMode?: CatalogGeneratorMode }) {
   const { text } = useUiLanguage();
+  const [mode, setMode] = useState<CatalogGeneratorMode>(initialMode);
   const [directories, setDirectories] = useState<Partial<Record<CatalogDirectoryRole, CatalogDirectoryHandle>>>({});
   const [publicBases, setPublicBases] = useState(DEFAULT_PUBLIC_BASES);
   const [directDrafts, setDirectDrafts] = useState<Record<ContentKind, string>>({ character: '', stage: '', lifebar: '' });
   const [directPaths, setDirectPaths] = useState<Record<ContentKind, string[]>>({ character: [], stage: [], lifebar: [] });
   const [result, setResult] = useState<CatalogGeneratorResult | null>(null);
-  const [status, setStatus] = useState(text('Choose source folders or add direct paths, then generate catalog.json.', '入力フォルダを選択するかファイルパスを追加して、catalog.jsonを生成します。'));
+  const [status, setStatus] = useState(initialMode === 'local'
+    ? text('Choose local source folders, then generate catalog.json.', 'ローカルの入力フォルダを選択して、catalog.jsonを生成します。')
+    : text('Add files available on this server, then generate catalog.json.', 'サーバーで公開済みのファイルを追加して、catalog.jsonを生成します。'));
   const [busy, setBusy] = useState(false);
   const pickerSupported = typeof window !== 'undefined' && typeof (window as DirectoryPickerWindow).showDirectoryPicker === 'function';
+
+  const changeMode = (nextMode: CatalogGeneratorMode) => {
+    setMode(nextMode);
+    setResult(null);
+    setStatus(nextMode === 'local'
+      ? text('Choose local source folders, then generate catalog.json.', 'ローカルの入力フォルダを選択して、catalog.jsonを生成します。')
+      : text('Add files available on this server, then generate catalog.json.', 'サーバーで公開済みのファイルを追加して、catalog.jsonを生成します。'));
+  };
 
   useEffect(() => {
     let active = true;
@@ -73,17 +86,17 @@ export function CatalogGeneratorPanel({ catalog }: { catalog: ContentCatalog }) 
     try {
       const files: CatalogSourceFile[] = [];
       for (const kind of SOURCE_KINDS) {
-        const directory = directories[kind];
+        const directory = mode === 'local' ? directories[kind] : undefined;
         if (directory) {
           if (!await ensureDirectoryPermission(directory, 'read')) throw new Error(`${roleLabel(kind, 'en')} folder permission was not granted.`);
           const scanned = await readCatalogSourceFiles(directory);
           files.push(...scanned.map((file) => ({
             ...file,
             expectedKind: kind,
-            catalogPath: resolveCatalogPublicPath(publicBases[kind], file.path),
+            catalogPath: resolveCatalogPublicPath(DEFAULT_PUBLIC_BASES[kind], file.path),
           })));
         }
-        for (const path of directPaths[kind]) {
+        for (const path of mode === 'server' ? directPaths[kind] : []) {
           files.push({
             ...await readCatalogSourcePath(resolveCatalogDirectPath(publicBases[kind], path)),
             expectedKind: kind,
@@ -93,7 +106,7 @@ export function CatalogGeneratorPanel({ catalog }: { catalog: ContentCatalog }) 
       const preserved = catalog.entries.filter((entry) => (
         entry.source === 'builtin'
         || entry.path.startsWith('builtin:')
-        || (!directories[entry.kind] && directPaths[entry.kind].length === 0)
+        || (mode === 'local' ? !directories[entry.kind] : directPaths[entry.kind].length === 0)
       ));
       const generated = generateContentCatalog(files, toDocument(catalog), preserved);
       setResult(generated);
@@ -136,16 +149,31 @@ export function CatalogGeneratorPanel({ catalog }: { catalog: ContentCatalog }) 
         </div>
       </div>
 
+      <div className="catalog-generator-mode" aria-label={text('Catalog source location', 'コンテンツの場所')} role="group">
+        <span>{text('Source location', 'コンテンツの場所')}</span>
+        <div className="catalog-generator-mode-switch">
+          <button aria-pressed={mode === 'server'} className={mode === 'server' ? 'active' : ''} onClick={() => changeMode('server')} type="button">
+            {text('Server', 'サーバー')}
+          </button>
+          <button aria-pressed={mode === 'local'} className={mode === 'local' ? 'active' : ''} onClick={() => changeMode('local')} type="button">
+            {text('Local', 'ローカル')}
+          </button>
+        </div>
+        <small>{mode === 'local'
+          ? text('Scan folders on this computer and write the result locally.', 'このPCのフォルダを走査し、生成結果をローカルへ保存します。')
+          : text('Read only files already published under this WebMUGEN origin.', 'このWebMUGENと同一オリジンで公開済みのファイルだけを読み込みます。')}</small>
+      </div>
+
       <div className="catalog-source-grid">
         {SOURCE_KINDS.map((kind) => <section className="catalog-source-card" key={kind}>
           <h4>{text(roleLabel(kind, 'en'), roleLabel(kind, 'ja'))}</h4>
-          <p>{directories[kind]
+          {mode === 'local' ? <><p>{directories[kind]
             ? text(`Selected folder: ${directories[kind]!.name}`, `選択中: ${directories[kind]!.name}`)
-            : text('No external folder selected.', '外部フォルダ未選択')}</p>
+            : text('No local folder selected.', 'ローカルフォルダ未選択')}</p>
           <button disabled={busy || !pickerSupported} onClick={() => void chooseFolder(kind)} type="button">
             {text('Choose folder', 'フォルダを選択')}
           </button>
-          <label>
+          </> : <><label>
             <span>{text('Published URL base', '配信URLの基点')}</span>
             <input aria-label={`${kind} public URL base`} value={publicBases[kind]} onChange={(event) => {
               const value = event.currentTarget.value;
@@ -170,10 +198,11 @@ export function CatalogGeneratorPanel({ catalog }: { catalog: ContentCatalog }) 
               setResult(null);
             }} type="button">×</button>
           </li>)}</ul> : null}
+          </>}
         </section>)}
       </div>
 
-      <section className="catalog-output-card">
+      {mode === 'local' ? <section className="catalog-output-card">
         <div>
           <h4>{text('Catalog output folder', 'Catalog出力フォルダ')}</h4>
           <p>{directories.output
@@ -181,16 +210,16 @@ export function CatalogGeneratorPanel({ catalog }: { catalog: ContentCatalog }) 
             : text('Optional. Without it, use the download button.', '任意です。未指定の場合はダウンロードを使用します。')}</p>
         </div>
         <button disabled={busy || !pickerSupported} onClick={() => void chooseFolder('output')} type="button">{text('Choose output folder', '出力フォルダを選択')}</button>
-      </section>
+      </section> : null}
 
       <div className="catalog-generator-actions">
         <button disabled={busy} onClick={() => void generate()} type="button">{text('Generate Catalog', 'Catalogを生成')}</button>
-        <button disabled={busy || !result || !directories.output} onClick={() => void writeCatalog()} type="button">{text('Write catalog.json', 'catalog.jsonを書き戻す')}</button>
+        {mode === 'local' ? <button disabled={busy || !result || !directories.output} onClick={() => void writeCatalog()} type="button">{text('Write catalog.json', 'catalog.jsonを書き戻す')}</button> : null}
         <button disabled={!result} onClick={() => result && downloadCatalogJson(result.catalog)} type="button">{text('Download catalog.json', 'catalog.jsonをダウンロード')}</button>
       </div>
-      {!pickerSupported ? <p className="catalog-generator-warning">{text(
-        'Folder selection is not supported in this browser. Direct same-origin file paths and Catalog download remain available.',
-        'このブラウザはフォルダ選択に対応していません。同一オリジンの直接ファイル指定とCatalogダウンロードは利用できます。',
+      {mode === 'local' && !pickerSupported ? <p className="catalog-generator-warning">{text(
+        'Folder selection is not supported in this browser. Switch to Server to add same-origin file paths, or use a supported browser.',
+        'このブラウザはフォルダ選択に対応していません。サーバーへ切り替えて同一オリジンのファイルを追加するか、対応ブラウザを使用してください。',
       )}</p> : null}
       <p className="catalog-generator-status" role="status">{status}</p>
       {result ? <div className="catalog-generator-results">

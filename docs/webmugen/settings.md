@@ -90,4 +90,4 @@ Arbitrary Character source loading and source editing are Development Mode featu
 
 Public Mode retains saved diagnostic and Catalog settings. Direct Stage source settings remain publisher-controlled, and server-writer features remain Development-only. See `build-mode.md` for the complete feature table and deployment checklist.
 
-Catalog management fetches validated same-origin JSON and does not write server files. Catalog Generator can download a generated file or, after an explicit browser permission grant, write `catalog.json` only to a user-selected local directory. It has no deployment-server write path.
+Catalog management fetches validated same-origin JSON and does not write server files. Catalog Generator separates its inputs with a Server / Local switch. Local mode scans user-selected PC folders and may write `catalog.json` only to a separately authorized local directory. Server mode reads explicitly added same-origin published paths and downloads the generated JSON; it neither scans nor writes the deployment server.

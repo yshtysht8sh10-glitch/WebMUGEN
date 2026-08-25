@@ -78,6 +78,8 @@ body {
 }
 
 .stage-viewport {
+  margin: 0 auto;
+  max-width: 100%;
   position: relative;
 }
 
@@ -454,7 +456,10 @@ body {
 }
 
 .game-canvas {
+  height: auto;
   image-rendering: auto;
+  max-width: 100%;
+  width: 100%;
 }
 
 .runtime-human-grid > section:first-child {
@@ -2562,7 +2567,7 @@ button.readable-state-badge:disabled {
 
 .settings-section {
   border: 1px solid #334155;
-  background: #020617;
+  background: #0f172a;
   border-radius: 8px;
   padding: 16px;
 }
@@ -2625,7 +2630,7 @@ button.readable-state-badge:disabled {
 }
 
 .settings-card {
-  background: #0f172a;
+  background: #020617;
   border: 1px solid #334155;
   border-radius: 7px;
   color: #cbd5e1;
@@ -2644,8 +2649,22 @@ button.readable-state-badge:disabled {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.content-settings-group {
+  background: #0b1220;
+  border: 1px solid #334155;
+  border-radius: 7px;
+  margin-top: 16px;
+  padding: 14px;
+}
+
+.content-settings-group > .settings-subsection-header {
+  border-top: 0;
+  margin-top: 0;
+  padding-top: 0;
+}
+
 .content-selection-card {
-  background: #0f172a;
+  background: #020617;
   border: 1px solid #334155;
   border-radius: 7px;
   color: #cbd5e1;
@@ -2679,7 +2698,11 @@ button.readable-state-badge:disabled {
 }
 
 .content-share-url {
-  margin-top: 18px;
+  margin-top: 14px;
+}
+
+.content-share-url > .settings-subsection-header {
+  margin-top: 0;
 }
 
 .content-share-url-row {
@@ -2722,6 +2745,12 @@ button.readable-state-badge:disabled {
   padding: 10px 12px;
 }
 
+.content-list-description {
+  color: #94a3b8 !important;
+  font-size: 12px;
+  margin: 12px 0 8px !important;
+}
+
 .content-count-grid span {
   color: #94a3b8;
   font-size: 13px;
@@ -2761,11 +2790,63 @@ button.readable-state-badge:disabled {
 }
 
 .catalog-generator {
-  background: #0f172a;
+  background: #0b1220;
   border: 1px solid #334155;
   border-radius: 7px;
   margin-top: 12px;
   padding: 14px;
+}
+
+.catalog-generator-mode {
+  align-items: center;
+  background: #020617;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  display: grid;
+  gap: 8px 14px;
+  grid-template-columns: auto minmax(220px, 320px) minmax(220px, 1fr);
+  margin-top: 12px;
+  padding: 10px 12px;
+}
+
+.catalog-generator-mode > span {
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.catalog-generator-mode > small {
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+.catalog-generator-mode-switch {
+  background: #0f172a;
+  border: 1px solid #475569;
+  border-radius: 999px;
+  display: grid;
+  gap: 3px;
+  grid-template-columns: 1fr 1fr;
+  padding: 3px;
+}
+
+.catalog-generator-mode-switch button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: #94a3b8;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 30px;
+  padding: 5px 12px;
+}
+
+.catalog-generator-mode-switch button.active {
+  background: #1d4ed8;
+  border-color: #60a5fa;
+  color: #eff6ff;
 }
 
 .catalog-generator-heading p {
@@ -3295,6 +3376,7 @@ button.readable-state-badge:disabled {
   .content-count-grid,
   .catalog-source-grid,
   .catalog-generator-results dl,
+  .catalog-generator-mode,
   .catalog-management-row,
   .content-share-url-row,
   .settings-field-grid,
@@ -3351,6 +3433,7 @@ button.readable-state-badge:disabled {
 
   .settings-page-panel,
   .settings-section,
+  .content-settings-group,
   .content-selection-card {
     padding: 10px;
   }

@@ -9,6 +9,7 @@ import { getCharacterDefFiles, parseDefText } from '../../parser/def/DefParser';
 import { parseSndV1 } from '../../parser/snd/SndParser';
 import { convertSffV1ToImageDataSpritePack } from '../sprite/SffSpritePackConverter';
 import type { CharacterAssets, CharacterLoadDiagnostic, CharacterPaletteAsset, CharacterSourceFile } from './CharacterTypes';
+import { decodeMugenText } from '../../parser/text/MugenTextDecoder';
 
 const COMMON_CNS_PATH = '/chars/common1.cns';
 const COMMON_CMD_PATHS = ['/chars/common.cmd'];
@@ -244,7 +245,7 @@ export function createHttpCharacterAssetFetcher(): CharacterAssetFetcher {
     async text(path: string) {
       const response = await fetch(path);
       if (!response.ok) throw new Error(`Failed to fetch text asset: ${path}`);
-      return response.text();
+      return decodeMugenText(await response.arrayBuffer());
     },
     async arrayBuffer(path: string) {
       const response = await fetch(path);

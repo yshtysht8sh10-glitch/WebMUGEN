@@ -8,10 +8,10 @@ describe('WinMUGEN compatibility Matrix', () => {
       cwd: process.cwd(),
       encoding: 'utf8',
     });
-    expect(output).toContain('465 rows validated');
+    expect(output).toContain('466 rows validated');
 
     const markdown = readFileSync('docs/webmugen/winmugen-compatibility-matrix.md', 'utf8');
-    expect(markdown).toContain('- Complete: 101');
+    expect(markdown).toContain('- Complete: 102');
     expect(markdown).toContain('- Partial: 204');
     expect(markdown).toContain('- Fallback: 15');
     expect(markdown).toContain('- Safe no-op: 35');

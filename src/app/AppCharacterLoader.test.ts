@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { zipSync, strToU8 } from 'fflate';
+import iconv from 'iconv-lite';
 import { readFile } from 'node:fs/promises';
 import { getAnimationDuration } from '../core/animation/AnimationDuration';
 import { stepCnsStateRuntime } from '../core/cns/CnsStateRuntime';
@@ -105,6 +106,88 @@ describe('AppCharacterLoader', () => {
       });
     } finally {
       globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('detects UTF-8 and CP932 independently for each ZIP text entry', async () => {
+    const cnsText = `[StateDef 0]\ntype = S\nmovetype = I\nphysics = S\nanim = 0\nctrl = 1\n\n[StateDef 200]\ntype = S\nmovetype = A\nphysics = S\nanim = 0\nctrl = 0\n\n[StateDef -1]\n\n[State -1, 攻撃]\ntype = ChangeState\ntriggerall = command = "攻撃"\ntrigger1 = ctrl\nvalue = 200\n`;
+    const zipBytes = zipSync({
+      'Mixed/Mixed.def': strToU8('[Info]\nname = "UTF-8格闘家"\n[Files]\ncmd = Mixed.cmd\ncns = Mixed.cns\nanim = Mixed.air\n'),
+      'Mixed/Mixed.cns': new Uint8Array(iconv.encode(cnsText, 'shift_jis')),
+      'Mixed/Mixed.air': strToU8('Begin Action 0\n0,0, 0,0, 5\n'),
+      'Mixed/Mixed.cmd': strToU8('[Command]\nname = "攻撃"\ncommand = a\ntime = 1\n'),
+      'Mixed/説明.txt': new Uint8Array(iconv.encode('CP932の説明文', 'shift_jis')),
+    });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (path: RequestInfo | URL) => (
+      String(path) === '/chars/Mixed.zip'
+        ? new Response(toArrayBuffer(zipBytes), { status: 200 })
+        : new Response('missing', { status: 404 })
+    )) as typeof fetch;
+
+    try {
+      const result = await loadAppCharacter('/chars/Mixed.zip');
+
+      expect(result.errorMessage).toBeNull();
+      expect(readCharacterRuntimeMetadata(result.character!).name).toBe('UTF-8格闘家');
+      expect(result.character?.cmd.commands.map((command) => command.name)).toContain('攻撃');
+      expect(result.character?.cnsSourceFiles?.find((file) => file.path === 'Mixed/Mixed.cns')?.text).toContain('command = "攻撃"');
+      expect(result.character?.cnsSourceFiles?.find((file) => file.path === 'Mixed/説明.txt')?.text).toBe('CP932の説明文');
+      const attack = simulateCnsInputScenario(result.character!, [holdP1Keys(['KeyA'], 1)]);
+      expect(attack.frames[0].p1Commands).toContain('攻撃');
+      expect(attack.frames[0].p1.stateNo).toBe(200);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('loads CP932 ZIP entry names and shared Character assets from a subdirectory deployment', async () => {
+    const zipBytes = replaceZipEntryName(zipSync({
+      'Demo/Demo.def': strToU8('[Info]\nname = Demo\n[Files]\ncmd = Demo.cmd\ncns = Demo.cns\nanim = Demo.air\n'),
+      'Demo/Demo.cns': strToU8('[StateDef 0]\ntype = S\nmovetype = I\nphysics = S\nanim = 0\nctrl = 1\n'),
+      'Demo/Demo.air': strToU8('Begin Action 0\n0,0, 0,0, 5\n'),
+      'Demo/Demo.cmd': strToU8('[Command]\nname = "a"\ncommand = a\n'),
+      'Demo/xxxxxx.txt': strToU8('legacy Japanese filename'),
+    }), 'Demo/xxxxxx.txt', new Uint8Array([
+      0x44, 0x65, 0x6d, 0x6f, 0x2f, 0x90, 0xe0, 0x96, 0xbe, 0x8f, 0x91, 0x2e, 0x74, 0x78, 0x74,
+    ]));
+    const originalFetch = globalThis.fetch;
+    const originalWindow = (globalThis as { window?: unknown }).window;
+    const requests: string[] = [];
+    (globalThis as { window?: unknown }).window = {
+      location: { href: 'https://example.test/DotoEita/50_WebMUGEN/index.html' },
+    };
+    globalThis.fetch = (async (path: RequestInfo | URL) => {
+      const url = String(path);
+      requests.push(url);
+      if (url === '/storage/legacy.zip') return new Response(toArrayBuffer(zipBytes));
+      if (url === '/DotoEita/50_WebMUGEN/chars/common.cmd') {
+        return new Response('[Command]\nname = "holdback"\ncommand = /B\n');
+      }
+      if (url === '/DotoEita/50_WebMUGEN/chars/common1.cns') {
+        return new Response('[StateDef 20]\ntype = S\nmovetype = I\nphysics = S\nctrl = 1\n');
+      }
+      return new Response('missing', { status: 404 });
+    }) as typeof fetch;
+
+    try {
+      const result = await loadAppCharacter('/storage/legacy.zip');
+      expect(result.errorMessage).toBeNull();
+      expect(result.character?.cnsSourceFiles?.find((file) => file.path === 'Demo/説明書.txt')).toMatchObject({
+        label: '説明書.txt', kind: 'text', text: 'legacy Japanese filename', external: false,
+      });
+      expect(result.character?.cnsSourceFiles?.map((file) => file.label)).toEqual(expect.arrayContaining([
+        'common.cmd', 'common1.cns',
+      ]));
+      expect(requests).toEqual(expect.arrayContaining([
+        '/DotoEita/50_WebMUGEN/chars/common.cmd',
+        '/DotoEita/50_WebMUGEN/chars/common1.cns',
+      ]));
+      expect(requests).not.toContain('/chars/common.cmd');
+      expect(requests).not.toContain('/chars/common1.cns');
+    } finally {
+      globalThis.fetch = originalFetch;
+      (globalThis as { window?: unknown }).window = originalWindow;
     }
   });
 
@@ -515,6 +598,25 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const copy = new Uint8Array(bytes.length);
   copy.set(bytes);
   return copy.buffer;
+}
+
+function replaceZipEntryName(zipBytes: Uint8Array, sourceName: string, replacement: Uint8Array): Uint8Array {
+  const bytes = zipBytes.slice();
+  const source = strToU8(sourceName);
+  if (source.length !== replacement.length) throw new Error('ZIP test entry names must have equal byte lengths.');
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let replacements = 0;
+  for (let offset = 0; offset + 30 + source.length <= bytes.length; offset += 1) {
+    const signature = view.getUint32(offset, true);
+    const nameOffset = signature === 0x04034b50 ? offset + 30 : signature === 0x02014b50 ? offset + 46 : -1;
+    const flagsOffset = signature === 0x04034b50 ? offset + 6 : signature === 0x02014b50 ? offset + 8 : -1;
+    if (nameOffset < 0 || !source.every((byte, index) => bytes[nameOffset + index] === byte)) continue;
+    bytes.set(replacement, nameOffset);
+    view.setUint16(flagsOffset, view.getUint16(flagsOffset, true) & ~0x0800, true);
+    replacements += 1;
+  }
+  if (replacements !== 2) throw new Error(`Expected local and central ZIP names, replaced ${replacements}.`);
+  return bytes;
 }
 
 function makeSingleSampleSnd(group: number, index: number, payload: Uint8Array): Uint8Array {

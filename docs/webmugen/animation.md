@@ -34,7 +34,7 @@ sprite around its axis on the corresponding Canvas axis. The vertical flag compo
 frame so its Helper 1310/1311 control threads extend upward from itoko toward the overhead Helper,
 not downward through the floor.
 
-Current-element Clsn1 and Clsn2 boxes are converted through a shared world-coordinate API. The conversion applies the element X/Y offset, mirrors the combined local X coordinates for left-facing players, adds the player world origin, preserves multiple boxes, and returns no rectangles when the selected element has no applicable default or element Clsn block. Each result records attack/body kind, default/element source, animation number, element index, and box index for collision diagnostics and renderer debug labels.
+Current-element Clsn1 and Clsn2 boxes are converted through a shared world-coordinate API. The conversion combines the element X/Y offset with the AIR box, applies the character `[Size] xscale/yscale` once, mirrors the scaled local X coordinates for left-facing players, adds the player world origin, preserves multiple boxes, and returns no rectangles when the selected element has no applicable default or element Clsn block. The same world rectangles drive live hit detection and renderer debug labels, so a high-resolution character using `0.5,0.5` does not retain double-sized Clsn boxes around its correctly scaled sprite. Each result records attack/body kind, default/element source, animation number, element index, and box index for collision diagnostics.
 
 The live app resolves player and Helper rendering, Clsn boxes, and AfterImage capture from the
 pre-physics animation snapshot while retaining post-physics world positions. CNS `AnimElem`
@@ -134,6 +134,11 @@ flags, and one of `animation_owner_missing`, `sprite_owner_missing`, `air_action
 normally; a prior missing result does not latch invisibility.
 
 In the default WinMUGEN Hi-Res profile, the renderer maps the 320x240 compatibility coordinate view to a physical 640x480 Canvas with a 2x outer transform. Root and Helper sprite rendering then applies the entity's `[Size] xscale/yscale` inside that transform. A normal `1,1` character therefore renders at 2x physical size, while high-resolution character data using `0.5,0.5` renders at net 1x. Canvas image smoothing is disabled so integer-expanded low-resolution sprites retain hard pixel edges while native high-resolution sprite data reaches the 640x480 target. The 960x540 wide profile keeps a 1x outer transform.
+
+The browser layout does not upscale the game Canvas beyond the selected screen profile's intrinsic
+pixel width. The viewport centers that intrinsic width and uses `max-width: 100%` to shrink it on a
+narrower browser while preserving its aspect ratio. This CSS presentation scaling does not change
+the Canvas backing resolution, logical MUGEN coordinates, collision geometry, or runtime state.
 
 Explod lifecycle advances AIR time before each following-frame render. Finite non-loop actions reach AnimTime 0 and satisfy the default `removetime=-2`; `LoopStart` and negative-duration elements do not. A positive removetime counts the creation frame as its first displayed tick, `0` never reaches the renderer, and `-1` remains until an explicit later removal path.
 

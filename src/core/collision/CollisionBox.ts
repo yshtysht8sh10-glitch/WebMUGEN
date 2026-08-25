@@ -20,8 +20,10 @@ export function airBoxToWorldRect(
     source: 'none', animNo: player.animNo, elementIndex: 0, boxIndex: 0,
   },
 ): WorldCollisionBox {
-  const localLeft = box.left + offset.x;
-  const localRight = box.right + offset.x;
+  const scaleX = finiteScale(player.collisionWidth?.xScale);
+  const scaleY = finiteScale(player.collisionWidth?.yScale);
+  const localLeft = (box.left + offset.x) * scaleX;
+  const localRight = (box.right + offset.x) * scaleX;
   const left = player.facing === 1 ? localLeft : -localRight;
   const right = player.facing === 1 ? localRight : -localLeft;
 
@@ -29,10 +31,14 @@ export function airBoxToWorldRect(
     kind,
     ...metadata,
     x: player.x + left,
-    y: player.y + box.top + offset.y,
+    y: player.y + (box.top + offset.y) * scaleY,
     width: right - left,
-    height: box.bottom - box.top,
+    height: (box.bottom - box.top) * scaleY,
   };
+}
+
+function finiteScale(value: number | undefined): number {
+  return Number.isFinite(value) ? Math.abs(value as number) : 1;
 }
 
 export function intersects(a: Rect, b: Rect): boolean {

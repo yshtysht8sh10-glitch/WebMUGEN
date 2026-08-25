@@ -1,7 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { loadCharacterFromDef, resolveAssetPath, selectCharacterPalette, type CharacterAssetFetcher } from './CharacterLoader';
+import { createHttpCharacterAssetFetcher, loadCharacterFromDef, resolveAssetPath, selectCharacterPalette, type CharacterAssetFetcher } from './CharacterLoader';
 
 describe('CharacterLoader', () => {
+  it('detects CP932 when loading an unpacked HTTP text asset', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => new Response(new Uint8Array([
+      0x93, 0xfa, 0x96, 0x7b, 0x8c, 0xea,
+    ]))) as typeof fetch;
+
+    try {
+      await expect(createHttpCharacterAssetFetcher().text('/chars/demo/readme.txt')).resolves.toBe('日本語');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it('resolves relative asset paths from def path', () => {
     expect(resolveAssetPath('/chars/kfm', 'kfm.air')).toBe('/chars/kfm.air'.replace('/kfm.air', '/kfm/kfm.air'));
     expect(resolveAssetPath('/chars/kfm/', './kfm.air')).toBe('/chars/kfm/kfm.air');

@@ -297,6 +297,19 @@ function webMugenNormalizeArchivePath(string $path): ?string
 
 function webMugenDecodeText(string $bytes): string
 {
+    if (strncmp($bytes, "\xEF\xBB\xBF", 3) === 0) return substr($bytes, 3);
+    if (strncmp($bytes, "\xFF\xFE", 2) === 0) {
+        $content = substr($bytes, 2);
+        if (function_exists('mb_convert_encoding')) return mb_convert_encoding($content, 'UTF-8', 'UTF-16LE');
+        $converted = @iconv('UTF-16LE', 'UTF-8//IGNORE', $content);
+        return is_string($converted) ? $converted : $bytes;
+    }
+    if (strncmp($bytes, "\xFE\xFF", 2) === 0) {
+        $content = substr($bytes, 2);
+        if (function_exists('mb_convert_encoding')) return mb_convert_encoding($content, 'UTF-8', 'UTF-16BE');
+        $converted = @iconv('UTF-16BE', 'UTF-8//IGNORE', $content);
+        return is_string($converted) ? $converted : $bytes;
+    }
     if (function_exists('mb_check_encoding') && mb_check_encoding($bytes, 'UTF-8')) return $bytes;
     if (function_exists('mb_convert_encoding')) return mb_convert_encoding($bytes, 'UTF-8', 'SJIS-win');
     $converted = @iconv('CP932', 'UTF-8//IGNORE', $bytes);

@@ -1,4 +1,4 @@
-import { unzipSync, strFromU8 } from 'fflate';
+import { unzipSync } from 'fflate';
 import { parseAirText } from '../parser/air/AirParser';
 import { parseCmdText } from '../parser/cmd/CmdParser';
 import { parseCnsText } from '../parser/cns/CnsParser';
@@ -10,6 +10,8 @@ import { sampleCharacterCns } from './sampleCharacterCns';
 import { getCharacterDefFiles, getDefValue } from '../parser/def/DefParser';
 import type { DefDocument } from '../parser/def/DefTypes';
 import { discoverCharacterDef } from '../content/CharacterDefDiscovery';
+import { resolveApplicationAssetPath } from './ApplicationAssetPath';
+import { decodeMugenText } from '../parser/text/MugenTextDecoder';
 
 export type AppCharacterLoadResult = {
   character: CharacterAssets | null;
@@ -36,9 +38,10 @@ export function readCharacterRuntimeMetadata(character: {
 
 export async function loadAppCharacter(defPath: string, paletteNo = 1): Promise<AppCharacterLoadResult> {
   try {
+    const httpFetcher = createApplicationCharacterAssetFetcher();
     const character = defPath.toLowerCase().endsWith('.zip')
-      ? await loadCharacterFromZip(defPath, paletteNo)
-      : await attachHttpCharacterFileInventory(defPath, await loadCharacterFromDef(defPath, undefined, { paletteNo }));
+      ? await loadCharacterFromZip(defPath, paletteNo, httpFetcher)
+      : await attachHttpCharacterFileInventory(defPath, await loadCharacterFromDef(defPath, httpFetcher, { paletteNo }));
     return {
       character,
       source: 'def',
@@ -69,8 +72,8 @@ export function createSampleCharacterAssets(): Pick<CharacterAssets, 'cns' | 'ai
   };
 }
 
-async function loadCharacterFromZip(zipPath: string, paletteNo: number): Promise<CharacterAssets> {
-  const fetcher = await createZipCharacterAssetFetcher(zipPath);
+async function loadCharacterFromZip(zipPath: string, paletteNo: number, httpFetcher: CharacterAssetFetcher): Promise<CharacterAssets> {
+  const fetcher = await createZipCharacterAssetFetcher(zipPath, httpFetcher);
   const character = await loadCharacterFromDef(fetcher.defPath, fetcher, { paletteNo });
   return {
     ...character,
@@ -86,13 +89,15 @@ type ZipCharacterAssetFetcher = CharacterAssetFetcher & {
   entries: ReadonlyMap<string, Uint8Array>;
 };
 
-async function createZipCharacterAssetFetcher(zipPath: string): Promise<ZipCharacterAssetFetcher> {
-  const httpFetcher = createHttpCharacterAssetFetcher();
-  const entries = unzipSync(new Uint8Array(await httpFetcher.arrayBuffer(zipPath)));
+async function createZipCharacterAssetFetcher(zipPath: string, httpFetcher: CharacterAssetFetcher): Promise<ZipCharacterAssetFetcher> {
+  const zipBytes = new Uint8Array(await httpFetcher.arrayBuffer(zipPath));
+  const entryNameAliases = readZipEntryNameAliases(zipBytes);
+  const entries = unzipSync(zipBytes);
   const normalizedEntries = new Map<string, Uint8Array>();
   const entryKeys = new Map<string, string>();
 
-  for (const [name, bytes] of Object.entries(entries)) {
+  for (const [rawName, bytes] of Object.entries(entries)) {
+    const name = entryNameAliases.get(rawName) ?? rawName;
     if (name.endsWith('/')) continue;
     const normalized = normalizeZipPath(name);
     if (!normalized) continue;
@@ -348,12 +353,87 @@ function isSharedHttpAssetPath(path: string): boolean {
   return normalized === '/chars/common1.cns' || normalized === '/chars/common.cmd';
 }
 
-function decodeZipText(bytes: Uint8Array): string {
-  try {
-    return new TextDecoder('shift_jis').decode(bytes);
-  } catch {
-    return strFromU8(bytes);
+function createApplicationCharacterAssetFetcher(): CharacterAssetFetcher {
+  const fetcher = createHttpCharacterAssetFetcher();
+  const resolvePath = (path: string) => path.replace(/\\/g, '/').startsWith('/chars/')
+    ? resolveApplicationAssetPath(path.replace(/^\//, ''))
+    : path;
+  return {
+    text: (path) => fetcher.text(resolvePath(path)),
+    arrayBuffer: (path) => fetcher.arrayBuffer(resolvePath(path)),
+  };
+}
+
+function readZipEntryNameAliases(bytes: Uint8Array): ReadonlyMap<string, string> {
+  const aliases = new Map<string, string>();
+  const endOffset = findZipEndOffset(bytes);
+  if (endOffset < 0) return aliases;
+
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const entryCount = view.getUint16(endOffset + 10, true);
+  let offset = view.getUint32(endOffset + 16, true);
+  for (let entryIndex = 0; entryIndex < entryCount && offset + 46 <= bytes.length; entryIndex += 1) {
+    if (view.getUint32(offset, true) !== 0x02014b50) break;
+    const flags = view.getUint16(offset + 8, true);
+    const nameLength = view.getUint16(offset + 28, true);
+    const extraLength = view.getUint16(offset + 30, true);
+    const commentLength = view.getUint16(offset + 32, true);
+    const nameBytes = bytes.subarray(offset + 46, offset + 46 + nameLength);
+    const extraBytes = bytes.subarray(offset + 46 + nameLength, offset + 46 + nameLength + extraLength);
+    const fflateName = (flags & 0x0800) !== 0 ? decodeUtf8(nameBytes) : decodeLatin1(nameBytes);
+    aliases.set(fflateName, decodeZipEntryName(nameBytes, extraBytes, (flags & 0x0800) !== 0));
+    offset += 46 + nameLength + extraLength + commentLength;
   }
+  return aliases;
+}
+
+function findZipEndOffset(bytes: Uint8Array): number {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  for (let offset = bytes.length - 22; offset >= Math.max(0, bytes.length - 65_558); offset -= 1) {
+    if (view.getUint32(offset, true) === 0x06054b50) return offset;
+  }
+  return -1;
+}
+
+function decodeZipEntryName(nameBytes: Uint8Array, extraBytes: Uint8Array, utf8Flag: boolean): string {
+  if (utf8Flag) return decodeUtf8(nameBytes);
+  const unicodePath = readUnicodePathExtraField(extraBytes);
+  if (unicodePath) return unicodePath;
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(nameBytes);
+  } catch {
+    return new TextDecoder('shift_jis').decode(nameBytes);
+  }
+}
+
+function readUnicodePathExtraField(extraBytes: Uint8Array): string | null {
+  const view = new DataView(extraBytes.buffer, extraBytes.byteOffset, extraBytes.byteLength);
+  let offset = 0;
+  while (offset + 4 <= extraBytes.length) {
+    const id = view.getUint16(offset, true);
+    const size = view.getUint16(offset + 2, true);
+    const dataOffset = offset + 4;
+    if (dataOffset + size > extraBytes.length) return null;
+    if (id === 0x7075 && size >= 5 && extraBytes[dataOffset] === 1) {
+      return decodeUtf8(extraBytes.subarray(dataOffset + 5, dataOffset + size));
+    }
+    offset = dataOffset + size;
+  }
+  return null;
+}
+
+function decodeUtf8(bytes: Uint8Array): string {
+  return new TextDecoder('utf-8').decode(bytes);
+}
+
+function decodeLatin1(bytes: Uint8Array): string {
+  let result = '';
+  for (const byte of bytes) result += String.fromCharCode(byte);
+  return result;
+}
+
+function decodeZipText(bytes: Uint8Array): string {
+  return decodeMugenText(bytes);
 }
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {

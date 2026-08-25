@@ -50,6 +50,29 @@ Clsn1: 2
     ]);
   });
 
+  it('applies Character Size scale once to AIR boxes and element offsets', () => {
+    const player = {
+      ...createInitialGameState().players[0],
+      animNo: 200,
+      animTime: 0,
+      facing: 1 as const,
+      collisionWidth: {
+        groundFront: 15, groundBack: 15, airFront: 12, airBack: 12,
+        height: 60, xScale: 0.5, yScale: 0.25,
+      },
+    };
+
+    expect(getPlayerAttackBoxes(player, airDocument)).toEqual([
+      { kind: 'attack', source: 'default', animNo: 200, elementIndex: 0, boxIndex: 0, x: player.x + 10, y: player.y - 13.25, width: 20, height: 2.5 },
+    ]);
+    expect(getPlayerBodyBoxes(player, airDocument)).toEqual([
+      { kind: 'body', source: 'default', animNo: 200, elementIndex: 0, boxIndex: 0, x: player.x - 2.5, y: player.y - 20.25, width: 10, height: 19.5 },
+    ]);
+    expect(getPlayerAttackBoxes({ ...player, facing: -1 }, airDocument)[0]).toMatchObject({
+      x: player.x - 30, width: 20, y: player.y - 13.25, height: 2.5,
+    });
+  });
+
   it('uses element overrides and preserves multiple-box provenance', () => {
     const player = { ...createInitialGameState().players[0], animNo: 200, animTime: 3, facing: 1 as const };
     expect(getPlayerAttackBoxes(player, airDocument)).toEqual([

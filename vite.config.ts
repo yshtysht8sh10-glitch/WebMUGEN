@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import iconv from 'iconv-lite';
 import { unzipSync, zipSync } from 'fflate';
 import { calculateTestTimeoutMs } from './src/testing/TestTimeoutBudget';
+import { decodeMugenText } from './src/parser/text/MugenTextDecoder';
 
 const virtualCharacterManifestId = 'virtual:webmugen-character-manifest';
 const resolvedVirtualCharacterManifestId = `\0${virtualCharacterManifestId}`;
@@ -301,10 +302,6 @@ function isProbablyText(bytes: Uint8Array): boolean {
     if (byte < 0x09 || (byte > 0x0d && byte < 0x20)) controlCount += 1;
   }
   return controlCount / sample.length < 0.02;
-}
-
-function decodeMugenText(bytes: Uint8Array): string {
-  return iconv.decode(Buffer.from(bytes), 'shift_jis');
 }
 
 function normalizeArchiveEntryPath(path: string): string {

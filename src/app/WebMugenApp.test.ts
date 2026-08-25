@@ -303,7 +303,7 @@ describe('WebMugenApp runtime history', () => {
     expect(html).toContain('aria-label="Character palette"');
     expect(html).toContain('<option value="9" selected="">p9</option>');
     expect(html).toContain('<option value="12">p12</option>');
-    expect(html).not.toContain('Content management');
+    expect(html).not.toContain('class="content-settings-group content-list-group"');
     expect(html).not.toContain('Selected by settings');
 
     const developmentHtml = renderToStaticMarkup(createElement(ContentCatalogPanel, {
@@ -313,14 +313,17 @@ describe('WebMugenApp runtime history', () => {
       selectionSource: { character: 'settings', stage: 'settings' }, canManage: true, canGenerate: true,
       onSelect: () => undefined, onPaletteChange: () => undefined, onPathChange: () => undefined, onReload: () => undefined,
     }));
-    expect(developmentHtml).toContain('Content management');
+    expect(developmentHtml).toContain('class="content-settings-group content-selection-group"');
+    expect(developmentHtml).toContain('class="content-settings-group content-list-group"');
     expect(developmentHtml).toContain('Content list file');
     expect(developmentHtml).toContain('Catalog Generator');
     expect(developmentHtml).toContain('External Character');
     expect(developmentHtml).toContain('External Stage');
     expect(developmentHtml).toContain('External LifeBar');
     expect(developmentHtml).toContain('Catalog output folder');
-    expect(developmentHtml).toContain('Direct file path');
+    expect(developmentHtml).toContain('aria-label="Catalog source location"');
+    expect(developmentHtml).toContain('aria-pressed="true" class="active" type="button">Local</button>');
+    expect(developmentHtml).not.toContain('Direct file path');
     expect(developmentHtml).not.toContain('Place character files under public/chars/');
     expect(developmentHtml).toContain('>1</strong>');
     expect(developmentHtml).toContain('>2</strong>');
@@ -381,7 +384,8 @@ describe('WebMugenApp runtime history', () => {
     expect(html).toContain('Share URL');
     expect(html).toContain('aria-label="Share URL"');
     expect(html).toContain('>Copy</button>');
-    expect(html).not.toContain('Content management');
+    expect(html).toContain('class="content-settings-group content-selection-group"');
+    expect(html).not.toContain('class="content-settings-group content-list-group"');
   });
 
   it('keeps the game panel mounted while leaving hidden static and Settings content unmounted', () => {
@@ -391,6 +395,8 @@ describe('WebMugenApp runtime history', () => {
     expect(html).toContain('class="top-panel active"');
     expect(html).toContain('class="top-panel hidden"');
     expect(html).toContain('<canvas');
+    expect(html).toContain('class="game-canvas"');
+    expect(html).toContain('class="stage-viewport" style="width:800px"');
     expect(html).toContain('Character Files');
     expect(html).not.toContain('<h2>Character Files</h2>');
     expect(html).toContain('Loading character');
