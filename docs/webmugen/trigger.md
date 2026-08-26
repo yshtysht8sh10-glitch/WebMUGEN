@@ -138,7 +138,7 @@ target selection, different local coordinate spaces, and Helper redirect ownersh
 
 ## Character constants
 
-`Const(...)` first resolves the current character CNS metadata. `[Velocity]` pairs expose their requested X/Y component, including `jump.neu`, `jump.fwd`, `jump.back`, `runjump.fwd`, `runjump.back`, and `airjump.neu/fwd/back`; `Const(velocity.airjump.y)` reads the neutral AirJump Y component. A directional entry that defines only X inherits the matching neutral jump or air-jump Y. `[Movement] airjump.num`, `airjump.height`, and `yaccel` feed special State 45 handling, expressions, and `Physics=A`. Existing defaults remain only for missing values already covered by the former compatibility table. Other WinMUGEN constant families and coordinate scaling remain Partial.
+`Const(...)` first resolves the current character CNS metadata. `[Velocity]` pairs expose their requested X/Y component, including `jump.neu`, `jump.fwd`, `jump.back`, `runjump.fwd`, `runjump.back`, and `airjump.neu/fwd/back`; `Const(velocity.airjump.y)` reads the neutral AirJump Y component. A directional entry that defines only X inherits the matching neutral jump or air-jump Y. `[Movement] airjump.num`, `airjump.height`, and `yaccel` feed special State 45 handling, expressions, and `Physics=A`. The MUGEN 1.0 surface `movement.down.bounce.offset.x/y`, `yaccel`, and `groundlevel` resolves configured values, including X/Y from the parsed `down.bounce.offset` pair. Its current global missing-value table is transitional until compatibility profiles own version-specific Const validity and defaults; it must not be treated as proof of WinMUGEN/MUGEN 1.0 equivalence. Other WinMUGEN constant families and coordinate scaling remain Partial.
 
 ## Safe defaults
 

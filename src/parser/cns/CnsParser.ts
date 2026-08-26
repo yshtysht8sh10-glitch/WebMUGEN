@@ -111,6 +111,11 @@ export function parseCnsText(text: string, options: CnsParseOptions = {}): CnsDo
     }
 
     current.section.values[key] = value;
+    const vector = metadataVector(value);
+    if (vector) {
+      current.section.vectorValues ??= {};
+      current.section.vectorValues[key] = vector;
+    }
   }
 
   for (const state of states) {
@@ -224,6 +229,13 @@ function parseValue(valueText: string): CnsValue {
   }
 
   return parseSingleValue(valueText);
+}
+
+function metadataVector(value: CnsValue): { x: number; y: number } | null {
+  if (!Array.isArray(value) || value.length !== 2) return null;
+  const x = Number(value[0]);
+  const y = Number(value[1]);
+  return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
 }
 
 function splitCommaValues(valueText: string): string[] {

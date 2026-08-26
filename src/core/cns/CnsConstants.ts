@@ -36,9 +36,16 @@ function readConfiguredConst(document: CnsDocument | null | undefined, name: str
 function readSectionComponent(document: CnsDocument, sectionName: string, key: string, component: number): number | null {
   const section = document.metadataSections.find((candidate) => candidate.name.trim().toLowerCase() === sectionName);
   const raw = section?.values[key];
-  if (raw === undefined) return null;
-  const value = Array.isArray(raw) ? raw[component] : component === 0 ? raw : undefined;
-  return finiteNumber(value);
+  if (raw !== undefined) {
+    const value = Array.isArray(raw) ? raw[component] : component === 0 ? raw : undefined;
+    const number = finiteNumber(value);
+    if (number !== null) return number;
+  }
+
+  const vectorComponent = key.match(/^(.+)\.(x|y)$/);
+  if (!vectorComponent) return null;
+  const vector = section?.vectorValues?.[vectorComponent[1]];
+  return finiteNumber(vector?.[vectorComponent[2] as 'x' | 'y']);
 }
 
 function finiteNumber(value: unknown): number | null {
@@ -72,6 +79,10 @@ function readDefaultConst(name: string): number {
     case 'movement.airjump.num': return 1;
     case 'movement.airjump.height': return 35;
     case 'movement.yaccel': return 0.6;
+    case 'movement.down.bounce.offset.x': return 0;
+    case 'movement.down.bounce.offset.y': return 20;
+    case 'movement.down.bounce.yaccel': return 0.4;
+    case 'movement.down.bounce.groundlevel': return 12;
     default: return 0;
   }
 }

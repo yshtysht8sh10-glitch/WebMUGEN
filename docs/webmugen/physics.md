@@ -82,6 +82,8 @@ For ordinary `Physics=A`, the physics step reads `Const(movement.yaccel)` from t
 
 `GetHitVar(yaccel)` is HitDef acceleration, not `Const(movement.yaccel)`. An omitted HitDef value and a voluntarily entered get-hit State with no contact snapshot use WinMUGEN's 240p default `.35`; a contact snapshot still wins, including an explicit zero. Issue #126 covers bundled itoko State 197 setting `Vel Y = -8` at the wall, entering State 5050 without contact, and receiving `.35` per CNS tick until the velocity turns downward.
 
+MUGEN 1.0-style common bounce states may express values through `Const(movement.down.bounce.*)`. The parser retains `down.bounce.offset = X,Y` as both its raw pair and a normalized vector, so configured X/Y components are available to constant resolution. The current unprofiled runtime uses the WinMUGEN State 5101 literals `offset=(0,20)`, `yaccel=.4`, and `groundlevel=12` as transitional missing-value fallbacks; this prevents a restored negative fall velocity from remaining constant and carrying the player upward indefinitely. These global fallbacks are migration debt, not evidence that the MUGEN 1.0 Const omission rules equal WinMUGEN semantics. Profile ownership is defined in `docs/architecture/compatibility.md`.
+
 `Physics=N` still integrates explicit X/Y velocity and has no automatic ground clamp. This permits data-authored below-ground routes such as T-H-M-A State 3710 reaching `Pos Y >= 400` before its ChangeState. T-H-M-A custom State 280 therefore keeps its
 `VelSet x = -12, y = -0.2` unchanged while moving each tick; the launch direction comes from the
 State's `P2Dist X < 0` Turn and Facing-relative VelSet, not from Physics=N.

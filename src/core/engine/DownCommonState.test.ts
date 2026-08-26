@@ -9,6 +9,40 @@ import type { GameState, PlayerState } from './types';
 const commonText = readFileSync('public/chars/common1.cns', 'utf8');
 const common = parseCnsText(commonText);
 const shortLieDown = parseCnsText(`[Data]\nliedown.time = 3\n${commonText}`);
+const constantDrivenBounceText = `[Statedef 5101]
+type=L
+movetype=H
+physics=N
+[State 5101, fall velocity]
+type=HitFallVel
+trigger1=Time=0
+[State 5101, offset]
+type=PosSet
+trigger1=Time=0
+y=Const(movement.down.bounce.offset.y)
+[State 5101, horizontal offset]
+type=PosAdd
+trigger1=Time=0
+x=Const(movement.down.bounce.offset.x)
+[State 5101, acceleration]
+type=VelAdd
+trigger1=1
+y=Const(movement.down.bounce.yaccel)
+[State 5101, land]
+type=ChangeState
+trigger1=Vel Y>0
+trigger1=Pos Y>=Const(movement.down.bounce.groundlevel)
+value=5110
+[Statedef 5110]
+type=L
+movetype=H
+physics=N`;
+const constantDrivenBounce = parseCnsText(constantDrivenBounceText);
+const configuredConstantDrivenBounce = parseCnsText(`[Movement]
+down.bounce.offset=3,7
+down.bounce.yaccel=.8
+down.bounce.groundlevel=5
+${constantDrivenBounceText}`);
 
 function downPlayer(stateNo: number, patch: Partial<PlayerState> = {}): PlayerState {
   return {
@@ -132,6 +166,40 @@ describe('common down and getup states', () => {
       }).state;
     }
     expect(state.players[1]).toMatchObject({ stateNo: 5110, stateType: 'L', moveType: 'H' });
+  });
+
+  it('uses WinMUGEN bounce defaults when common states reference movement.down.bounce constants', () => {
+    let state = gameWithP2(downPlayer(5101, {
+      x: 588,
+      y: 285,
+      vx: 0,
+      vy: -4.5,
+      stateTime: 0,
+      hitFallVelocity: { x: 0, y: -4.5 },
+    }));
+
+    state = stepCnsStateRuntime(state, constantDrivenBounce).state;
+    expect(state.players[1]).toMatchObject({ stateNo: 5101, x: 588, y: 305, vx: 0, vy: -4.1 });
+
+    for (let frame = 0; frame < 30 && state.players[1].stateNo !== 5110; frame += 1) {
+      state = stepCnsPhysicsMotion(state, constantDrivenBounce);
+      state = stepCnsStateRuntime(state, constantDrivenBounce).state;
+    }
+
+    expect(state.players[1]).toMatchObject({ stateNo: 5110, stateType: 'L', moveType: 'H' });
+  });
+
+  it('uses parsed Movement bounce values before the transitional fixed defaults', () => {
+    const state = stepCnsStateRuntime(gameWithP2(downPlayer(5101, {
+      x: 588,
+      y: 285,
+      vx: 0,
+      vy: -4.5,
+      stateTime: 0,
+      hitFallVelocity: { x: 0, y: -4.5 },
+    })), configuredConstantDrivenBounce).state;
+
+    expect(state.players[1]).toMatchObject({ stateNo: 5101, x: 585, y: 292, vx: 0, vy: -3.7 });
   });
 
   it('plays State 5120, sets timed two-slot invulnerability, and returns to State 0 with control', () => {

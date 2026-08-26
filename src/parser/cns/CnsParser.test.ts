@@ -156,6 +156,18 @@ ground.velocity = -4, 0
     expect(doc.states[0].controllers[0].params['ground.velocity']).toEqual([-4, 0]);
   });
 
+  it('retains metadata vectors as raw values and a normalized x/y view', () => {
+    const doc = parseCnsText(`
+[Movement]
+down.bounce.offset = 3, 17
+down.bounce.yaccel = .55
+`);
+
+    expect(doc.metadataSections[0].values['down.bounce.offset']).toEqual([3, 17]);
+    expect(doc.metadataSections[0].vectorValues?.['down.bounce.offset']).toEqual({ x: 3, y: 17 });
+    expect(doc.metadataSections[0].vectorValues?.['down.bounce.yaccel']).toBeUndefined();
+  });
+
   it('does not treat Shift-JIS full-width punctuation as CNS separators', () => {
     const doc = parseCnsText(`
 [StateDef 232]

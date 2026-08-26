@@ -52,6 +52,7 @@ export type CnsStateDefinition = {
 export type CnsMetadataSection = {
   name: string;
   values: Record<string, CnsValue>;
+  vectorValues?: Record<string, { x: number; y: number }>;
 };
 
 export type CnsDocument = {

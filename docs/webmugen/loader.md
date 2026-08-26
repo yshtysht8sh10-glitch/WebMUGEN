@@ -27,6 +27,14 @@ paths remain origin-absolute. ZIP entry names use the UTF-8 flag or Unicode Path
 present. Legacy names without either marker accept valid UTF-8 first and otherwise decode as
 Shift-JIS/CP932, so WinMUGEN-era Japanese filenames remain selectable and inspectable.
 
+When a Catalog generated from a local Character folder retains a `/chars/<relative path>` entry,
+the loader first keeps the normal HTTP behavior. If that load fails, including a development server
+returning its HTML fallback with HTTP 200 for a missing ZIP, it resolves the same relative path
+through the saved Character `FileSystemDirectoryHandle` and retries the ZIP/DEF load locally.
+The HTTP path always wins when it exists, and WebMUGEN's `/chars/common1.cns` and
+`/chars/common.cmd` remain application assets rather than local-folder overrides. Missing or expired
+folder permission preserves the original HTTP load error and sample fallback behavior.
+
 Text contents are decoded independently for every DEF, CNS, CMD, AIR, ZSS, JSON, and inspectable text entry. UTF-8, UTF-16LE, and UTF-16BE BOMs take priority; without a BOM, a strict UTF-8 decode is attempted and valid UTF-8 is accepted, otherwise the bytes are decoded as Shift-JIS/CP932. The same detector is used by ZIP Characters, unpacked HTTP Characters, ZIP Stages, Catalog classification, and the development file inventory. This permits UTF-8 and CP932 files to coexist in one Character without passing different strings to the file viewer and runtime parser.
 
 ## Loaded asset types
@@ -83,7 +91,7 @@ document. Duplicate StateNo entries retain array precedence: only the first entr
 character/base States continue to win where the previous runtime `Array.find` selected them first.
 The index is an execution lookup aid; it does not reorder or remove `states` used by static tooling.
 
-Character `[Data]`, `[Size]`, `[Velocity]`, and `[Movement]` sections are retained as CNS metadata. `Const(...)` resolves those character sections before using the existing compatibility defaults. Directional jump and run-jump pairs therefore remain available to common State 40, and `movement.yaccel` reaches air physics without copying character values into TypeScript.
+Character `[Data]`, `[Size]`, `[Velocity]`, and `[Movement]` sections are retained as CNS metadata. Numeric two-component metadata such as `down.bounce.offset = X,Y` keeps its raw pair and also receives a normalized `{x,y}` vector view; this is syntax normalization and does not select version-specific semantics. `Const(...)` resolves character data before the current compatibility defaults. Directional jump and run-jump pairs therefore remain available to common State 40, and `movement.yaccel` reaches air physics without copying character values into TypeScript. Compatibility-profile ownership of Const validity and defaults is specified in `docs/architecture/compatibility.md` and is not yet implemented.
 
 ## CMD loading policy
 
