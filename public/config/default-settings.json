@@ -56,6 +56,13 @@
           "b": 1,
           "c": 6,
           "start": 5
+        },
+        "controller": {
+          "type": "gamepad",
+          "index": 0,
+          "id": "",
+          "mapping": "",
+          "ordinal": 0
         }
       },
       {
@@ -84,6 +91,13 @@
           "b": 3,
           "c": 5,
           "start": 9
+        },
+        "controller": {
+          "type": "gamepad",
+          "index": 1,
+          "id": "",
+          "mapping": "",
+          "ordinal": 1
         }
       }
     ]

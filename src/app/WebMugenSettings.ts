@@ -313,6 +313,26 @@ function normalizePlayerInputConfig(value: unknown, fallback: PlayerInputMapping
   for (const action of Object.keys(next.gamepad) as Array<keyof PlayerInputMapping['gamepad']>) {
     if (typeof gamepad[action] === 'number' && Number.isInteger(gamepad[action]) && gamepad[action] >= 0) next.gamepad[action] = gamepad[action];
   }
+  if (isRecord(value.controller)) {
+    if (value.controller.type === 'keyboard') {
+      next.controller = { type: 'keyboard' };
+    } else if (
+      value.controller.type === 'gamepad'
+      && typeof value.controller.index === 'number'
+      && Number.isInteger(value.controller.index)
+      && value.controller.index >= 0
+    ) {
+      next.controller = {
+        type: 'gamepad',
+        index: value.controller.index,
+        id: typeof value.controller.id === 'string' ? value.controller.id : '',
+        mapping: typeof value.controller.mapping === 'string' ? value.controller.mapping : '',
+        ordinal: typeof value.controller.ordinal === 'number' && Number.isInteger(value.controller.ordinal) && value.controller.ordinal >= 0
+          ? value.controller.ordinal
+          : 0,
+      };
+    }
+  }
   return next;
 }
 
@@ -321,7 +341,7 @@ function cloneInputConfig(config: InputConfig): InputConfig {
 }
 
 function clonePlayerInputConfig(player: PlayerInputMapping): PlayerInputMapping {
-  return { keyboard: { ...player.keyboard }, gamepad: { ...player.gamepad } };
+  return { keyboard: { ...player.keyboard }, gamepad: { ...player.gamepad }, controller: { ...player.controller } };
 }
 
 function readJson(storage: SettingsStorage | undefined, key: string): unknown {

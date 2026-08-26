@@ -26,7 +26,9 @@ are available in both modes.
 - Content owns Character, palette, Stage, LifeBar/HUD, Catalog management, and Catalog Generator.
 - Content also owns the Development/Public Share URL field generated from the live Character and Stage Catalog IDs.
 - General owns round time, Infinite Power, Practice Mode, and other match behavior.
-- Input owns the live monitor, control summary, keyboard/gamepad mappings, and reset action.
+- Input owns the live keyboard/Gamepad monitor, per-player physical controller selection,
+  keyboard/Gamepad mappings, and reset action. It does not repeat those mappings in a separate
+  control summary.
 - Audio owns browser audio activation, test controls, master volume, and mute.
 - Display owns logical viewport size and optional visual diagnostic overlays.
 - Developer owns frame timing, Human/AI logs, retention mode, and hit lifecycle diagnostics.
@@ -53,7 +55,9 @@ The version 1 object contains only configuration:
 - audio volume and mute;
 - match, presentation, and diagnostic runtime settings shown by Settings;
 - selected character path and palette number;
-- keyboard and gamepad mappings;
+- keyboard and Gamepad Button mappings;
+- each player's physical controller selection, stored with Gamepad `id`, `mapping`, browser index,
+  and same-ID ordinal so reconnect recovery is not based on index alone;
 - Japanese/English UI language.
 
 Character and Stage paths are restricted to normalized same-origin `/chars/` and `/stages/` asset paths with supported extensions. Unknown object keys are not copied into the normalized object.
@@ -75,6 +79,10 @@ After a successful unified write, legacy keys are removed. Future schema changes
 ## Reset behavior
 
 The Development-only Publisher settings page provides **Restore publisher defaults** / **初期設定に戻す**. After confirmation it removes the unified user object, applies the latest fetched publisher defaults immediately to React state and the audio/runtime refs, resets input mappings, and reloads content when needed. Public Mode does not expose the Publisher settings page.
+
+The Input page's own **Reset** action restores both players' keyboard/Button mappings and their
+legacy controller defaults: the first connected Gamepad for P1 and the second for P2. Selecting
+Keyboard disables Gamepad input only for that player; the player's keyboard mapping remains active.
 
 ## Storage scope
 

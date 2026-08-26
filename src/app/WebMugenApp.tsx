@@ -33,10 +33,13 @@ import { convertSffV1ToImageDataSpritePack } from '../core/sprite/SffSpritePackC
 import { tokenizeCharacterSourceLine } from './CharacterSyntaxHighlighter';
 import {
   BrowserInput,
+  createGamepadAssignment,
   DEFAULT_INPUT_CONFIG,
   keysToP1Input,
   keysToP2Input,
+  resolveAssignedGamepad,
   type InputConfig,
+  type PlayerControllerAssignment,
   type PlayerInputMapping,
 } from './BrowserInput';
 import { createInputDebugSnapshot } from '../input/InputDebugInfo';
@@ -2261,7 +2264,7 @@ export function AudioSettingsPanel({
   );
 }
 
-function InputConfigPanel({
+export function InputConfigPanel({
   config,
   onChange,
 }: {
@@ -2269,6 +2272,26 @@ function InputConfigPanel({
   onChange: (config: InputConfig) => void;
 }) {
   const { text } = useUiLanguage();
+  const [gamepads, setGamepads] = useState<GamepadDeviceInfo[]>(readConnectedGamepadDevices);
+
+  useEffect(() => {
+    const update = () => setGamepads(readConnectedGamepadDevices());
+    const intervalId = window.setInterval(update, 500);
+    window.addEventListener('gamepadconnected', update);
+    window.addEventListener('gamepaddisconnected', update);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('gamepadconnected', update);
+      window.removeEventListener('gamepaddisconnected', update);
+    };
+  }, []);
+
+  const assignedGamepads = config.players.map((player, playerIndex) => (
+    resolveAssignedGamepad(gamepads, player.controller, playerIndex)
+  ));
+  const duplicateGamepad = assignedGamepads[0] && assignedGamepads[1]
+    ? assignedGamepads[0].index === assignedGamepads[1].index
+    : false;
   return (
     <section className="input-config-panel settings-section">
       <div className="input-config-header">
@@ -2278,13 +2301,16 @@ function InputConfigPanel({
         </button>
       </div>
       <LiveInputMonitor />
-      <ControlSummaryCard config={config} />
+      {duplicateGamepad ? <p className="input-controller-warning" role="status">
+        {text('P1 and P2 are assigned to the same controller.', 'P1とP2に同じコントローラーが割り当てられています。')}
+      </p> : null}
       <div className="input-config-grid">
         {config.players.map((player, playerIndex) => (
           <PlayerInputConfig
             key={playerIndex}
             player={player}
             playerIndex={playerIndex}
+            gamepads={gamepads}
             onChange={(nextPlayer) => onChange(replacePlayerInputConfig(config, playerIndex, nextPlayer))}
           />
         ))}
@@ -2437,6 +2463,8 @@ type LiveInputMonitorState = {
   }>;
 };
 
+type GamepadDeviceInfo = Pick<Gamepad, 'index' | 'id' | 'mapping'>;
+
 function LiveInputMonitor() {
   const { text } = useUiLanguage();
   const [snapshot, setSnapshot] = useState<LiveInputMonitorState>({ keys: [], gamepads: [] });
@@ -2475,8 +2503,9 @@ function LiveInputMonitor() {
       <div className="live-input-grid">
         <div>
           <h4>{text('Keyboard', 'キーボード')}</h4>
+          <span className="live-input-label">{text('Pressed', '押下中')}:</span>
           <div className="live-input-pills">
-            {snapshot.keys.length === 0 ? <span className="live-input-empty">-</span> : snapshot.keys.map((key) => (
+            {snapshot.keys.length === 0 ? <span className="live-input-empty">{text('none', 'なし')}</span> : snapshot.keys.map((key) => (
               <span className="live-input-pill" key={key}>{key}</span>
             ))}
           </div>
@@ -2487,16 +2516,26 @@ function LiveInputMonitor() {
             <div className="live-input-empty">{text('not connected', '未接続')}</div>
           ) : snapshot.gamepads.map((gamepad) => (
             <div className="live-gamepad-row" key={gamepad.index}>
-              <strong>Pad {gamepad.index + 1}</strong>
-              <span title={gamepad.id}>{gamepad.id || 'unknown'}</span>
-              <span>{text('buttons', 'ボタン')}: {gamepad.buttons.length === 0 ? '-' : gamepad.buttons.join(', ')}</span>
-              <span>{text('axes', '軸')}: {gamepad.axes.length === 0 ? '-' : gamepad.axes.map((axis) => `${axis.index}:${axis.value.toFixed(2)}`).join(', ')}</span>
+              <strong>{formatGamepadDeviceLabel(gamepad)}</strong>
+              <span>{text('Pressed buttons', '押下ボタン')}: {gamepad.buttons.length === 0
+                ? text('none', 'なし')
+                : gamepad.buttons.map((button) => `Button ${button}`).join(', ')}</span>
+              <span>{text('Axis input', '軸入力')}: {gamepad.axes.length === 0
+                ? text('none', 'なし')
+                : gamepad.axes.map((axis) => `Axis ${axis.index}: ${formatAxisValue(axis.value)}`).join(', ')}</span>
             </div>
           ))}
         </div>
       </div>
     </section>
   );
+}
+
+function readConnectedGamepadDevices(): GamepadDeviceInfo[] {
+  if (typeof navigator === 'undefined' || typeof navigator.getGamepads !== 'function') return [];
+  return Array.from(navigator.getGamepads())
+    .filter((gamepad): gamepad is Gamepad => Boolean(gamepad))
+    .map(({ index, id, mapping }) => ({ index, id, mapping }));
 }
 
 function readLiveGamepadSnapshot(): LiveInputMonitorState['gamepads'] {
@@ -2518,18 +2557,50 @@ function readLiveGamepadSnapshot(): LiveInputMonitorState['gamepads'] {
 function PlayerInputConfig({
   player,
   playerIndex,
+  gamepads,
   onChange,
 }: {
   player: PlayerInputMapping;
   playerIndex: number;
+  gamepads: readonly GamepadDeviceInfo[];
   onChange: (player: PlayerInputMapping) => void;
 }) {
   const { text } = useUiLanguage();
   const japaneseActionLabels: Partial<Record<InputAction, string>> = { left: '左', right: '右', up: '上', down: '下', start: 'スタート' };
   const actionLabel = (key: InputAction, fallback: string) => japaneseActionLabels[key] ?? fallback;
+  const selectedGamepad = resolveAssignedGamepad(gamepads, player.controller, playerIndex);
+  const selectedControllerValue = player.controller.type === 'keyboard'
+    ? 'keyboard'
+    : selectedGamepad ? gamepadOptionValue(selectedGamepad) : 'unavailable';
   return (
     <section className="input-config-card">
       <h3>P{playerIndex + 1}</h3>
+      <label className="settings-field input-controller-select">
+        <span>{text('Controller in use', '使用コントローラー')}</span>
+        <select
+          aria-label={`P${playerIndex + 1} controller`}
+          value={selectedControllerValue}
+          onChange={(event) => {
+            const controller = controllerAssignmentFromValue(event.currentTarget.value, gamepads);
+            if (controller) onChange({ ...player, controller });
+          }}
+        >
+          <option value="keyboard">Keyboard</option>
+          {player.controller.type === 'gamepad' && !selectedGamepad ? (
+            <option value="unavailable" disabled>{formatUnavailableController(player.controller, text)}</option>
+          ) : null}
+          {gamepads.map((gamepad) => (
+            <option key={gamepadOptionValue(gamepad)} value={gamepadOptionValue(gamepad)}>
+              {formatGamepadDeviceLabel(gamepad)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="input-config-column-headings" aria-hidden="true">
+        <span>{text('Action', '操作')}</span>
+        <span>Keyboard</span>
+        <span>Gamepad</span>
+      </div>
       <div className="input-config-rows">
         {INPUT_ACTIONS.map((action) => (
           <div className="input-config-row" key={action.key}>
@@ -2541,9 +2612,10 @@ function PlayerInputConfig({
                 keyboard: { ...player.keyboard, [action.key]: code },
               })}
             />
-            <label>
-              {text('Pad', 'パッド')}
+            <label className="gamepad-binding-field">
+              <span>{formatGamepadBindingPrefix(action.key)}</span>
               <input
+                aria-label={`P${playerIndex + 1} ${action.label} gamepad button`}
                 min={0}
                 max={31}
                 type="number"
@@ -2604,13 +2676,51 @@ function cloneInputConfig(config: InputConfig): InputConfig {
       {
         keyboard: { ...config.players[0].keyboard },
         gamepad: { ...config.players[0].gamepad },
+        controller: { ...config.players[0].controller },
       },
       {
         keyboard: { ...config.players[1].keyboard },
         gamepad: { ...config.players[1].gamepad },
+        controller: { ...config.players[1].controller },
       },
     ],
   };
+}
+
+function gamepadOptionValue(gamepad: GamepadDeviceInfo): string {
+  return `gamepad:${gamepad.index}`;
+}
+
+function controllerAssignmentFromValue(value: string, gamepads: readonly GamepadDeviceInfo[]): PlayerControllerAssignment | null {
+  if (value === 'keyboard') return { type: 'keyboard' };
+  const match = /^gamepad:(\d+)$/.exec(value);
+  if (!match) return null;
+  const gamepad = gamepads.find((entry) => entry.index === Number(match[1]));
+  return gamepad ? createGamepadAssignment(gamepad, gamepads) : null;
+}
+
+function formatGamepadDeviceLabel(gamepad: Pick<Gamepad, 'index' | 'id'>): string {
+  return `Pad ${gamepad.index + 1} - ${gamepad.id || 'Unknown controller'}`;
+}
+
+function formatUnavailableController(
+  assignment: Extract<PlayerControllerAssignment, { type: 'gamepad' }>,
+  text: (english: string, japanese: string) => string,
+): string {
+  return `Pad ${assignment.index + 1} - ${assignment.id || text('not connected', '未接続')}`;
+}
+
+function formatGamepadBindingPrefix(action: InputAction): string {
+  if (action === 'left') return 'Axis 0 − / Button';
+  if (action === 'right') return 'Axis 0 + / Button';
+  if (action === 'up') return 'Axis 1 − / Button';
+  if (action === 'down') return 'Axis 1 + / Button';
+  return 'Button';
+}
+
+function formatAxisValue(value: number): string {
+  const normalized = Math.abs(value) < 0.005 ? 0 : value;
+  return `${normalized > 0 ? '+' : ''}${normalized.toFixed(2)}`;
 }
 
 function uniqueCharacterPathOptions(paths: readonly string[]): readonly string[] {
@@ -2627,21 +2737,6 @@ function formatKeyCode(code: string): string {
     .replace(/^Key/, '')
     .replace(/^Arrow/, '')
     .replace(/^Digit/, '');
-}
-
-function formatKeyboardMapping(player: PlayerInputMapping): string {
-  return [
-    `${formatKeyCode(player.keyboard.left)}/${formatKeyCode(player.keyboard.right)}/${formatKeyCode(player.keyboard.up)}/${formatKeyCode(player.keyboard.down)} move`,
-    `${formatKeyCode(player.keyboard.a)}/${formatKeyCode(player.keyboard.b)}/${formatKeyCode(player.keyboard.c)} = a/b/c`,
-    `${formatKeyCode(player.keyboard.x)}/${formatKeyCode(player.keyboard.y)}/${formatKeyCode(player.keyboard.z)} = x/y/z`,
-  ].join(', ');
-}
-
-function formatGamepadMapping(player: PlayerInputMapping): string {
-  return [
-    `${player.gamepad.x}/${player.gamepad.y}/${player.gamepad.z} = x/y/z`,
-    `${player.gamepad.a}/${player.gamepad.b}/${player.gamepad.c} = a/b/c`,
-  ].join(', ');
 }
 
 function AppPageTabs({ activePage, onChange, showCharacterFiles }: { activePage: AppPage; onChange: (page: AppPage) => void; showCharacterFiles: boolean }) {
@@ -2874,29 +2969,6 @@ function StaticDebugPanel({
       air={air}
       sprites={sprites}
     />
-  );
-}
-
-function ControlSummaryCard({ config }: { config: InputConfig }) {
-  const { text } = useUiLanguage();
-  return (
-    <section className="input-config-card control-summary-card">
-      <h3>{text('Control Summary', '操作一覧')}</h3>
-      <div className="control-help-grid">
-        <div>
-          <h4>{text('Keyboard', 'キーボード')}</h4>
-          <p>P1: {formatKeyboardMapping(config.players[0])}</p>
-          <p>P2: {formatKeyboardMapping(config.players[1])}</p>
-        </div>
-        <div>
-          <h4>{text('Controller', 'コントローラー')}</h4>
-          <p>{text('1st gamepad = P1, 2nd gamepad = P2', '1台目のゲームパッド = P1、2台目 = P2')}</p>
-          <p>{text('Move with the D-pad or left stick', '方向パッドまたは左スティックで移動')}</p>
-          <p>P1: {formatGamepadMapping(config.players[0])}</p>
-          <p>P2: {formatGamepadMapping(config.players[1])}</p>
-        </div>
-      </div>
-    </section>
   );
 }
 

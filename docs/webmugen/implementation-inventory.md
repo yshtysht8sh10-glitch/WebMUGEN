@@ -39,7 +39,7 @@ This document is a high-level inventory of WebMUGEN implementation areas. It is 
 
 | Area | Status summary |
 |---|---|
-| Browser input | Keyboard input and player mapping exist. |
+| Browser input | Keyboard input, per-player Gamepad device assignment, reconnect recovery by id/mapping/same-id ordinal/index, configurable Button mappings, fixed left-stick Axis mappings, and a live input monitor exist. |
 | Command debug | Active command names are visible. |
 | CNS debug | Runtime traces expose state/animation/controller execution. |
 | Physics debug | Post-physics state, velocity, facing, power, juggle pool, guard intent, and current/self State owner ids are visible. |

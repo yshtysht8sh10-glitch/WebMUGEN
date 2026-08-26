@@ -31,9 +31,20 @@ export type PlayerGamepadMapping = {
   start: number;
 };
 
+export type PlayerControllerAssignment =
+  | { type: 'keyboard' }
+  | {
+    type: 'gamepad';
+    index: number;
+    id: string;
+    mapping: string;
+    ordinal: number;
+  };
+
 export type PlayerInputMapping = {
   keyboard: PlayerKeyboardMapping;
   gamepad: PlayerGamepadMapping;
+  controller: PlayerControllerAssignment;
 };
 
 export type InputConfig = {
@@ -57,6 +68,7 @@ export const DEFAULT_INPUT_CONFIG: InputConfig = {
         start: 'Enter',
       },
       gamepad: { left: 14, right: 15, up: 12, down: 13, x: 0, y: 1, z: 4, a: 2, b: 3, c: 5, start: 9 },
+      controller: { type: 'gamepad', index: 0, id: '', mapping: '', ordinal: 0 },
     },
     {
       keyboard: {
@@ -73,6 +85,7 @@ export const DEFAULT_INPUT_CONFIG: InputConfig = {
         start: 'NumpadEnter',
       },
       gamepad: { left: 14, right: 15, up: 12, down: 13, x: 0, y: 1, z: 4, a: 2, b: 3, c: 5, start: 9 },
+      controller: { type: 'gamepad', index: 1, id: '', mapping: '', ordinal: 1 },
     },
   ],
 };
@@ -161,7 +174,7 @@ function addGamepadKeys(keys: Set<string>, gamepads: readonly (Gamepad | null)[]
   const connectedGamepads = gamepads.filter((gamepad): gamepad is Gamepad => Boolean(gamepad));
 
   for (const [playerIndex, mapping] of config.players.entries()) {
-    const gamepad = connectedGamepads[playerIndex];
+    const gamepad = resolveAssignedGamepad(connectedGamepads, mapping.controller, playerIndex);
     if (!gamepad) {
       continue;
     }
@@ -185,6 +198,42 @@ function addGamepadKeys(keys: Set<string>, gamepads: readonly (Gamepad | null)[]
       }
     }
   }
+}
+
+export function resolveAssignedGamepad<T extends Pick<Gamepad, 'index' | 'id' | 'mapping'>>(
+  connectedGamepads: readonly T[],
+  assignment: PlayerControllerAssignment,
+  legacyPlayerIndex: number,
+): T | undefined {
+  if (assignment.type === 'keyboard') return undefined;
+
+  if (!assignment.id) {
+    return connectedGamepads[legacyPlayerIndex];
+  }
+
+  const sameDeviceType = connectedGamepads.filter((gamepad) => (
+    gamepad.id === assignment.id
+    && (!assignment.mapping || gamepad.mapping === assignment.mapping)
+  ));
+  return sameDeviceType.find((gamepad) => gamepad.index === assignment.index)
+    ?? sameDeviceType[assignment.ordinal]
+    ?? sameDeviceType[0];
+}
+
+export function createGamepadAssignment<T extends Pick<Gamepad, 'index' | 'id' | 'mapping'>>(
+  selected: T,
+  connectedGamepads: readonly T[],
+): PlayerControllerAssignment {
+  const ordinal = connectedGamepads
+    .filter((gamepad) => gamepad.id === selected.id && gamepad.mapping === selected.mapping)
+    .findIndex((gamepad) => gamepad.index === selected.index);
+  return {
+    type: 'gamepad',
+    index: selected.index,
+    id: selected.id,
+    mapping: selected.mapping,
+    ordinal: Math.max(0, ordinal),
+  };
 }
 
 function isGamepadButtonPressed(gamepad: Gamepad, index: number): boolean {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { BrowserInput, DEFAULT_INPUT_CONFIG, keysToP1Input, keysToP2Input, type InputConfig } from './BrowserInput';
+import { BrowserInput, createGamepadAssignment, DEFAULT_INPUT_CONFIG, keysToP1Input, keysToP2Input, resolveAssignedGamepad, type InputConfig } from './BrowserInput';
 
 describe('BrowserInput', () => {
   it('tracks pressed keys', () => {
@@ -81,6 +81,7 @@ describe('BrowserInput', () => {
         {
           keyboard: { ...DEFAULT_INPUT_CONFIG.players[0].keyboard, right: 'KeyR', a: 'KeyM' },
           gamepad: DEFAULT_INPUT_CONFIG.players[0].gamepad,
+          controller: DEFAULT_INPUT_CONFIG.players[0].controller,
         },
         DEFAULT_INPUT_CONFIG.players[1],
       ],
@@ -127,6 +128,7 @@ describe('BrowserInput', () => {
         {
           keyboard: DEFAULT_INPUT_CONFIG.players[0].keyboard,
           gamepad: { ...DEFAULT_INPUT_CONFIG.players[0].gamepad, a: 7 },
+          controller: DEFAULT_INPUT_CONFIG.players[0].controller,
         },
         DEFAULT_INPUT_CONFIG.players[1],
       ],
@@ -144,6 +146,7 @@ describe('BrowserInput', () => {
         {
           keyboard: DEFAULT_INPUT_CONFIG.players[0].keyboard,
           gamepad: { ...DEFAULT_INPUT_CONFIG.players[0].gamepad, left: 7 },
+          controller: DEFAULT_INPUT_CONFIG.players[0].controller,
         },
         DEFAULT_INPUT_CONFIG.players[1],
       ],
@@ -186,6 +189,47 @@ describe('BrowserInput', () => {
     expect(keys.has('KeyL')).toBe(false);
     expect(keys.has('KeyF')).toBe(false);
   });
+
+  it('routes each selected physical gamepad only to its assigned player', () => {
+    const pad1 = createGamepad({ index: 0, id: 'Xbox Controller', pressedButtons: [2] });
+    const pad2 = createGamepad({ index: 1, id: 'JC-PS101U', pressedButtons: [0] });
+    const config: InputConfig = {
+      players: [
+        { ...DEFAULT_INPUT_CONFIG.players[0], controller: createGamepadAssignment(pad1, [pad1, pad2]) },
+        { ...DEFAULT_INPUT_CONFIG.players[1], controller: createGamepadAssignment(pad2, [pad1, pad2]) },
+      ],
+    };
+    const input = new BrowserInput(createFakeWindow(), { getGamepads: () => [pad1, pad2] });
+    const keys = input.getPressedKeys(config);
+
+    expect(keysToP1Input(keys, config).buttons).toEqual(['a']);
+    expect(keysToP2Input(keys, config).buttons).toEqual(['x']);
+    expect(keysToP1Input(keys, config).buttons).not.toContain('x');
+    expect(keysToP2Input(keys, config).buttons).not.toContain('a');
+  });
+
+  it('restores a selected device by id and same-id ordinal after indexes change', () => {
+    const first = createGamepad({ index: 0, id: 'Twin USB Pad' });
+    const second = createGamepad({ index: 1, id: 'Twin USB Pad' });
+    const assignment = createGamepadAssignment(second, [first, second]);
+    const reconnectedFirst = createGamepad({ index: 3, id: 'Twin USB Pad' });
+    const reconnectedSecond = createGamepad({ index: 5, id: 'Twin USB Pad' });
+
+    expect(resolveAssignedGamepad([reconnectedFirst, reconnectedSecond], assignment, 0)?.index).toBe(5);
+  });
+
+  it('keeps keyboard-only players isolated from connected gamepads', () => {
+    const pad = createGamepad({ index: 0, id: 'Xbox Controller', pressedButtons: [2] });
+    const config: InputConfig = {
+      players: [
+        { ...DEFAULT_INPUT_CONFIG.players[0], controller: { type: 'keyboard' } },
+        DEFAULT_INPUT_CONFIG.players[1],
+      ],
+    };
+    const input = new BrowserInput(createFakeWindow(), { getGamepads: () => [pad] });
+
+    expect(keysToP1Input(input.getPressedKeys(config), config).buttons).toEqual([]);
+  });
 });
 
 function createFakeWindow(): Window {
@@ -196,14 +240,23 @@ function createFakeWindow(): Window {
 }
 
 function createGamepad({
+  index = 0,
+  id = 'Test Gamepad',
+  mapping = 'standard',
   axes = [0, 0],
   pressedButtons = [],
 }: {
+  index?: number;
+  id?: string;
+  mapping?: string;
   axes?: number[];
   pressedButtons?: number[];
 }): Gamepad {
   const pressedButtonSet = new Set(pressedButtons);
   return {
+    index,
+    id,
+    mapping,
     axes,
     buttons: Array.from({ length: 16 }, (_, index) => {
       const pressed = pressedButtonSet.has(index);

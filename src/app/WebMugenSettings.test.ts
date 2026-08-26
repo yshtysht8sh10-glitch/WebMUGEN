@@ -92,6 +92,31 @@ describe('WebMugenSettings', () => {
     expect((await loadWebMugenSettings({ storage, fetcher: published({}) })).migratedLegacySettings).toBe(false);
   });
 
+  it('persists controller identity and keeps legacy input assignments on their default Pad slots', async () => {
+    const saved = normalizeWebMugenSettings({ input: { players: [
+      {
+        ...DEFAULT_INPUT_CONFIG.players[0],
+        controller: { type: 'gamepad', index: 4, id: 'Twin USB Pad', mapping: 'standard', ordinal: 1 },
+      },
+      { ...DEFAULT_INPUT_CONFIG.players[1], controller: { type: 'keyboard' } },
+    ] } });
+    const storage = memoryStorage();
+    saveWebMugenSettings(saved, storage);
+    const loaded = await loadWebMugenSettings({ storage, fetcher: published({}) });
+
+    expect(loaded.settings.input.players[0].controller).toEqual({
+      type: 'gamepad', index: 4, id: 'Twin USB Pad', mapping: 'standard', ordinal: 1,
+    });
+    expect(loaded.settings.input.players[1].controller).toEqual({ type: 'keyboard' });
+
+    const legacy = normalizeWebMugenSettings({ input: { players: [
+      { keyboard: DEFAULT_INPUT_CONFIG.players[0].keyboard, gamepad: DEFAULT_INPUT_CONFIG.players[0].gamepad },
+      { keyboard: DEFAULT_INPUT_CONFIG.players[1].keyboard, gamepad: DEFAULT_INPUT_CONFIG.players[1].gamepad },
+    ] } });
+    expect(legacy.input.players[0].controller).toEqual(DEFAULT_INPUT_CONFIG.players[0].controller);
+    expect(legacy.input.players[1].controller).toEqual(DEFAULT_INPUT_CONFIG.players[1].controller);
+  });
+
   it('normalizes versioned data and preserves a future migration entry point', () => {
     const migrated = migrateWebMugenSettings({ version: 99, runtime: { roundTime: 88 } });
     const normalized = normalizeWebMugenSettings(migrated);
