@@ -109,6 +109,35 @@ describe('AppCharacterLoader', () => {
     }
   });
 
+  it('loads a catalog Character ZIP from the selected local folder after its HTTP path is unavailable', async () => {
+    const zipBytes = zipSync({
+      'Local/Local.def': strToU8('[Info]\nname = Local Fighter\n[Files]\ncmd = Local.cmd\ncns = Local.cns\nanim = Local.air\n'),
+      'Local/Local.cns': strToU8('[StateDef 0]\ntype = S\nmovetype = I\nphysics = S\nanim = 0\nctrl = 1\n'),
+      'Local/Local.air': strToU8('Begin Action 0\n0,0, 0,0, 5\n'),
+      'Local/Local.cmd': strToU8('[Command]\nname = "a"\ncommand = a\ntime = 1\n'),
+    });
+    const originalFetch = globalThis.fetch;
+    const localReader = async (path: string) => path === '/chars/material-10-archive.zip' ? zipBytes : null;
+    globalThis.fetch = (async (path: RequestInfo | URL) => {
+      const url = String(path);
+      if (url === '/chars/common.cmd') return new Response('[Command]\nname = "holddown"\ncommand = /D\n');
+      if (url === '/chars/common1.cns') return new Response('[StateDef 20]\ntype = S\nmovetype = I\nphysics = S\nctrl = 1\n');
+      if (url === '/chars/material-10-archive.zip') return new Response('<!doctype html><title>Vite fallback</title>', { status: 200 });
+      return new Response('missing', { status: 404 });
+    }) as typeof fetch;
+
+    try {
+      const result = await loadAppCharacter('/chars/material-10-archive.zip', 1, localReader);
+
+      expect(result.source).toBe('def');
+      expect(result.errorMessage).toBeNull();
+      expect(readCharacterRuntimeMetadata(result.character!)).toMatchObject({ name: 'Local Fighter' });
+      expect(result.character?.cns.states.some((state) => state.stateNo === 0)).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it('detects UTF-8 and CP932 independently for each ZIP text entry', async () => {
     const cnsText = `[StateDef 0]\ntype = S\nmovetype = I\nphysics = S\nanim = 0\nctrl = 1\n\n[StateDef 200]\ntype = S\nmovetype = A\nphysics = S\nanim = 0\nctrl = 0\n\n[StateDef -1]\n\n[State -1, 攻撃]\ntype = ChangeState\ntriggerall = command = "攻撃"\ntrigger1 = ctrl\nvalue = 200\n`;
     const zipBytes = zipSync({

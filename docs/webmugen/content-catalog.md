@@ -81,6 +81,14 @@ Server mode does not scan a deployment server directory and does not receive ser
 
 In both modes, each result must match its source slot's expected kind. Publisher-shipped `source: "builtin"` items are always retained; generated items receive `source: "external"`. An unset source kind retains its currently loaded external items instead of silently deleting them. Structured classification results record kind, engine, confidence, entry file, warnings, and errors. Unknown/corrupt/ambiguous/wrong-kind entries, unsafe direct paths, and duplicate generated IDs are listed with reasons.
 
+For a locally generated Character entry, the `/chars/<relative path>` value is also the lookup key
+for the saved local Character folder. Runtime keeps normal same-origin HTTP loading first, then reads
+that relative ZIP/DEF from the retained folder handle only when the HTTP load is unavailable or
+invalid for the declared asset type. This lets one
+generated `catalog.json` keep stable Character paths during local testing while preserving the same
+server-first paths after the assets are published. Stage and LifeBar local-runtime fallback are not
+part of this slice.
+
 The four Local-mode `FileSystemDirectoryHandle` values are stored separately in IndexedDB when supported. A restored handle is used only after checking its current permission. Expired permission requests reauthorization; failure returns to explicit folder selection. Browsers without the File System Access API can switch to Server mode for same-origin direct paths, download a generated Catalog, run the game, or use a server/CLI-generated Catalog.
 
 ### Classification rules

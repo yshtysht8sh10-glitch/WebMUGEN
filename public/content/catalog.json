@@ -74,11 +74,227 @@
       "source": "builtin"
     },
     {
-      "id": "itoko",
+      "id": "material-10-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "yuka&gor",
+      "path": "/chars/material-10-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-11-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "Emperor",
+      "path": "/chars/material-11-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-12-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "Eni_BlackDragon2",
+      "path": "/chars/material-12-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-13-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "Eni_BlackDragon",
+      "path": "/chars/material-13-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-14-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "Gangs now",
+      "path": "/chars/material-14-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-15-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "Jecht",
+      "path": "/chars/material-15-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-16-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "Lazy Hazakura",
+      "path": "/chars/material-16-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-17-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "Phantom_Scissors",
+      "path": "/chars/material-17-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-18-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "Tenshi Hinanai",
+      "path": "/chars/material-18-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-19-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "kadoyasu Itaba",
+      "path": "/chars/material-19-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-20-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "kikka yajima",
+      "path": "/chars/material-20-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-21-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "Yuka sazanami",
+      "path": "/chars/material-21-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-24-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "curemarch",
+      "path": "/chars/material-24-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-25-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "matoi ryuko",
+      "path": "/chars/material-25-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-26-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "D4meirin",
+      "path": "/chars/material-26-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-27-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "Mother_Legion",
+      "path": "/chars/material-27-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-28-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "biollente",
+      "path": "/chars/material-28-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-29-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "gamera(heisei)",
+      "path": "/chars/material-29-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-3-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "Tao Jun",
+      "path": "/chars/material-3-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-30-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "godzilla(VS)",
+      "path": "/chars/material-30-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-31-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "ultra_man",
+      "path": "/chars/material-31-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-32-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "K-Hanayama",
+      "path": "/chars/material-32-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-4-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "akkarin",
+      "path": "/chars/material-4-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-5-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "Alice Liddell",
+      "path": "/chars/material-5-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-6-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "New Super Mario",
+      "path": "/chars/material-6-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-7-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "T-H-M-A",
+      "path": "/chars/material-7-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-8-archive",
+      "kind": "character",
+      "engine": "winmugen",
+      "name": "akkarin",
+      "path": "/chars/material-8-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-9-archive",
       "kind": "character",
       "engine": "winmugen",
       "name": "itoko",
-      "path": "/chars/itoko.zip",
+      "path": "/chars/material-9-archive.zip",
       "source": "external"
     }
   ]

@@ -12,6 +12,7 @@ import type { DefDocument } from '../parser/def/DefTypes';
 import { discoverCharacterDef } from '../content/CharacterDefDiscovery';
 import { resolveApplicationAssetPath } from './ApplicationAssetPath';
 import { decodeMugenText } from '../parser/text/MugenTextDecoder';
+import { readLocalCatalogCharacterAsset } from '../content/catalog-generator/LocalCatalogAssetSource';
 
 export type AppCharacterLoadResult = {
   character: CharacterAssets | null;
@@ -36,24 +37,56 @@ export function readCharacterRuntimeMetadata(character: {
   };
 }
 
-export async function loadAppCharacter(defPath: string, paletteNo = 1): Promise<AppCharacterLoadResult> {
+export type LocalCharacterAssetReader = (path: string) => Promise<Uint8Array | null>;
+
+export async function loadAppCharacter(
+  defPath: string,
+  paletteNo = 1,
+  localAssetReader: LocalCharacterAssetReader = readLocalCatalogCharacterAsset,
+): Promise<AppCharacterLoadResult> {
   try {
-    const httpFetcher = createApplicationCharacterAssetFetcher();
-    const character = defPath.toLowerCase().endsWith('.zip')
-      ? await loadCharacterFromZip(defPath, paletteNo, httpFetcher)
-      : await attachHttpCharacterFileInventory(defPath, await loadCharacterFromDef(defPath, httpFetcher, { paletteNo }));
+    const httpFetcher = createApplicationCharacterAssetFetcher(localAssetReader);
+    const character = await loadAppCharacterAssets(defPath, paletteNo, httpFetcher);
     return {
       character,
       source: 'def',
       errorMessage: null,
     };
-  } catch (error) {
+  } catch (httpError) {
+    const localRootBytes = await localAssetReader(defPath).catch(() => null);
+    if (localRootBytes) {
+      try {
+        const localReader = async (path: string) => path === defPath ? localRootBytes : localAssetReader(path);
+        const character = await loadAppCharacterAssets(
+          defPath,
+          paletteNo,
+          createApplicationCharacterAssetFetcher(localReader, true),
+        );
+        return { character, source: 'def', errorMessage: null };
+      } catch (localError) {
+        return {
+          character: null,
+          source: 'sample',
+          errorMessage: localError instanceof Error ? localError.message : String(localError),
+        };
+      }
+    }
     return {
       character: null,
       source: 'sample',
-      errorMessage: error instanceof Error ? error.message : String(error),
+      errorMessage: httpError instanceof Error ? httpError.message : String(httpError),
     };
   }
+}
+
+async function loadAppCharacterAssets(
+  defPath: string,
+  paletteNo: number,
+  fetcher: CharacterAssetFetcher,
+): Promise<CharacterAssets> {
+  return defPath.toLowerCase().endsWith('.zip')
+    ? loadCharacterFromZip(defPath, paletteNo, fetcher)
+    : attachHttpCharacterFileInventory(defPath, await loadCharacterFromDef(defPath, fetcher, { paletteNo }));
 }
 
 export function createSampleCharacterAssets(): Pick<CharacterAssets, 'cns' | 'air' | 'cmd' | 'sprites' | 'sounds' | 'loadDiagnostics' | 'cnsSourceFiles'> {
@@ -353,15 +386,50 @@ function isSharedHttpAssetPath(path: string): boolean {
   return normalized === '/chars/common1.cns' || normalized === '/chars/common.cmd';
 }
 
-function createApplicationCharacterAssetFetcher(): CharacterAssetFetcher {
+function createApplicationCharacterAssetFetcher(
+  localAssetReader: LocalCharacterAssetReader,
+  localFirst = false,
+): CharacterAssetFetcher {
   const fetcher = createHttpCharacterAssetFetcher();
   const resolvePath = (path: string) => path.replace(/\\/g, '/').startsWith('/chars/')
     ? resolveApplicationAssetPath(path.replace(/^\//, ''))
     : path;
   return {
-    text: (path) => fetcher.text(resolvePath(path)),
-    arrayBuffer: (path) => fetcher.arrayBuffer(resolvePath(path)),
+    text: (path) => withLocalCharacterFallback(
+      path,
+      () => fetcher.text(resolvePath(path)),
+      async (bytes) => decodeMugenText(bytes),
+      localAssetReader,
+      localFirst,
+    ),
+    arrayBuffer: (path) => withLocalCharacterFallback(
+      path,
+      () => fetcher.arrayBuffer(resolvePath(path)),
+      async (bytes) => toArrayBuffer(bytes),
+      localAssetReader,
+      localFirst,
+    ),
   };
+}
+
+async function withLocalCharacterFallback<T>(
+  path: string,
+  readHttp: () => Promise<T>,
+  convert: (bytes: Uint8Array) => Promise<T>,
+  localAssetReader: LocalCharacterAssetReader,
+  localFirst: boolean,
+): Promise<T> {
+  if (localFirst && !isSharedHttpAssetPath(path)) {
+    const bytes = await localAssetReader(path).catch(() => null);
+    if (bytes) return convert(bytes);
+  }
+  try {
+    return await readHttp();
+  } catch (httpError) {
+    const bytes = localFirst || isSharedHttpAssetPath(path) ? null : await localAssetReader(path).catch(() => null);
+    if (!bytes) throw httpError;
+    return convert(bytes);
+  }
 }
 
 function readZipEntryNameAliases(bytes: Uint8Array): ReadonlyMap<string, string> {

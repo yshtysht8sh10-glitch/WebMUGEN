@@ -5,6 +5,7 @@ import { classifyDefText, classifyWebMugenJson, classifyZipBytes } from './Catal
 import { generateContentCatalog, resolveCatalogDirectPath, resolveCatalogPublicPath } from './CatalogGenerator';
 import type { CatalogDirectoryHandle, CatalogFileHandle, CatalogSourceFile } from './CatalogGeneratorTypes';
 import { readCatalogSourceFiles, readCatalogSourcePath } from './LocalFolderCatalogSource';
+import { readCatalogDirectoryAsset } from './LocalCatalogAssetSource';
 import { downloadCatalogJson, ensureDirectoryPermission, serializeContentCatalog, writeCatalogToDirectory } from './CatalogWriter';
 
 const characterDef = '[Info]\nname = Hero\n[Files]\ncmd = hero.cmd\ncns = hero.cns\nsprite = hero.sff\nanim = hero.air';
@@ -80,6 +81,14 @@ describe('Catalog Generator folder and permission support', () => {
     const nested = directory('chars', [file('hero.def', characterDef), file('readme.txt', 'ignored')]);
     const root = directory('content', [nested, file('catalog.json', '{}'), file('arena.def', stageDef)]);
     expect((await readCatalogSourceFiles(root)).map((entry) => entry.path)).toEqual(['arena.def', 'chars/hero.def']);
+  });
+
+  it('reads a generated Character path from the retained local folder hierarchy', async () => {
+    const root = directory('characters', [directory('nested', [file('fighter.zip', 'local zip bytes')])]);
+
+    expect(new TextDecoder().decode(await readCatalogDirectoryAsset(root, 'nested/fighter.zip') ?? undefined)).toBe('local zip bytes');
+    expect(await readCatalogDirectoryAsset(root, '../fighter.zip')).toBeNull();
+    expect(await readCatalogDirectoryAsset(root, 'missing.zip')).toBeNull();
   });
 
   it('loads a directly specified same-origin file and rejects unsafe paths', async () => {
