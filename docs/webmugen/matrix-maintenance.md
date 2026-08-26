@@ -8,6 +8,8 @@ This document defines how to maintain the WebMUGEN compatibility matrix.
 
 `docs/webmugen/winmugen-compatibility-matrix.md` is the canonical row inventory and human-readable evidence checklist.
 
+The Matrix is WinMUGEN-first. When a row has a known MUGEN 1.0 difference, its evidence must identify the tested profile instead of combining both versions into one ambiguous result. A future schema may add profile-specific status/evidence or separate profile views, but it must preserve the meaning and history of the WinMUGEN row. MUGEN 1.0 documentation alone cannot promote or redefine a WinMUGEN status. See `docs/architecture/compatibility.md`.
+
 `docs/webmugen/winmugen-compatibility-matrix.html` is the browser viewer. It fetches and parses the Markdown inventory at runtime instead of embedding a second copy of every row. Every Markdown row stores the explicit canonical status, progress, and evidence shown by the HTML.
 
 The viewer resolves Matrix remarks through the same live Japanese/English language state used by headings, statuses, and table labels. English is the canonical source and fallback. Japanese remarks are prepared when the Markdown is parsed, with explicit per-item Japanese text taking precedence when an item needs terminology that cannot be translated safely by the shared Matrix glossary. Switching languages re-renders the current filtered rows without a page reload.

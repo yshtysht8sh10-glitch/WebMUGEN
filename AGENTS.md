@@ -4,6 +4,7 @@ This file is for Codex and other AI coding agents working in this repository.
 
 Before making changes, read these documents:
 
+- `docs/architecture/compatibility.md`
 - `docs/webmugen/development-policy.md`
 - `docs/webmugen/runtime-pipeline.md`
 - `docs/webmugen/loader.md`
@@ -25,6 +26,19 @@ WebMUGEN is not a KFM-only demo.
 The goal is WinMUGEN compatibility: existing WinMUGEN characters should run in the browser with behavior as close to WinMUGEN as practical.
 
 Compatibility comes before convenience, shortcuts, local KFM-only fixes, or code elegance.
+
+## Compatibility architecture
+
+WinMUGEN is the base engine and the highest-priority compatibility target. MUGEN 1.0 support is a version-difference layer that may be added only without changing verified WinMUGEN behavior. Future MUGEN 1.1 support follows the same rule.
+
+- Do not use MUGEN 1.0 documentation alone to define or change WinMUGEN semantics.
+- Establish WinMUGEN behavior from WinMUGEN real-game observation, standard characters, standard `common1.cns`, and official or contemporary WinMUGEN material, in that order.
+- Treat MUGEN 1.0 documentation as difference evidence. Move a rule into shared implementation only after WinMUGEN equivalence is independently confirmed.
+- When versions differ, separate them through a `CompatibilityProfile`; do not turn WinMUGEN into a fallback from MUGEN 1.0 behavior.
+- Select the profile during character loading, retain it on the loaded character, and dispatch through profile policies. Do not scatter `mugenversion` conditionals throughout runtime modules.
+- Keep syntax normalization in parsers and version-specific meaning, defaults, common States, HitDef, physics, commands, and animation in compatibility profiles.
+
+The architecture and incremental migration rules are defined in `docs/architecture/compatibility.md`.
 
 ## Role and decision authority
 

@@ -10,6 +10,12 @@ The goal is not only to make KFM move. The goal is to preserve the behavior expe
 
 Compatibility comes before convenience, local shortcuts, or KFM-only fixes.
 
+## Compatibility architecture
+
+`docs/architecture/compatibility.md` is the design authority for version ownership. WebMUGEN uses WinMUGEN as its base engine. MUGEN 1.0 and future versions are explicit compatibility profiles containing verified differences, not newer baselines from which WinMUGEN behavior falls back.
+
+MUGEN 1.0 documentation alone must not change WinMUGEN behavior. Character loading will select and retain one compatibility profile, while parsers remain shared syntax readers and runtime semantics/defaults belong to the selected profile. Until that dispatcher is implemented, global compatibility shims must be documented as transitional and must not be presented as proof that WinMUGEN and MUGEN 1.0 semantics are identical.
+
 ## Application version
 
 The WebMUGEN application version is managed as a semantic version in the root `package.json`.
