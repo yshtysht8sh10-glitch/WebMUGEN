@@ -9,6 +9,8 @@ export type AudioRuntimeDiagnosticCode =
   | 'audio_locked'
   | 'audio_unlocked'
   | 'audio_play_sample_started'
+  | 'audio_test_tone_started'
+  | 'audio_test_tone_unsupported'
   | 'audio_playback_rejected'
   | 'audio_decode_started'
   | 'audio_decode_completed'
@@ -49,6 +51,12 @@ export type AudioPlaybackOptions = {
   pan?: number;
   playbackRate?: number;
   channelKey?: string;
+  onEnded?: () => void;
+};
+
+export type AudioToneOptions = AudioPlaybackOptions & {
+  durationSeconds?: number;
+  frequencyHz?: number;
 };
 
 export type AudioPlaybackHandle = {
@@ -64,6 +72,7 @@ export interface AudioAdapter {
   resume(): Promise<void>;
   decode(bytes: ArrayBuffer): Promise<unknown>;
   play(decoded: unknown, options: AudioPlaybackOptions): AudioPlaybackHandle;
+  playTone?(options: AudioToneOptions): AudioPlaybackHandle;
   setMasterGain(value: number): void;
   close(): Promise<void>;
 }
@@ -247,21 +256,51 @@ export class BrowserAudioRuntime {
       }
       const handle = adapter.play(await decoded, options);
       this.emit('audio_source_started', 'Audio adapter executed source.start().', { sampleKey });
-      if (options.channelKey) {
-        const previous = this.channelHandles.get(options.channelKey);
-        if (previous) {
-          previous.stop();
-          this.activeHandles.delete(previous);
-        }
-        this.channelHandles.set(options.channelKey, handle);
-      }
-      this.activeHandles.add(handle);
-      handle.setOnEnded?.(() => this.releaseHandle(handle, options.channelKey));
+      this.trackHandle(handle, options);
       this.emit('playback_started', 'Audio sample playback started.', { sampleKey });
       return true;
     } catch (error) {
       this.decodeCache.delete(sampleKey);
       this.emit('decode_failed', errorMessage('Audio sample decode/playback failed', error), { sampleKey });
+      return false;
+    }
+  }
+
+  playTestTone(options: AudioToneOptions = {}): boolean {
+    const sampleKey = 'settings:test-tone';
+    if (this.closed) {
+      this.emit('audio_playback_rejected', 'Test tone rejected because the audio runtime was cleaned up.', { sampleKey });
+      return false;
+    }
+    const adapter = this.ensureAdapter();
+    if (!adapter) {
+      this.emit('audio_playback_rejected', 'Test tone rejected because Web Audio is unavailable.', { sampleKey });
+      return false;
+    }
+    if (!this.unlocked && adapter.state !== 'running') {
+      this.emit('audio_locked', 'Test tone rejected until AudioContext is unlocked.', { sampleKey });
+      return false;
+    }
+    if (!adapter.playTone) {
+      this.emit('audio_test_tone_unsupported', 'Test tone is unavailable in this audio adapter.', { sampleKey });
+      return false;
+    }
+
+    try {
+      const toneOptions: AudioToneOptions = {
+        durationSeconds: 1,
+        frequencyHz: 440,
+        volume: 0.2,
+        pan: 0,
+        ...options,
+        loop: false,
+      };
+      const handle = adapter.playTone(toneOptions);
+      this.trackHandle(handle, toneOptions);
+      this.emit('audio_test_tone_started', 'Fixed test tone playback started.', { sampleKey });
+      return true;
+    } catch (error) {
+      this.emit('audio_playback_rejected', errorMessage('Test tone playback failed', error), { sampleKey });
       return false;
     }
   }
@@ -360,6 +399,22 @@ export class BrowserAudioRuntime {
       ...details,
     });
   }
+
+  private trackHandle(handle: AudioPlaybackHandle, options: AudioPlaybackOptions): void {
+    if (options.channelKey) {
+      const previous = this.channelHandles.get(options.channelKey);
+      if (previous) {
+        previous.stop();
+        this.activeHandles.delete(previous);
+      }
+      this.channelHandles.set(options.channelKey, handle);
+    }
+    this.activeHandles.add(handle);
+    handle.setOnEnded?.(() => {
+      this.releaseHandle(handle, options.channelKey);
+      options.onEnded?.();
+    });
+  }
 }
 
 export function createWebAudioAdapter(): AudioAdapter | null {
@@ -393,6 +448,33 @@ export function createWebAudioAdapter(): AudioAdapter | null {
       return {
         stop: () => { try { source.stop(); } catch { /* already stopped */ } },
         setOnEnded(callback) { source.onended = callback; },
+        setPan(value) {
+          if (!panner) return false;
+          panner.pan.value = clamp(value, -1, 1);
+          return true;
+        },
+      };
+    },
+    playTone(options) {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const panner = typeof context.createStereoPanner === 'function' ? context.createStereoPanner() : null;
+      oscillator.type = 'sine';
+      oscillator.frequency.value = clamp(options.frequencyHz ?? 440, 80, 2000);
+      gain.gain.value = clamp(options.volume ?? 0.2, 0, 1);
+      oscillator.connect(gain);
+      if (panner) {
+        panner.pan.value = clamp(options.pan ?? 0, -1, 1);
+        gain.connect(panner);
+        panner.connect(master);
+      } else {
+        gain.connect(master);
+      }
+      oscillator.start();
+      oscillator.stop(context.currentTime + clamp(options.durationSeconds ?? 1, 0.05, 2));
+      return {
+        stop: () => { try { oscillator.stop(); } catch { /* already stopped */ } },
+        setOnEnded(callback) { oscillator.onended = callback; },
         setPan(value) {
           if (!panner) return false;
           panner.pan.value = clamp(value, -1, 1);

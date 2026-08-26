@@ -13,14 +13,13 @@ import {
 describe('master audio settings UI', () => {
   it('renders a 0-100 keyboard range, current value, mute control, and explicit labels', () => {
     const html = renderToStaticMarkup(createElement(AudioSettingsPanel, {
-      status: 'locked',
       muted: false,
       masterVolume: 50,
-      diagnostic: 'audio=-',
-      onUnlock: vi.fn(),
+      testPan: 0,
+      testStatus: 'stopped',
       onTest: vi.fn(),
       onStopTest: vi.fn(),
-      onPanTest: vi.fn(),
+      onTestPanChange: vi.fn(),
       onMutedChange: vi.fn(),
       onMasterVolumeChange: vi.fn(),
     }));
@@ -33,6 +32,15 @@ describe('master audio settings UI', () => {
     expect(html).toContain('step="1"');
     expect(html).toContain('aria-label="Master volume"');
     expect(html).toContain('aria-label="Mute all audio"');
+    expect(html).toContain('aria-label="Test sound position"');
+    expect(html).toContain('min="-1"');
+    expect(html).toContain('max="1"');
+    expect(html).toContain('step="0.01"');
+    expect(html).toContain('<output for="audio-test-pan">0.00</output>');
+    expect(html).toContain('Test sound: Stopped');
+    expect(html).not.toContain('Start audio');
+    expect(html).not.toContain('Pan left');
+    expect(html).not.toContain('audio=-');
   });
 
   it('saves and restores volume and mute', () => {

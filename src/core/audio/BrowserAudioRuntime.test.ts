@@ -234,6 +234,37 @@ describe('BrowserAudioRuntime', () => {
     expect(fake.stop).toHaveBeenCalledTimes(1);
   });
 
+  it('plays a character-independent test tone after unlock and keeps pan, master gain, mute, and stop connected', async () => {
+    const fake = createFakeAdapter();
+    const runtime = new BrowserAudioRuntime(() => fake.adapter);
+    const onEnded = vi.fn();
+
+    expect(runtime.playTestTone({ channelKey: 'settings:test-tone' })).toBe(false);
+    expect(await runtime.unlock('audio-test-button')).toBe(true);
+    runtime.setMasterVolume(0.35);
+    runtime.setMuted(true);
+    runtime.setMuted(false);
+    expect(runtime.playTestTone({ channelKey: 'settings:test-tone', pan: 0, onEnded })).toBe(true);
+    expect(fake.playTone).toHaveBeenCalledWith(expect.objectContaining({
+      channelKey: 'settings:test-tone',
+      durationSeconds: 1,
+      frequencyHz: 440,
+      loop: false,
+      pan: 0,
+    }));
+    expect(runtime.updateChannelPan('settings:test-tone', -1)).toBe('updated');
+    expect(runtime.updateChannelPan('settings:test-tone', 0)).toBe('updated');
+    expect(runtime.updateChannelPan('settings:test-tone', 1)).toBe('updated');
+    expect(fake.pans).toEqual([-1, 0, 1]);
+    expect(fake.gains).toEqual([1, 0.35, 0, 0.35]);
+    fake.endedCallbacks.at(-1)?.();
+    expect(onEnded).toHaveBeenCalledTimes(1);
+    expect(runtime.stopChannel('settings:test-tone')).toBe(false);
+
+    expect(runtime.playTestTone({ channelKey: 'settings:test-tone' })).toBe(true);
+    expect(runtime.stopChannel('settings:test-tone')).toBe(true);
+  });
+
   it('routes channel gain through pan and the shared ramped master gain', () => {
     const originalAudioContext = globalThis.AudioContext;
     const graph = createFakeWebAudioGraph();
@@ -251,6 +282,29 @@ describe('BrowserAudioRuntime', () => {
       expect(graph.master.gain.cancelScheduledValues).toHaveBeenCalledWith(2);
       expect(graph.master.gain.setValueAtTime).toHaveBeenCalledWith(1, 2);
       expect(graph.master.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0.5, 2.015);
+    } finally {
+      Object.defineProperty(globalThis, 'AudioContext', { configurable: true, value: originalAudioContext });
+    }
+  });
+
+  it('creates a short oscillator tone through channel gain, stereo pan, and master gain', () => {
+    const originalAudioContext = globalThis.AudioContext;
+    const graph = createFakeWebAudioGraph();
+    Object.defineProperty(globalThis, 'AudioContext', { configurable: true, value: graph.AudioContext });
+    try {
+      const adapter = createWebAudioAdapter()!;
+      const handle = adapter.playTone!({ frequencyHz: 523.25, durationSeconds: 0.75, volume: 0.2, pan: -0.5 });
+
+      expect(graph.oscillator.type).toBe('sine');
+      expect(graph.oscillator.frequency.value).toBe(523.25);
+      expect(graph.oscillator.connect).toHaveBeenCalledWith(graph.channelGain);
+      expect(graph.channelGain.connect).toHaveBeenCalledWith(graph.panner);
+      expect(graph.panner.pan.value).toBe(-0.5);
+      expect(graph.panner.connect).toHaveBeenCalledWith(graph.master);
+      expect(graph.oscillator.start).toHaveBeenCalledTimes(1);
+      expect(graph.oscillator.stop).toHaveBeenCalledWith(2.75);
+      handle.setPan?.(0.5);
+      expect(graph.panner.pan.value).toBe(0.5);
     } finally {
       Object.defineProperty(globalThis, 'AudioContext', { configurable: true, value: originalAudioContext });
     }
@@ -297,19 +351,21 @@ function createFakeAdapter(supportsPan = true) {
   const decode = vi.fn(async () => ({ decoded: true }));
   const endedCallbacks: Array<() => void> = [];
   const pans: number[] = [];
-  const play = vi.fn((): AudioPlaybackHandle => ({
+  const createHandle = (): AudioPlaybackHandle => ({
     stop,
     setOnEnded(callback) { endedCallbacks.push(callback); },
     ...(supportsPan ? { setPan(value: number) { pans.push(value); return true; } } : {}),
-  }));
+  });
+  const play = vi.fn(createHandle);
+  const playTone = vi.fn(createHandle);
   const close = vi.fn(async () => {});
   const gains: number[] = [];
   const adapter: AudioAdapter = {
-    get state() { return state; }, resume, decode, play,
+    get state() { return state; }, resume, decode, play, playTone,
     setMasterGain(value) { gains.push(value); },
     close,
   };
-  return { adapter, stop, resume, decode, play, close, gains, endedCallbacks, pans, setState(value: string) { state = value; } };
+  return { adapter, stop, resume, decode, play, playTone, close, gains, endedCallbacks, pans, setState(value: string) { state = value; } };
 }
 
 function createFakeWebAudioGraph() {
@@ -323,6 +379,7 @@ function createFakeWebAudioGraph() {
   const master = { gain: audioParam(), connect: vi.fn() };
   const channelGain = { gain: audioParam(), connect: vi.fn() };
   const source = { buffer: null, loop: false, playbackRate: { value: 1 }, connect: vi.fn(), start: vi.fn(), stop: vi.fn(), onended: null };
+  const oscillator = { type: 'sine', frequency: { value: 440 }, connect: vi.fn(), start: vi.fn(), stop: vi.fn(), onended: null };
   const panner = { pan: { value: 0 }, connect: vi.fn() };
   let gainCount = 0;
   class FakeAudioContext {
@@ -331,10 +388,11 @@ function createFakeWebAudioGraph() {
     destination = destination;
     createGain() { gainCount += 1; return gainCount === 1 ? master : channelGain; }
     createBufferSource() { return source; }
+    createOscillator() { return oscillator; }
     createStereoPanner() { return panner; }
     resume = vi.fn(async () => {});
     decodeAudioData = vi.fn(async () => ({}));
     close = vi.fn(async () => {});
   }
-  return { AudioContext: FakeAudioContext as unknown as typeof AudioContext, destination, master, channelGain, source, panner };
+  return { AudioContext: FakeAudioContext as unknown as typeof AudioContext, destination, master, channelGain, source, oscillator, panner };
 }

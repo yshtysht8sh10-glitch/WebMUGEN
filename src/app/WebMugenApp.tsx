@@ -270,7 +270,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
   const audioSettingsRef = useRef<AudioSettings>(webMugenSettingsRef.current.audio);
   const audioRuntimeRef = useRef<BrowserAudioRuntime | null>(null);
   const audioStartGateRef = useRef<AudioStartGate | null>(null);
-  const characterSoundsRef = useRef<SndDocument | null>(null);
+  const audioTestRevisionRef = useRef(0);
   const lastFrameTickTimeRef = useRef<number | null>(null);
   const frameNoRef = useRef(0);
   const runtimeHistoryRef = useRef<string[]>([]);
@@ -324,10 +324,10 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
   const [inputConfig, setInputConfigState] = useState<InputConfig>(inputConfigRef.current);
   const [runtimeSettings, setRuntimeSettingsState] = useState<RuntimeSettings>(runtimeSettingsRef.current);
   const screenSizeProfile = getScreenSizeProfile(runtimeSettings.screenSizeMode);
-  const [audioStatus, setAudioStatus] = useState<'locked' | 'unlocked' | 'unsupported'>('locked');
   const [audioMuted, setAudioMuted] = useState(audioSettingsRef.current.muted);
   const [audioMasterVolume, setAudioMasterVolume] = useState(audioSettingsRef.current.masterVolumePercent);
-  const [audioDiagnostic, setAudioDiagnostic] = useState('audio=-');
+  const [audioTestPan, setAudioTestPan] = useState(0);
+  const [audioTestStatus, setAudioTestStatus] = useState<'stopped' | 'playing' | 'unavailable'>('stopped');
   const [runtimeStartState, setRuntimeStartState] = useState<RuntimeStartState>('loading');
   const [characterPath, setCharacterPathState] = useState(webMugenSettingsRef.current.content.characterPath);
   const [cnsSourceFiles, setCnsSourceFiles] = useState<CharacterSourceFile[]>([]);
@@ -430,10 +430,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
   };
 
   useEffect(() => {
-    let active = true;
     const runtime = new BrowserAudioRuntime(undefined, (diagnostic: AudioRuntimeDiagnostic) => {
       recordAudioHistory(formatAudioRuntimeDiagnostic(diagnostic));
-      if (active) setAudioDiagnostic(`audio ${diagnostic.code}${diagnostic.sampleKey ? ` sample=${diagnostic.sampleKey}` : ''} ${diagnostic.message}`);
     });
     runtime.setMasterVolume(audioSettingsRef.current.masterVolumePercent / 100);
     runtime.setMuted(audioSettingsRef.current.muted);
@@ -442,7 +440,6 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
 
     return () => {
       recordAudioHistory(`raw.audio_lifecycle event=react_effect_cleanup runtimeInstanceId=${runtime.runtimeInstanceId}`);
-      active = false;
       audioStartGateRef.current?.dispose();
       audioStartGateRef.current = null;
       void runtime.cleanup();
@@ -497,7 +494,6 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
       audioRuntime?.stopAll();
       rendererRef.current?.dispose();
       rendererRef.current = null;
-      characterSoundsRef.current = null;
       setStateTransitionLogLines(['StateNoが変化すると、ここに遷移だけが残ります。']);
 
       const paletteNo = webMugenSettingsRef.current.content.paletteNo;
@@ -556,7 +552,6 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
       setCnsSourceFiles(character.cnsSourceFiles ?? []);
       setLoadedAir(character.air);
       setLoadedSprites(character.sprites);
-      characterSoundsRef.current = character.sounds ?? null;
       cnsCoverageRef.current = analyzeCnsCoverage(character.cns);
       setCoverageDebugLines(formatCnsCoverageDebugOverlay(cnsCoverageRef.current));
 
@@ -1186,9 +1181,6 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
           if (disposed) return;
           recordAudioHistory(`raw.audio_start_gate state=${nextState} runtimeInstanceId=${gateRuntime.runtimeInstanceId} contextState=${gateRuntime.contextState}`);
           setRuntimeStartState(nextState);
-          if (nextState === 'running' || nextState === 'audio-unavailable') {
-            setAudioStatus(gateRuntime.status === 'unlocked' ? 'unlocked' : gateRuntime.status === 'unsupported' ? 'unsupported' : 'locked');
-          }
         },
       });
       audioStartGateRef.current = gate;
@@ -1453,31 +1445,33 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
     }
   };
 
-  const unlockAudio = async () => {
+  const playAudioTestTone = async () => {
     const runtime = audioRuntimeRef.current;
-    if (!runtime) return;
-    const unlocked = await runtime.unlock();
-    setAudioStatus(unlocked ? 'unlocked' : runtime.status === 'unsupported' ? 'unsupported' : 'locked');
-  };
-
-  const testLoadedAudio = async () => {
-    const sample = characterSoundsRef.current?.samples.find((entry) => entry.format === 'wave');
-    const runtime = audioRuntimeRef.current;
-    if (!runtime || !sample) {
-      setAudioDiagnostic('audio sound_asset_missing No loaded WAV sample is available.');
+    if (!runtime || !await runtime.unlock('audio-test-button')) {
+      setAudioTestStatus('unavailable');
       return;
     }
-    await runtime.playSample(sndSampleKey(sample.group, sample.index), sample.bytes, { channelKey: 'manual:0', loop: true });
+    const revision = ++audioTestRevisionRef.current;
+    const started = runtime.playTestTone({
+      channelKey: 'settings:test-tone',
+      pan: audioTestPan,
+      onEnded: () => {
+        if (audioTestRevisionRef.current === revision) setAudioTestStatus('stopped');
+      },
+    });
+    setAudioTestStatus(started ? 'playing' : 'unavailable');
   };
 
   const stopTestAudio = () => {
-    const stopped = audioRuntimeRef.current?.stopChannel('manual:0') ?? false;
-    setAudioDiagnostic(`audio test_stop result=${stopped ? 'stopped' : 'noop'}`);
+    audioTestRevisionRef.current += 1;
+    audioRuntimeRef.current?.stopChannel('settings:test-tone');
+    setAudioTestStatus('stopped');
   };
 
-  const panTestAudio = () => {
-    const result = audioRuntimeRef.current?.updateChannelPan('manual:0', -0.75) ?? 'channel_not_found';
-    setAudioDiagnostic(`audio test_pan normalized=-0.75 result=${result}`);
+  const setAudioTestPosition = (pan: number) => {
+    const normalized = Math.max(-1, Math.min(1, pan));
+    setAudioTestPan(normalized);
+    audioRuntimeRef.current?.updateChannelPan('settings:test-tone', normalized);
   };
 
   const setAudioMute = (muted: boolean) => {
@@ -1683,14 +1677,13 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
               onCatalogReload={reloadContentCatalog}
               onInputConfigChange={setInputConfig}
               onRuntimeSettingsChange={setRuntimeSettings}
-              audioStatus={audioStatus}
               audioMuted={audioMuted}
               audioMasterVolume={audioMasterVolume}
-              audioDiagnostic={audioDiagnostic}
-              onUnlockAudio={unlockAudio}
-              onTestAudio={testLoadedAudio}
+              audioTestPan={audioTestPan}
+              audioTestStatus={audioTestStatus}
+              onTestAudio={playAudioTestTone}
               onStopTestAudio={stopTestAudio}
-              onPanTestAudio={panTestAudio}
+              onAudioTestPanChange={setAudioTestPosition}
               onAudioMutedChange={setAudioMute}
               onAudioMasterVolumeChange={setAudioVolume}
               onResetAllSettings={resetAllSettings}
@@ -1829,14 +1822,13 @@ function SettingsPanel({
   onCatalogReload,
   onInputConfigChange,
   onRuntimeSettingsChange,
-  audioStatus,
   audioMuted,
   audioMasterVolume,
-  audioDiagnostic,
-  onUnlockAudio,
+  audioTestPan,
+  audioTestStatus,
   onTestAudio,
   onStopTestAudio,
-  onPanTestAudio,
+  onAudioTestPanChange,
   onAudioMutedChange,
   onAudioMasterVolumeChange,
   onResetAllSettings,
@@ -1860,14 +1852,13 @@ function SettingsPanel({
   onCatalogReload: () => void;
   onInputConfigChange: (config: InputConfig) => void;
   onRuntimeSettingsChange: (settings: RuntimeSettings) => void;
-  audioStatus: 'locked' | 'unlocked' | 'unsupported';
   audioMuted: boolean;
   audioMasterVolume: number;
-  audioDiagnostic: string;
-  onUnlockAudio: () => void;
+  audioTestPan: number;
+  audioTestStatus: 'stopped' | 'playing' | 'unavailable';
   onTestAudio: () => void;
   onStopTestAudio: () => void;
-  onPanTestAudio: () => void;
+  onAudioTestPanChange: (pan: number) => void;
   onAudioMutedChange: (muted: boolean) => void;
   onAudioMasterVolumeChange: (volume: number) => void;
   onResetAllSettings: () => void;
@@ -1948,14 +1939,13 @@ function SettingsPanel({
         page="developer"
       /> : null}
       {activeSettingsPage === 'audio' ? <AudioSettingsPanel
-        status={audioStatus}
         muted={audioMuted}
         masterVolume={audioMasterVolume}
-        diagnostic={audioDiagnostic}
-        onUnlock={onUnlockAudio}
+        testPan={audioTestPan}
+        testStatus={audioTestStatus}
         onTest={onTestAudio}
         onStopTest={onStopTestAudio}
-        onPanTest={onPanTestAudio}
+        onTestPanChange={onAudioTestPanChange}
         onMutedChange={onAudioMutedChange}
         onMasterVolumeChange={onAudioMasterVolumeChange}
       /> : null}
@@ -2175,25 +2165,23 @@ function formatCatalogReadStatus(
 }
 
 export function AudioSettingsPanel({
-  status,
   muted,
   masterVolume,
-  diagnostic,
-  onUnlock,
+  testPan,
+  testStatus,
   onTest,
   onStopTest,
-  onPanTest,
+  onTestPanChange,
   onMutedChange,
   onMasterVolumeChange,
 }: {
-  status: 'locked' | 'unlocked' | 'unsupported';
   muted: boolean;
   masterVolume: number;
-  diagnostic: string;
-  onUnlock: () => void;
+  testPan: number;
+  testStatus: 'stopped' | 'playing' | 'unavailable';
   onTest: () => void;
   onStopTest: () => void;
-  onPanTest: () => void;
+  onTestPanChange: (pan: number) => void;
   onMutedChange: (muted: boolean) => void;
   onMasterVolumeChange: (volume: number) => void;
 }) {
@@ -2205,16 +2193,41 @@ export function AudioSettingsPanel({
           <h2>{text('Audio', '音声設定')}</h2>
           <p>{text('Control playback, volume, and test output.', '再生状態、音量、テスト出力をまとめて調整します。')}</p>
         </div>
-        <span className={`audio-status-badge ${status}`}>{text('Audio status', '音声状態')}: {text(status, status === 'locked' ? '未開始' : status === 'unlocked' ? '開始済み' : '非対応')}</span>
       </div>
       <div className="settings-card-grid audio-settings-grid">
         <section className="settings-card audio-control-card">
-          <h3>{text('Playback test', '再生テスト')}</h3>
-          <div className="settings-action-grid">
-            <button className="settings-primary-button" type="button" onClick={onUnlock}>{text('Start audio', '音声を開始')}</button>
-            <button type="button" onClick={onTest} disabled={status !== 'unlocked'}>{text('Play test sound', 'テスト音を再生')}</button>
-            <button type="button" onClick={onStopTest}>{text('Stop', '停止')}</button>
-            <button type="button" onClick={onPanTest}>{text('Pan left', '左へ移動')}</button>
+          <div className="audio-test-header">
+            <h3>{text('Playback test', '再生テスト')}</h3>
+            <span className={`audio-test-status ${testStatus}`} role="status">
+              {text('Test sound', 'テスト音')}: {text(
+                testStatus === 'playing' ? 'Playing' : testStatus === 'unavailable' ? 'Unavailable' : 'Stopped',
+                testStatus === 'playing' ? '再生中' : testStatus === 'unavailable' ? '利用できません' : '停止中',
+              )}
+            </span>
+          </div>
+          <div className="settings-action-grid audio-test-actions">
+            <button className="settings-primary-button" type="button" onClick={onTest}>{text('Play test sound', 'テスト音を再生')}</button>
+            <button type="button" onClick={onStopTest} disabled={testStatus !== 'playing'}>{text('Stop', '停止')}</button>
+          </div>
+          <div className="audio-pan-control">
+            <div className="audio-pan-header">
+              <label htmlFor="audio-test-pan">{text('Sound position', '音の位置')}</label>
+              <output htmlFor="audio-test-pan">{testPan.toFixed(2)}</output>
+            </div>
+            <div className="audio-pan-slider-row">
+              <span>{text('Left', '左')}</span>
+              <input
+                id="audio-test-pan"
+                aria-label="Test sound position"
+                type="range"
+                min={-1}
+                max={1}
+                step={0.01}
+                value={testPan}
+                onChange={(event) => onTestPanChange(Number(event.currentTarget.value))}
+              />
+              <span>{text('Right', '右')}</span>
+            </div>
           </div>
         </section>
         <section className="settings-card audio-volume-card">
@@ -2244,7 +2257,6 @@ export function AudioSettingsPanel({
           </label>
         </section>
       </div>
-      <p className="settings-diagnostic">{diagnostic}</p>
     </section>
   );
 }
