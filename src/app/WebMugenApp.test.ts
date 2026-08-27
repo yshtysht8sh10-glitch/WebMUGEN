@@ -295,11 +295,11 @@ describe('WebMugenApp runtime history', () => {
       onSelect: () => undefined, onPaletteChange: () => undefined, onPathChange: () => undefined, onReload: () => undefined,
     }));
 
-    expect(html).toContain('[WinMUGEN] Hero (hero)');
-    expect(html).toContain('[WebMUGEN] Fresh (fresh)');
-    expect(html).toContain('[WinMUGEN] Arena (arena)');
-    expect(html).toContain('[WebMUGEN] Fresh HUD (fresh-hud)');
-    expect(html).toContain('[WinMUGEN] Classic HUD (classic-hud)');
+    expect(html).toContain('[WinMUGEN] Hero');
+    expect(html).toContain('[WebMUGEN] Fresh');
+    expect(html).toContain('[WinMUGEN] Arena');
+    expect(html).toContain('[WebMUGEN] Fresh HUD');
+    expect(html).toContain('[WinMUGEN] Classic HUD');
     expect(html).toContain('aria-label="Character palette"');
     expect(html).toContain('<option value="9" selected="">p9</option>');
     expect(html).toContain('<option value="12">p12</option>');
@@ -320,7 +320,8 @@ describe('WebMugenApp runtime history', () => {
     expect(developmentHtml).toContain('External Character');
     expect(developmentHtml).toContain('External Stage');
     expect(developmentHtml).toContain('External LifeBar');
-    expect(developmentHtml).toContain('Catalog output folder');
+    expect(developmentHtml).toContain('Catalog output');
+    expect(developmentHtml).toContain('Load content list');
     expect(developmentHtml).toContain('aria-label="Catalog source location"');
     expect(developmentHtml).toContain('aria-pressed="true" class="active" type="button">Local</button>');
     expect(developmentHtml).not.toContain('Direct file path');

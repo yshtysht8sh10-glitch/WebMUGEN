@@ -60,6 +60,42 @@ try {
     $publicCatalogJson = json_decode($publicCatalog['body'], true, flags: JSON_THROW_ON_ERROR);
     assertHttpValue(1, $publicCatalogJson['version'], 'generated Catalog Runtime schema version');
     assertHttpValue(true, is_array($publicCatalogJson['items']), 'generated Catalog Runtime items');
+    $saveRevision = hash_file('sha256', $content . '/catalog.json');
+    if (!is_string($saveRevision)) throw new RuntimeException('failed to hash Catalog fixture');
+    $publicCatalogJson['items'][0]['name'] = 'Saved through GUI API';
+    $saveUrl = str_replace('action=play-url', 'action=save-catalog', $server['url']);
+    $save = catalogResponse($saveUrl, null, 'http-file-secret-value', [
+        'catalog' => $publicCatalogJson,
+        'expectedRevision' => $saveRevision,
+    ]);
+    assertHttpStatus(200, $save['status'], 'X-WebMUGEN-Token GUI Catalog save');
+    $saveJson = json_decode($save['body'], true, flags: JSON_THROW_ON_ERROR);
+    assertHttpValue(true, $saveJson['success'], 'GUI Catalog save success');
+    assertHttpValue(count($publicCatalogJson['items']), $saveJson['itemCount'], 'GUI Catalog save item count');
+    assertHttpValue('Saved through GUI API', json_decode((string)file_get_contents($content . '/catalog.json'), true, flags: JSON_THROW_ON_ERROR)['items'][0]['name'], 'GUI Catalog save updates the server file');
+    if (DIRECTORY_SEPARATOR !== '\\') {
+        clearstatcache(true, $content . '/catalog.json');
+        assertHttpValue(0644, fileperms($content . '/catalog.json') & 0777, 'GUI Catalog save permission');
+    }
+    $servedAfterSave = catalogGetResponse(str_replace('/api/catalog.php?action=play-url', '/content/catalog.json', $server['url']));
+    assertHttpValue('Saved through GUI API', json_decode($servedAfterSave['body'], true, flags: JSON_THROW_ON_ERROR)['items'][0]['name'], 'public Catalog GET exposes the GUI change');
+
+    $conflict = catalogResponse($saveUrl, null, 'http-file-secret-value', [
+        'catalog' => $publicCatalogJson,
+        'expectedRevision' => $saveRevision,
+    ]);
+    assertHttpStatus(409, $conflict['status'], 'stale GUI Catalog save conflict');
+    assertHttpValue('catalog.conflict', json_decode($conflict['body'], true, flags: JSON_THROW_ON_ERROR)['error']['code'], 'conflict response code');
+
+    $invalidCatalog = $publicCatalogJson;
+    $invalidCatalog['items'][] = $invalidCatalog['items'][0];
+    $invalid = catalogResponse($saveUrl, null, 'http-file-secret-value', [
+        'catalog' => $invalidCatalog,
+        'expectedRevision' => (string)$saveJson['revision'],
+    ]);
+    assertHttpStatus(422, $invalid['status'], 'invalid GUI Catalog rejected');
+    assertHttpValue('catalog.invalid', json_decode($invalid['body'], true, flags: JSON_THROW_ON_ERROR)['error']['code'], 'invalid GUI Catalog response code');
+    assertHttpStatus(401, catalogResponse($saveUrl, null, null, ['catalog' => $publicCatalogJson, 'expectedRevision' => (string)$saveJson['revision']])['status'], 'GUI Catalog save requires authentication');
     assertHttpStatus(401, catalogRequest($server['url'], null, null), 'missing Authorization and X-WebMUGEN-Token');
     assertHttpStatus(401, catalogRequest($server['url'], null, 'wrong-token'), 'mismatched X-WebMUGEN-Token');
     assertHttpStatus(401, catalogRequest($server['url'], 'wrong-token', 'http-file-secret-value'), 'Bearer mismatch takes priority over matching X-WebMUGEN-Token');
@@ -142,7 +178,7 @@ function catalogRequest(string $url, ?string $token = null, ?string $xToken = nu
     return catalogResponse($url, $token, $xToken)['status'];
 }
 
-function catalogResponse(string $url, ?string $token = null, ?string $xToken = null): array
+function catalogResponse(string $url, ?string $token = null, ?string $xToken = null, ?array $payload = null): array
 {
     $curl = curl_init($url);
     $headers = ['Content-Type: application/json'];
@@ -153,7 +189,7 @@ function catalogResponse(string $url, ?string $token = null, ?string $xToken = n
         CURLOPT_TIMEOUT => 2,
         CURLOPT_POST => true,
         CURLOPT_HTTPHEADER => $headers,
-        CURLOPT_POSTFIELDS => json_encode(['characterId' => 'kfm', 'stageId' => 'cyber']),
+        CURLOPT_POSTFIELDS => json_encode($payload ?? ['characterId' => 'kfm', 'stageId' => 'cyber']),
     ]);
     $body = curl_exec($curl);
     if ($body === false && curl_errno($curl) !== CURLE_COULDNT_CONNECT) {

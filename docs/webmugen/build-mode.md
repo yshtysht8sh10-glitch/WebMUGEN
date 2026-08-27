@@ -46,6 +46,7 @@ so the same artifact supports both placements without changing a domain or serve
 - [ ] Confirm the Publisher settings entry and publisher-default actions are absent.
 - [ ] Confirm Character and Stage editor/save controls are absent.
 - [ ] Confirm Content Catalog management, Catalog Generator, and Developer settings are present.
+- [ ] Confirm the Catalog API Token field and server `save-catalog` action are absent from Public Mode.
 - [ ] Confirm Runtime Debug, CNS Trace, detailed logs, collision boxes, and state history remain opt-in and work when enabled.
 - [ ] Confirm gameplay, audio, language, input configuration, and settings persistence work.
 - [ ] Confirm the Content Share URL copies and opens the selected Character and Stage.

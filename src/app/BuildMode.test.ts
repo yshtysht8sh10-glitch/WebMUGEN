@@ -20,6 +20,7 @@ describe('WebMUGEN build mode', () => {
       characterEditor: false,
       catalogManagement: true,
       catalogGenerator: true,
+      catalogServerWriter: false,
       publishDefaultsButton: false,
       runtimeDebug: true,
       cnsTrace: true,
@@ -30,7 +31,7 @@ describe('WebMUGEN build mode', () => {
       shareUrl: true,
     });
     expect(createFeatureFlags('development')).toMatchObject({
-      characterFiles: true, characterEditor: true, catalogManagement: true, catalogGenerator: true, publishDefaultsButton: true,
+      characterFiles: true, characterEditor: true, catalogManagement: true, catalogGenerator: true, catalogServerWriter: true, publishDefaultsButton: true,
       shareUrl: true,
     });
   });

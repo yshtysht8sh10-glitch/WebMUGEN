@@ -7,7 +7,7 @@ This document is a high-level inventory of WebMUGEN implementation areas. It is 
 - Content catalog Reader/Validator/Selection: `src/content/catalog/`, the `src/app/ContentCatalog.ts` facade, `public/content/catalog.json`, and `docs/webmugen/content-catalog.md`.
 - Development Catalog generation: `src/content/catalog-generator/`; separate Character/Stage/LifeBar source handles and one output handle, direct same-origin paths, kind validation, and built-in/external merging.
 - URL content selection and Share URL generation: `src/app/UrlContentSelection.ts`, the Content settings UI, and `docs/webmugen/url-settings.md`.
-- Proxy-release publication adapter: `public/api/catalog.php` and `catalog-lib.php`; authenticated fixed-root Character/Stage ZIP classification, stable `proxy-release-*` IDs, deterministic DEF selection, atomic Catalog replacement, and generated Character/Stage play URLs.
+- Proxy-release publication and Catalog administration adapter: `public/api/catalog.php` and `catalog-lib.php`; authenticated fixed-root Character/Stage ZIP classification, stable `proxy-release-*` IDs, deterministic DEF selection, revision-guarded GUI draft save, validated atomic Catalog replacement with `0644` permissions, and generated Character/Stage play URLs.
 - Separated Stage/LifeBar presentation runtimes: `src/stage/{winmugen,webmugen}`, `src/lifebar/{winmugen,webmugen}`, and `docs/webmugen/native-presentation.md`.
 
 ## Parser layer

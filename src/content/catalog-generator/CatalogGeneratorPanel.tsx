@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useUiLanguage } from '../../app/UiLanguage';
+import { BUILTIN_CONTENT_ENTRIES } from '../catalog/BuiltinContentCatalog';
 import type { ContentCatalog, ContentCatalogDocument, ContentKind } from '../catalog/ContentCatalogTypes';
+import { isCatalogDraftDirty, mergeCatalogEntries, parseCatalogDraft, removeCatalogEntry } from './CatalogDraft';
 import { loadCatalogDirectoryHandle, saveCatalogDirectoryHandle } from './CatalogDirectoryStore';
 import { generateContentCatalog, resolveCatalogDirectPath, resolveCatalogPublicPath } from './CatalogGenerator';
 import type { CatalogDirectoryHandle, CatalogDirectoryRole, CatalogGeneratorResult, CatalogSourceFile } from './CatalogGeneratorTypes';
+import { CatalogServerWriteError, readCatalogServerSnapshot, saveCatalogDraftToServer } from './CatalogServerWriter';
 import { readCatalogSourceFiles, readCatalogSourcePath } from './LocalFolderCatalogSource';
-import { downloadCatalogJson, ensureDirectoryPermission, writeCatalogToDirectory } from './CatalogWriter';
+import { downloadCatalogJson, ensureDirectoryPermission, serializeContentCatalog, writeCatalogToDirectory } from './CatalogWriter';
 
 type DirectoryPickerWindow = Window & {
   showDirectoryPicker?: (options?: { mode?: 'read' | 'readwrite' }) => Promise<CatalogDirectoryHandle>;
@@ -19,27 +22,93 @@ const DEFAULT_PUBLIC_BASES: Record<ContentKind, string> = {
 };
 
 export type CatalogGeneratorMode = 'server' | 'local';
+type CatalogSaveState = 'idle' | 'checking' | 'local-saved' | 'local-failed' | 'server-saving' | 'server-saved' | 'server-failed' | 'conflict';
 
-export function CatalogGeneratorPanel({ catalog, initialMode = 'local' }: { catalog: ContentCatalog; initialMode?: CatalogGeneratorMode }) {
+export function CatalogGeneratorPanel({
+  catalog,
+  initialMode = 'local',
+  canWriteServer = false,
+  onCatalogSaved,
+}: {
+  catalog: ContentCatalog;
+  initialMode?: CatalogGeneratorMode;
+  canWriteServer?: boolean;
+  onCatalogSaved?: () => void | Promise<void>;
+}) {
   const { text } = useUiLanguage();
   const [mode, setMode] = useState<CatalogGeneratorMode>(initialMode);
   const [directories, setDirectories] = useState<Partial<Record<CatalogDirectoryRole, CatalogDirectoryHandle>>>({});
   const [publicBases, setPublicBases] = useState(DEFAULT_PUBLIC_BASES);
   const [directDrafts, setDirectDrafts] = useState<Record<ContentKind, string>>({ character: '', stage: '', lifebar: '' });
   const [directPaths, setDirectPaths] = useState<Record<ContentKind, string[]>>({ character: [], stage: [], lifebar: [] });
+  const [draftCatalog, setDraftCatalog] = useState<ContentCatalogDocument>(() => toDocument(catalog));
+  const [savedCatalog, setSavedCatalog] = useState<ContentCatalogDocument>(() => toDocument(catalog));
+  const [serverRevision, setServerRevision] = useState<string | null>(null);
+  const lastSavedServerRevision = useRef<string | null>(null);
+  const [serverToken, setServerToken] = useState('');
+  const [saveState, setSaveState] = useState<CatalogSaveState>('idle');
   const [result, setResult] = useState<CatalogGeneratorResult | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorText, setEditorText] = useState(() => serializeContentCatalog(toDocument(catalog)));
   const [status, setStatus] = useState(initialMode === 'local'
-    ? text('Choose local source folders, then generate catalog.json.', 'ローカルの入力フォルダを選択して、catalog.jsonを生成します。')
-    : text('Add files available on this server, then generate catalog.json.', 'サーバーで公開済みのファイルを追加して、catalog.jsonを生成します。'));
+    ? text('Choose local source folders, then add external content to the Catalog draft.', 'ローカルの入力フォルダを選択し、外部コンテンツをCatalog下書きへ追加します。')
+    : text('Add files available on this server to the Catalog draft.', 'サーバーで公開済みのファイルをCatalog下書きへ追加します。'));
   const [busy, setBusy] = useState(false);
   const pickerSupported = typeof window !== 'undefined' && typeof (window as DirectoryPickerWindow).showDirectoryPicker === 'function';
+  const draftDirty = isCatalogDraftDirty(draftCatalog, savedCatalog);
+  const draftState = catalogDraftState(draftDirty, saveState, text);
+
+  useEffect(() => {
+    const next = toDocument(catalog);
+    setDraftCatalog(next);
+    setSavedCatalog(next);
+    setEditorText(serializeContentCatalog(next));
+    setResult(null);
+  }, [catalog]);
+
+  useEffect(() => {
+    if (mode !== 'server' || !canWriteServer) return undefined;
+    let active = true;
+    setSaveState('checking');
+    setStatus(text('Checking the current server Catalog revision...', 'サーバー上のCatalog更新状態を確認しています…'));
+    void readCatalogServerSnapshot(catalog.sourcePath ?? '/content/catalog.json').then((snapshot) => {
+      if (!active) return;
+      if (isCatalogDraftDirty(snapshot.catalog, savedCatalog)) {
+        setServerRevision(null);
+        setSaveState('conflict');
+        setStatus(text(
+          'The server Catalog differs from the loaded draft base. Reload the content list before saving.',
+          'サーバー上のCatalogが下書きの読込元から更新されています。保存前にコンテンツ一覧を再読込してください。',
+        ));
+        return;
+      }
+      setServerRevision(snapshot.revision);
+      if (snapshot.revision === lastSavedServerRevision.current) {
+        setSaveState('server-saved');
+        setStatus(text(
+          `Server save succeeded: ${snapshot.catalog.items.length} items are applied to catalog.json.`,
+          `サーバー保存成功: ${snapshot.catalog.items.length}件がcatalog.jsonに反映されています。`,
+        ));
+        return;
+      }
+      setSaveState('idle');
+      setStatus(text('The server Catalog matches the loaded draft base.', 'サーバー上のCatalogは下書きの読込元と一致しています。'));
+    }).catch((error) => {
+      if (!active) return;
+      setServerRevision(null);
+      setSaveState('server-failed');
+      setStatus(text('Server Catalog check failed: ', 'サーバーCatalogの確認に失敗しました: ') + errorMessage(error));
+    });
+    return () => { active = false; };
+  }, [mode, canWriteServer, catalog.sourcePath, text]);
 
   const changeMode = (nextMode: CatalogGeneratorMode) => {
     setMode(nextMode);
     setResult(null);
+    setSaveState('idle');
     setStatus(nextMode === 'local'
-      ? text('Choose local source folders, then generate catalog.json.', 'ローカルの入力フォルダを選択して、catalog.jsonを生成します。')
-      : text('Add files available on this server, then generate catalog.json.', 'サーバーで公開済みのファイルを追加して、catalog.jsonを生成します。'));
+      ? text('Choose local source folders, then add external content to the Catalog draft.', 'ローカルの入力フォルダを選択し、外部コンテンツをCatalog下書きへ追加します。')
+      : text('Add files available on this server to the Catalog draft.', 'サーバーで公開済みのファイルをCatalog下書きへ追加します。'));
   };
 
   useEffect(() => {
@@ -80,7 +149,7 @@ export function CatalogGeneratorPanel({ catalog, initialMode = 'local' }: { cata
     setResult(null);
   };
 
-  const generate = async () => {
+  const addExternalContent = async () => {
     setBusy(true);
     setStatus(text('Scanning the three sources and validating direct paths...', '3種の入力元を走査し、直接指定パスを検証しています…'));
     try {
@@ -103,16 +172,17 @@ export function CatalogGeneratorPanel({ catalog, initialMode = 'local' }: { cata
           });
         }
       }
-      const preserved = catalog.entries.filter((entry) => (
-        entry.source === 'builtin'
-        || entry.path.startsWith('builtin:')
-        || (mode === 'local' ? !directories[entry.kind] : directPaths[entry.kind].length === 0)
-      ));
-      const generated = generateContentCatalog(files, toDocument(catalog), preserved);
+      const replacedKinds = new Set(SOURCE_KINDS.filter((kind) => (
+        mode === 'local' ? Boolean(directories[kind]) : directPaths[kind].length > 0
+      )));
+      const preserved = draftCatalog.items.filter((entry) => entry.source !== 'external' || !replacedKinds.has(entry.kind));
+      const generated = generateContentCatalog(files, draftCatalog, preserved);
       setResult(generated);
+      setDraftCatalog(generated.catalog);
+      setEditorText(serializeContentCatalog(generated.catalog));
       setStatus(text(
-        `Generation completed: ${generated.items.length} total, ${generated.excluded.length} excluded.`,
-        `生成完了: 内蔵を含む${generated.items.length}件、${generated.excluded.length}件除外。`,
+        `External content updated: ${generated.items.length} total, ${generated.excluded.length} excluded.`,
+        `外部コンテンツを反映しました: 合計${generated.items.length}件、${generated.excluded.length}件除外。`,
       ));
     } catch (error) {
       setStatus(text('Catalog generation failed: ', 'Catalog生成に失敗しました: ') + errorMessage(error));
@@ -121,17 +191,93 @@ export function CatalogGeneratorPanel({ catalog, initialMode = 'local' }: { cata
     }
   };
 
+  const addBuiltInContent = () => {
+    const next = mergeCatalogEntries(draftCatalog, BUILTIN_CONTENT_ENTRIES);
+    setDraftCatalog(next);
+    setEditorText(serializeContentCatalog(next));
+    setResult(null);
+    setStatus(text(
+      `Built-in content is present in the Catalog (${BUILTIN_CONTENT_ENTRIES.length} entries).`,
+      `内蔵コンテンツ${BUILTIN_CONTENT_ENTRIES.length}件をCatalogへ追加しました。`,
+    ));
+  };
+
+  const deleteItem = (id: string) => {
+    const next = removeCatalogEntry(draftCatalog, id);
+    setDraftCatalog(next);
+    setEditorText(serializeContentCatalog(next));
+    setResult(null);
+    setStatus(text(`Removed ${id} from the Catalog draft.`, `${id} をCatalog下書きから削除しました。`));
+  };
+
+  const applyEditor = () => {
+    try {
+      const next = parseCatalogDraft(editorText, catalog.sourcePath ?? '/content/catalog.json');
+      setDraftCatalog(next);
+      setEditorText(serializeContentCatalog(next));
+      setResult(null);
+      setStatus(text('The edited JSON was applied to the Catalog draft.', '編集したJSONをCatalog下書きへ反映しました。'));
+    } catch (error) {
+      setStatus(text('Catalog JSON is invalid: ', 'Catalog JSONが不正です: ') + errorMessage(error));
+    }
+  };
+
   const writeCatalog = async () => {
     const output = directories.output;
-    if (!output || !result) return;
+    if (!output) return;
     setBusy(true);
     try {
-      const outcome = await writeCatalogToDirectory(output, result.catalog);
-      setStatus(outcome === 'written'
-        ? text('catalog.json was written to the Catalog output folder.', 'Catalog出力フォルダへcatalog.jsonを書き込みました。')
-        : text('Write permission is unavailable. Download catalog.json instead.', '書込権限がありません。catalog.jsonをダウンロードしてください。'));
+      const outcome = await writeCatalogToDirectory(output, draftCatalog);
+      if (outcome === 'written') {
+        setSavedCatalog(draftCatalog);
+        setSaveState('local-saved');
+        setStatus(text('The draft was applied to catalog.json.', '下書きをcatalog.jsonに反映しました。'));
+      } else {
+        setSaveState('local-failed');
+        setStatus(text('Write permission is unavailable. Download catalog.json instead.', '書込権限がありません。catalog.jsonをダウンロードしてください。'));
+      }
     } catch (error) {
+      setSaveState('local-failed');
       setStatus(text('Catalog write failed: ', 'Catalog書込に失敗しました: ') + errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const writeServerCatalog = async () => {
+    const token = serverToken.trim();
+    if (!token) {
+      setSaveState('server-failed');
+      setStatus(text('Enter the Catalog API Token before saving.', '保存前にCatalog API Tokenを入力してください。'));
+      return;
+    }
+    if (!serverRevision) {
+      setSaveState('conflict');
+      setStatus(text('Reload the content list before saving to the server.', 'サーバーへ保存する前にコンテンツ一覧を再読込してください。'));
+      return;
+    }
+    setBusy(true);
+    setSaveState('server-saving');
+    setServerToken('');
+    setStatus(text('Saving the Catalog draft through the authenticated server API...', '認証付きCatalog API経由で下書きを保存しています…'));
+    try {
+      const saved = await saveCatalogDraftToServer(draftCatalog, serverRevision, token);
+      lastSavedServerRevision.current = saved.revision;
+      setServerRevision(saved.revision);
+      setSavedCatalog(draftCatalog);
+      await onCatalogSaved?.();
+      setSaveState('server-saved');
+      setStatus(text(
+        `Server save succeeded: ${saved.itemCount} items were applied to catalog.json.`,
+        `サーバー保存成功: ${saved.itemCount}件をcatalog.jsonに反映しました。`,
+      ));
+    } catch (error) {
+      const conflict = error instanceof CatalogServerWriteError && error.code === 'catalog.conflict';
+      if (conflict) setServerRevision(null);
+      setSaveState(conflict ? 'conflict' : 'server-failed');
+      setStatus(conflict
+        ? text('Server save conflict: reload the content list before retrying.', 'サーバー保存競合: コンテンツ一覧を再読込してからやり直してください。')
+        : text('Server save failed: ', 'サーバー保存失敗: ') + errorMessage(error));
     } finally {
       setBusy(false);
     }
@@ -143,8 +289,8 @@ export function CatalogGeneratorPanel({ catalog, initialMode = 'local' }: { cata
         <div>
           <h3>{text('Generate content list', 'コンテンツ一覧を生成')}</h3>
           <p>{text(
-            'Choose separate external Character, Stage, and LifeBar sources. Built-in WebMUGEN items are retained in the generated Catalog.',
-            '外部Character・Stage・LifeBarの入力元を個別に指定します。WebMUGEN内蔵項目は生成Catalogに保持されます。',
+            'Choose separate external Character, Stage, and LifeBar sources, then manage the Catalog draft before saving it.',
+            '外部Character・Stage・LifeBarの入力元を個別に指定し、保存前にCatalog下書きを確認・編集します。',
           )}</p>
         </div>
       </div>
@@ -160,15 +306,20 @@ export function CatalogGeneratorPanel({ catalog, initialMode = 'local' }: { cata
           </button>
         </div>
         <small>{mode === 'local'
-          ? text('Scan folders on this computer and write the result locally.', 'このPCのフォルダを走査し、生成結果をローカルへ保存します。')
-          : text('Read only files already published under this WebMUGEN origin.', 'このWebMUGENと同一オリジンで公開済みのファイルだけを読み込みます。')}</small>
+          ? text(
+            'Scan folders on this computer and save locally. Browsers disclose the complete folder name, not its absolute OS path.',
+            'このPCのフォルダを走査してローカルへ保存します。ブラウザはフォルダ名を開示しますが、OS上の絶対パスは開示しません。',
+          )
+          : canWriteServer
+            ? text('Read published files and apply the draft through the authenticated Catalog API.', '公開済みファイルを読み込み、認証付きCatalog API経由で下書きを反映します。')
+            : text('Read only files already published under this WebMUGEN origin.', 'このWebMUGENと同一オリジンで公開済みのファイルだけを読み込みます。')}</small>
       </div>
 
       <div className="catalog-source-grid">
         {SOURCE_KINDS.map((kind) => <section className="catalog-source-card" key={kind}>
           <h4>{text(roleLabel(kind, 'en'), roleLabel(kind, 'ja'))}</h4>
-          {mode === 'local' ? <><p>{directories[kind]
-            ? text(`Selected folder: ${directories[kind]!.name}`, `選択中: ${directories[kind]!.name}`)
+          {mode === 'local' ? <><p className="catalog-folder-path" title={directories[kind]?.name}>{directories[kind]
+            ? text(`Selected folder: ${directories[kind]!.name}`, `選択中のフォルダ: ${directories[kind]!.name}`)
             : text('No local folder selected.', 'ローカルフォルダ未選択')}</p>
           <button disabled={busy || !pickerSupported} onClick={() => void chooseFolder(kind)} type="button">
             {text('Choose folder', 'フォルダを選択')}
@@ -202,21 +353,72 @@ export function CatalogGeneratorPanel({ catalog, initialMode = 'local' }: { cata
         </section>)}
       </div>
 
-      {mode === 'local' ? <section className="catalog-output-card">
-        <div>
-          <h4>{text('Catalog output folder', 'Catalog出力フォルダ')}</h4>
-          <p>{directories.output
-            ? text(`Selected folder: ${directories.output.name}`, `選択中: ${directories.output.name}`)
-            : text('Optional. Without it, use the download button.', '任意です。未指定の場合はダウンロードを使用します。')}</p>
+      <section className={`catalog-output-card${draftDirty ? ' draft-dirty' : ''}`}>
+        <div className="catalog-output-heading">
+          <div>
+            <h4>{text('Catalog output', 'Catalog出力')}</h4>
+            <p>{text(
+              'Add external or built-in content to the draft. Review it, then save or download catalog.json.',
+              '外部または内蔵コンテンツを下書きへ追加し、確認後にcatalog.jsonを保存またはダウンロードします。',
+            )}</p>
+          </div>
+          <div className="catalog-draft-state" aria-live="polite">
+            <strong>{text(`${draftCatalog.items.length} items`, `${draftCatalog.items.length}件`)}</strong>
+            <span className={draftState.tone}>{draftState.label}</span>
+          </div>
         </div>
-        <button disabled={busy || !pickerSupported} onClick={() => void chooseFolder('output')} type="button">{text('Choose output folder', '出力フォルダを選択')}</button>
-      </section> : null}
+        {mode === 'local' ? <div className="catalog-output-folder-row">
+          <div>
+            <span>{text('Output folder', '出力フォルダ')}</span>
+            <p className="catalog-folder-path" title={directories.output?.name}>{directories.output
+              ? text(`Selected folder: ${directories.output.name}`, `選択中のフォルダ: ${directories.output.name}`)
+              : text('No output folder selected. Download remains available.', '出力フォルダ未選択。ダウンロードは利用できます。')}</p>
+          </div>
+          <button disabled={busy || !pickerSupported} onClick={() => void chooseFolder('output')} type="button">{text('Choose output folder', '出力フォルダを選択')}</button>
+        </div> : canWriteServer ? <div className="catalog-server-auth">
+          <label htmlFor="catalog-api-token">
+            <span>{text('Catalog API Token', 'Catalog API Token')}</span>
+            <input
+              id="catalog-api-token"
+              aria-label="Catalog API Token"
+              autoComplete="off"
+              disabled={busy}
+              type="password"
+              value={serverToken}
+              onChange={(event) => setServerToken(event.currentTarget.value)}
+            />
+          </label>
+          <small>{text(
+            'Used only for this save request. It is not stored in settings, localStorage, URLs, or logs.',
+            'この保存リクエストだけに使用し、設定・localStorage・URL・ログには保存しません。',
+          )}</small>
+        </div> : null}
 
-      <div className="catalog-generator-actions">
-        <button disabled={busy} onClick={() => void generate()} type="button">{text('Generate Catalog', 'Catalogを生成')}</button>
-        {mode === 'local' ? <button disabled={busy || !result || !directories.output} onClick={() => void writeCatalog()} type="button">{text('Write catalog.json', 'catalog.jsonを書き戻す')}</button> : null}
-        <button disabled={!result} onClick={() => result && downloadCatalogJson(result.catalog)} type="button">{text('Download catalog.json', 'catalog.jsonをダウンロード')}</button>
-      </div>
+        <details className="catalog-item-manager">
+          <summary>{text('Review or remove Catalog items', 'Catalog項目を確認・削除')} ({draftCatalog.items.length})</summary>
+          <ul>{draftCatalog.items.map((entry) => <li key={entry.id}>
+            <span><strong>{entry.name}</strong><code>{entry.id} · {entry.kind} · {entry.path}</code></span>
+            <button aria-label={`Remove ${entry.id}`} onClick={() => deleteItem(entry.id)} type="button">{text('Remove', '削除')}</button>
+          </li>)}</ul>
+        </details>
+
+        {editorOpen ? <div className="catalog-json-editor">
+          <label htmlFor="catalog-json-draft">{text('catalog.json text editor', 'catalog.jsonテキストエディター')}</label>
+          <textarea id="catalog-json-draft" value={editorText} onChange={(event) => setEditorText(event.currentTarget.value)} spellCheck={false} />
+          <div><button onClick={applyEditor} type="button">{text('Apply JSON to draft', 'JSONを下書きへ反映')}</button></div>
+        </div> : null}
+
+        <div className="catalog-draft-actions">
+          <button className="catalog-draft-action" disabled={busy} onClick={() => void addExternalContent()} type="button">{text('Add external content to draft', '下書きに外部コンテンツを追加')}</button>
+          <button className="catalog-draft-action" disabled={busy} onClick={addBuiltInContent} type="button">{text('Add built-in content to draft', '下書きに内蔵コンテンツを追加')}</button>
+          <button className="catalog-draft-action" onClick={() => setEditorOpen((open) => !open)} type="button">{editorOpen ? text('Close draft text editor', '下書きのテキスト編集を閉じる') : text('Edit draft as JSON', '下書きをJSONで編集')}</button>
+        </div>
+        <div className="catalog-output-actions">
+          <button className="catalog-download-button" onClick={() => downloadCatalogJson(draftCatalog)} type="button">{text('Download draft as catalog.json', '下書きをcatalog.jsonとしてダウンロード')}</button>
+          {mode === 'local' ? <button className={`catalog-apply-button${draftDirty ? ' pending' : ''}`} disabled={busy || !directories.output} onClick={() => void writeCatalog()} type="button">{text('Apply draft to catalog.json', '下書きをcatalog.jsonに反映')}</button> : null}
+          {mode === 'server' && canWriteServer ? <button className={`catalog-apply-button${draftDirty ? ' pending' : ''}`} disabled={busy || saveState === 'checking' || !serverRevision} onClick={() => void writeServerCatalog()} type="button">{text('Apply draft to catalog.json', '下書きをcatalog.jsonに反映')}</button> : null}
+        </div>
+      </section>
       {mode === 'local' && !pickerSupported ? <p className="catalog-generator-warning">{text(
         'Folder selection is not supported in this browser. Switch to Server to add same-origin file paths, or use a supported browser.',
         'このブラウザはフォルダ選択に対応していません。サーバーへ切り替えて同一オリジンのファイルを追加するか、対応ブラウザを使用してください。',
@@ -254,6 +456,22 @@ function roleLabel(role: CatalogDirectoryRole, language: 'en' | 'ja'): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function catalogDraftState(
+  draftDirty: boolean,
+  saveState: CatalogSaveState,
+  text: (english: string, japanese: string) => string,
+): { label: string; tone: 'neutral' | 'pending' | 'saved' | 'error' } {
+  if (saveState === 'checking') return { label: text('Checking server...', 'サーバー確認中…'), tone: 'neutral' };
+  if (saveState === 'server-saving') return { label: text('Saving to server...', 'サーバーへ保存中…'), tone: 'pending' };
+  if (saveState === 'conflict') return { label: text('Server conflict', 'サーバー更新と競合'), tone: 'error' };
+  if (saveState === 'server-failed') return { label: text('Server save failed', 'サーバー保存失敗'), tone: 'error' };
+  if (saveState === 'local-failed') return { label: text('Local save failed', 'ローカル保存失敗'), tone: 'error' };
+  if (draftDirty) return { label: text('Unapplied changes', '未反映の変更あり'), tone: 'pending' };
+  if (saveState === 'server-saved') return { label: text('Server save succeeded', 'サーバー保存成功'), tone: 'saved' };
+  if (saveState === 'local-saved') return { label: text('Applied to catalog.json', 'catalog.jsonへ反映済み'), tone: 'saved' };
+  return { label: text('Same as loaded Catalog', '読込Catalogと同じ'), tone: 'neutral' };
 }
 
 function toDocument(catalog: ContentCatalog): ContentCatalogDocument {

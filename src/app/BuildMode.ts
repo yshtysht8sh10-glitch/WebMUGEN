@@ -6,6 +6,7 @@ export type WebMugenFeatureFlags = {
   characterEditor: boolean;
   catalogManagement: boolean;
   catalogGenerator: boolean;
+  catalogServerWriter: boolean;
   stageEditor: boolean;
   publishDefaultsButton: boolean;
   runtimeDebug: boolean;
@@ -30,6 +31,7 @@ export function createFeatureFlags(buildMode: WebMugenBuildMode): WebMugenFeatur
     characterEditor: development,
     catalogManagement: true,
     catalogGenerator: true,
+    catalogServerWriter: development,
     stageEditor: development,
     publishDefaultsButton: development,
     runtimeDebug: true,

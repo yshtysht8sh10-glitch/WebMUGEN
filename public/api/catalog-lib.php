@@ -476,6 +476,45 @@ function webMugenReadCatalog(string $path): array
     return $decoded;
 }
 
+function webMugenCatalogRevision(string $path): string
+{
+    if (!is_file($path) || !is_readable($path)) throw new RuntimeException('Catalog file is not readable.', 500);
+    $revision = hash_file('sha256', $path);
+    if (!is_string($revision)) throw new RuntimeException('Catalog revision could not be calculated.', 500);
+    return $revision;
+}
+
+function webMugenSaveCatalog(array $config, mixed $catalog, string $expectedRevision): array
+{
+    if (preg_match('/^[a-f0-9]{64}$/', $expectedRevision) !== 1) {
+        throw new RuntimeException('expectedRevision must be a SHA-256 hash.', 400);
+    }
+    if (!is_array($catalog)) throw new RuntimeException('Catalog draft is required.', 422);
+    try {
+        webMugenValidateCatalog($catalog);
+    } catch (RuntimeException $error) {
+        throw new RuntimeException($error->getMessage(), 422, $error);
+    }
+
+    $catalogPath = (string)$config['catalogPath'];
+    if (!hash_equals($expectedRevision, webMugenCatalogRevision($catalogPath))) {
+        throw new RuntimeException('Catalog changed after this draft was loaded. Reload before saving.', 409);
+    }
+    webMugenWriteCatalogAtomic(
+        $catalogPath,
+        $catalog,
+        static function (string $temporaryPath, string $finalPath) use ($expectedRevision): void {
+            if (!hash_equals($expectedRevision, webMugenCatalogRevision($finalPath))) {
+                throw new RuntimeException('Catalog changed while this draft was being saved. Reload before retrying.', 409);
+            }
+        },
+    );
+    return [
+        'revision' => webMugenCatalogRevision($catalogPath),
+        'itemCount' => count($catalog['items']),
+    ];
+}
+
 function webMugenValidateCatalog(mixed $catalog): void
 {
     if (!is_array($catalog) || ($catalog['version'] ?? null) !== 1 || !isset($catalog['items']) || !is_array($catalog['items'])) {
@@ -485,13 +524,36 @@ function webMugenValidateCatalog(mixed $catalog): void
     foreach ($catalog['items'] as $item) {
         if (!is_array($item)) throw new RuntimeException('Catalog item must be an object.', 500);
         $id = (string)($item['id'] ?? '');
+        $name = trim((string)($item['name'] ?? ''));
+        $kind = (string)($item['kind'] ?? '');
+        $engine = (string)($item['engine'] ?? '');
         $path = (string)($item['path'] ?? '');
         if (!preg_match('/^[a-z0-9][a-z0-9_-]{0,63}$/i', $id)) throw new RuntimeException('Catalog item has an invalid ID.', 500);
         if (isset($ids[strtolower($id)])) throw new RuntimeException('Catalog contains a duplicate ID.', 500);
-        if (!isset($item['name'], $item['kind'], $item['engine']) || trim((string)$item['name']) === '') throw new RuntimeException('Catalog item is incomplete.', 500);
-        if (str_contains(str_replace('\\', '/', $path), '/../') || str_contains($path, '://')) throw new RuntimeException('Catalog item has an unsafe path.', 500);
+        $nameLength = function_exists('mb_strlen') ? mb_strlen($name, 'UTF-8') : strlen($name);
+        if ($name === '' || $nameLength > 120) throw new RuntimeException('Catalog item has an invalid name.', 500);
+        if (!in_array($kind, ['character', 'stage', 'lifebar'], true)) throw new RuntimeException('Catalog item has an unknown kind.', 500);
+        if (!in_array($engine, ['winmugen', 'webmugen'], true)) throw new RuntimeException('Catalog item has an unknown engine.', 500);
+        if (isset($item['source']) && !in_array($item['source'], ['builtin', 'external'], true)) throw new RuntimeException('Catalog item has an unknown source.', 500);
+        if (!webMugenCatalogItemPathIsValid($path, $kind, $engine)) throw new RuntimeException('Catalog item has an invalid path.', 500);
         $ids[strtolower($id)] = true;
     }
+}
+
+function webMugenCatalogItemPathIsValid(string $path, string $kind, string $engine): bool
+{
+    $normalized = str_replace('\\', '/', trim($path));
+    if ($normalized === '' || str_contains($normalized, '://') || str_starts_with($normalized, '//')) return false;
+    foreach (explode('/', $normalized) as $part) {
+        if ($part === '.' || $part === '..') return false;
+    }
+    $lower = strtolower($normalized);
+    if ($engine === 'webmugen') {
+        return str_starts_with($normalized, 'builtin:' . $kind . ':')
+            || str_ends_with($lower, '.json');
+    }
+    if ($kind === 'lifebar') return str_ends_with($lower, '.def');
+    return str_ends_with($lower, '.def') || str_ends_with($lower, '.zip');
 }
 
 function webMugenWriteCatalogAtomic(

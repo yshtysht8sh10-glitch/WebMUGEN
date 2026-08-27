@@ -86,6 +86,41 @@ try {
         'Stage play URL uses the configured default Character',
     );
 
+    $draft = webMugenReadCatalog($catalogPath);
+    $draft["items"][0]["name"] = 'Edited in GUI';
+    $draftRevision = webMugenCatalogRevision($catalogPath);
+    $savedDraft = webMugenSaveCatalog($config, $draft, $draftRevision);
+    assertSame(count($draft['items']), $savedDraft['itemCount'], 'GUI draft save reports the complete item count');
+    assertSame('Edited in GUI', webMugenReadCatalog($catalogPath)['items'][0]['name'], 'GUI draft save replaces the server Catalog');
+    assertSame(webMugenCatalogRevision($catalogPath), $savedDraft['revision'], 'GUI draft save returns the written revision');
+    if (DIRECTORY_SEPARATOR !== '\\') {
+        clearstatcache(true, $catalogPath);
+        assertSame(0644, fileperms($catalogPath) & 0777, 'GUI draft save keeps the Catalog publicly readable');
+    }
+
+    $beforeInvalidDraft = (string)file_get_contents($catalogPath);
+    $duplicateDraft = $draft;
+    $duplicateDraft['items'][] = $duplicateDraft['items'][0];
+    try {
+        webMugenSaveCatalog($config, $duplicateDraft, webMugenCatalogRevision($catalogPath));
+        throw new RuntimeException('expected duplicate draft rejection');
+    } catch (RuntimeException $error) {
+        assertSame(422, $error->getCode(), 'duplicate GUI draft is rejected as invalid');
+    }
+    assertSame($beforeInvalidDraft, (string)file_get_contents($catalogPath), 'invalid GUI draft leaves the Catalog unchanged');
+
+    $staleRevision = webMugenCatalogRevision($catalogPath);
+    $newerCatalog = webMugenReadCatalog($catalogPath);
+    $newerCatalog['items'][0]['name'] = 'Changed by another publisher';
+    webMugenWriteCatalogAtomic($catalogPath, $newerCatalog);
+    try {
+        webMugenSaveCatalog($config, $draft, $staleRevision);
+        throw new RuntimeException('expected stale GUI draft conflict');
+    } catch (RuntimeException $error) {
+        assertSame(409, $error->getCode(), 'stale GUI draft is rejected as a conflict');
+    }
+    assertSame('Changed by another publisher', webMugenReadCatalog($catalogPath)['items'][0]['name'], 'conflict keeps the newer server Catalog');
+
     foreach (['../uploaded_938472.zip', 'sub/uploaded_938472.zip', 'sub\\uploaded_938472.zip', 'https://example.test/fighter.zip'] as $unsafeArchive) {
         try {
             webMugenPublicationArchivePath($config, $unsafeArchive);

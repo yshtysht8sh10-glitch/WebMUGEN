@@ -100,9 +100,9 @@ describe('Content Catalog Reader and Validator', () => {
 
   it('labels selectable content with its execution engine', () => {
     expect(formatCatalogEntryLabel({ id: 'fresh', name: 'Fresh', kind: 'stage', engine: 'webmugen', path: 'builtin:stage:fresh' }))
-      .toBe('[WebMUGEN] Fresh (fresh)');
+      .toBe('[WebMUGEN] Fresh');
     expect(formatCatalogEntryLabel({ id: 'arena', name: 'Arena', kind: 'stage', engine: 'winmugen', path: '/stages/arena.def' }))
-      .toBe('[WinMUGEN] Arena (arena)');
+      .toBe('[WinMUGEN] Arena');
   });
 
   it('rejects an unknown built-in/external source marker', () => {

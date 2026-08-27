@@ -1696,6 +1696,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
               showDeveloperRuntimeSettings={WEBMUGEN_FEATURES.runtimeDebug}
               canManageCatalog={WEBMUGEN_FEATURES.catalogManagement}
               canGenerateCatalog={WEBMUGEN_FEATURES.catalogGenerator}
+              canWriteCatalogServer={WEBMUGEN_FEATURES.catalogServerWriter}
               canShareUrl={WEBMUGEN_FEATURES.shareUrl}
             />
           </section>
@@ -1841,6 +1842,7 @@ function SettingsPanel({
   showDeveloperRuntimeSettings,
   canManageCatalog,
   canGenerateCatalog,
+  canWriteCatalogServer,
   canShareUrl,
 }: {
   contentCatalog: ContentCatalog;
@@ -1871,6 +1873,7 @@ function SettingsPanel({
   showDeveloperRuntimeSettings: boolean;
   canManageCatalog: boolean;
   canGenerateCatalog: boolean;
+  canWriteCatalogServer: boolean;
   canShareUrl: boolean;
 }) {
   const { text } = useUiLanguage();
@@ -1917,6 +1920,7 @@ function SettingsPanel({
         selectionSource={contentSelectionSource}
         canManage={canManageCatalog}
         canGenerate={canGenerateCatalog}
+        canWriteServer={canWriteCatalogServer}
         canShare={canShareUrl}
         onSelect={onCatalogSelectionChange}
         onPaletteChange={onCharacterPaletteChange}
@@ -1968,6 +1972,7 @@ export function ContentCatalogPanel({
   selectionSource,
   canManage,
   canGenerate,
+  canWriteServer = false,
   canShare = true,
   shareUrlBase,
   onSelect,
@@ -1981,6 +1986,7 @@ export function ContentCatalogPanel({
   selectionSource: { character: ContentSelectionSource; stage: ContentSelectionSource };
   canManage: boolean;
   canGenerate: boolean;
+  canWriteServer?: boolean;
   canShare?: boolean;
   shareUrlBase?: UrlContentSelectionBase;
   onSelect: (kind: 'character' | 'stage' | 'lifebar', id: string) => void;
@@ -2065,7 +2071,7 @@ export function ContentCatalogPanel({
       {canManage ? <>
         <section className="content-settings-group content-list-group">
           <div className="settings-subsection-header">
-            <h3>{text('Content list', 'コンテンツ一覧')}</h3>
+            <h3>{text('Load content list', 'コンテンツ一覧を読込')}</h3>
             <p>{text('Runtime reads this validated JSON file and never scans its folders.', 'Runtimeは検証済みのJSONファイルを読み込むだけで、フォルダ走査は行いません。')}</p>
           </div>
           <div className="catalog-management-row">
@@ -2097,7 +2103,7 @@ export function ContentCatalogPanel({
             </li>)}</ul>
           </details> : null}
         </section>
-        {canGenerate ? <CatalogGeneratorPanel catalog={catalog} /> : null}
+        {canGenerate ? <CatalogGeneratorPanel catalog={catalog} canWriteServer={canWriteServer} onCatalogSaved={onReload} /> : null}
       </> : null}
     </section>
   );
@@ -2128,7 +2134,7 @@ export function ContentShareUrl({
   return (
     <div className="content-share-url">
       <div className="settings-subsection-header">
-        <h3>{text('Share URL', '共有URL')}</h3>
+        <h4>{text('Share URL', '共有URL')}</h4>
         <p>{text(
           'Open the game with the currently selected Character and Stage.',
           '現在選択中のCharacterとStageでゲームを開くURLです。',

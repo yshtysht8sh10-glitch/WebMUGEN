@@ -65,6 +65,17 @@ try {
             'stagePath' => $result['entry']['path'],
             'playUrl' => $result['playUrl'],
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    } elseif ($action === 'save-catalog') {
+        $result = webMugenSaveCatalog(
+            $config,
+            $payload['catalog'] ?? null,
+            (string)($payload['expectedRevision'] ?? ''),
+        );
+        echo json_encode([
+            'success' => true,
+            'revision' => $result['revision'],
+            'itemCount' => $result['itemCount'],
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     } elseif ($action === 'rebuild') {
         $result = webMugenRebuildCatalog($config);
         echo json_encode(['success' => true, 'registered' => count($result['entries']), 'excluded' => $result['excluded']], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
@@ -88,8 +99,12 @@ try {
 function webMugenErrorCode(Throwable $error, int $status, string $action = ''): string
 {
     if ($status === 401) return 'auth.failed';
+    if ($status === 409) return 'catalog.conflict';
     if ($status === 404) return 'not_found';
-    if ($status === 422) return $action === 'publish-stage' ? 'stage.invalid' : 'character.invalid';
+    if ($status === 422) {
+        if ($action === 'save-catalog') return 'catalog.invalid';
+        return $action === 'publish-stage' ? 'stage.invalid' : 'character.invalid';
+    }
     if ($status === 405) return 'method.invalid';
     return 'catalog.failed';
 }

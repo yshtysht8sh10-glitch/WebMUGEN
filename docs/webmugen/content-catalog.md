@@ -1,6 +1,6 @@
 # Content Catalog
 
-Updated: 2026-08-23
+Updated: 2026-08-27
 
 ## Purpose and architecture
 
@@ -74,8 +74,8 @@ URL Character and Stage IDs are accepted only when an entry of the correct kind 
 
 The Generator starts with a **Server / Local** source-location switch and renders only the controls used by the selected workflow:
 
-- **Local:** uses `showDirectoryPicker()` when supported. Independently choose external Character, Stage, and LifeBar folders; any source may remain unset. The Generator recursively reads candidates and maps their relative paths to the default published bases `/chars`, `/stages`, and `/lifebars`. An optional output folder enables direct `catalog.json` writeback; download remains available as a fallback.
-- **Server:** accepts same-origin files that are already publicly reachable by WebMUGEN. Set the published URL base for each kind and add a file name, relative path, or absolute same-origin path. For example, `itoko.zip` under `/chars` resolves to `/chars/itoko.zip`. Server mode generates a downloadable Catalog and does not expose local folder pickers or output-folder writeback.
+- **Local:** uses `showDirectoryPicker()` when supported. Independently choose external Character, Stage, and LifeBar folders; any source may remain unset. The Generator recursively reads candidates and maps their relative paths to the default published bases `/chars`, `/stages`, and `/lifebars`. An optional output folder enables direct `catalog.json` save; download remains available as a fallback.
+- **Server:** accepts same-origin files that are already publicly reachable by WebMUGEN. Set the published URL base for each kind and add a file name, relative path, or absolute same-origin path. For example, `itoko.zip` under `/chars` resolves to `/chars/itoko.zip`. Development Mode can apply the validated draft through the authenticated Catalog API; Public Mode exposes neither the Token control nor the server-save action. Download remains available without server write access.
 
 Server mode does not scan a deployment server directory and does not receive server credentials. Rental-server rebuild scripts and the authenticated Catalog API remain separate server-side workflows.
 
@@ -90,6 +90,25 @@ server-first paths after the assets are published. Stage and LifeBar local-runti
 part of this slice.
 
 The four Local-mode `FileSystemDirectoryHandle` values are stored separately in IndexedDB when supported. A restored handle is used only after checking its current permission. Expired permission requests reauthorization; failure returns to explicit folder selection. Browsers without the File System Access API can switch to Server mode for same-origin direct paths, download a generated Catalog, run the game, or use a server/CLI-generated Catalog.
+
+The browser deliberately exposes only a selected directory handle and its display name. It does not expose the operating-system absolute path, so the UI shows the complete browser-provided name without inventing a local path. The handle itself remains the authority used for scanning and saving.
+
+### Catalog draft and output
+
+Development Mode keeps an editable Catalog draft between source scanning and output:
+
+- **Add external content to draft** scans or validates the selected external sources and updates the applicable external entries in the draft.
+- **Add built-in content to draft** re-adds the canonical WebMUGEN-shipped entries without duplicating IDs. The canonical list is maintained in `src/content/catalog/BuiltinContentCatalog.ts` and is checked against the `source: "builtin"` entries in the publisher Catalog.
+- **Review or remove Catalog items** removes a specified entry from the draft only. The selected output file is unchanged until Save or Download is used.
+- **Edit catalog.json** opens an in-page text editor. Applying edited JSON requires a fully valid version 1 Catalog; invalid or partially rejected JSON is not applied.
+- **Apply draft to catalog.json** uses a mode-specific save route: Local writes to the user-authorized output directory, while Server sends the complete draft to the authenticated `save-catalog` API action. It is visually emphasized whenever the draft differs from the loaded or last successfully written Catalog. A successful write clears the unapplied state; downloading does not.
+- **Download draft as catalog.json** remains available in both Local and Server modes as a separate file-delivery path. Download never changes the Runtime Catalog or the draft's unapplied state.
+
+Server save requires an administrator to enter the existing Catalog API Token. The value is held only in component memory for the current request, sent in both the existing Bearer and `X-WebMUGEN-Token` headers, and cleared before the request completes. It is never written to settings, localStorage, URLs, HTML source, logs, or the API response.
+
+Before enabling Server save, the GUI fetches the current Catalog bytes with `cache: no-store`, validates them, and records their SHA-256 revision. `save-catalog` accepts that revision as `expectedRevision`, validates the complete submitted document, checks the revision again immediately before atomic replacement, applies permission mode `0644`, and returns the new revision. A change by `publish-character`, `publish-stage`, `rebuild`, or another administrator produces HTTP 409 instead of silently overwriting the newer Catalog. The administrator must reload the content list and reapply the intended edit.
+
+These controls are grouped under **Catalog output**. They are authoring operations only and remain absent from Public Mode.
 
 ### Classification rules
 
@@ -124,7 +143,10 @@ The supplied PHP endpoint `public/api/catalog.php` is the deployment adapter for
 - `publish-character`: validate one `publicationId` plus the actual `archiveFile` basename and return its stable Character ID, Character path, and play URL;
 - `publish-stage`: validate one Stage ZIP, upsert it with the stable publication ID, and return its Stage ID, Stage path, and a play URL using the configured default Character;
 - `rebuild`: rescan the fixed storage root and replace all `proxy-release-*` entries while retaining publisher/built-in entries;
+- `save-catalog`: validate and atomically replace the complete GUI Catalog draft only when its `expectedRevision` still matches the server file;
 - `play-url`: return the current URL for an already cataloged publication.
+
+`rebuild` and `save-catalog` are intentionally separate. `rebuild` derives proxy-release entries from `storage/data`; `save-catalog` preserves the administrator's complete GUI-authored document, including names, paths, removals, and non-proxy content. Neither action is used as a substitute for the other.
 
 For rental-server deployments, copy `public/config/catalog-config.example.php` to `public/config/catalog-config.php` and replace `YOUR_SECRET_HERE` with the same Bearer token configured in the proxy-release administrator screen. `catalog-config.php` is ignored by Git and must remain server-only. PHP reads the secret in this order:
 
@@ -171,10 +193,10 @@ Development Mode additionally shows:
 - editable **Content list file** path and reload;
 - three independent external source folders and URL bases;
 - same-origin direct file path additions per kind;
-- an independent Catalog output folder plus generate, write, and download controls;
+- a Catalog output area containing the independent output folder, separate external/built-in draft updates, per-item removal, JSON text editing, save, and download controls;
 - Generator exclusions and Catalog diff counts.
 
-Public Mode hides the Catalog path, reload, Generator, folder picker, detailed errors, and all management actions. It shows only the allowed content selectors and cannot switch to a user-saved Catalog path that differs from the publisher default.
+Public Mode keeps the current Catalog browsing and generation utilities, but it always hides the Catalog API Token field and disables the authenticated server-writer control through the separate `catalogServerWriter` feature. The PHP endpoint independently requires the server-side Secret, so hiding the control is not treated as authentication.
 
 The Character selector in **Content in use** is the only runtime Character selection UI. The former separate Character path selector was removed. Development authors add missing Character paths through the Generator, validate them, regenerate the Catalog, and then select them from the same Catalog-backed control used in Public Mode.
 
