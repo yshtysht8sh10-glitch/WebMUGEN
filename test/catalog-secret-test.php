@@ -7,6 +7,7 @@ require_once __DIR__ . '/../public/api/catalog-lib.php';
 $root = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'webmugen-catalog-secret-' . bin2hex(random_bytes(6));
 $configPath = $root . DIRECTORY_SEPARATOR . 'catalog-config.php';
 $originalEnvironmentSecret = getenv('WEBMUGEN_CATALOG_SECRET');
+$originalEnvironmentDevelopmentPassHash = getenv('WEBMUGEN_DEVELOPMENT_PASS_HASH');
 mkdir($root, 0777, true);
 
 try {
@@ -62,6 +63,16 @@ try {
     $bearerWins = webMugenApiTokenState(['HTTP_AUTHORIZATION' => 'Bearer wrong-token', 'HTTP_X_WEBMUGEN_TOKEN' => $sharedSecret], [], []);
     assertSecret('bearer', $bearerWins['selectedAuthSource'], 'Bearer remains preferred when both headers exist');
     assertSecret(false, webMugenAuthorizeRequest($bearerWins, $sharedSecret), 'mismatched Bearer is not rescued by matching X-WebMUGEN-Token');
+    $developmentPass = 'separate-development-pass';
+    $developmentPassHash = password_hash($developmentPass, PASSWORD_DEFAULT);
+    assertSecret(true, webMugenVerifyDevelopmentPass($developmentPass, $developmentPassHash), 'Development Pass hash verifies');
+    assertSecret(false, webMugenVerifyDevelopmentPass($sharedSecret, $developmentPassHash), 'API token is not a Development Pass');
+    $developmentToken = webMugenIssueDevelopmentToken($sharedSecret, 900, 1000);
+    assertSecret(true, webMugenVerifyDevelopmentToken($developmentToken, $sharedSecret, 1001), 'issued Development session verifies');
+    assertSecret(true, webMugenAuthorizeApiOrDevelopmentRequest(webMugenApiTokenState(['HTTP_AUTHORIZATION' => 'Bearer ' . $developmentToken], [], []), $sharedSecret, 1001), 'Development session authorizes API request');
+    assertSecret(false, webMugenVerifyDevelopmentToken($developmentToken, 'different-api-secret', 1001), 'Development session is signed by the API secret');
+    assertSecret(false, webMugenVerifyDevelopmentToken($developmentToken, $sharedSecret, 1900), 'expired Development session is rejected');
+    assertSecret(false, webMugenVerifyDevelopmentToken($developmentToken . 'tampered', $sharedSecret, 1001), 'tampered Development session is rejected');
     assertSecret(['HTTP_AUTHORIZATION', 'HTTP_X_WEBMUGEN_TOKEN', 'REDIRECT_HTTP_AUTHORIZATION'], webMugenDebugServerHeaderKeys([
         'HTTP_X_WEBMUGEN_TOKEN' => 'hidden',
         'REQUEST_METHOD' => 'POST',
@@ -73,6 +84,8 @@ try {
 } finally {
     if ($originalEnvironmentSecret === false) putenv('WEBMUGEN_CATALOG_SECRET');
     else putenv('WEBMUGEN_CATALOG_SECRET=' . $originalEnvironmentSecret);
+    if ($originalEnvironmentDevelopmentPassHash === false) putenv('WEBMUGEN_DEVELOPMENT_PASS_HASH');
+    else putenv('WEBMUGEN_DEVELOPMENT_PASS_HASH=' . $originalEnvironmentDevelopmentPassHash);
     if (is_file($configPath)) unlink($configPath);
     if (is_dir($root)) rmdir($root);
 }

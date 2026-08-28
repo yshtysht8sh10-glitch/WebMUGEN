@@ -23,7 +23,7 @@ export class DevelopmentModeAuthorizationError extends Error {
 export async function authorizeDevelopmentMode(
   password: string,
   fetcher: DevelopmentModeAuthFetch = fetch,
-): Promise<void> {
+): Promise<string> {
   const credential = password.trim();
   if (!credential) throw new DevelopmentModeAuthorizationError('Pass is required.', 400);
   const response = await fetcher(DEVELOPMENT_MODE_AUTH_PATH, {
@@ -31,8 +31,7 @@ export async function authorizeDevelopmentMode(
     cache: 'no-store',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${credential}`,
-      'X-WebMUGEN-Token': credential,
+      'X-WebMUGEN-Development-Pass': credential,
     },
     body: '{}',
   });
@@ -45,6 +44,10 @@ export async function authorizeDevelopmentMode(
       response.status,
     );
   }
+  if (typeof payload.sessionToken !== 'string' || !payload.sessionToken.startsWith('wmd1.')) {
+    throw new DevelopmentModeAuthorizationError('Development Mode API returned an invalid session.', 500);
+  }
+  return payload.sessionToken;
 }
 
 function parseResponse(source: string): Record<string, unknown> {

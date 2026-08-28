@@ -28,6 +28,8 @@ try {
             'configFilePath' => (string)$config['configFilePath'],
             'secretSource' => (string)$config['secretSource'],
             'secretLength' => strlen((string)$config['secret']),
+            'developmentPassConfigured' => (string)$config['developmentPassHash'] !== '',
+            'developmentPassSource' => (string)$config['developmentPassSource'],
             'authorizationHeaderExists' => $authorization !== '',
             'authorizationHeaderLength' => strlen($authorization),
             'authorizationHeaderSource' => (string)$authorizationState['source'],
@@ -43,11 +45,22 @@ try {
         return;
     }
 
-    if (!webMugenAuthorizeRequest($tokenState, (string)$config['secret'])) throw new RuntimeException('Catalog API authorization failed.', 401);
-
     if ($action === 'authorize') {
-        echo json_encode(['success' => true, 'mode' => 'development'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
-    } elseif ($action === 'publish-character') {
+        $password = webMugenDevelopmentPassHeader($_SERVER);
+        if (!webMugenVerifyDevelopmentPass($password, (string)$config['developmentPassHash'])) throw new RuntimeException('Development Mode authorization failed.', 401);
+        $sessionToken = webMugenIssueDevelopmentToken((string)$config['secret'], (int)$config['developmentSessionTtl']);
+        echo json_encode([
+            'success' => true,
+            'mode' => 'development',
+            'sessionToken' => $sessionToken,
+            'expiresIn' => (int)$config['developmentSessionTtl'],
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        return;
+    } else {
+        if (!webMugenAuthorizeApiOrDevelopmentRequest($tokenState, (string)$config['secret'])) throw new RuntimeException('Catalog API authorization failed.', 401);
+    }
+
+    if ($action === 'publish-character') {
         $publicationId = (string)($payload['publicationId'] ?? '');
         $archiveFile = (string)($payload['archiveFile'] ?? '');
         $result = webMugenPublishCharacter($config, $publicationId, $archiveFile, isset($payload['stageId']) ? (string)$payload['stageId'] : null);

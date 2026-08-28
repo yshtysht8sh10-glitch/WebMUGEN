@@ -13,6 +13,9 @@ function webMugenCatalogConfig(array $server = []): array
     return [
         'secret' => $security['secret'],
         'secretSource' => $security['secretSource'],
+        'developmentPassHash' => $security['developmentPassHash'],
+        'developmentPassSource' => $security['developmentPassSource'],
+        'developmentSessionTtl' => $security['developmentSessionTtl'],
         'debug' => $security['debug'],
         'configFilePath' => $security['configFilePath'],
         'configFileExists' => $security['configFileExists'],
@@ -47,9 +50,21 @@ function webMugenCatalogSecurityState(?string $configPath = null): array
     $fileSecret = is_string($fileConfig['secret'] ?? null) ? trim($fileConfig['secret']) : '';
     $environmentSecret = trim((string)(getenv('WEBMUGEN_CATALOG_SECRET') ?: ''));
     $secretSource = $fileSecret !== '' ? 'config' : ($environmentSecret !== '' ? 'environment' : 'none');
+    $fileDevelopmentPassHash = is_string($fileConfig['development_pass_hash'] ?? null) ? trim($fileConfig['development_pass_hash']) : '';
+    $environmentDevelopmentPassHash = trim((string)(getenv('WEBMUGEN_DEVELOPMENT_PASS_HASH') ?: ''));
+    $developmentPassSource = $fileDevelopmentPassHash !== '' ? 'config' : ($environmentDevelopmentPassHash !== '' ? 'environment' : 'none');
+    $fileDevelopmentSessionTtl = $fileConfig['development_session_ttl'] ?? null;
+    $environmentDevelopmentSessionTtl = getenv('WEBMUGEN_DEVELOPMENT_SESSION_TTL');
+    $configuredTtl = $fileDevelopmentSessionTtl !== null
+        ? $fileDevelopmentSessionTtl
+        : ($environmentDevelopmentSessionTtl !== false && trim((string)$environmentDevelopmentSessionTtl) !== '' ? $environmentDevelopmentSessionTtl : 900);
+    $developmentSessionTtl = max(60, min(3600, (int)$configuredTtl));
     return [
         'secret' => $fileSecret !== '' ? $fileSecret : $environmentSecret,
         'secretSource' => $secretSource,
+        'developmentPassHash' => $fileDevelopmentPassHash !== '' ? $fileDevelopmentPassHash : $environmentDevelopmentPassHash,
+        'developmentPassSource' => $developmentPassSource,
+        'developmentSessionTtl' => $developmentSessionTtl,
         'debug' => $loaded && ($fileConfig['debug'] ?? false) === true,
         'configFilePath' => $path,
         'configFileExists' => $exists,
@@ -474,6 +489,79 @@ function webMugenReadCatalog(string $path): array
     $decoded = json_decode((string)file_get_contents($path), true);
     webMugenValidateCatalog($decoded);
     return $decoded;
+}
+
+function webMugenDevelopmentPassHeader(array $server = [], ?array $apacheHeaders = null, ?array $allHeaders = null): string
+{
+    $serverValue = trim((string)($server['HTTP_X_WEBMUGEN_DEVELOPMENT_PASS'] ?? ''));
+    if ($serverValue !== '') return $serverValue;
+    $redirectValue = trim((string)($server['REDIRECT_HTTP_X_WEBMUGEN_DEVELOPMENT_PASS'] ?? ''));
+    if ($redirectValue !== '') return $redirectValue;
+    if ($apacheHeaders === null) $apacheHeaders = function_exists('apache_request_headers') ? apache_request_headers() : [];
+    $apacheValue = webMugenHeaderValue(is_array($apacheHeaders) ? $apacheHeaders : [], 'X-WebMUGEN-Development-Pass');
+    if ($apacheValue !== '') return $apacheValue;
+    if ($allHeaders === null) $allHeaders = function_exists('getallheaders') ? getallheaders() : [];
+    return webMugenHeaderValue(is_array($allHeaders) ? $allHeaders : [], 'X-WebMUGEN-Development-Pass');
+}
+
+function webMugenVerifyDevelopmentPass(string $password, string $passwordHash): bool
+{
+    return $password !== '' && $passwordHash !== '' && password_verify($password, $passwordHash);
+}
+
+function webMugenIssueDevelopmentToken(string $secret, int $ttlSeconds, ?int $now = null): string
+{
+    if ($secret === '') throw new RuntimeException('Development Mode session signing is unavailable.', 503);
+    $issuedAt = $now ?? time();
+    $payload = webMugenBase64UrlEncode(json_encode([
+        'v' => 1,
+        'scope' => 'development',
+        'iat' => $issuedAt,
+        'exp' => $issuedAt + max(60, min(3600, $ttlSeconds)),
+        'nonce' => webMugenBase64UrlEncode(random_bytes(18)),
+    ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+    $signature = webMugenBase64UrlEncode(hash_hmac('sha256', $payload, $secret, true));
+    return 'wmd1.' . $payload . '.' . $signature;
+}
+
+function webMugenVerifyDevelopmentToken(string $token, string $secret, ?int $now = null): bool
+{
+    if ($token === '' || $secret === '' || !str_starts_with($token, 'wmd1.')) return false;
+    $parts = explode('.', $token);
+    if (count($parts) !== 3 || $parts[0] !== 'wmd1') return false;
+    $expected = webMugenBase64UrlEncode(hash_hmac('sha256', $parts[1], $secret, true));
+    if (!hash_equals($expected, $parts[2])) return false;
+    $decoded = webMugenBase64UrlDecode($parts[1]);
+    if ($decoded === null) return false;
+    try {
+        $payload = json_decode($decoded, true, flags: JSON_THROW_ON_ERROR);
+    } catch (Throwable) {
+        return false;
+    }
+    if (!is_array($payload) || ($payload['v'] ?? null) !== 1 || ($payload['scope'] ?? null) !== 'development') return false;
+    $issuedAt = $payload['iat'] ?? null;
+    $expiresAt = $payload['exp'] ?? null;
+    $currentTime = $now ?? time();
+    return is_int($issuedAt) && is_int($expiresAt) && $issuedAt <= $currentTime + 30 && $expiresAt > $currentTime && $expiresAt - $issuedAt <= 3600;
+}
+
+function webMugenAuthorizeApiOrDevelopmentRequest(array $tokenState, string $secret, ?int $now = null): bool
+{
+    return webMugenAuthorizeRequest($tokenState, $secret)
+        || webMugenVerifyDevelopmentToken((string)($tokenState['token'] ?? ''), $secret, $now);
+}
+
+function webMugenBase64UrlEncode(string $value): string
+{
+    return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
+}
+
+function webMugenBase64UrlDecode(string $value): ?string
+{
+    if ($value === '' || preg_match('/^[A-Za-z0-9_-]+$/', $value) !== 1) return null;
+    $padding = (4 - strlen($value) % 4) % 4;
+    $decoded = base64_decode(strtr($value . str_repeat('=', $padding), '-_', '+/'), true);
+    return is_string($decoded) ? $decoded : null;
 }
 
 function webMugenCatalogRevision(string $path): string

@@ -45,18 +45,19 @@ describe('CatalogGeneratorPanel', () => {
     expect(html).not.toContain('Choose output folder');
   });
 
-  it('reuses the Development Mode Pass without exposing a second token field', () => {
+  it('uses the Development session without exposing a second token field', () => {
     const html = renderToStaticMarkup(createElement(CatalogGeneratorPanel, {
       catalog,
       initialMode: 'server',
       canWriteServer: true,
-      serverCredential: 'memory-only-secret',
+      serverCredential: 'wmd1.memory-only-session.signature',
     }));
 
     expect(html).toContain('Development Mode authenticated');
     expect(html).toContain('Apply draft to catalog.json');
     expect(html).not.toContain('Catalog API Token');
-    expect(html).not.toContain('memory-only-secret');
+    expect(html).toContain('short-lived Development session');
+    expect(html).not.toContain('memory-only-session');
   });
 
   it('does not expose server write controls when the build policy disables them', () => {

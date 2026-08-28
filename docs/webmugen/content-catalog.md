@@ -77,7 +77,7 @@ The Generator starts with a **Server / Local** source-location switch and render
 - **Local:** uses `showDirectoryPicker()` when supported. Independently choose external Character, Stage, and LifeBar folders; any source may remain unset. The Generator recursively reads candidates and maps their relative paths to the default published bases `/chars`, `/stages`, and `/lifebars`. An optional output folder enables direct `catalog.json` save; download remains available as a fallback.
 - **Server:** accepts same-origin files that are already publicly reachable by WebMUGEN. Set the published URL base for each kind and add a file name, relative path, or absolute same-origin path. For example, `itoko.zip` under `/chars` resolves to `/chars/itoko.zip`. Authenticated Development Mode can apply the validated draft through the Catalog API. Locked Public Mode exposes neither the credential control nor the server-save action. Download remains available without server write access.
 
-Server mode does not scan a deployment server directory. A Pass-authenticated Development session reuses its current in-memory credential for Catalog API writes; it never receives or reads the server's configured secret. Rental-server rebuild scripts and the authenticated Catalog API remain separate server-side workflows.
+Server mode does not scan a deployment server directory. Pass authentication returns a short-lived, scoped Development session token for Catalog API writes; the browser never receives or reads the server's API secret and never reuses the raw Pass as a token. Rental-server rebuild scripts and the authenticated Catalog API remain separate server-side workflows.
 
 In both modes, each result must match its source slot's expected kind. Publisher-shipped `source: "builtin"` items are always retained; generated items receive `source: "external"`. An unset source kind retains its currently loaded external items instead of silently deleting them. Structured classification results record kind, engine, confidence, entry file, warnings, and errors. Unknown/corrupt/ambiguous/wrong-kind entries, unsafe direct paths, and duplicate generated IDs are listed with reasons.
 
@@ -104,7 +104,7 @@ Development Mode keeps an editable Catalog draft between source scanning and out
 - **Apply draft to catalog.json** uses a mode-specific save route: Local writes to the user-authorized output directory, while Server sends the complete draft to the authenticated `save-catalog` API action. Selecting or changing an external input marks it as not yet imported; the final Apply action imports pending sources before writing, so a newly selected folder cannot be silently omitted. It is visually emphasized whenever the draft differs from the loaded Catalog or a selected input is pending. A successful write clears the unapplied state; downloading does not.
 - **Download draft as catalog.json** remains available in both Local and Server modes as a separate file-delivery path. Download never changes the Runtime Catalog or the draft's unapplied state.
 
-In a Public build, Server save reuses the Pass accepted by the header's Development Mode gate, so the administrator is not prompted for a second Token. The value remains only in tab memory and is sent in both the existing Bearer and `X-WebMUGEN-Token` headers. It is never written to settings, localStorage, URLs, HTML source, logs, or the API response, and reload discards it. A directly built Development artifact has no runtime login credential, so its existing manual Catalog API Token field remains available as a fallback.
+In a Public build, Server save uses the short-lived session token returned after the header's Development Mode gate verifies the separate Pass. The raw Pass is discarded immediately after authorization. Only the scoped token remains in tab memory and is sent in the existing Bearer and `X-WebMUGEN-Token` headers. It is never written to settings, localStorage, URLs, HTML source, or logs, and reload discards it. A directly built Development artifact has no runtime login session, so its existing manual Catalog API Token field remains available for trusted local administration.
 
 Before enabling Server save, the GUI fetches the current Catalog bytes with `cache: no-store`, validates them, and records their SHA-256 revision. `save-catalog` accepts that revision as `expectedRevision`, validates the complete submitted document, checks the revision again immediately before atomic replacement, applies permission mode `0644`, and returns the new revision. A change by `publish-character`, `publish-stage`, `rebuild`, or another administrator produces HTTP 409 instead of silently overwriting the newer Catalog. The administrator must reload the content list and reapply the intended edit.
 
@@ -144,16 +144,26 @@ The supplied PHP endpoint `public/api/catalog.php` is the deployment adapter for
 - `publish-stage`: validate one Stage ZIP, upsert it with the stable publication ID, and return its Stage ID, Stage path, and a play URL using the configured default Character;
 - `rebuild`: rescan the fixed storage root and replace all `proxy-release-*` entries while retaining publisher/built-in entries;
 - `save-catalog`: validate and atomically replace the complete GUI Catalog draft only when its `expectedRevision` still matches the server file;
-- `authorize`: validate the header Pass without mutating the Catalog, allowing a Public client to enter Development Mode for the current tab;
+- `authorize`: validate `X-WebMUGEN-Development-Pass` against the configured Pass hash without mutating the Catalog, then issue a short-lived signed Development session token;
 - `play-url`: return the current URL for an already cataloged publication.
 
 `rebuild` and `save-catalog` are intentionally separate. `rebuild` derives proxy-release entries from `storage/data`; `save-catalog` preserves the administrator's complete GUI-authored document, including names, paths, removals, and non-proxy content. Neither action is used as a substitute for the other.
 
-For rental-server deployments, copy `public/config/catalog-config.example.php` to `public/config/catalog-config.php` and replace `YOUR_SECRET_HERE` with the same Bearer token configured in the proxy-release administrator screen. `catalog-config.php` is ignored by Git and must remain server-only. PHP reads the secret in this order:
+For rental-server deployments, copy `public/config/catalog-config.example.php` to `public/config/catalog-config.php`. Replace `YOUR_SECRET_HERE` with a rotated API token used only by proxy-release/API clients, and replace `YOUR_PASSWORD_HASH_HERE` with `password_hash()` output for a different Development Mode Pass. Set `debug` to `false` for normal operation. `catalog-config.php` is ignored by Git and must remain server-only. PHP reads the API secret in this order:
 
 1. non-empty `secret` from `public/config/catalog-config.php`;
 2. `WEBMUGEN_CATALOG_SECRET` environment variable;
 3. no secret, causing Catalog API authorization to fail with HTTP 401.
+
+The Development Pass hash is read from non-empty `development_pass_hash` in the same server-only file, then from `WEBMUGEN_DEVELOPMENT_PASS_HASH`. `development_session_ttl` defaults to 900 seconds and is clamped to 60–3600 seconds. The raw Pass is never stored in this configuration. The API secret signs Development session tokens but is neither returned to nor derived by the browser.
+
+Generate the Pass hash on a trusted machine with PHP, then copy only the resulting hash into the server-only configuration:
+
+```bash
+php -r "echo password_hash('REPLACE_WITH_A_NEW_DEVELOPMENT_PASS', PASSWORD_DEFAULT), PHP_EOL;"
+```
+
+Do not use the API `secret` as the replacement text. Avoid leaving the raw Pass in shared terminal history; use the hosting provider's secret-management or environment-variable UI when available.
 
 The environment variable remains supported for Docker and existing deployments. Never place either real value in the example file, Vite/browser settings, JavaScript, HTML, URLs, logs, or repository files.
 
@@ -166,6 +176,8 @@ Authorization is read first from `$_SERVER['HTTP_AUTHORIZATION']`, then `$_SERVE
 Configure the remaining deployment values with these server-side environment variables:
 
 - `WEBMUGEN_CATALOG_SECRET`: backward-compatible Bearer token fallback when the config file has no non-empty secret;
+- `WEBMUGEN_DEVELOPMENT_PASS_HASH`: Development Mode `password_hash()` fallback when the config file has no non-empty hash;
+- `WEBMUGEN_DEVELOPMENT_SESSION_TTL`: short-lived Development session duration in seconds, clamped to 60–3600;
 - `WEBMUGEN_PROXY_STORAGE_DIR`: filesystem path to `/DotoEita/16_proxy_release/storage/data`;
 - `WEBMUGEN_PROXY_STORAGE_PUBLIC_BASE`: corresponding same-origin URL path;
 - `WEBMUGEN_CATALOG_PATH`: filesystem path to the deployed `content/catalog.json`;
@@ -197,7 +209,7 @@ Development Mode additionally shows:
 - a Catalog output area containing the independent output folder, separate external/built-in draft updates, per-item removal, JSON text editing, save, and download controls;
 - Generator exclusions and Catalog diff counts.
 
-Locked Public Mode keeps the current Catalog browsing and generation utilities, hides credential input and disables the authenticated server-writer control. Successful server-side Pass verification switches the current tab to the Development feature profile and reuses that in-memory credential for writes. The PHP endpoint independently authenticates every write request; hiding or showing a control is never treated as authorization.
+Locked Public Mode keeps only the published Character, Stage, LifeBar, palette, and Share URL controls. It hides the Catalog source path/reload section, Catalog Generator, credential input, and authenticated server-writer control. Successful server-side Pass verification switches the current tab to the Development feature profile, reveals those authoring controls, and uses the issued in-memory session token for writes. The PHP endpoint independently authenticates every write request; hiding or showing a control is never treated as authorization.
 
 The Character selector in **Content in use** is the only runtime Character selection UI. The former separate Character path selector was removed. Development authors add missing Character paths through the Generator, validate them, regenerate the Catalog, and then select them from the same Catalog-backed control used in Public Mode.
 

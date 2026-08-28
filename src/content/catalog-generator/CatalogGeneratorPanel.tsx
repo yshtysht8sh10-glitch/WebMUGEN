@@ -432,7 +432,7 @@ export function CatalogGeneratorPanel({
             />
           </label>}
           <small>{serverCredential ? text(
-            'The authenticated Pass is reused for server saves and kept only in memory.',
+            'A short-lived Development session is used for server saves and kept only in memory.',
             '認証済みのPassをサーバー保存にも使用し、メモリ上だけに保持します。',
           ) : text(
             'Used only for this save request. It is not stored in settings, localStorage, URLs, or logs.',

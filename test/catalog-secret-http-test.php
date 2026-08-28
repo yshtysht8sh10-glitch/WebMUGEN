@@ -24,7 +24,8 @@ try {
 
     putenv('WEBMUGEN_CATALOG_SECRET');
     putenv('WEBMUGEN_PROXY_STORAGE_DIR=' . $storage);
-    writeHttpSecretConfig($configPath, 'http-file-secret-value', true);
+    $developmentPass = 'http-development-pass-value';
+    writeHttpSecretConfig($configPath, 'http-file-secret-value', $developmentPass, true);
     $server = startCatalogServer($public);
     $debugXToken = 'http-debug-x-token-value';
     $debug = catalogResponse(str_replace('action=play-url', 'action=debug', $server['url']), 'http-file-secret-value', $debugXToken);
@@ -35,6 +36,8 @@ try {
     assertHttpValue(true, $debugJson['configFileLoaded'], 'debug config loaded');
     assertHttpValue('config', $debugJson['secretSource'], 'debug secret source');
     assertHttpValue(strlen('http-file-secret-value'), $debugJson['secretLength'], 'debug secret length');
+    assertHttpValue(true, $debugJson['developmentPassConfigured'], 'debug reports configured Development Pass without exposing its hash');
+    assertHttpValue('config', $debugJson['developmentPassSource'], 'debug Development Pass source');
     assertHttpValue(true, $debugJson['authorizationHeaderExists'], 'debug Authorization exists');
     assertHttpValue(strlen('Bearer http-file-secret-value'), $debugJson['authorizationHeaderLength'], 'debug Authorization length');
     assertHttpValue('HTTP_AUTHORIZATION', $debugJson['authorizationHeaderSource'], 'debug Authorization source');
@@ -49,13 +52,18 @@ try {
     assertHttpStatus(200, catalogRequest($server['url'], 'http-file-secret-value'), 'config file only');
     assertHttpStatus(200, catalogRequest($server['url'], null, 'http-file-secret-value'), 'X-WebMUGEN-Token only');
     $authorizeUrl = str_replace('action=play-url', 'action=authorize', $server['url']);
-    $authorize = catalogResponse($authorizeUrl, 'http-file-secret-value');
+    $authorize = catalogResponse($authorizeUrl, null, null, null, $developmentPass);
     assertHttpStatus(200, $authorize['status'], 'Development Mode Pass authorization');
     $authorizeJson = json_decode($authorize['body'], true, flags: JSON_THROW_ON_ERROR);
     assertHttpValue(true, $authorizeJson['success'], 'Development Mode authorization success');
     assertHttpValue('development', $authorizeJson['mode'], 'Development Mode authorization profile');
+    assertHttpValue(true, is_string($authorizeJson['sessionToken']) && str_starts_with($authorizeJson['sessionToken'], 'wmd1.'), 'Development Mode issues a scoped session');
+    assertHttpValue(900, $authorizeJson['expiresIn'], 'Development Mode session TTL');
     assertHttpValue(false, str_contains($authorize['body'], 'http-file-secret-value'), 'Development Mode authorization omits Pass');
-    assertHttpStatus(401, catalogRequest($authorizeUrl, 'wrong-token'), 'Development Mode rejects an invalid Pass');
+    assertHttpValue(false, str_contains($authorize['body'], $developmentPass), 'Development Mode authorization omits entered Pass');
+    assertHttpStatus(200, catalogRequest($server['url'], $authorizeJson['sessionToken']), 'Development session authorizes Catalog API');
+    assertHttpStatus(401, catalogResponse($authorizeUrl, null, null, null, 'wrong-pass')['status'], 'Development Mode rejects an invalid Pass');
+    assertHttpStatus(401, catalogResponse($authorizeUrl, null, null, null, 'http-file-secret-value')['status'], 'API token is not accepted as Development Pass');
     assertHttpStatus(401, catalogRequest($authorizeUrl, null, null), 'Development Mode requires a Pass');
     $rebuild = catalogResponse(str_replace('action=play-url', 'action=rebuild', $server['url']), null, 'http-file-secret-value');
     assertHttpStatus(200, $rebuild['status'], 'X-WebMUGEN-Token rebuild');
@@ -112,7 +120,7 @@ try {
     stopCatalogServer($server);
     $server = null;
 
-    writeHttpSecretConfig($configPath, 'http-file-secret-value', false);
+    writeHttpSecretConfig($configPath, 'http-file-secret-value', $developmentPass, false);
     putenv('WEBMUGEN_CATALOG_SECRET=http-environment-secret-value');
     $server = startCatalogServer($public);
     assertHttpStatus(404, catalogRequest(str_replace('action=play-url', 'action=debug', $server['url']), 'http-file-secret-value'), 'debug disabled');
@@ -187,12 +195,13 @@ function catalogRequest(string $url, ?string $token = null, ?string $xToken = nu
     return catalogResponse($url, $token, $xToken)['status'];
 }
 
-function catalogResponse(string $url, ?string $token = null, ?string $xToken = null, ?array $payload = null): array
+function catalogResponse(string $url, ?string $token = null, ?string $xToken = null, ?array $payload = null, ?string $developmentPass = null): array
 {
     $curl = curl_init($url);
     $headers = ['Content-Type: application/json'];
     if ($token !== null) $headers[] = 'Authorization: Bearer ' . $token;
     if ($xToken !== null) $headers[] = 'X-WebMUGEN-Token: ' . $xToken;
+    if ($developmentPass !== null) $headers[] = 'X-WebMUGEN-Development-Pass: ' . $developmentPass;
     curl_setopt_array($curl, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => 2,
@@ -229,9 +238,9 @@ function catalogGetResponse(string $url): array
     return ['status' => $status, 'body' => is_string($body) ? $body : ''];
 }
 
-function writeHttpSecretConfig(string $path, string $secret, bool $debug = false): void
+function writeHttpSecretConfig(string $path, string $secret, string $developmentPass, bool $debug = false): void
 {
-    $source = "<?php\n\nreturn [\n    'secret' => " . var_export($secret, true) . ",\n    'debug' => " . var_export($debug, true) . ",\n];\n";
+    $source = "<?php\n\nreturn [\n    'secret' => " . var_export($secret, true) . ",\n    'development_pass_hash' => " . var_export(password_hash($developmentPass, PASSWORD_DEFAULT), true) . ",\n    'development_session_ttl' => 900,\n    'debug' => " . var_export($debug, true) . ",\n];\n";
     if (file_put_contents($path, $source) === false) throw new RuntimeException('failed to write test config');
 }
 

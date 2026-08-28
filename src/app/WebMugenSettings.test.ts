@@ -167,7 +167,7 @@ describe('WebMugenSettings', () => {
     expect(body).not.toHaveProperty('life');
   });
 
-  it('keeps public catalog and diagnostic settings while blocking direct Stage source settings', () => {
+  it('locks Public mode to the publisher Catalog while retaining diagnostic settings', () => {
     const published = normalizeWebMugenSettings({
       content: { characterPath: '/chars/T-H-M-A.zip' },
       runtime: { stageArchivePath: '/stages/published.zip' },
@@ -184,7 +184,10 @@ describe('WebMugenSettings', () => {
       },
     }, published);
     const publicSettings = applyFeaturePolicyToSettings(saved, published, createFeatureFlags('public'));
-    expect(publicSettings.content).toEqual(saved.content);
+    expect(publicSettings.content).toEqual({
+      ...saved.content,
+      catalogPath: published.content.catalogPath,
+    });
     expect(publicSettings.runtime.stageArchivePath).toBe('/stages/published.zip');
     expect(publicSettings.runtime).toMatchObject({
       humanLogEnabled: true,

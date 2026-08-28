@@ -15,12 +15,12 @@ describe('Catalog server writer', () => {
     expect(snapshot.revision).toMatch(/^[a-f0-9]{64}$/);
   });
 
-  it('sends the draft and revision through both existing authentication headers', async () => {
+  it('sends the draft and revision through both supported bearer-token headers', async () => {
     const fetcher = vi.fn(async () => response(200, JSON.stringify({ success: true, revision: 'b'.repeat(64), itemCount: 1 })));
-    await expect(saveCatalogDraftToServer(catalog, 'a'.repeat(64), 'session-token', fetcher)).resolves.toEqual({ revision: 'b'.repeat(64), itemCount: 1 });
+    await expect(saveCatalogDraftToServer(catalog, 'a'.repeat(64), 'wmd1.session-token.signature', fetcher)).resolves.toEqual({ revision: 'b'.repeat(64), itemCount: 1 });
     expect(fetcher).toHaveBeenCalledWith(`${CATALOG_API_PATH}?action=save-catalog`, expect.objectContaining({
       method: 'POST',
-      headers: expect.objectContaining({ Authorization: 'Bearer session-token', 'X-WebMUGEN-Token': 'session-token' }),
+      headers: expect.objectContaining({ Authorization: 'Bearer wmd1.session-token.signature', 'X-WebMUGEN-Token': 'wmd1.session-token.signature' }),
       body: JSON.stringify({ catalog, expectedRevision: 'a'.repeat(64) }),
     }));
   });

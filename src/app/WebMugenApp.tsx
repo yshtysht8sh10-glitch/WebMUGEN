@@ -244,7 +244,7 @@ const EMPTY_STATIC_DEBUG_INFO: StaticDebugInfo = {
 
 export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage }) {
   const [features, setFeatures] = useState(WEBMUGEN_FEATURES);
-  const [developmentModeCredential, setDevelopmentModeCredential] = useState<string | null>(null);
+  const [developmentModeSessionToken, setDevelopmentModeSessionToken] = useState<string | null>(null);
   const featuresRef = useRef(features);
   featuresRef.current = features;
   const webMugenSettingsRef = useRef<WebMugenSettings>(normalizeWebMugenSettings(FALLBACK_WEBMUGEN_SETTINGS));
@@ -1574,14 +1574,14 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
         </button>
         <DevelopmentModeGate
           active={features.buildMode === 'development'}
-          canLock={developmentModeCredential !== null}
+          canLock={developmentModeSessionToken !== null}
           defaultOpen={typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('admin')}
-          onUnlock={(credential) => {
-            setDevelopmentModeCredential(credential);
+          onUnlock={(sessionToken) => {
+            setDevelopmentModeSessionToken(sessionToken);
             setFeatures(createFeatureFlags('development'));
           }}
           onLock={() => {
-            setDevelopmentModeCredential(null);
+            setDevelopmentModeSessionToken(null);
             setFeatures(createFeatureFlags('public'));
           }}
         />
@@ -1714,7 +1714,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
               canManageCatalog={features.catalogManagement}
               canGenerateCatalog={features.catalogGenerator}
               canWriteCatalogServer={features.catalogServerWriter}
-              catalogServerCredential={developmentModeCredential ?? undefined}
+              catalogServerCredential={developmentModeSessionToken ?? undefined}
               canShareUrl={features.shareUrl}
             />
           </section>

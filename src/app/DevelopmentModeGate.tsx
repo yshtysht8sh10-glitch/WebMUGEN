@@ -12,7 +12,7 @@ export function DevelopmentModeGate({
   active: boolean;
   canLock: boolean;
   defaultOpen?: boolean;
-  onUnlock: (credential: string) => void;
+  onUnlock: (sessionToken: string) => void;
   onLock: () => void;
 }) {
   const { text } = useUiLanguage();
@@ -37,10 +37,10 @@ export function DevelopmentModeGate({
     setBusy(true);
     setStatus(text('Checking Pass...', 'Passを確認しています…'));
     try {
-      await authorizeDevelopmentMode(credential);
+      const sessionToken = await authorizeDevelopmentMode(credential);
       setOpen(false);
       setStatus('');
-      onUnlock(credential);
+      onUnlock(sessionToken);
     } catch {
       setStatus(text('Pass was rejected.', 'Passが違います。'));
     } finally {
