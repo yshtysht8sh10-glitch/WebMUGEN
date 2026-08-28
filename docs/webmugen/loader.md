@@ -35,6 +35,13 @@ The HTTP path always wins when it exists, and WebMUGEN's `/chars/common1.cns` an
 `/chars/common.cmd` remain application assets rather than local-folder overrides. Missing or expired
 folder permission preserves the original HTTP load error and sample fallback behavior.
 
+The WinMUGEN Stage ZIP loader applies the same server-first rule to `/stages/<relative path>`.
+When HTTP loading or ZIP parsing fails, it reads the relative ZIP through the saved Stage
+`FileSystemDirectoryHandle` and retries the normal Stage DEF/SFF parser. This local transport does
+not change Stage semantics: candidate DEF selection, referenced SFF validation, layer parsing, and
+runtime construction remain identical to an HTTP-loaded archive. Missing permission or a missing
+local ZIP preserves the original Stage load error and the application's visible Stage fallback.
+
 Text contents are decoded independently for every DEF, CNS, CMD, AIR, ZSS, JSON, and inspectable text entry. UTF-8, UTF-16LE, and UTF-16BE BOMs take priority; without a BOM, a strict UTF-8 decode is attempted and valid UTF-8 is accepted, otherwise the bytes are decoded as Shift-JIS/CP932. The same detector is used by ZIP Characters, unpacked HTTP Characters, ZIP Stages, Catalog classification, and the development file inventory. This permits UTF-8 and CP932 files to coexist in one Character without passing different strings to the file viewer and runtime parser.
 
 ## Loaded asset types

@@ -50,14 +50,6 @@
       "source": "builtin"
     },
     {
-      "id": "material-22",
-      "name": "Material 22",
-      "kind": "stage",
-      "engine": "winmugen",
-      "path": "/stages/material-22-archive.zip",
-      "source": "external"
-    },
-    {
       "id": "fresh-hud",
       "name": "Fresh HUD",
       "kind": "lifebar",
@@ -295,6 +287,22 @@
       "engine": "winmugen",
       "name": "itoko",
       "path": "/chars/material-9-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-22-archive",
+      "kind": "stage",
+      "engine": "winmugen",
+      "name": "Beach in summer A",
+      "path": "/stages/material-22-archive.zip",
+      "source": "external"
+    },
+    {
+      "id": "material-23-archive",
+      "kind": "stage",
+      "engine": "winmugen",
+      "name": "Bloody forest",
+      "path": "/stages/material-23-archive.zip",
       "source": "external"
     }
   ]

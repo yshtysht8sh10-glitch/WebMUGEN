@@ -94,7 +94,7 @@ Edit `public/config/default-settings.json` to change defaults for first-time use
 
 In Development Mode, the Publisher settings page exposes **Use current settings as publisher defaults**. After confirmation, the browser sends the normalized complete settings object to the local Vite-only `/__webmugen/default-settings` endpoint, which overwrites the fixed `public/config/default-settings.json` target. Public builds render neither the Publisher settings menu nor its actions, do not provide the development middleware endpoint, and the client handler checks the same feature flag before making a request.
 
-Arbitrary Character source loading and source editing are Development Mode features. Public Mode keeps the Character Files page read-only, rejects edit handlers, and loads characters through the validated Catalog selection. This is a distribution boundary rather than authentication; only content intended for public access should be deployed.
+Arbitrary Character source loading and source editing are Development Mode features. Locked Public Mode keeps the Character Files page read-only, rejects edit handlers, and loads characters through the validated Catalog selection. A Public build can elevate the current tab only after the server validates the header Development Mode Pass; the credential stays in memory and reload returns to Public. Only content intended for public access should be deployed.
 
 Public Mode retains saved diagnostic and Catalog settings. Direct Stage source settings remain publisher-controlled, and server-writer features remain Development-only. See `build-mode.md` for the complete feature table and deployment checklist.
 

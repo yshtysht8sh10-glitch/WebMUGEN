@@ -171,7 +171,8 @@ import {
   synchronizeContentIdsFromRuntime,
   type WebMugenSettings,
 } from './WebMugenSettings';
-import { WEBMUGEN_FEATURES } from './BuildMode';
+import { WEBMUGEN_FEATURES, createFeatureFlags } from './BuildMode';
+import { DevelopmentModeGate } from './DevelopmentModeGate';
 import {
   createEmptyContentCatalog,
   entriesOfKind,
@@ -242,6 +243,10 @@ const EMPTY_STATIC_DEBUG_INFO: StaticDebugInfo = {
 };
 
 export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage }) {
+  const [features, setFeatures] = useState(WEBMUGEN_FEATURES);
+  const [developmentModeCredential, setDevelopmentModeCredential] = useState<string | null>(null);
+  const featuresRef = useRef(features);
+  featuresRef.current = features;
   const webMugenSettingsRef = useRef<WebMugenSettings>(normalizeWebMugenSettings(FALLBACK_WEBMUGEN_SETTINGS));
   const publishedSettingsRef = useRef<WebMugenSettings>(normalizeWebMugenSettings(FALLBACK_WEBMUGEN_SETTINGS));
   const contentCatalogRef = useRef<ContentCatalog>(createEmptyContentCatalog());
@@ -607,17 +612,17 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
           else if (action === 'frame-step') frameStepRequested = winMugenPausedRef.current;
           else if (action === 'toggle-hud') winMugenHudVisibleRef.current = !winMugenHudVisibleRef.current;
           else if (action === 'toggle-fast-forward') winMugenFastForwardRef.current = !winMugenFastForwardRef.current;
-          else if (action === 'toggle-collision-boxes' && WEBMUGEN_FEATURES.hitboxDebug) {
+          else if (action === 'toggle-collision-boxes' && featuresRef.current.hitboxDebug) {
             setRuntimeSettings({
               ...runtimeSettingsRef.current,
               collisionBoxesVisible: !runtimeSettingsRef.current.collisionBoxesVisible,
             });
-          } else if (action === 'toggle-debug-display' && WEBMUGEN_FEATURES.inputHistoryDebug) {
+          } else if (action === 'toggle-debug-display' && featuresRef.current.inputHistoryDebug) {
             setRuntimeSettings({
               ...runtimeSettingsRef.current,
               stateHistoryVisible: !runtimeSettingsRef.current.stateHistoryVisible,
             });
-          } else if (action === 'clear-debug' && WEBMUGEN_FEATURES.detailedLogs) clearRuntimeLogs();
+          } else if (action === 'clear-debug' && featuresRef.current.detailedLogs) clearRuntimeLogs();
           else if (action === 'screenshot') captureCanvasScreenshot(canvas);
           else if (action === 'reload-match') reloadMatchRequested = true;
         }
@@ -657,9 +662,9 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
         const p1Commands = p1HitPauseCommandBufferRef.current?.resolve(resolvedP1Commands, currentPlayers[0].hitPause > 0) ?? resolvedP1Commands;
         const p2Commands = p2HitPauseCommandBufferRef.current?.resolve(resolvedP2Commands, currentPlayers[1].hitPause > 0) ?? resolvedP2Commands;
 
-        const humanLogEnabled = WEBMUGEN_FEATURES.detailedLogs && runtimeSettingsRef.current.humanLogEnabled;
-        const aiLogEnabled = WEBMUGEN_FEATURES.detailedLogs && runtimeSettingsRef.current.aiLogEnabled;
-        const traceDiagnosticsEnabled = WEBMUGEN_FEATURES.cnsTrace && (humanLogEnabled || aiLogEnabled);
+        const humanLogEnabled = featuresRef.current.detailedLogs && runtimeSettingsRef.current.humanLogEnabled;
+        const aiLogEnabled = featuresRef.current.detailedLogs && runtimeSettingsRef.current.aiLogEnabled;
+        const traceDiagnosticsEnabled = featuresRef.current.cnsTrace && (humanLogEnabled || aiLogEnabled);
         const nextInputDebugLines = traceDiagnosticsEnabled ? formatInputDebugOverlay(inputSnapshot) : [];
         const nextCommandDebugLines = traceDiagnosticsEnabled ? formatCnsCommandDebugOverlay(p1Commands, p2Commands) : [];
         if (humanLogEnabled) {
@@ -1234,7 +1239,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
     const normalized = applyFeaturePolicyToSettings(
       normalizeWebMugenSettings(nextSettings, publishedSettingsRef.current),
       publishedSettingsRef.current,
-      WEBMUGEN_FEATURES,
+      features,
     );
     webMugenSettingsRef.current = normalized;
     saveWebMugenSettings(normalized);
@@ -1266,7 +1271,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
   };
 
   const openCnsSource = (selection: CnsSourceSelection) => {
-    if (!WEBMUGEN_FEATURES.characterFiles) return;
+    if (!features.characterFiles) return;
     setSelectedCnsSource(selection);
     if (selection) {
       const historyEntry = createSourceViewHistoryEntry(cnsSourceFiles, selection);
@@ -1280,7 +1285,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
   };
 
   const handleSaveCharacterSource = async (file: CharacterSourceFile, sourceText: string) => {
-    if (!WEBMUGEN_FEATURES.characterEditor) return;
+    if (!features.characterEditor) return;
     await saveCharacterSourceFile(file, sourceText);
     setCnsSourceFiles((files) => files.map((candidate) => candidate.path === file.path
       ? { ...candidate, text: sourceText }
@@ -1321,7 +1326,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
     const normalized = applyFeaturePolicyToSettings({
       ...webMugenSettingsRef.current,
       runtime: normalizeRuntimeSettings(nextSettings),
-    }, publishedSettingsRef.current, WEBMUGEN_FEATURES).runtime;
+    }, publishedSettingsRef.current, features).runtime;
     const urlStageActive = contentSelectionSourceRef.current.stage === 'url';
     const stageSelectionChanged = normalized.stageTheme !== runtimeSettingsRef.current.stageTheme
       || normalized.stageArchivePath !== runtimeSettingsRef.current.stageArchivePath;
@@ -1417,7 +1422,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
   };
 
   const setCatalogPath = (catalogPath: string) => {
-    if (!WEBMUGEN_FEATURES.catalogManagement) return;
+    if (!features.catalogManagement) return;
     const persisted = persistUnifiedSettings({
       ...webMugenSettingsRef.current,
       content: { ...webMugenSettingsRef.current.content, catalogPath },
@@ -1426,7 +1431,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
   };
 
   const reloadContentCatalog = async () => {
-    if (!WEBMUGEN_FEATURES.catalogManagement) return;
+    if (!features.catalogManagement) return;
     try {
       const result = await readContentCatalog(webMugenSettingsRef.current.content.catalogPath, {
         previousCatalog: contentCatalogRef.current.entries.length > 0 ? contentCatalogRef.current : undefined,
@@ -1517,7 +1522,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
   };
 
   const publishCurrentSettingsAsDefaults = async () => {
-    if (!WEBMUGEN_FEATURES.publishDefaultsButton) return;
+    if (!features.publishDefaultsButton) return;
     const message = uiLanguage === 'ja'
       ? '現在のSettings内容で public/config/default-settings.json を上書きします。続行しますか？'
       : 'Overwrite public/config/default-settings.json with the current Settings values?';
@@ -1567,10 +1572,22 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
         >
           {uiLanguage === 'ja' ? 'English' : '日本語'}
         </button>
-        {WEBMUGEN_FEATURES.buildMode === 'development' ? <strong className="development-mode-badge">DEVELOPMENT MODE</strong> : null}
+        <DevelopmentModeGate
+          active={features.buildMode === 'development'}
+          canLock={developmentModeCredential !== null}
+          defaultOpen={typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('admin')}
+          onUnlock={(credential) => {
+            setDevelopmentModeCredential(credential);
+            setFeatures(createFeatureFlags('development'));
+          }}
+          onLock={() => {
+            setDevelopmentModeCredential(null);
+            setFeatures(createFeatureFlags('public'));
+          }}
+        />
       </header>
 
-      <AppPageTabs activePage={activePage} onChange={setActivePage} showCharacterFiles={WEBMUGEN_FEATURES.characterFiles} />
+      <AppPageTabs activePage={activePage} onChange={setActivePage} showCharacterFiles={features.characterFiles} />
 
       <section
         className={`top-panel ${activePage === 'play' ? 'active' : 'hidden'}`}
@@ -1591,7 +1608,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
                   onContinueWithoutAudio={continueWithoutAudio}
                 />
               )}
-              {WEBMUGEN_FEATURES.inputHistoryDebug && runtimeSettings.stateHistoryVisible && <div className="stage-debug-overlay" aria-label="stage debug overlay">
+              {features.inputHistoryDebug && runtimeSettings.stateHistoryVisible && <div className="stage-debug-overlay" aria-label="stage debug overlay">
                 {stageDebugLines.map((line, index) => (
                   <div key={`${line}-${index}`}>{line}</div>
                 ))}
@@ -1599,7 +1616,7 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
             </div>
           </section>
 
-          {WEBMUGEN_FEATURES.runtimeDebug ? <>
+          {features.runtimeDebug ? <>
           <DebugTabsV2 activeTab={activeDebugTab} onChange={setActiveDebugTab} />
           <CopyToolbarV2
             activeTab={activeDebugTab}
@@ -1645,14 +1662,14 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
         className={`top-panel ${activePage === 'static-files' ? 'active' : 'hidden'}`}
         aria-hidden={activePage !== 'static-files'}
       >
-        {WEBMUGEN_FEATURES.characterFiles && activePage === 'static-files' ? (
+        {features.characterFiles && activePage === 'static-files' ? (
           <section className="debug-panel page-debug-panel">
             <StaticDebugPanel
               sourceFiles={cnsSourceFiles}
               sourceViewHistory={sourceViewHistory}
               selectedSource={selectedCnsSource}
               onOpenSource={openCnsSource}
-              onSaveSource={WEBMUGEN_FEATURES.characterEditor ? handleSaveCharacterSource : undefined}
+              onSaveSource={features.characterEditor ? handleSaveCharacterSource : undefined}
               sourceScrollPositionsRef={cnsSourceScrollPositionsRef}
               air={loadedAir}
               sprites={loadedSprites}
@@ -1690,14 +1707,15 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
               onAudioMutedChange={setAudioMute}
               onAudioMasterVolumeChange={setAudioVolume}
               onResetAllSettings={resetAllSettings}
-              canPublishDefaults={WEBMUGEN_FEATURES.publishDefaultsButton}
+              canPublishDefaults={features.publishDefaultsButton}
               onPublishDefaults={publishCurrentSettingsAsDefaults}
               publishDefaultsStatus={publishDefaultsStatus}
-              showDeveloperRuntimeSettings={WEBMUGEN_FEATURES.runtimeDebug}
-              canManageCatalog={WEBMUGEN_FEATURES.catalogManagement}
-              canGenerateCatalog={WEBMUGEN_FEATURES.catalogGenerator}
-              canWriteCatalogServer={WEBMUGEN_FEATURES.catalogServerWriter}
-              canShareUrl={WEBMUGEN_FEATURES.shareUrl}
+              showDeveloperRuntimeSettings={features.runtimeDebug}
+              canManageCatalog={features.catalogManagement}
+              canGenerateCatalog={features.catalogGenerator}
+              canWriteCatalogServer={features.catalogServerWriter}
+              catalogServerCredential={developmentModeCredential ?? undefined}
+              canShareUrl={features.shareUrl}
             />
           </section>
         ) : null}
@@ -1843,6 +1861,7 @@ function SettingsPanel({
   canManageCatalog,
   canGenerateCatalog,
   canWriteCatalogServer,
+  catalogServerCredential,
   canShareUrl,
 }: {
   contentCatalog: ContentCatalog;
@@ -1874,6 +1893,7 @@ function SettingsPanel({
   canManageCatalog: boolean;
   canGenerateCatalog: boolean;
   canWriteCatalogServer: boolean;
+  catalogServerCredential?: string;
   canShareUrl: boolean;
 }) {
   const { text } = useUiLanguage();
@@ -1921,6 +1941,7 @@ function SettingsPanel({
         canManage={canManageCatalog}
         canGenerate={canGenerateCatalog}
         canWriteServer={canWriteCatalogServer}
+        serverCredential={catalogServerCredential}
         canShare={canShareUrl}
         onSelect={onCatalogSelectionChange}
         onPaletteChange={onCharacterPaletteChange}
@@ -1973,6 +1994,7 @@ export function ContentCatalogPanel({
   canManage,
   canGenerate,
   canWriteServer = false,
+  serverCredential,
   canShare = true,
   shareUrlBase,
   onSelect,
@@ -1987,6 +2009,7 @@ export function ContentCatalogPanel({
   canManage: boolean;
   canGenerate: boolean;
   canWriteServer?: boolean;
+  serverCredential?: string;
   canShare?: boolean;
   shareUrlBase?: UrlContentSelectionBase;
   onSelect: (kind: 'character' | 'stage' | 'lifebar', id: string) => void;
@@ -2103,7 +2126,12 @@ export function ContentCatalogPanel({
             </li>)}</ul>
           </details> : null}
         </section>
-        {canGenerate ? <CatalogGeneratorPanel catalog={catalog} canWriteServer={canWriteServer} onCatalogSaved={onReload} /> : null}
+        {canGenerate ? <CatalogGeneratorPanel
+          catalog={catalog}
+          canWriteServer={canWriteServer}
+          serverCredential={serverCredential}
+          onCatalogSaved={onReload}
+        /> : null}
       </> : null}
     </section>
   );

@@ -79,4 +79,16 @@ describe('MUGEN stage ZIP loader', () => {
     expect(stage.sprites.sprites.get('0,0')).toMatchObject({ xAxis: 0, yAxis: -484 });
     vi.unstubAllGlobals();
   }, 20_000);
+
+  it('loads a Catalog Stage ZIP from the saved local Stage folder when HTTP cannot serve it', async () => {
+    const archive = new Uint8Array(await readFile('public/stages/material-22-archive.zip'));
+    const localAssetReader = vi.fn(async (path: string) => path === '/stages/local-beach.zip' ? archive : null);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('<!doctype html>')));
+
+    const stage = await loadMugenStageZip('/stages/local-beach.zip', localAssetReader);
+
+    expect(stage.name).toBe('Beach in summer A');
+    expect(localAssetReader).toHaveBeenCalledWith('/stages/local-beach.zip');
+    vi.unstubAllGlobals();
+  }, 20_000);
 });

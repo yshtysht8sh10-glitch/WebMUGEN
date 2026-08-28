@@ -45,7 +45,9 @@ try {
 
     if (!webMugenAuthorizeRequest($tokenState, (string)$config['secret'])) throw new RuntimeException('Catalog API authorization failed.', 401);
 
-    if ($action === 'publish-character') {
+    if ($action === 'authorize') {
+        echo json_encode(['success' => true, 'mode' => 'development'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    } elseif ($action === 'publish-character') {
         $publicationId = (string)($payload['publicationId'] ?? '');
         $archiveFile = (string)($payload['archiveFile'] ?? '');
         $result = webMugenPublishCharacter($config, $publicationId, $archiveFile, isset($payload['stageId']) ? (string)$payload['stageId'] : null);

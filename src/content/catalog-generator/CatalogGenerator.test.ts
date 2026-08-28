@@ -5,7 +5,7 @@ import { classifyDefText, classifyWebMugenJson, classifyZipBytes } from './Catal
 import { generateContentCatalog, resolveCatalogDirectPath, resolveCatalogPublicPath } from './CatalogGenerator';
 import type { CatalogDirectoryHandle, CatalogFileHandle, CatalogSourceFile } from './CatalogGeneratorTypes';
 import { readCatalogSourceFiles, readCatalogSourcePath } from './LocalFolderCatalogSource';
-import { readCatalogDirectoryAsset } from './LocalCatalogAssetSource';
+import { readCatalogDirectoryAsset, readLocalCatalogStageAsset } from './LocalCatalogAssetSource';
 import { downloadCatalogJson, ensureDirectoryPermission, serializeContentCatalog, writeCatalogToDirectory } from './CatalogWriter';
 
 const characterDef = '[Info]\nname = Hero\n[Files]\ncmd = hero.cmd\ncns = hero.cns\nsprite = hero.sff\nanim = hero.air';
@@ -30,6 +30,19 @@ describe('Catalog Generator classification', () => {
     const ambiguous = classifyZipBytes(zipSync({ 'hero.def': strToU8(characterDef), 'arena.def': strToU8(stageDef) }), 'mixed.zip');
     expect(ambiguous.kind).toBe('unknown');
     expect(ambiguous.errors[0]).toContain('multiple content kinds');
+  });
+
+  it('classifies multi-DEF Stage ZIPs like the selected beach and forest archives', () => {
+    const beach = classifyZipBytes(zipSync({
+      '夏の浜辺/Beach_in_summerA.def': strToU8('[Info]\nname = Beach in summer A\n[Camera]\n[PlayerInfo]\n[Bound]\n[StageInfo]\n[BGDef]\nspr = beach.sff'),
+      '夏の浜辺/Beach_in_summerB.def': strToU8('[Info]\nname = Beach in summer B\n[Camera]\n[PlayerInfo]\n[Bound]\n[StageInfo]\n[BGDef]\nspr = beach.sff'),
+    }), 'material-22-archive.zip');
+    const forest = classifyZipBytes(zipSync({
+      '血塗られた森/Bloody_forest.def': strToU8('[Info]\nname = Bloody forest\n[Camera]\n[PlayerInfo]\n[Bound]\n[StageInfo]\n[BGDef]\nspr = forest.sff'),
+    }), 'material-23-archive.zip');
+
+    expect(beach).toMatchObject({ kind: 'stage', engine: 'winmugen', name: 'Beach in summer A' });
+    expect(forest).toMatchObject({ kind: 'stage', engine: 'winmugen', name: 'Bloody forest' });
   });
 
   it('generates Catalog JSON, rejects unknown and duplicate IDs, and reports changes from an existing Catalog', () => {
@@ -89,6 +102,19 @@ describe('Catalog Generator folder and permission support', () => {
     expect(new TextDecoder().decode(await readCatalogDirectoryAsset(root, 'nested/fighter.zip') ?? undefined)).toBe('local zip bytes');
     expect(await readCatalogDirectoryAsset(root, '../fighter.zip')).toBeNull();
     expect(await readCatalogDirectoryAsset(root, 'missing.zip')).toBeNull();
+  });
+
+  it('reads a generated /stages path from the retained local Stage folder', async () => {
+    const factory = createMemoryIdbFactory();
+    const root = directory('stages', [file('material-23-archive.zip', 'bloody forest zip')]);
+    vi.stubGlobal('indexedDB', factory);
+    await saveCatalogDirectoryHandle(root, 'stage');
+
+    const bytes = await readLocalCatalogStageAsset('/stages/material-23-archive.zip');
+
+    expect(new TextDecoder().decode(bytes ?? undefined)).toBe('bloody forest zip');
+    expect(await readLocalCatalogStageAsset('/chars/material-23-archive.zip')).toBeNull();
+    vi.unstubAllGlobals();
   });
 
   it('loads a directly specified same-origin file and rejects unsafe paths', async () => {

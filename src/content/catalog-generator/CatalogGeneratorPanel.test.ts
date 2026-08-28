@@ -20,7 +20,7 @@ describe('CatalogGeneratorPanel', () => {
     expect(html).toContain('Choose folder');
     expect(html).toContain('Catalog output');
     expect(html).toContain('Choose output folder');
-    expect(html).toContain('Add external content to draft');
+    expect(html).toContain('Import selected external content into draft');
     expect(html).toContain('Add built-in content to draft');
     expect(html).toContain('Edit draft as JSON');
     expect(html).toContain('Apply draft to catalog.json');
@@ -39,10 +39,24 @@ describe('CatalogGeneratorPanel', () => {
     expect(html).toContain('Download draft as catalog.json');
     expect(html).toContain('Catalog API Token');
     expect(html).toContain('Apply draft to catalog.json');
-    expect(html).toContain('Add external content to draft');
+    expect(html).toContain('Import selected external content into draft');
     expect(html).toContain('Add built-in content to draft');
     expect(html).not.toContain('Choose folder');
     expect(html).not.toContain('Choose output folder');
+  });
+
+  it('reuses the Development Mode Pass without exposing a second token field', () => {
+    const html = renderToStaticMarkup(createElement(CatalogGeneratorPanel, {
+      catalog,
+      initialMode: 'server',
+      canWriteServer: true,
+      serverCredential: 'memory-only-secret',
+    }));
+
+    expect(html).toContain('Development Mode authenticated');
+    expect(html).toContain('Apply draft to catalog.json');
+    expect(html).not.toContain('Catalog API Token');
+    expect(html).not.toContain('memory-only-secret');
   });
 
   it('does not expose server write controls when the build policy disables them', () => {

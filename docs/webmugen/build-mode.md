@@ -1,8 +1,8 @@
 # Development and Public Build Modes
 
-Updated: 2026-08-23
+Updated: 2026-08-28
 
-WebMUGEN derives all developer-facing capabilities from one `WebMugenBuildMode`: `development` or `public`. Components must consume the feature set from `BuildMode.ts`; hostname checks and independent feature booleans are not mode authorities.
+WebMUGEN derives its initial developer-facing capabilities from one `WebMugenBuildMode`: `development` or `public`. Components must consume the feature set from `BuildMode.ts`; hostname checks and independent feature booleans are not mode authorities. A Public build may elevate its in-memory feature profile after server-side Pass authentication, but it always starts locked.
 
 ## Selection and safe fallback
 
@@ -23,11 +23,13 @@ An explicit valid value wins independently of Vite's DEV/PROD flag. If the value
 
 Development Mode enables Character Files editing, direct Stage source controls, publisher-default export, and the other developer-writer capabilities. A persistent `DEVELOPMENT MODE` badge appears in the header. Runtime Character selection remains the single Catalog-backed selector shared with Public Mode.
 
+In a Public build, the header **Development Mode** entry accepts an administrator Pass and sends it only in authenticated request headers to `api/catalog.php?action=authorize`. The PHP endpoint compares it with the existing server-only Catalog secret. On success, the current tab switches to the Development feature profile and reuses the same in-memory credential for authenticated Catalog writes. The Pass is never placed in a URL, request body, settings, localStorage, rendered HTML, or application log. Reloading or closing the tab discards it and returns to locked Public Mode. A static-only deployment without the PHP endpoint cannot unlock Development Mode.
+
 Public Mode retains game play, read-only Character Files browsing, and the Content, General, Input, Audio, Display, and Developer settings pages. Content Catalog source management, Catalog Generator, the Share URL, Runtime Debug, CNS Trace, Human/AI logs, collision boxes, state/input history, internal diagnostics, and Compatibility Matrix links are available in both modes. Diagnostic capture remains opt-in and defaults OFF.
 
-Public Mode still excludes the Publisher settings page, Character Editor, direct Stage Editor/source controls, and their write handlers. Character source text, palettes, sprites, sounds, maps, and navigation remain viewable, but Edit/Save controls are not provided. Catalog loading is a validated same-origin read. Catalog Generator's Server mode reads explicitly added same-origin paths and downloads generated JSON; Local mode can write `catalog.json` only into a local directory that the user explicitly selects and grants browser read/write permission. Neither mode can scan or rewrite the deployed server. The mode is therefore a server-write boundary, not a restriction on diagnostics or local authoring tools.
+While locked, Public Mode excludes the Publisher settings page, Character Editor, direct Stage Editor/source controls, and their write handlers. Character source text, palettes, sprites, sounds, maps, and navigation remain viewable, but Edit/Save controls are not provided. Catalog loading is a validated same-origin read. Catalog Generator's Server mode reads explicitly added same-origin paths and downloads generated JSON; Local mode can write `catalog.json` only into a local directory that the user explicitly selects and grants browser read/write permission. An authenticated Development session may additionally use the Catalog API to replace the deployed Catalog draft.
 
-The mode is a distribution safety boundary, not authentication. Never deploy private assets or secrets in a public bundle.
+The build mode remains the safe initial distribution policy; server-side Pass verification is the authentication boundary for runtime elevation. Never deploy private assets or secrets in a public bundle.
 
 ## Public deployment checklist
 
@@ -41,12 +43,14 @@ so the same artifact supports both placements without changing a domain or serve
 
 - [ ] Run `npm run build:public` (or otherwise set `VITE_WEBMUGEN_MODE=public`).
 - [ ] Run `npm run typecheck` and record any known failures separately from artifact generation.
-- [ ] Confirm there is no `DEVELOPMENT MODE` badge.
+- [ ] Confirm the initial screen has a **Development Mode** entry but no `DEVELOPMENT MODE` badge.
+- [ ] Confirm an invalid Pass leaves the Public feature profile active and does not expose the Pass in the URL or UI.
+- [ ] Confirm a valid Pass displays the badge and Development-only controls, and that reload locks the UI again.
 - [ ] Confirm Character Files can be browsed but have no Edit/Save controls.
 - [ ] Confirm the Publisher settings entry and publisher-default actions are absent.
 - [ ] Confirm Character and Stage editor/save controls are absent.
 - [ ] Confirm Content Catalog management, Catalog Generator, and Developer settings are present.
-- [ ] Confirm the Catalog API Token field and server `save-catalog` action are absent from Public Mode.
+- [ ] Confirm the Catalog API Token field and server `save-catalog` action are absent while locked, then become available without a second Token prompt after successful Pass authentication.
 - [ ] Confirm Runtime Debug, CNS Trace, detailed logs, collision boxes, and state history remain opt-in and work when enabled.
 - [ ] Confirm gameplay, audio, language, input configuration, and settings persistence work.
 - [ ] Confirm the Content Share URL copies and opens the selected Character and Stage.

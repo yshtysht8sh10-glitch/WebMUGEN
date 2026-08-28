@@ -2708,6 +2708,71 @@ button.readable-state-badge:disabled {
   padding-top: 12px;
 }
 
+.development-mode-access {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  position: relative;
+}
+
+.development-mode-entry,
+.development-mode-exit {
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid #64748b;
+  border-radius: 999px;
+  color: #cbd5e1;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.4rem 0.7rem;
+  white-space: nowrap;
+}
+
+.development-mode-exit {
+  border-color: #92400e;
+  color: #fbbf24;
+}
+
+.development-mode-login {
+  background: #0f172a;
+  border: 1px solid #475569;
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(2, 6, 23, 0.55);
+  display: grid;
+  gap: 8px;
+  min-width: 240px;
+  padding: 12px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 50;
+}
+
+.development-mode-login label,
+.development-mode-login span {
+  color: #cbd5e1;
+  font-size: 0.75rem;
+}
+
+.development-mode-login input {
+  background: #020617;
+  border: 1px solid #64748b;
+  border-radius: 5px;
+  color: #f8fafc;
+  min-width: 0;
+  padding: 8px;
+}
+
+.development-mode-login button {
+  background: #1d4ed8;
+  border: 1px solid #60a5fa;
+  border-radius: 5px;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 8px;
+}
+
 .content-share-url h4 {
   color: #f8fafc;
   font-size: 13px;

@@ -3,11 +3,20 @@ import type { CatalogDirectoryHandle, CatalogFileHandle } from './CatalogGenerat
 import { ensureDirectoryPermission } from './CatalogWriter';
 
 const CHARACTER_PUBLIC_BASE = '/chars/';
+const STAGE_PUBLIC_BASE = '/stages/';
 
 export async function readLocalCatalogCharacterAsset(path: string): Promise<Uint8Array | null> {
-  const relativePath = localCharacterRelativePath(path);
+  const relativePath = localCatalogRelativePath(path, CHARACTER_PUBLIC_BASE);
   if (!relativePath) return null;
   const directory = await loadCatalogDirectoryHandle('character');
+  if (!directory || !await ensureDirectoryPermission(directory, 'read')) return null;
+  return readCatalogDirectoryAsset(directory, relativePath);
+}
+
+export async function readLocalCatalogStageAsset(path: string): Promise<Uint8Array | null> {
+  const relativePath = localCatalogRelativePath(path, STAGE_PUBLIC_BASE);
+  if (!relativePath) return null;
+  const directory = await loadCatalogDirectoryHandle('stage');
   if (!directory || !await ensureDirectoryPermission(directory, 'read')) return null;
   return readCatalogDirectoryAsset(directory, relativePath);
 }
@@ -33,11 +42,12 @@ export async function readCatalogDirectoryAsset(
   return null;
 }
 
-function localCharacterRelativePath(path: string): string | null {
+function localCatalogRelativePath(path: string, publicBase: string): string | null {
   const normalized = path.trim().replace(/\\/g, '/');
-  if (!normalized.startsWith(CHARACTER_PUBLIC_BASE)) return null;
-  const relativePath = normalized.slice(CHARACTER_PUBLIC_BASE.length);
-  return relativePath === 'common.cmd' || relativePath === 'common1.cns' ? null : relativePath;
+  if (!normalized.startsWith(publicBase)) return null;
+  const relativePath = normalized.slice(publicBase.length);
+  if (publicBase === CHARACTER_PUBLIC_BASE && (relativePath === 'common.cmd' || relativePath === 'common1.cns')) return null;
+  return relativePath;
 }
 
 function safeRelativeParts(path: string): string[] | null {

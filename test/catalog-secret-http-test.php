@@ -48,6 +48,15 @@ try {
     assertHttpValue(false, str_contains($debug['body'], $debugXToken), 'debug omits X-WebMUGEN-Token value');
     assertHttpStatus(200, catalogRequest($server['url'], 'http-file-secret-value'), 'config file only');
     assertHttpStatus(200, catalogRequest($server['url'], null, 'http-file-secret-value'), 'X-WebMUGEN-Token only');
+    $authorizeUrl = str_replace('action=play-url', 'action=authorize', $server['url']);
+    $authorize = catalogResponse($authorizeUrl, 'http-file-secret-value');
+    assertHttpStatus(200, $authorize['status'], 'Development Mode Pass authorization');
+    $authorizeJson = json_decode($authorize['body'], true, flags: JSON_THROW_ON_ERROR);
+    assertHttpValue(true, $authorizeJson['success'], 'Development Mode authorization success');
+    assertHttpValue('development', $authorizeJson['mode'], 'Development Mode authorization profile');
+    assertHttpValue(false, str_contains($authorize['body'], 'http-file-secret-value'), 'Development Mode authorization omits Pass');
+    assertHttpStatus(401, catalogRequest($authorizeUrl, 'wrong-token'), 'Development Mode rejects an invalid Pass');
+    assertHttpStatus(401, catalogRequest($authorizeUrl, null, null), 'Development Mode requires a Pass');
     $rebuild = catalogResponse(str_replace('action=play-url', 'action=rebuild', $server['url']), null, 'http-file-secret-value');
     assertHttpStatus(200, $rebuild['status'], 'X-WebMUGEN-Token rebuild');
     assertHttpValue(true, json_decode($rebuild['body'], true, flags: JSON_THROW_ON_ERROR)['success'], 'X-WebMUGEN-Token rebuild success');

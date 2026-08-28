@@ -4,11 +4,27 @@ import type { MugenStage, MugenStageLayer } from '../core/stage/MugenStage';
 import { getDefSection, getDefValue, parseDefText } from '../parser/def/DefParser';
 import { selectPreferredDefCandidate } from '../content/DefCandidateSelection';
 import { decodeMugenText } from '../parser/text/MugenTextDecoder';
+import { readLocalCatalogStageAsset } from '../content/catalog-generator/LocalCatalogAssetSource';
 
-export async function loadMugenStageZip(zipPath: string): Promise<MugenStage> {
-  const response = await fetch(zipPath);
-  if (!response.ok) throw new Error(`Stage ZIP load failed: HTTP ${response.status}`);
-  const entries = unzipSync(new Uint8Array(await response.arrayBuffer()));
+export type LocalStageAssetReader = (path: string) => Promise<Uint8Array | null>;
+
+export async function loadMugenStageZip(
+  zipPath: string,
+  localAssetReader: LocalStageAssetReader = readLocalCatalogStageAsset,
+): Promise<MugenStage> {
+  try {
+    const response = await fetch(zipPath);
+    if (!response.ok) throw new Error(`Stage ZIP load failed: HTTP ${response.status}`);
+    return parseMugenStageZip(new Uint8Array(await response.arrayBuffer()));
+  } catch (httpError) {
+    const localBytes = await localAssetReader(zipPath).catch(() => null);
+    if (!localBytes) throw httpError;
+    return parseMugenStageZip(localBytes);
+  }
+}
+
+function parseMugenStageZip(bytes: Uint8Array): MugenStage {
+  const entries = unzipSync(bytes);
   const files = new Map<string, Uint8Array>();
   for (const [name, bytes] of Object.entries(entries)) {
     if (!name.endsWith('/')) files.set(normalizePath(name), bytes);
