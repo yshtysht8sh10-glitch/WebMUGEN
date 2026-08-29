@@ -27,6 +27,7 @@ export function validateContentCatalog(value: unknown, sourcePath: string): Cont
   const entries: ContentCatalogEntry[] = [];
   const issues: ContentCatalogIssue[] = [];
   const ids = new Set<string>();
+  const paths = new Set<string>();
   for (let index = 0; index < value.items.length; index += 1) {
     const normalized = validateCatalogEntry(value.items[index], sourcePath, index);
     if ('issue' in normalized) {
@@ -37,7 +38,12 @@ export function validateContentCatalog(value: unknown, sourcePath: string): Cont
       issues.push({ code: 'item.duplicate-id', itemIndex: index, message: `Duplicate content ID: ${normalized.entry.id}.` });
       continue;
     }
+    if (paths.has(normalized.entry.path)) {
+      issues.push({ code: 'item.duplicate-path', itemIndex: index, message: `Duplicate content path: ${normalized.entry.path}.` });
+      continue;
+    }
     ids.add(normalized.entry.id);
+    paths.add(normalized.entry.path);
     entries.push(normalized.entry);
   }
 

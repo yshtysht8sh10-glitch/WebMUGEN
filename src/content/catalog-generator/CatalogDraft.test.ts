@@ -23,6 +23,22 @@ describe('Catalog draft editing', () => {
     expect(twice).toEqual(once);
   });
 
+  it('does not add a different ID that points to an existing path', () => {
+    const merged = mergeCatalogEntries(document, [{
+      id: 'hero-copy', name: 'Hero Copy', kind: 'character', engine: 'winmugen', path: '/chars/hero.zip', source: 'external',
+    }]);
+    expect(merged).toEqual(document);
+  });
+
+  it('still updates metadata when the existing ID owns the same path', () => {
+    const merged = mergeCatalogEntries(document, [{ ...document.items[0], name: 'Renamed Hero' }]);
+    expect(merged.items).toEqual([{ ...document.items[0], name: 'Renamed Hero' }]);
+  });
+
+  it('accepts an empty item list from the JSON editor as a complete Catalog draft', () => {
+    expect(parseCatalogDraft('{"version":1,"items":[]}')).toEqual({ version: 1, items: [] });
+  });
+
   it('detects whether the draft contains changes not reflected in catalog.json', () => {
     expect(isCatalogDraftDirty(document, { ...document, items: document.items.map((entry) => ({ ...entry })) })).toBe(false);
     expect(isCatalogDraftDirty(removeCatalogEntry(document, 'hero'), document)).toBe(true);

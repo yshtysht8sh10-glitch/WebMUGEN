@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ContentCatalog } from '../catalog/ContentCatalogTypes';
-import { CatalogGeneratorPanel } from './CatalogGeneratorPanel';
+import { CatalogGeneratorPanel, catalogApplyButtonFeedback, normalizeServerPublicBase } from './CatalogGeneratorPanel';
 
 const catalog: ContentCatalog = {
   version: 1,
@@ -24,7 +24,7 @@ describe('CatalogGeneratorPanel', () => {
     expect(html).toContain('Add built-in content to draft');
     expect(html).toContain('Edit draft as JSON');
     expect(html).toContain('Apply draft to catalog.json');
-    expect(html).toContain('class="catalog-apply-button"');
+    expect(html).toContain('class="catalog-apply-button default"');
     expect(html).toContain('>Same as loaded Catalog</span>');
     expect(html).toContain('Download draft as catalog.json');
     expect(html).not.toContain('Direct file path');
@@ -66,5 +66,27 @@ describe('CatalogGeneratorPanel', () => {
     expect(html).toContain('Download draft as catalog.json');
     expect(html).not.toContain('Catalog API Token');
     expect(html).not.toContain('Apply draft to catalog.json');
+  });
+
+  it('shows progress, success, and failure directly on the apply button', () => {
+    const english = (value: string) => value;
+
+    expect(catalogApplyButtonFeedback(true, 'server-saving', english)).toEqual({
+      label: 'Applying...', tone: 'saving',
+    });
+    expect(catalogApplyButtonFeedback(false, 'server-saved', english)).toEqual({
+      label: '✓ Applied to catalog.json', tone: 'saved',
+    });
+    expect(catalogApplyButtonFeedback(true, 'server-failed', english)).toEqual({
+      label: 'Apply failed — check the message below', tone: 'error',
+    });
+    expect(catalogApplyButtonFeedback(true, 'idle', english)).toEqual({
+      label: 'Apply draft to catalog.json', tone: 'default',
+    });
+  });
+
+  it('matches a server scan base regardless of a trailing slash', () => {
+    expect(normalizeServerPublicBase(' /DotoEita/16_proxy_release/storage/data/ '))
+      .toBe('/DotoEita/16_proxy_release/storage/data');
   });
 });

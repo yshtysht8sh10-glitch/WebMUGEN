@@ -17,6 +17,7 @@ export function generateContentCatalog(
   const errors: string[] = [];
   const warnings: string[] = [];
   const ids = new Set(preservedItems.map((entry) => entry.id));
+  const paths = new Set(preservedItems.map((entry) => catalogPathKey(entry.path)));
 
   for (const file of files) {
     const result = classifyCatalogSourceFile(file);
@@ -36,6 +37,13 @@ export function generateContentCatalog(
       excluded.push({ path: file.path, result: { ...result, kind: 'unknown', errors: [...result.errors, message] } });
       continue;
     }
+    const pathKey = catalogPathKey(catalogPath);
+    if (paths.has(pathKey)) {
+      const message = `Duplicate generated path: ${catalogPath}.`;
+      errors.push(message);
+      excluded.push({ path: file.path, result: { ...result, kind: 'unknown', errors: [...result.errors, message] } });
+      continue;
+    }
     const id = createCatalogId(file.path);
     if (!id || ids.has(id)) {
       const message = id ? `Duplicate generated ID: ${id}.` : `Cannot generate a safe ID for ${file.path}.`;
@@ -44,6 +52,7 @@ export function generateContentCatalog(
       continue;
     }
     ids.add(id);
+    paths.add(pathKey);
     items.push({
       id,
       kind: result.kind,
@@ -69,6 +78,10 @@ export function generateContentCatalog(
     diff: compareCatalogs(existingCatalog, catalog),
     scannedFiles: files.length,
   };
+}
+
+function catalogPathKey(path: string): string {
+  return path.trim().replace(/\\/g, '/');
 }
 
 function isSafeGeneratedPath(path: string): boolean {

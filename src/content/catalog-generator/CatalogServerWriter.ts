@@ -17,6 +17,12 @@ export type CatalogServerSnapshot = {
   revision: string;
 };
 
+export type CatalogServerScanResult = {
+  storagePublicBase: string;
+  entries: ContentCatalogDocument['items'];
+  excluded: Array<{ file: string; code: string; message: string }>;
+};
+
 export class CatalogServerWriteError extends Error {
   readonly status: number;
   readonly code: string;
@@ -33,11 +39,17 @@ export async function readCatalogServerSnapshot(
   catalogPath: string,
   fetcher: CatalogServerFetch = fetch,
 ): Promise<CatalogServerSnapshot> {
-  const response = await fetcher(catalogPath, { cache: 'no-store' });
+  const resolvedCatalogPath = resolveCatalogServerSnapshotPath(catalogPath);
+  const response = await fetcher(resolvedCatalogPath, { cache: 'no-store' });
   const source = await response.text();
-  if (!response.ok) throw new CatalogServerWriteError(source || `HTTP ${response.status}`, response.status);
+  if (!response.ok) {
+    const message = looksLikeHtml(source)
+      ? `HTTP ${response.status}: Catalog was not found at ${resolvedCatalogPath}.`
+      : source || `HTTP ${response.status}`;
+    throw new CatalogServerWriteError(message, response.status);
+  }
   const value: unknown = JSON.parse(source);
-  const validated = validateContentCatalog(value, catalogPath);
+  const validated = validateContentCatalog(value, resolvedCatalogPath);
   if (validated.rejectedEntries > 0) {
     throw new CatalogServerWriteError(validated.issues.map((issue) => issue.message).join(' '), 422, 'catalog.invalid');
   }
@@ -48,6 +60,12 @@ export async function readCatalogServerSnapshot(
     },
     revision: await sha256(source),
   };
+}
+
+export function resolveCatalogServerSnapshotPath(catalogPath: string, locationHref?: string): string {
+  return catalogPath === '/content/catalog.json'
+    ? resolveApplicationAssetPath('content/catalog.json', locationHref)
+    : catalogPath;
 }
 
 export async function saveCatalogDraftToServer(
@@ -82,6 +100,49 @@ export async function saveCatalogDraftToServer(
   return { revision: payload.revision, itemCount: payload.itemCount };
 }
 
+export async function scanCatalogServerContent(
+  token: string,
+  fetcher: CatalogServerFetch = fetch,
+): Promise<CatalogServerScanResult> {
+  const response = await fetcher(`${CATALOG_API_PATH}?action=scan-catalog`, {
+    method: 'POST',
+    cache: 'no-store',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      'X-WebMUGEN-Token': token,
+    },
+    body: '{}',
+  });
+  const source = await response.text();
+  const payload = parseResponse(source);
+  if (!response.ok || payload.success !== true) {
+    const error = isRecord(payload.error) ? payload.error : {};
+    throw new CatalogServerWriteError(
+      typeof error.message === 'string' ? error.message : `HTTP ${response.status}`,
+      response.status,
+      typeof error.code === 'string' ? error.code : 'catalog.failed',
+    );
+  }
+  if (typeof payload.storagePublicBase !== 'string' || !Array.isArray(payload.entries) || !Array.isArray(payload.excluded)) {
+    throw new CatalogServerWriteError('Catalog API returned an invalid scan response.', 500);
+  }
+  const validated = validateContentCatalog({ version: 1, items: payload.entries }, '/content/catalog.json');
+  if (validated.rejectedEntries > 0) {
+    throw new CatalogServerWriteError(validated.issues.map((issue) => issue.message).join(' '), 422, 'catalog.invalid');
+  }
+  const excluded = payload.excluded.filter(isRecord).map((entry) => ({
+    file: typeof entry.file === 'string' ? entry.file : '',
+    code: typeof entry.code === 'string' ? entry.code : 'catalog.invalid',
+    message: typeof entry.message === 'string' ? entry.message : 'The file was excluded.',
+  }));
+  return {
+    storagePublicBase: payload.storagePublicBase.replace(/\/$/, ''),
+    entries: validated.entries.map((entry) => ({ ...entry })),
+    excluded,
+  };
+}
+
 async function sha256(source: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(source));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -94,6 +155,10 @@ function parseResponse(source: string): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+function looksLikeHtml(source: string): boolean {
+  return /^\s*(?:<!doctype\s+html|<html\b)/i.test(source);
 }
 
 function isRecord(value: unknown): value is Record<string, any> {

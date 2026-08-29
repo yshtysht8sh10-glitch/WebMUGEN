@@ -769,8 +769,18 @@ function applyTargetOperations(
           : enterState(stateSource, owner, operation.value, ownerCns, stateInput);
         return { ...entered, stateOwnerId: ownerId, stateOwnerEntityId: operation.ownerId };
       }
-      if (operation.kind === 'velSet') return { ...player, vx: operation.x ?? player.vx, vy: operation.y ?? player.vy };
-      if (operation.kind === 'velAdd') return { ...player, vx: player.vx + (operation.x ?? 0), vy: player.vy + (operation.y ?? 0) };
+      // WinMUGEN TargetVel* X is relative to each selected target's Facing,
+      // not the root or Helper that queued the controller.
+      if (operation.kind === 'velSet') return {
+        ...player,
+        vx: operation.x === undefined ? player.vx : operation.x * player.facing,
+        vy: operation.y ?? player.vy,
+      };
+      if (operation.kind === 'velAdd') return {
+        ...player,
+        vx: player.vx + (operation.x ?? 0) * player.facing,
+        vy: player.vy + (operation.y ?? 0),
+      };
       if (operation.kind === 'lifeAdd') {
         const rawValue = Number.isFinite(operation.value) ? operation.value ?? 0 : 0;
         const storedAttackMultiplier = (operation.ownerPlayer as ExtendedPlayerState).attackMultiplier;

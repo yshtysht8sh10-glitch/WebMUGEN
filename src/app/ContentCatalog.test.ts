@@ -63,12 +63,13 @@ describe('Content Catalog Reader and Validator', () => {
       { id: 'unknown', name: 'Unknown', kind: 'mystery', engine: 'winmugen', path: 'unknown.def' },
       { id: 'bad-path', name: 'Bad Path', kind: 'stage', engine: 'winmugen', path: '../stage.def' },
       { id: 'hero', name: 'Duplicate', kind: 'character', engine: 'winmugen', path: 'chars/other.zip' },
+      { id: 'hero-copy', name: 'Duplicate Path', kind: 'character', engine: 'winmugen', path: 'chars/hero.zip' },
     ] }, '/content/catalog.json');
     expect(entriesOfKind(catalog, 'character').map((entry) => entry.id)).toEqual(['hero']);
     expect(entriesOfKind(catalog, 'stage').map((entry) => entry.id)).toEqual(['arena']);
     expect(entriesOfKind(catalog, 'lifebar').map((entry) => entry.id)).toEqual(['hud']);
-    expect(catalog).toMatchObject({ totalEntries: 6, rejectedEntries: 3 });
-    expect(catalog.issues.map((issue) => issue.code)).toEqual(['item.kind', 'item.path', 'item.duplicate-id']);
+    expect(catalog).toMatchObject({ totalEntries: 7, rejectedEntries: 4 });
+    expect(catalog.issues.map((issue) => issue.code)).toEqual(['item.kind', 'item.path', 'item.duplicate-id', 'item.duplicate-path']);
   });
 
   it('supports an empty Catalog and safely resolves a missing current selection to the first allowed item', () => {

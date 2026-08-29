@@ -6,6 +6,7 @@ import {
   WEBMUGEN_SETTINGS_STORAGE_KEY,
   loadWebMugenSettings,
   migrateWebMugenSettings,
+  normalizeCatalogPath,
   normalizeWebMugenSettings,
   publishWebMugenDefaults,
   resetWebMugenSettings,
@@ -17,6 +18,19 @@ import {
 import { createFeatureFlags } from './BuildMode';
 
 describe('WebMugenSettings', () => {
+  it('migrates the legacy root Catalog default into the current application directory', () => {
+    expect(normalizeCatalogPath(
+      '/content/catalog.json',
+      '/fallback/catalog.json',
+      'https://example.test/DotoEita/50_WebMUGEN/index.html?admin=1',
+    )).toBe('/DotoEita/50_WebMUGEN/content/catalog.json');
+    expect(normalizeCatalogPath(
+      '/shared/catalog.json',
+      '/fallback/catalog.json',
+      'https://example.test/DotoEita/50_WebMUGEN/index.html',
+    )).toBe('/shared/catalog.json');
+  });
+
   it('uses published defaults when no user settings exist', async () => {
     const storage = memoryStorage();
     const loaded = await loadWebMugenSettings({

@@ -433,9 +433,11 @@ function webMugenRebuildCatalog(array $config): array
     $scan = webMugenScanCatalog($config);
     $catalog = webMugenReadCatalog((string)$config['catalogPath']);
     $preserved = array_values(array_filter($catalog['items'], static fn(array $item): bool => !str_starts_with((string)($item['id'] ?? ''), 'proxy-release-')));
-    $document = ['version' => 1, 'items' => array_merge($preserved, $scan['entries'])];
+    $preservedPaths = array_fill_keys(array_map(static fn(array $item): string => webMugenCatalogPathKey((string)($item['path'] ?? '')), $preserved), true);
+    $entries = array_values(array_filter($scan['entries'], static fn(array $entry): bool => !isset($preservedPaths[webMugenCatalogPathKey((string)($entry['path'] ?? ''))])));
+    $document = ['version' => 1, 'items' => array_merge($preserved, $entries)];
     webMugenWriteCatalogAtomic((string)$config['catalogPath'], $document);
-    return ['catalog' => $document, 'entries' => $scan['entries'], 'excluded' => $scan['excluded']];
+    return ['catalog' => $document, 'entries' => $entries, 'excluded' => $scan['excluded']];
 }
 
 function webMugenPublishCharacter(array $config, string $publicationId, string $archiveFile, ?string $stageId = null): array
@@ -443,7 +445,11 @@ function webMugenPublishCharacter(array $config, string $publicationId, string $
     if (!preg_match('/^[0-9]+$/', $publicationId)) throw new RuntimeException('publicationId must be numeric.', 400);
     $entry = webMugenCatalogEntryForZip(webMugenPublicationArchivePath($config, $archiveFile), $config, $publicationId);
     $catalog = webMugenReadCatalog((string)$config['catalogPath']);
-    $items = array_values(array_filter($catalog['items'], static fn(array $item): bool => ($item['id'] ?? null) !== $entry['id']));
+    $entryPathKey = webMugenCatalogPathKey($entry['path']);
+    $items = array_values(array_filter($catalog['items'], static fn(array $item): bool => (
+        ($item['id'] ?? null) !== $entry['id']
+        && webMugenCatalogPathKey((string)($item['path'] ?? '')) !== $entryPathKey
+    )));
     $items[] = $entry;
     $document = ['version' => 1, 'items' => $items];
     $playUrl = webMugenBuildPlayUrl($config, $document, $entry['id'], $stageId ?? (string)$config['defaultStageId']);
@@ -460,7 +466,11 @@ function webMugenPublishStage(array $config, string $publicationId, string $arch
     if (!preg_match('/^[0-9]+$/', $publicationId)) throw new RuntimeException('publicationId must be numeric.', 400);
     $entry = webMugenStageCatalogEntryForZip(webMugenPublicationArchivePath($config, $archiveFile), $config, $publicationId);
     $catalog = webMugenReadCatalog((string)$config['catalogPath']);
-    $items = array_values(array_filter($catalog['items'], static fn(array $item): bool => ($item['id'] ?? null) !== $entry['id']));
+    $entryPathKey = webMugenCatalogPathKey($entry['path']);
+    $items = array_values(array_filter($catalog['items'], static fn(array $item): bool => (
+        ($item['id'] ?? null) !== $entry['id']
+        && webMugenCatalogPathKey((string)($item['path'] ?? '')) !== $entryPathKey
+    )));
     $items[] = $entry;
     $document = ['version' => 1, 'items' => $items];
     $playUrl = webMugenBuildPlayUrl($config, $document, $characterId ?? (string)$config['defaultCharacterId'], $entry['id']);
@@ -609,6 +619,7 @@ function webMugenValidateCatalog(mixed $catalog): void
         throw new RuntimeException('Catalog must be a version 1 document with an items array.', 500);
     }
     $ids = [];
+    $paths = [];
     foreach ($catalog['items'] as $item) {
         if (!is_array($item)) throw new RuntimeException('Catalog item must be an object.', 500);
         $id = (string)($item['id'] ?? '');
@@ -624,8 +635,16 @@ function webMugenValidateCatalog(mixed $catalog): void
         if (!in_array($engine, ['winmugen', 'webmugen'], true)) throw new RuntimeException('Catalog item has an unknown engine.', 500);
         if (isset($item['source']) && !in_array($item['source'], ['builtin', 'external'], true)) throw new RuntimeException('Catalog item has an unknown source.', 500);
         if (!webMugenCatalogItemPathIsValid($path, $kind, $engine)) throw new RuntimeException('Catalog item has an invalid path.', 500);
+        $normalizedPath = webMugenCatalogPathKey($path);
+        if (isset($paths[$normalizedPath])) throw new RuntimeException('Catalog contains a duplicate path.', 500);
         $ids[strtolower($id)] = true;
+        $paths[$normalizedPath] = true;
     }
+}
+
+function webMugenCatalogPathKey(string $path): string
+{
+    return str_replace('\\', '/', trim($path));
 }
 
 function webMugenCatalogItemPathIsValid(string $path, string $kind, string $engine): bool

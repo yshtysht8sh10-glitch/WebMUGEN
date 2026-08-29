@@ -1,6 +1,6 @@
 # Content Catalog
 
-Updated: 2026-08-27
+Updated: 2026-08-29
 
 ## Purpose and architecture
 
@@ -9,7 +9,7 @@ The Content Catalog is the common, deployment-independent list of content that a
 Responsibilities are deliberately separated:
 
 - **Catalog Reader** fetches one same-origin JSON file, enforces a timeout, parses JSON, and returns either a validated Catalog or a structured failure with the previous successful Catalog as fallback.
-- **Catalog Validator** checks the schema, version, individual items, duplicate IDs, kind/engine values, safe paths, and resolves relative paths against the Catalog directory.
+- **Catalog Validator** checks the schema, version, individual items, duplicate IDs and paths, kind/engine values, safe paths, and resolves relative paths against the Catalog directory.
 - **Content Selection** exposes only entries of the requested kind and resolves a removed selection to the first allowed entry of that kind.
 - **Content Loader** remains the final authority for the selected Character, Stage, or LifeBar. A declared `kind` never bypasses its normal Loader validation.
 - **Catalog Generator** is a separate Development Mode tool. It scans independently selected Character, Stage, and LifeBar folders, validates directly specified files, and creates `catalog.json` in an independent output folder or download.
@@ -54,7 +54,7 @@ The canonical version 1 document uses `items`:
 
 Each item has a stable `id`, display `name`, `kind` (`character`, `stage`, or `lifebar`), execution `engine` (`winmugen` or `webmugen`), and path. The optional `source` field distinguishes publisher-shipped `builtin` items from generated `external` items. Relative paths are resolved from the directory containing `catalog.json`; absolute same-origin paths remain absolute. Built-in native content may use `builtin:<kind>:<id>`.
 
-Unknown kinds/engines, unsafe paths, duplicate IDs, invalid item shapes, and incompatible extensions are excluded individually and reported. A missing `items` array or unsupported top-level version rejects the whole document. An empty `items` array is valid and leaves the publisher's safe game fallbacks active.
+Unknown kinds/engines, unsafe paths, duplicate IDs or paths, invalid item shapes, and incompatible extensions are excluded individually and reported. A missing `items` array or unsupported top-level version rejects the whole document. An empty `items` array is valid and leaves the publisher's safe game fallbacks active.
 
 ## Runtime reading and fallback
 
@@ -75,11 +75,13 @@ URL Character and Stage IDs are accepted only when an entry of the correct kind 
 The Generator starts with a **Server / Local** source-location switch and renders only the controls used by the selected workflow:
 
 - **Local:** uses `showDirectoryPicker()` when supported. Independently choose external Character, Stage, and LifeBar folders; any source may remain unset. The Generator recursively reads candidates and maps their relative paths to the default published bases `/chars`, `/stages`, and `/lifebars`. An optional output folder enables direct `catalog.json` save; download remains available as a fallback.
-- **Server:** accepts same-origin files that are already publicly reachable by WebMUGEN. Set the published URL base for each kind and add a file name, relative path, or absolute same-origin path. For example, `itoko.zip` under `/chars` resolves to `/chars/itoko.zip`. Authenticated Development Mode can apply the validated draft through the Catalog API. Locked Public Mode exposes neither the credential control nor the server-save action. Download remains available without server write access.
+- **Server:** authenticated Development Mode asks the Catalog API to scan its configured fixed `storageDir` without changing `catalog.json`, then imports the returned Character and Stage entries into the browser draft. The Character or Stage published URL base must match the API's `storagePublicBase`; for the proxy deployment this is `/DotoEita/16_proxy_release/storage/data`. Same-origin individual files can still be added by file name, relative path, or absolute path. Locked Public Mode exposes neither the scan credential nor the server-save action. Download remains available without server write access.
+
+The Character, Stage, and LifeBar published URL bases are remembered in same-origin browser storage only after **Apply draft to catalog.json** succeeds. Opening Development Mode again restores the last successfully applied bases. Editing a base, importing a draft, a failed apply, or downloading does not replace the remembered values. Development Passes, API secrets, and Development session tokens are never included in this stored record.
 
 Server mode does not scan a deployment server directory. Pass authentication returns a short-lived, scoped Development session token for Catalog API writes; the browser never receives or reads the server's API secret and never reuses the raw Pass as a token. Rental-server rebuild scripts and the authenticated Catalog API remain separate server-side workflows.
 
-In both modes, each result must match its source slot's expected kind. Publisher-shipped `source: "builtin"` items are always retained; generated items receive `source: "external"`. An unset source kind retains its currently loaded external items instead of silently deleting them. Structured classification results record kind, engine, confidence, entry file, warnings, and errors. Unknown/corrupt/ambiguous/wrong-kind entries, unsafe direct paths, and duplicate generated IDs are listed with reasons.
+In both modes, each result must match its source slot's expected kind. Publisher-shipped `source: "builtin"` items are always retained; generated items receive `source: "external"`. An unset source kind retains its currently loaded external items instead of silently deleting them. Structured classification results record kind, engine, confidence, entry file, warnings, and errors. Unknown/corrupt/ambiguous/wrong-kind entries, unsafe direct paths, duplicate generated IDs, and duplicate generated paths are listed with reasons. A new entry is not added when another ID already owns the same normalized path; updating the existing ID's metadata remains allowed.
 
 For locally generated Character and Stage entries, `/chars/<relative path>` and
 `/stages/<relative path>` are also lookup keys for their respective saved local source folders.
@@ -100,8 +102,8 @@ Development Mode keeps an editable Catalog draft between source scanning and out
 - **Import selected external content into draft** scans or validates the selected external sources and updates the applicable external entries in the draft.
 - **Add built-in content to draft** re-adds the canonical WebMUGEN-shipped entries without duplicating IDs. The canonical list is maintained in `src/content/catalog/BuiltinContentCatalog.ts` and is checked against the `source: "builtin"` entries in the publisher Catalog.
 - **Review or remove Catalog items** removes a specified entry from the draft only. The selected output file is unchanged until Save or Download is used.
-- **Edit catalog.json** opens an in-page text editor. Applying edited JSON requires a fully valid version 1 Catalog; invalid or partially rejected JSON is not applied.
-- **Apply draft to catalog.json** uses a mode-specific save route: Local writes to the user-authorized output directory, while Server sends the complete draft to the authenticated `save-catalog` API action. Selecting or changing an external input marks it as not yet imported; the final Apply action imports pending sources before writing, so a newly selected folder cannot be silently omitted. It is visually emphasized whenever the draft differs from the loaded Catalog or a selected input is pending. A successful write clears the unapplied state; downloading does not.
+- **Edit catalog.json** opens an in-page text editor. Edited JSON must be a fully valid version 1 Catalog; invalid or partially rejected JSON is not applied. An empty `items` array is valid. Text changes immediately mark the draft as unapplied.
+- **Apply draft to catalog.json** validates and incorporates the current text-editor contents before using a mode-specific save route: Local writes to the user-authorized output directory, while Server sends the complete draft to the authenticated `save-catalog` API action. The separate Apply-JSON action remains useful for previewing the edited item list, but is not a prerequisite for saving. Selecting or changing an external input marks it as not yet imported; the final Apply action imports pending sources before writing, so a newly selected folder cannot be silently omitted. It is visually emphasized whenever the draft differs from the loaded Catalog, the text editor has unsaved edits, or a selected input is pending. During a write the button itself reports progress; success changes it to a green confirmation and failure to a red prompt beside the action that was used. A new edit restores the normal apply label. A successful write clears the unapplied state; downloading does not.
 - **Download draft as catalog.json** remains available in both Local and Server modes as a separate file-delivery path. Download never changes the Runtime Catalog or the draft's unapplied state.
 
 In a Public build, Server save uses the short-lived session token returned after the header's Development Mode gate verifies the separate Pass. The raw Pass is discarded immediately after authorization. Only the scoped token remains in tab memory and is sent in the existing Bearer and `X-WebMUGEN-Token` headers. It is never written to settings, localStorage, URLs, HTML source, or logs, and reload discards it. A directly built Development artifact has no runtime login session, so its existing manual Catalog API Token field remains available for trusted local administration.
@@ -138,14 +140,26 @@ Only the shared schema is part of the runtime contract. Do not make the browser 
 
 ### Proxy-release publishing endpoint
 
+The publisher default should store the bundled Catalog as the application-relative
+`content/catalog.json`, not the origin-root `/content/catalog.json`. Runtime settings resolve that
+path against the deployed `index.html`, so both root and subdirectory deployments read and verify
+the same file beside the application. The legacy exact value `/content/catalog.json` is migrated to
+the current application directory; other explicit same-origin absolute Catalog paths remain unchanged.
+
 The supplied PHP endpoint `public/api/catalog.php` is the deployment adapter for the proxy-release workflow. It scans only the configured fixed storage root, validates each ZIP server-side, and rewrites the same version 1 Catalog consumed by the Runtime. It supports authenticated `POST` actions:
 
 - `publish-character`: validate one `publicationId` plus the actual `archiveFile` basename and return its stable Character ID, Character path, and play URL;
 - `publish-stage`: validate one Stage ZIP, upsert it with the stable publication ID, and return its Stage ID, Stage path, and a play URL using the configured default Character;
 - `rebuild`: rescan the fixed storage root and replace all `proxy-release-*` entries while retaining publisher/built-in entries;
+- `scan-catalog`: inspect the fixed storage root and return validated Character and Stage entries plus exclusions without modifying `catalog.json`; this is the server-mode draft import route;
 - `save-catalog`: validate and atomically replace the complete GUI Catalog draft only when its `expectedRevision` still matches the server file;
 - `authorize`: validate `X-WebMUGEN-Development-Pass` against the configured Pass hash without mutating the Catalog, then issue a short-lived signed Development session token;
 - `play-url`: return the current URL for an already cataloged publication.
+
+Publishing a Character or Stage is an upsert by both stable ID and normalized path. If a server
+rebuild already registered the same ZIP under a scan-generated ID, publishing it removes that older
+entry and leaves one entry with the requested stable publication ID. Server rebuilds likewise keep an
+existing non-proxy entry when a scanned ZIP resolves to the same path.
 
 `rebuild` and `save-catalog` are intentionally separate. `rebuild` derives proxy-release entries from `storage/data`; `save-catalog` preserves the administrator's complete GUI-authored document, including names, paths, removals, and non-proxy content. Neither action is used as a substitute for the other.
 

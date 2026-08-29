@@ -1,6 +1,6 @@
 # Development and Public Build Modes
 
-Updated: 2026-08-28
+Updated: 2026-08-29
 
 WebMUGEN derives its initial developer-facing capabilities from one `WebMugenBuildMode`: `development` or `public`. Components must consume the feature set from `BuildMode.ts`; hostname checks and independent feature booleans are not mode authorities. A Public build may elevate its in-memory feature profile after server-side Pass authentication, but it always starts locked.
 
@@ -40,6 +40,9 @@ such as `https://example.com/WebMUGEN/`, create/select the server's `WebMUGEN/` 
 `index.html`, `assets/`, `chars/`, `config/`, `content/`, `lifebars/`, and `stages/` directly inside
 it. Do not upload `src/`, `node_modules/`, or the repository root. Asset references are relative,
 so the same artifact supports both placements without changing a domain or server file.
+Keep the publisher Catalog setting as `content/catalog.json`; the application resolves it beside
+the deployed `index.html`. The legacy `/content/catalog.json` value is migrated for this bundled
+Catalog because it otherwise targets the domain root when WebMUGEN is deployed in a subdirectory.
 
 - [ ] Run `npm run build:public` (or otherwise set `VITE_WEBMUGEN_MODE=public`).
 - [ ] Run `npm run typecheck` and record any known failures separately from artifact generation.

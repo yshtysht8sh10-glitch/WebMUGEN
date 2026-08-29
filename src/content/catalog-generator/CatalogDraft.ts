@@ -15,16 +15,26 @@ export function mergeCatalogEntries(
 ): ContentCatalogDocument {
   const items = document.items.map((entry) => ({ ...entry }));
   const indices = new Map(items.map((entry, index) => [entry.id, index]));
+  const pathOwners = new Map(items.map((entry) => [catalogPathKey(entry.path), entry.id]));
   for (const addition of additions) {
     const index = indices.get(addition.id);
+    const pathKey = catalogPathKey(addition.path);
+    const pathOwner = pathOwners.get(pathKey);
+    if (pathOwner !== undefined && pathOwner !== addition.id) continue;
     if (index === undefined) {
       indices.set(addition.id, items.length);
       items.push({ ...addition });
     } else {
+      pathOwners.delete(catalogPathKey(items[index].path));
       items[index] = { ...addition };
     }
+    pathOwners.set(pathKey, addition.id);
   }
   return { version: 1, items };
+}
+
+function catalogPathKey(path: string): string {
+  return path.trim().replace(/\\/g, '/');
 }
 
 export function removeCatalogEntry(document: ContentCatalogDocument, id: string): ContentCatalogDocument {

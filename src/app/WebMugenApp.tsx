@@ -158,6 +158,7 @@ import {
 import { RuntimePerformanceMetrics } from './RuntimePerformanceMetrics';
 import { CHARACTER_PATH_OPTIONS as DISCOVERED_CHARACTER_PATH_OPTIONS } from 'virtual:webmugen-character-manifest';
 import { UiLanguageProvider, useUiLanguage } from './UiLanguage';
+import { START_GATE_CONTENT } from './StartGateContent';
 import { applyViewportCameraRules, getScreenSizeProfile, resolveViewportCamera } from '../core/engine/ScreenSize';
 import {
   FALLBACK_WEBMUGEN_SETTINGS,
@@ -1734,7 +1735,7 @@ export function AudioStartOverlay({
   onUserGesture: (gestureType: AudioStartGateGesture) => void;
   onContinueWithoutAudio: () => void;
 }) {
-  const { text } = useUiLanguage();
+  const { language, text } = useUiLanguage();
   if (state === 'loading') {
     return <div className="audio-start-overlay" role="status">{text('Loading character…', 'キャラクターを読み込んでいます…')}</div>;
   }
@@ -1742,17 +1743,25 @@ export function AudioStartOverlay({
     return <div className="audio-start-overlay" role="status">{text('Starting audio…', '音声を開始しています…')}</div>;
   }
   if (state === 'waiting-for-user') {
+    const content = START_GATE_CONTENT[language];
     return (
       <div className="audio-start-overlay">
-        <button
-          autoFocus
-          className="audio-start-primary"
-          onPointerDown={() => onUserGesture('pointerdown')}
-          onKeyDown={() => onUserGesture('keydown')}
-          type="button"
-        >
-          {text('Click or press a key to start', 'クリックまたはキー入力で開始')}
-        </button>
+        <section className="audio-start-card" aria-label={content.startLabel}>
+          <button
+            autoFocus
+            className="audio-start-primary"
+            onPointerDown={() => onUserGesture('pointerdown')}
+            onKeyDown={() => onUserGesture('keydown')}
+            type="button"
+          >
+            {content.startLabel}
+          </button>
+          <div className="audio-start-notice">
+            {content.noticeParagraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+            <p className="audio-start-compatibility-note">※{content.compatibilityNote}</p>
+            <p className="audio-start-recommendation">{content.recommendation}</p>
+          </div>
+        </section>
       </div>
     );
   }

@@ -1,6 +1,6 @@
 # Browser Audio Runtime
 
-Updated: 2026-07-15
+Updated: 2026-08-28
 
 ## Responsibility
 
@@ -19,7 +19,7 @@ The runtime provides:
 
 React re-renders do not create another context. The app-level effect owns the runtime for the component lifetime. Character reload and round restart stop active sources; component unmount stops sources, clears decoded data, and closes the context.
 
-Issue #51 uses an Audio Start Gate instead of racing the first game input against `resume()`. Character/assets load first, but `BrowserInput`, `CanvasRenderer`, and the requestAnimationFrame loop are not started. The canvas overlay shows `クリックまたはキー入力で開始`; its own `pointerdown` or `keydown` handler calls `BrowserAudioRuntime.unlock()` synchronously in that gesture stack. The prepared game-loop closure starts exactly once only after unlock returns true and the adapter reports `running`. A rejected or resolved-but-suspended resume keeps the overlay visible and retryable. Unsupported/repeated failure exposes an explicit `音声なしで開始` action. The old BrowserInput unlock callback and independent window keydown listener are not part of this path. Runtime, Manual, and Settings tab changes are not startup signals.
+Issue #51 uses an Audio Start Gate instead of racing the first game input against `resume()`. Character/assets load first, but `BrowserInput`, `CanvasRenderer`, and the requestAnimationFrame loop are not started. The canvas overlay presents the start action together with the current compatibility notice; purpose-dependent Japanese and English copy is centralized in `src/app/StartGateContent.ts` so revising the notice does not change startup behavior. The start button's own `pointerdown` or `keydown` handler calls `BrowserAudioRuntime.unlock()` synchronously in that gesture stack. The prepared game-loop closure starts exactly once only after unlock returns true and the adapter reports `running`. A rejected or resolved-but-suspended resume keeps the overlay visible and retryable. Unsupported/repeated failure exposes an explicit `音声なしで開始` action. The old BrowserInput unlock callback and independent window keydown listener are not part of this path. Runtime, Manual, and Settings tab changes are not startup signals.
 
 The gate states are `loading`, `waiting-for-user`, `unlocking-audio`, `running`, and `audio-unavailable`. StrictMode cleanup disposes the old gate before closing its runtime and cancels any old requestAnimationFrame; a late old unlock Promise cannot start the loop. Character changes reuse an already-running shared AudioContext and start the newly prepared loop without creating another context.
 

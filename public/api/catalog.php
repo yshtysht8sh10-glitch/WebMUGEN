@@ -94,6 +94,14 @@ try {
     } elseif ($action === 'rebuild') {
         $result = webMugenRebuildCatalog($config);
         echo json_encode(['success' => true, 'registered' => count($result['entries']), 'excluded' => $result['excluded']], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    } elseif ($action === 'scan-catalog') {
+        $result = webMugenScanCatalog($config);
+        echo json_encode([
+            'success' => true,
+            'storagePublicBase' => (string)$config['storagePublicBase'],
+            'entries' => $result['entries'],
+            'excluded' => $result['excluded'],
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     } elseif ($action === 'play-url') {
         $catalog = webMugenReadCatalog((string)$config['catalogPath']);
         $playUrl = webMugenBuildPlayUrl($config, $catalog, (string)($payload['characterId'] ?? ''), (string)($payload['stageId'] ?? $config['defaultStageId']));

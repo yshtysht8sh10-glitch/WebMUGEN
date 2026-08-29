@@ -155,6 +155,36 @@ ctrl = 0
     expect(result.state.players[0].hitDiagnosticLines?.join('\n')).toContain('raw.target_controller owner=p1 controller=TargetState');
   });
 
+  it.each([
+    { facing: 1 as const, expectedSet: 3, expectedAdd: 4 },
+    { facing: -1 as const, expectedSet: -3, expectedAdd: -4 },
+  ])('converts TargetVelSet and TargetVelAdd X from target-facing coordinates when Facing=$facing', ({ facing, expectedSet, expectedAdd }) => {
+    const setCns = parseCnsText(`
+[Statedef 200]
+[State 200, VelSet]
+type = TargetVelSet
+trigger1 = 1
+x = 3
+y = -2
+`);
+    const addCns = parseCnsText(`
+[Statedef 200]
+[State 200, VelAdd]
+type = TargetVelAdd
+trigger1 = 1
+x = 1
+y = .5
+`);
+    const initial = targetState();
+    initial.players[1] = { ...initial.players[1], facing, vx: 0, vy: 0 };
+
+    const set = stepCnsStateRuntime(initial, setCns).state;
+    expect(set.players[1]).toMatchObject({ facing, vx: expectedSet, vy: -2 });
+
+    const added = stepCnsStateRuntime(set, addCns).state;
+    expect(added.players[1]).toMatchObject({ facing, vx: expectedAdd, vy: -1.5 });
+  });
+
   it('safely does nothing and logs a diagnostic when id does not match', () => {
     const cns = parseCnsText(`
 [Statedef 200]

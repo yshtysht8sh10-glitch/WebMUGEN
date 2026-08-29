@@ -438,6 +438,11 @@ describe('WebMugenApp runtime history', () => {
     }));
 
     expect(waiting).toContain('Click or press a key to start');
+    expect(waiting).toContain('class="audio-start-card"');
+    expect(waiting).toContain('This web app aims to recreate WinMUGEN.');
+    expect(waiting).toContain('currently about 60% complete');
+    expect(waiting).toContain('MUGEN 1.0 or 1.1');
+    expect(waiting).toContain('try it in the compatible version of MUGEN');
     expect(unavailable).toContain('Retry audio');
     expect(unavailable).toContain('Continue without audio');
     expect(waiting).not.toContain('Runtime');
@@ -458,6 +463,10 @@ describe('WebMugenApp runtime history', () => {
     expect(english).toContain('Game / Runtime');
     expect(english).not.toContain('ゲーム・実行状況');
     expect(japanese).toContain('クリックまたはキー入力で開始');
+    expect(japanese).toContain('本WebアプリはWinMUGENの再現を目指したアプリとなります。');
+    expect(japanese).toContain('まだ完成度は6割ほど');
+    expect(japanese).toContain('※特にMUGEN1.0や1.1対応のキャラ');
+    expect(japanese).toContain('対応VerのMUGENに導入して遊んでください。');
     expect(japanese).not.toContain('Click or press a key to start');
   });
 

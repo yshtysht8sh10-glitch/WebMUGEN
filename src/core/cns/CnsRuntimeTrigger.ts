@@ -159,6 +159,14 @@ function compileBooleanExpression(expression: string): BooleanSource {
   if (trimmed === '1') return () => true;
   if (trimmed === '0') return () => false;
 
+  // AnimElem is an edge trigger, not a numeric current-element comparison.
+  // Preserve that meaning after a redirect (for example
+  // `helper(ID), AnimElem = 2`) before the generic redirected-number path.
+  const redirectedAnimElem = isRedirectedAnimElemTrigger(trimmed)
+    ? getRedirectBooleanSource(trimmed)
+    : null;
+  if (redirectedAnimElem) return redirectedAnimElem;
+
   // Parse a comparison whose operands are direct numeric redirects before the
   // generic redirect path. Otherwise `helper(ID),var(N) >= ...` is treated as
   // one redirected boolean expression and an absent left-side Helper returns
@@ -388,6 +396,11 @@ function evaluateBooleanExpression(expression: string, context: CnsRuntimeTrigge
   if (trimmed.startsWith('!')) return !evaluateBooleanExpression(trimmed.slice(1), context);
   if (trimmed === '1') return true;
   if (trimmed === '0') return false;
+
+  const redirectedAnimElem = isRedirectedAnimElemTrigger(trimmed)
+    ? getRedirectBooleanSource(trimmed)
+    : null;
+  if (redirectedAnimElem) return redirectedAnimElem(context);
 
   const numericComparison = compileNumericComparison(trimmed, true);
   if (numericComparison) return numericComparison(context);
@@ -1010,6 +1023,12 @@ function parseRedirect(name: string): { kind: RedirectKind; argument?: string; e
   const match = name.match(/^(enemynear|enemy|target|parent|root|helper|playerid|partner)(?:\(([^)]*)\))?\s*,\s*(.+)$/);
   if (!match) return null;
   return { kind: match[1] as RedirectKind, argument: match[2]?.trim() || undefined, expression: match[3] };
+}
+
+function isRedirectedAnimElemTrigger(expression: string): boolean {
+  const parsed = parseRedirect(expression);
+  return parsed !== null
+    && /^animelem\s*=\s*-?\d+(?:\s*,\s*(?:=|!=|>=|<=|>|<)?\s*-?\d+)?$/i.test(parsed.expression);
 }
 
 function compileRedirectPlayerResolver(

@@ -193,6 +193,8 @@ The three-character HitDef audit observed `BackEdgeBodyDist`, `FrontEdgeBodyDist
 
 `AnimElem = N` is evaluated from the current AIR action, using 1-based element numbering. It is true when element N starts. A finite action without `LoopStart` repeats the whole action and bare `AnimElem = N` becomes true again on each pass. Explicit `LoopStart` and negative-duration holds retain the original non-resetting trigger timeline, so a terminal `-1` element does not continuously retrigger. `AnimElem = N, op T` compares the original element-relative time with `=`, `!=`, `<`, `>`, `<=`, or `>=`; an invalid element number returns false. `AnimElemTime(N)` reads the same original timeline. Bundled T-H-M-A Helper State 3031 and State 3940 cover the finite-repeat and infinite-hold distinction.
 
+Redirects retain the same edge-trigger meaning. `helper(ID), AnimElem = N` is true only when the selected Helper enters element N, not for every tick during that element. This matters for bundled itoko State 1464: Action 1464 element 2 lasts three ticks, but its `TargetVelSet y = -14` must execute only on the first tick instead of resetting P2's launch velocity three times. The comparison-time form after a redirect continues to test the selected entity's element-relative time.
+
 Issue #111 corrected the finite-loop behavior introduced by Issue #54. The production app still supplies AIR element timing to CNS evaluation, but a repeated visual pass no longer makes bare `AnimElem` true again. T-H-M-A State 3010 is covered by a real-character regression proving that its `AnimElem = 3` Helper controller runs once instead of once per loop.
 
 ## Move contact results

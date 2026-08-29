@@ -69,6 +69,77 @@ describe('itoko thread-and-thimble doll compatibility', () => {
     expect(gravity?.triggers.map((trigger) => trigger.expression.toLowerCase())).toContain('time >= 20');
   });
 
+  it('applies the redirected AnimElem launch velocity once, then lets State 1465 gravity reduce it', () => {
+    let state = createInitialGameState();
+    state.players = [
+      { ...state.players[0], moveType: 'I' },
+      {
+        ...state.players[1],
+        y: 49,
+        vy: 0,
+        stateNo: 1465,
+        stateHeaderAppliedStateNo: 1465,
+        stateTime: 20,
+        stateOwnerId: 1,
+        selfStateOwnerId: 2,
+        moveType: 'H',
+        stateType: 'A',
+        physics: 'N',
+        animNo: 1465,
+        animTime: 20,
+      },
+    ];
+    state.helpers = spawnHelper(state.helpers, {
+      helperId: 1350,
+      rootEntityId: 1,
+      parentEntityId: 1,
+      ownerCharacterId: 1,
+      stateOwnerId: 1,
+      animationOwnerId: 1,
+      stateNo: 9999,
+      x: 300,
+      y: -80,
+      facing: 1,
+      keyCtrl: false,
+      ownPal: true,
+      spawnFrame: -1,
+      parent: state.players[0],
+    }, cns);
+    const doll = state.helpers.entries.find((helper) => helper.helperId === 1350)!;
+    doll.player = { ...doll.player, animNo: 1464, animTime: 3 };
+    state.helpers = spawnHelper(state.helpers, {
+      helperId: 1462,
+      rootEntityId: 1,
+      parentEntityId: doll.entityId,
+      ownerCharacterId: 1,
+      stateOwnerId: 1,
+      animationOwnerId: 1,
+      stateNo: 1464,
+      x: 300,
+      y: -80,
+      facing: 1,
+      keyCtrl: false,
+      ownPal: true,
+      spawnFrame: -1,
+      parent: doll.player,
+    }, cns);
+    const hand = state.helpers.entries.find((helper) => helper.helperId === 1462)!;
+    hand.player = {
+      ...hand.player,
+      stateTime: 10,
+      targets: [{ playerId: 2, hitDefId: 1462, activeHitDefId: 7 }],
+    };
+    state.players[1] = { ...state.players[1], stateOwnerEntityId: hand.entityId };
+
+    state = stepCnsStateRuntime(state, cns, animationInput).state;
+    expect(state.players[1]).toMatchObject({ stateNo: 1465, stateTime: 20, facing: -1, vx: 0.5, vy: -14 });
+
+    state = stepCnsPhysicsMotion(state, cns);
+    state = stepCnsStateRuntime(state, cns, animationInput).state;
+    expect(state.players[1]).toMatchObject({ stateNo: 1465, stateTime: 21, facing: -1, vx: 0.5, vy: -13.63 });
+    expect(state.helpers.entries.find((helper) => helper.helperId === 1462)?.player.stateTime).toBe(11);
+  });
+
   it('marks every root-side control-thread frame for vertical AIR flipping', () => {
     const action = air.actions.find((candidate) => candidate.actionNo === 1370);
 

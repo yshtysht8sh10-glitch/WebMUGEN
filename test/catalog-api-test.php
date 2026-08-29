@@ -52,6 +52,11 @@ try {
         'defaultCharacterId' => 't-h-m-a',
     ];
 
+    $beforeScan = (string)file_get_contents($catalogPath);
+    $scanned = webMugenScanCatalog($config);
+    assertSame(6, count($scanned['entries']), 'read-only server scan discovers valid Character and Stage ZIPs');
+    assertSame($beforeScan, (string)file_get_contents($catalogPath), 'read-only server scan does not rewrite the Catalog');
+
     $rebuilt = webMugenRebuildCatalog($config);
     assertSame(6, count($rebuilt['entries']), 'valid Character and Stage ZIPs are registered regardless of file name');
     assertSame(2, count($rebuilt['excluded']), 'unknown and corrupt ZIPs are excluded');
@@ -72,6 +77,12 @@ try {
     $published = webMugenPublishCharacter($config, '123', 'uploaded_938472.zip');
     assertSame('proxy-release-123', $published['entry']['id'], 'publication ID is independent from the archive filename');
     assertSame('/DotoEita/16_proxy_release/storage/data/uploaded_938472.zip', $published['entry']['path'], 'the actual archive filename is retained in the Catalog path');
+    $publishedCharacterMatches = array_values(array_filter(
+        webMugenReadCatalog($catalogPath)['items'],
+        static fn(array $entry): bool => $entry['path'] === '/DotoEita/16_proxy_release/storage/data/uploaded_938472.zip',
+    ));
+    assertSame(1, count($publishedCharacterMatches), 'publishing a rebuilt Character path replaces rather than duplicates it');
+    assertSame('proxy-release-123', $publishedCharacterMatches[0]['id'], 'published Character keeps the stable publication ID after path replacement');
     assertSame(
         'https://example.test/DotoEita/50_WebMUGEN/index.html?character=proxy-release-123&stage=cyber',
         $published['playUrl'],
@@ -80,6 +91,12 @@ try {
     $publishedStage = webMugenPublishStage($config, '7', 'material-7-archive.zip');
     assertSame('proxy-release-7', $publishedStage['entry']['id'], 'Stage uses the stable publication ID');
     assertSame('stage', $publishedStage['entry']['kind'], 'Stage Catalog kind is retained');
+    $publishedStageMatches = array_values(array_filter(
+        webMugenReadCatalog($catalogPath)['items'],
+        static fn(array $entry): bool => $entry['path'] === '/DotoEita/16_proxy_release/storage/data/material-7-archive.zip',
+    ));
+    assertSame(1, count($publishedStageMatches), 'publishing a rebuilt Stage path replaces rather than duplicates it');
+    assertSame('proxy-release-7', $publishedStageMatches[0]['id'], 'published Stage keeps the stable publication ID after path replacement');
     assertSame(
         'https://example.test/DotoEita/50_WebMUGEN/index.html?character=t-h-m-a&stage=proxy-release-7',
         $publishedStage['playUrl'],
@@ -98,6 +115,15 @@ try {
         assertSame(0644, fileperms($catalogPath) & 0777, 'GUI draft save keeps the Catalog publicly readable');
     }
 
+    $savedEmptyDraft = webMugenSaveCatalog(
+        $config,
+        ['version' => 1, 'items' => []],
+        webMugenCatalogRevision($catalogPath),
+    );
+    assertSame(0, $savedEmptyDraft['itemCount'], 'GUI draft save accepts an intentionally empty Catalog');
+    assertSame([], webMugenReadCatalog($catalogPath)['items'], 'empty GUI draft replaces the previous Catalog contents');
+    webMugenSaveCatalog($config, $draft, webMugenCatalogRevision($catalogPath));
+
     $beforeInvalidDraft = (string)file_get_contents($catalogPath);
     $duplicateDraft = $draft;
     $duplicateDraft['items'][] = $duplicateDraft['items'][0];
@@ -108,6 +134,16 @@ try {
         assertSame(422, $error->getCode(), 'duplicate GUI draft is rejected as invalid');
     }
     assertSame($beforeInvalidDraft, (string)file_get_contents($catalogPath), 'invalid GUI draft leaves the Catalog unchanged');
+
+    $duplicatePathDraft = $draft;
+    $duplicatePathDraft['items'][] = array_merge($duplicatePathDraft['items'][0], ['id' => 'duplicate-path']);
+    try {
+        webMugenSaveCatalog($config, $duplicatePathDraft, webMugenCatalogRevision($catalogPath));
+        throw new RuntimeException('expected duplicate path draft rejection');
+    } catch (RuntimeException $error) {
+        assertSame(422, $error->getCode(), 'duplicate-path GUI draft is rejected as invalid');
+    }
+    assertSame($beforeInvalidDraft, (string)file_get_contents($catalogPath), 'duplicate-path draft leaves the Catalog unchanged');
 
     $staleRevision = webMugenCatalogRevision($catalogPath);
     $newerCatalog = webMugenReadCatalog($catalogPath);

@@ -276,13 +276,16 @@ function normalizeContentPath(value: unknown, prefix: string, fallback: string, 
   return path;
 }
 
-function normalizeCatalogPath(value: unknown, fallback: string): string {
+export function normalizeCatalogPath(value: unknown, fallback: string, locationHref?: string): string {
   if (typeof value !== 'string') return fallback;
   const path = value.trim().replace(/\\/g, '/');
   if (!path.endsWith('.json') || path.includes('..') || path.includes('://')) return fallback;
+  if (path === '/content/catalog.json') {
+    return resolveApplicationAssetPath('content/catalog.json', locationHref);
+  }
   if (path.startsWith('/')) return path;
   try {
-    return resolveApplicationAssetPath(path);
+    return resolveApplicationAssetPath(path, locationHref);
   } catch {
     return fallback;
   }

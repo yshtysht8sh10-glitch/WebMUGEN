@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ContentCatalogDocument } from '../catalog/ContentCatalogTypes';
-import { CATALOG_API_PATH, CatalogServerWriteError, readCatalogServerSnapshot, saveCatalogDraftToServer } from './CatalogServerWriter';
+import {
+  CATALOG_API_PATH,
+  CatalogServerWriteError,
+  readCatalogServerSnapshot,
+  resolveCatalogServerSnapshotPath,
+  saveCatalogDraftToServer,
+  scanCatalogServerContent,
+} from './CatalogServerWriter';
 
 const catalog: ContentCatalogDocument = {
   version: 1,
@@ -8,11 +15,33 @@ const catalog: ContentCatalogDocument = {
 };
 
 describe('Catalog server writer', () => {
+  it('resolves the legacy default Catalog path inside a subdirectory deployment', () => {
+    expect(resolveCatalogServerSnapshotPath(
+      '/content/catalog.json',
+      'https://example.test/DotoEita/50_WebMUGEN/index.html?admin=1',
+    )).toBe('/DotoEita/50_WebMUGEN/content/catalog.json');
+    expect(resolveCatalogServerSnapshotPath(
+      '/shared/catalog.json',
+      'https://example.test/DotoEita/50_WebMUGEN/index.html',
+    )).toBe('/shared/catalog.json');
+  });
+
   it('hashes the exact loaded Catalog bytes for optimistic locking', async () => {
     const source = `${JSON.stringify(catalog, null, 2)}\n`;
     const snapshot = await readCatalogServerSnapshot('/content/catalog.json', async () => response(200, source));
     expect(snapshot.catalog).toEqual(catalog);
     expect(snapshot.revision).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it('summarizes an HTML host error without exposing the complete error page', async () => {
+    const error = await readCatalogServerSnapshot(
+      '/content/catalog.json',
+      async () => response(404, '<!DOCTYPE html><html><body>hosting provider error page</body></html>'),
+    ).catch((caught) => caught);
+    expect(error).toBeInstanceOf(CatalogServerWriteError);
+    expect(error).toMatchObject({ status: 404 });
+    expect(String(error)).toContain('Catalog was not found at /content/catalog.json');
+    expect(String(error)).not.toContain('hosting provider error page');
   });
 
   it('sends the draft and revision through both supported bearer-token headers', async () => {
@@ -31,6 +60,26 @@ describe('Catalog server writer', () => {
     expect(error).toBeInstanceOf(CatalogServerWriteError);
     expect(error).toMatchObject({ status: 409, code: 'catalog.conflict' });
     expect(String(error)).not.toContain('secret-token');
+  });
+
+  it('scans the configured server storage without writing catalog.json', async () => {
+    const fetcher = vi.fn(async () => response(200, JSON.stringify({
+      success: true,
+      storagePublicBase: '/DotoEita/16_proxy_release/storage/data/',
+      entries: [catalog.items[0]],
+      excluded: [{ file: 'broken.zip', code: 'character.invalid', message: 'Invalid ZIP.' }],
+    })));
+
+    await expect(scanCatalogServerContent('wmd1.session-token.signature', fetcher)).resolves.toEqual({
+      storagePublicBase: '/DotoEita/16_proxy_release/storage/data',
+      entries: catalog.items,
+      excluded: [{ file: 'broken.zip', code: 'character.invalid', message: 'Invalid ZIP.' }],
+    });
+    expect(fetcher).toHaveBeenCalledWith(`${CATALOG_API_PATH}?action=scan-catalog`, expect.objectContaining({
+      method: 'POST',
+      headers: expect.objectContaining({ Authorization: 'Bearer wmd1.session-token.signature' }),
+      body: '{}',
+    }));
   });
 });
 

@@ -96,6 +96,23 @@ describe('Catalog Generator folder and permission support', () => {
     expect((await readCatalogSourceFiles(root)).map((entry) => entry.path)).toEqual(['arena.def', 'chars/hero.def']);
   });
 
+  it('excludes a generated item whose path is already present under another ID', () => {
+    const retained = {
+      id: 'published-hero', name: 'Published Hero', kind: 'character' as const, engine: 'winmugen' as const,
+      path: '/external/chars/hero.zip', source: 'external' as const,
+    };
+    const result = generateContentCatalog([{
+      path: 'incoming/hero.zip',
+      name: 'hero.zip',
+      bytes: zipSync({ 'hero.def': strToU8(characterDef) }),
+      catalogPath: '/external/chars/hero.zip',
+    }], { version: 1, items: [retained] }, [retained]);
+
+    expect(result.catalog.items).toEqual([retained]);
+    expect(result.excluded).toHaveLength(1);
+    expect(result.errors).toContain('Duplicate generated path: /external/chars/hero.zip.');
+  });
+
   it('reads a generated Character path from the retained local folder hierarchy', async () => {
     const root = directory('characters', [directory('nested', [file('fighter.zip', 'local zip bytes')])]);
 

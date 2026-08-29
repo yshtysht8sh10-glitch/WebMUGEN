@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialGameState } from '../engine/GameState';
-import { evaluateCnsRuntimeTrigger } from './CnsRuntimeTrigger';
+import { evaluateCnsRuntimeTrigger, evaluateCnsRuntimeTriggerLegacy } from './CnsRuntimeTrigger';
 
 describe('CnsRuntimeTrigger core expansion', () => {
   const player = {
@@ -64,6 +64,49 @@ describe('CnsRuntimeTrigger core expansion', () => {
     expect(evaluateCnsRuntimeTrigger('AnimElem = 5, = 0', context)).toBe(true);
     expect(evaluateCnsRuntimeTrigger('AnimElem = 5, >= 0', context)).toBe(true);
     expect(evaluateCnsRuntimeTrigger('AnimElem = 6, < 0', context)).toBe(true);
+  });
+
+  it.each([
+    ['compiled', evaluateCnsRuntimeTrigger],
+    ['legacy', evaluateCnsRuntimeTriggerLegacy],
+  ])('keeps redirected AnimElem as a one-frame element-start trigger in the %s evaluator', (_name, evaluate) => {
+    const helper = { ...opponent, id: 16, helperId: 1350, animNo: 1464, animTime: 3 };
+    const context = {
+      player,
+      resolveRedirectEntity: () => helper,
+      getRedirectAnimationContext: () => ({
+        animTime: -45,
+        animElemNo: 2,
+        animElemTime: 0,
+        animElemStarted: true,
+        animElemCount: 6,
+        animElemTimes: [3, 0, -3, -33, -37, -41],
+      }),
+    };
+
+    expect(evaluate('helper(1350), AnimElem = 2', context)).toBe(true);
+    expect(evaluate('helper(1350), AnimElem = 2', {
+      ...context,
+      getRedirectAnimationContext: () => ({
+        animTime: -44,
+        animElemNo: 2,
+        animElemTime: 1,
+        animElemStarted: false,
+        animElemCount: 6,
+        animElemTimes: [4, 1, -2, -32, -36, -40],
+      }),
+    })).toBe(false);
+    expect(evaluate('helper(1350), AnimElem = 2, >= 1', {
+      ...context,
+      getRedirectAnimationContext: () => ({
+        animTime: -44,
+        animElemNo: 2,
+        animElemTime: 1,
+        animElemStarted: false,
+        animElemCount: 6,
+        animElemTimes: [4, 1, -2, -32, -36, -40],
+      }),
+    })).toBe(true);
   });
 
   it('evaluates AnimelemTime from AIR element-relative times', () => {
