@@ -1,4 +1,4 @@
-import type { GameState, PlayerState } from './types';
+import type { GameState, HelperEntity, PlayerState } from './types';
 
 export const FALLBACK_STAGE_LEFT = 48;
 export const FALLBACK_STAGE_RIGHT = 912;
@@ -33,7 +33,7 @@ export function applyFallbackStageRules(state: GameState, options: FallbackStage
   [nextP1, nextP2] = pushResult.players;
   nextP1 = clampToStage(nextP1);
   nextP2 = clampToStage(nextP2);
-  [nextP1, nextP2] = finalizeTargetBinds([nextP1, nextP2]);
+  [nextP1, nextP2] = finalizeTargetBinds([nextP1, nextP2], state.helpers.entries);
   [nextP1, nextP2] = applyFacing(nextP1, nextP2, state, options.autoTurn ?? true);
 
   return {
@@ -50,11 +50,15 @@ export function applyFallbackStageRules(state: GameState, options: FallbackStage
   };
 }
 
-function finalizeTargetBinds(players: [PlayerState, PlayerState]): [PlayerState, PlayerState] {
+function finalizeTargetBinds(
+  players: [PlayerState, PlayerState],
+  helpers: readonly HelperEntity[],
+): [PlayerState, PlayerState] {
   return players.map((player) => {
     const bind = player.targetBind;
     if (!bind) return player;
-    const owner = players.find((candidate) => candidate.id === bind.ownerId);
+    const owner = players.find((candidate) => candidate.id === bind.ownerId)
+      ?? helpers.find((helper) => helper.entityId === bind.ownerId)?.player;
     if (!owner) return { ...player, targetBind: undefined };
     return {
       ...player,

@@ -7,6 +7,9 @@ import { resolveSimpleHits } from './SimpleCollision';
 describe('phase7 physics fix', () => {
   it('applies ground friction', () => {
     const document = parseCnsText(`
+[Movement]
+stand.friction = .7
+
 [StateDef 0]
 type = S
 movetype = I
@@ -25,7 +28,7 @@ ctrl = 1
       moveHit: false,
     });
 
-    expect(next.vx).toBeLessThan(2);
+    expect(next.vx).toBeCloseTo(1.4);
   });
 
   it('uses fallback ground hit when no active HitDef exists', () => {

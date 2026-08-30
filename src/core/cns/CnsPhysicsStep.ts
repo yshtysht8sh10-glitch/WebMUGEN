@@ -7,8 +7,11 @@ import { advanceMoveContact } from '../hitdef/MoveContactState';
 import { stepBgPalFx } from '../palfx/BgPalFxSystem';
 import { snapshotPresentedAnimation } from '../animation/PresentedAnimation';
 
-const GROUND_FRICTION = 0.82;
 const COMMON_JUMP_LAND_STATE = 52;
+// WinMUGEN keeps cornerpush as a separate position offset and damps that
+// offset with a hardcoded coefficient rather than character ground friction.
+const WINMUGEN_CORNER_PUSH_FRICTION = 0.7;
+const WINMUGEN_CORNER_PUSH_STOP_SPEED = 1;
 
 export function stepCnsPhysicsMotion(state: GameState, cns?: CnsDocument | null): GameState {
   const beforePlayers = state.players;
@@ -161,42 +164,55 @@ export function stepPlayerCnsPhysics(player: PlayerState, cns?: CnsDocument | nu
   };
 
   if (player.positionFrozen) {
-    return { ...advanced, palFx, positionFrozen: false, ...nextTime };
+    return applyCornerPush({ ...advanced, palFx, positionFrozen: false, ...nextTime }, player.x);
   }
 
   if (player.physics === 'S' || player.physics === 'C') {
-    const nextVx = player.vx * GROUND_FRICTION;
-    return {
+    const friction = readCnsConst(
+      cns,
+      player.physics === 'C' ? 'movement.crouch.friction' : 'movement.stand.friction',
+    );
+    const nextVx = player.vx * friction;
+    return applyCornerPush({
       ...advanced,
       palFx,
-      x: player.x + player.vx,
       // WinMUGEN S/C physics applies ground friction; it does not itself
       // rewrite Pos Y. StateType and Physics are independent, and real
       // characters intentionally combine StateType=A with Physics=S.
       y: player.y + player.vy,
       vx: Math.abs(nextVx) < 0.01 ? 0 : nextVx,
       ...nextTime,
-    };
+    }, player.x + player.vx);
   }
 
   if (player.physics === 'A') {
     const nextVy = player.vy + readCnsConst(cns, 'movement.yaccel');
-    return {
+    return applyCornerPush({
       ...advanced,
       palFx,
-      x: player.x + player.vx,
       y: player.y + nextVy,
       vy: nextVy,
       ...nextTime,
-    };
+    }, player.x + player.vx);
   }
 
-  return {
+  return applyCornerPush({
     ...advanced,
     palFx,
-    x: player.x + player.vx,
     y: player.y + player.vy,
     ...nextTime,
+  }, player.x + player.vx);
+}
+
+function applyCornerPush(player: PlayerState, ordinaryX: number): PlayerState {
+  const offset = player.cornerPushVelocity ?? 0;
+  if (offset === 0) return { ...player, x: ordinaryX };
+
+  const decayed = offset * WINMUGEN_CORNER_PUSH_FRICTION;
+  return {
+    ...player,
+    x: ordinaryX + offset,
+    cornerPushVelocity: Math.abs(decayed) < WINMUGEN_CORNER_PUSH_STOP_SPEED ? undefined : decayed,
   };
 }
 

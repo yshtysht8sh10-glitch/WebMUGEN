@@ -106,6 +106,7 @@ import { analyzeCnsCoverage } from '../core/cns/CnsCoverageDiagnostics';
 import type { CnsCoverageDiagnostics } from '../core/cns/CnsCoverageDiagnostics';
 import {
   advanceExternalCnsStateEntryFrame,
+  applyPostContactTargetBindControllers,
   enterCnsStateAndRunTimeZeroWithTrace,
   stepCnsStateRuntime,
   type CnsExecutedControllerRef,
@@ -875,8 +876,24 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
               character.air,
               aiLogEnabled && runtimeSettingsRef.current.hitDiagnostics,
               beforePhysicsState,
-              (player, opponent, stateNo) => {
-                const entry = enterCnsStateAndRunTimeZeroWithTrace(player, opponent, stateNo, character.cns, {
+              (player, opponent, stateNo, entryContext) => {
+                const supplyingEntityId = player.stateOwnerEntityId ?? opponent.id;
+                const supplyingHelper = nextState.helpers.entries.find((helper) => helper.entityId === supplyingEntityId);
+                const entityContext = supplyingHelper ? {
+                  kind: 'helper' as const,
+                  entityId: supplyingHelper.entityId,
+                  helperId: supplyingHelper.helperId,
+                  rootEntityId: supplyingHelper.rootEntityId,
+                  parentEntityId: supplyingHelper.parentEntityId,
+                  ownerCharacterId: supplyingHelper.ownerCharacterId,
+                } : {
+                  kind: 'root' as const,
+                  entityId: opponent.id,
+                  rootEntityId: opponent.id,
+                  parentEntityId: null,
+                  ownerCharacterId: opponent.id,
+                };
+                const entryInput = {
                   gameTime: nextState.frame,
                   getAnimationDuration: (animNo) => getMugenAnimEndTime(character.air, animNo),
                   getAnimationElementNo: (animNo, animTime) => {
@@ -915,7 +932,28 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
                   roundWinner: nextRoundState.winner,
                   roundEndReason: nextRoundState.endReason,
                   teamMode: 'single',
-                }, player.id === 1 ? p1Commands : p2Commands);
+                  entityContext,
+                };
+                const postContact = entryContext.customState
+                  ? applyPostContactTargetBindControllers(
+                      opponent,
+                      player,
+                      character.cns,
+                      entryInput,
+                      opponent.id === 1 ? p1Commands : p2Commands,
+                    )
+                  : { attacker: opponent, target: player, executedControllers: [] };
+                const entry = enterCnsStateAndRunTimeZeroWithTrace(
+                  postContact.target,
+                  postContact.attacker,
+                  stateNo,
+                  character.cns,
+                  entryInput,
+                  player.id === 1 ? p1Commands : p2Commands,
+                );
+                if (postContact.executedControllers.length > 0) {
+                  entry.trace.debugLines.unshift(`post-contact controllers=${postContact.executedControllers.join(',')}`);
+                }
                 externalStateEntryTraces.push(entry.trace);
                 return advanceExternalCnsStateEntryFrame(entry.player);
               },

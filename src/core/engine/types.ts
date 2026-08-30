@@ -328,6 +328,10 @@ export type PlayerState = {
     moveCameraX: boolean;
     moveCameraY: boolean;
   };
+  /** Current camera containment edge touched by this root during the frame. */
+  screenEdge?: 'left' | 'right';
+  /** WinMUGEN cornerpush position offset, separate from ordinary X velocity. */
+  cornerPushVelocity?: number;
   hitDiagnosticLines?: string[];
   hitStun?: {
     activeHitDefId: number | null;

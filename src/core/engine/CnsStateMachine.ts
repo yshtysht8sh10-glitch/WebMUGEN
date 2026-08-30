@@ -2,6 +2,7 @@ import type { CnsDocument, CnsStateDefinition } from '../../mugen/common/cnsType
 import { findCnsState } from '../../mugen/common/CnsStateIndex';
 import type { PlayerInput, PlayerState, ProjectileState } from './types';
 import { executeControllers } from './ControllerExecutor';
+import { readCnsConst } from '../cns/CnsConstants';
 
 export type StepPlayerByCnsContext = {
   input: PlayerInput;
@@ -15,7 +16,6 @@ export type StepPlayerByCnsResult = {
 };
 
 const GROUND_Y = 285;
-const GROUND_FRICTION = 0.82;
 const AIR_GRAVITY = 0.45;
 const COMMON_JUMP_LAND_STATE = 52;
 const GLOBAL_STATE_ORDER = [-2, -1];
@@ -67,7 +67,7 @@ export function stepPlayerByCnsWithEvents(
     return enterChangedState(nextPlayer, document, projectiles);
   }
 
-  nextPlayer = applyPhysics(nextPlayer, velocityChanged, context.input);
+  nextPlayer = applyPhysics(nextPlayer, velocityChanged, context.input, document);
   nextPlayer = applyVelocity(nextPlayer);
   nextPlayer = clampToStage(nextPlayer, document);
 
@@ -141,6 +141,7 @@ function applyPhysics(
   player: PlayerState,
   velocityChangedByController: boolean,
   input: PlayerInput,
+  document: CnsDocument,
 ): PlayerState {
   if (player.physics === 'A') {
     return {
@@ -152,7 +153,11 @@ function applyPhysics(
   const holdingHorizontal = input.left || input.right;
 
   if (!velocityChangedByController && !holdingHorizontal && (player.physics === 'S' || player.physics === 'C')) {
-    const vx = Math.abs(player.vx) < 0.05 ? 0 : player.vx * GROUND_FRICTION;
+    const friction = readCnsConst(
+      document,
+      player.physics === 'C' ? 'movement.crouch.friction' : 'movement.stand.friction',
+    );
+    const vx = Math.abs(player.vx) < 0.05 ? 0 : player.vx * friction;
     return { ...player, vx };
   }
 

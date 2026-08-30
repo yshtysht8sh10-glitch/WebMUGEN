@@ -55,6 +55,11 @@ Common values:
 Current compatibility should remain conservative until each behavior is tested against expected WinMUGEN flow.
 
 `S` and `C` apply horizontal ground friction but do not force the player axis to ground level.
+The coefficient comes from the loaded character's `[Movement]`: Physics `S` uses
+`stand.friction` and Physics `C` uses `crouch.friction`. Missing values use the WinMUGEN
+defaults `.85` and `.82`, respectively; the runtime does not substitute the crouch value for
+both modes. Position is integrated with the current velocity and the selected coefficient is
+retained for the following tick.
 StateType and Physics are independent in WinMUGEN. An airborne `StateType = A` may intentionally
 retain `Physics = S/C`; its explicit Y velocity still updates position, and only an actual ground
 crossing is clamped. Bundled T-H-M-A uses this combination in the airborne Darkness Finger route
@@ -88,11 +93,20 @@ MUGEN 1.0-style common bounce states may express values through `Const(movement.
 `VelSet x = -12, y = -0.2` unchanged while moving each tick; the launch direction comes from the
 State's `P2Dist X < 0` Turn and Facing-relative VelSet, not from Physics=N.
 
+On an accepted HitDef contact, the runtime first registers the Target. A contact-conditioned
+`TargetBind` with `ignorehitpause = 1` then receives a narrow post-contact pass before the
+`p2stateno` destination's Time=0 controllers. For itoko Helper 1462, this moves grounded P2 to the
+authored airborne `pos = 85,10` before State 1465 evaluates `Pos Y >= 0`; evaluating the destination
+first incorrectly returned P2 to State 5100 on the contact frame.
+
 After roots and Helpers integrate motion, an active `TargetBind` reapplies its positional offset from
 the unique runtime owner's resulting position and Facing. A Helper owner therefore follows its own
 entity position instead of aliasing its root id. Effective bind ticks synchronize both position and
 velocity with that owner. A duration that reaches zero still receives its final owner correction;
-stage clamp/push repeats that correction and then clears the expired bind metadata.
+stage clamp/push repeats that correction and then clears the expired bind metadata. Issue #134 also
+resolves that final stage correction against both root and Helper entity ids. Previously the physics
+pass found itoko's hand Helper 1462, but the immediately following stage pass searched roots only and
+discarded P2's bind; State 1465 therefore stopped following the hand before its scripted release.
 Positive durations count down on movable ticks, omitted `time` is one tick, zero cancels, and any
 negative value is indefinite. Owner P1 pause freezes the finite counter, while target-only P2
 hit-shake consumes it. This lets itoko's opening bind expire before Projectile 3066 launches P2,
@@ -189,7 +203,22 @@ Built-in stages retain the quarter-strength jump camera. External stages instead
 
 ## HitDef cornerpush and snap
 
-Accepted HitDef contact selects `ground.cornerpush.veloff`, `air.cornerpush.veloff`, `down.cornerpush.veloff`, `guard.cornerpush.veloff`, or `airguard.cornerpush.veloff` from the defender contact class. Omitted values follow WinMUGEN inheritance: a non-air attack defaults ground cornerpush to `1.3 * guard.velocity` (whose X value itself defaults to `ground.velocity`), an air attack defaults it to zero, air/down/guard inherit ground, and airguard inherits guard. It changes attacker world X velocity only when the defender is at the existing fallback stage boundary (48 or 912), with the selected value converted once by attacker Facing. A middle-stage contact leaves velocity unchanged. Issue #133 covers the omitted-default guard regression. Camera-relative screen edges and dynamic stage bounds remain Partial.
+Accepted HitDef contact selects `ground.cornerpush.veloff`, `air.cornerpush.veloff`, `down.cornerpush.veloff`, `guard.cornerpush.veloff`, or `airguard.cornerpush.veloff` from the defender contact class. Omitted values follow WinMUGEN inheritance: a non-air attack defaults ground cornerpush to `1.3 * guard.velocity` (whose X value itself defaults to `ground.velocity`), an air attack defaults it to zero, air/down/guard inherit ground, and airguard inherits guard. When the defender touches the current camera containment edge, or the legacy fallback stage boundary when no camera marker is available, the selected value becomes a Facing-relative attacker-only cornerpush offset. It does not replace or add to the attacker's ordinary X velocity. A middle-stage contact does not create this offset.
+
+Issue #133 uses the supplied WinMUGEN image sequence and itoko State 210 as the acceptance case. The sequence shows two separate contacts with P2 remaining at the right screen edge while P1 moves left and the distance grows after each hit. State 210 supplies `ground.velocity = -6, 0` and omits every cornerpush field, so the WinMUGEN non-air default resolves to `1.3 * -6 = -7.8`. This is attacker cornerpush; it is not an extra defender knockback.
+
+The runtime order for this case is:
+
+1. CNS activates and snapshots the HitDef, including the profile-resolved cornerpush default.
+2. Physics and stage push/clamp run for the current tick.
+3. Camera containment clamps an enabled root when the final camera cannot move farther and records whether it touches the left or right containment edge.
+4. Collision selects ground, air, down, guard, or airguard contact semantics.
+5. At a recorded edge, HitDef stores the Facing-relative cornerpush offset on P1 while applying the ordinary reaction velocity to P2. Without an edge marker, P1 receives no cornerpush.
+6. HitPause freezes the offset. When it ends, each active tick adds the offset to P1 position, multiplies the offset by WinMUGEN's hardcoded `0.7`, and clears it when the next magnitude is below `1`. P1's ordinary velocity and character `stand.friction`/`crouch.friction` remain independent. P2's outward reaction is clipped by camera containment, so this smaller decaying P1 offset preserves distance expansion without treating `-7.8` as a long-lived ground velocity.
+
+At normal spacing the same State 210 hit therefore expands the distance through P2's `6` world-X reaction while P1 stays in place. At the right edge P2 remains at the containment limit and P1 receives a `-7.8` cornerpush offset. The offset sequence `-7.8, -5.46, -3.822, ...` moves P1 by about `22.941126` coordinates before stopping, rather than feeding `-7.8` through `.85` standing friction. Focused tests cover both Facings, hit and guard inheritance, normal spacing, HitPause freeze, dedicated `0.7` decay, and the full right-edge HitPause-to-motion sequence. Helper defenders, team/multi-player selection, and exact Width/ScreenBound edge interactions remain Partial.
+
+Evidence for the split is the WinMUGEN State Controller reference describing cornerpush as an "additional velocity (velocity offset)", not ordinary player velocity. The numeric `0.7` is not stated in that document; it is corroborated by the IKEMEN GO WinMUGEN compatibility path, which explicitly uses hardcoded `0.7` for MUGEN characters, adds the offset separately during position update, and stops it below one coordinate.
 
 HitDef `snap` places the defender at attacker position plus the requested offset; X is Facing-relative and Y uses the runtime stage coordinate directly. Existing stage rules clamp/push later in the frame, so snap does not bypass stage safety.
 

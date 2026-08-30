@@ -262,16 +262,30 @@ function keepPlayersInsideCamera(
   const rightEdge = cameraX + width - Math.max(0, rightInset);
   const clampedPlayers: string[] = [];
   const players = state.players.map((player) => {
-    if (player.screenBound?.value === false) return player;
+    if (player.screenBound?.value === false) return clearScreenEdge(player);
     const box = screenBoundsForPlayer(player, usePlayerAxis);
     let offsetX = 0;
     if (box.left < leftEdge) offsetX = leftEdge - box.left;
     if (box.right + offsetX > rightEdge) offsetX -= box.right + offsetX - rightEdge;
-    if (offsetX === 0) return player;
-    clampedPlayers.push(`p${player.id}`);
-    return { ...player, x: player.x + offsetX };
+    if (offsetX !== 0) clampedPlayers.push(`p${player.id}`);
+    const positioned = offsetX === 0 ? player : { ...player, x: player.x + offsetX };
+    const positionedBox = screenBoundsForPlayer(positioned, usePlayerAxis);
+    const screenEdge = positionedBox.left <= leftEdge
+      ? 'left'
+      : positionedBox.right >= rightEdge
+        ? 'right'
+        : undefined;
+    return screenEdge === undefined
+      ? clearScreenEdge(positioned)
+      : { ...positioned, screenEdge };
   }) as GameState['players'];
   return { players, clampedPlayers };
+}
+
+function clearScreenEdge(player: GameState['players'][number]): GameState['players'][number] {
+  if (player.screenEdge === undefined) return player;
+  const { screenEdge: _screenEdge, ...rest } = player;
+  return rest;
 }
 
 function cameraFollowers(state: GameState, axis: 'moveCameraX' | 'moveCameraY'): GameState['players'][number][] {

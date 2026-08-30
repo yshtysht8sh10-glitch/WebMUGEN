@@ -5,6 +5,49 @@ import { parseCnsText } from '../../parser/cns/CnsParser';
 import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 
 describe('CnsPhysicsStep', () => {
+  it('keeps cornerpush separate from X velocity and applies WinMUGEN 0.7 decay after HitPause', () => {
+    const initial = createInitialGameState();
+    let state = {
+      ...initial,
+      players: [{
+        ...initial.players[0],
+        vx: 0,
+        hitPause: 1,
+        cornerPushVelocity: -7.8,
+      }, initial.players[1]] as typeof initial.players,
+    };
+
+    state = stepCnsPhysicsMotion(state);
+    expect(state.players[0]).toMatchObject({ x: initial.players[0].x, vx: 0, cornerPushVelocity: -7.8 });
+
+    for (let tick = 0; tick < 6; tick += 1) state = stepCnsPhysicsMotion(state);
+
+    expect(state.players[0].x).toBeCloseTo(initial.players[0].x - 22.941126);
+    expect(state.players[0].vx).toBe(0);
+    expect(state.players[0].cornerPushVelocity).toBeUndefined();
+  });
+
+  it.each([
+    { physics: 'S' as const, key: 'stand.friction', configured: 0.7, fallback: 0.85 },
+    { physics: 'C' as const, key: 'crouch.friction', configured: 0.6, fallback: 0.82 },
+  ])('uses character movement.$key for Physics=$physics', ({ physics, key, configured, fallback }) => {
+    const state = createInitialGameState();
+    const player = { ...state.players[0], physics, vx: 10 };
+    const configuredCns = parseCnsText(`[Movement]\n${key} = ${configured}`);
+
+    const configuredStep = stepCnsPhysicsMotion({
+      ...state,
+      players: [player, state.players[1]],
+    }, configuredCns);
+    const fallbackStep = stepCnsPhysicsMotion({
+      ...state,
+      players: [player, state.players[1]],
+    });
+
+    expect(configuredStep.players[0]).toMatchObject({ x: player.x + 10, vx: 10 * configured });
+    expect(fallbackStep.players[0]).toMatchObject({ x: player.x + 10, vx: 10 * fallback });
+  });
+
   it('advances defender PalFX while a pending external State entry remains at Time 0', () => {
     const state = createInitialGameState();
     const affected = {

@@ -3,10 +3,17 @@ import { parseAirText } from '../../parser/air/AirParser';
 import { createInitialGameState } from './GameState';
 import { resolveFallbackHits } from './FallbackHitResolver';
 import { parseCnsText } from '../../parser/cns/CnsParser';
-import { stepCnsStateRuntime } from '../cns/CnsStateRuntime';
+import {
+  advanceExternalCnsStateEntryFrame,
+  applyPostContactTargetBindControllers,
+  enterCnsStateAndRunTimeZero,
+  stepCnsStateRuntime,
+} from '../cns/CnsStateRuntime';
 import { applyFallbackHitRecovery } from './FallbackHitRecovery';
 import { stepCnsPhysicsMotion } from '../cns/CnsPhysicsStep';
 import { evaluateCnsRuntimeTrigger } from '../cns/CnsRuntimeTrigger';
+import { applyFallbackStageRules } from './FallbackStageRules';
+import { applyViewportCameraRules } from './ScreenSize';
 
 const air = parseAirText(`
 [Begin Action 0]
@@ -20,6 +27,13 @@ Clsn2Default: 1
 Clsn1: 1
  Clsn1[0] = 10,-60,70,-30
 200,0, 0,0, 5
+
+[Begin Action 210]
+Clsn2Default: 1
+ Clsn2[0] = -20,-80,20,0
+Clsn1: 1
+ Clsn1[0] = 10,-60,70,-30
+210,0, 0,0, 5
 
 [Begin Action 5000]
 0,0, 0,0, 5
@@ -134,9 +148,33 @@ type=HitDef
 trigger1=1
 attr=A,HT
 hitflag=M
+id=1462
 damage=0,0
 pausetime=0,0
 p2stateno=1465
+[State 1462, bind after contact]
+type=TargetBind
+trigger1=MoveHit=1
+time=1
+id=1462
+pos=0,-100
+ignorehitpause=1
+[StateDef 1465]
+type=A
+movetype=H
+physics=N
+[State 1465, animation]
+type=ChangeAnim2
+trigger1=Time=0
+value=1465
+[State 1465, grounded abort]
+type=SelfState
+trigger1=Pos Y>=0
+value=5100
+[StateDef 5100]
+type=L
+movetype=H
+physics=N
 `);
     const initial = createInitialGameState();
     const helperPlayer = {
@@ -171,9 +209,29 @@ p2stateno=1465
     };
 
     const activated = stepCnsStateRuntime(source, cns).state;
-    const result = resolveFallbackHits(activated, air, true);
+    const result = resolveFallbackHits(activated, air, true, undefined, (player, opponent, stateNo) => {
+      const postContact = applyPostContactTargetBindControllers(opponent, player, cns, {
+        entityContext: {
+          kind: 'helper', entityId: 3, helperId: 1462, rootEntityId: 1, parentEntityId: 1, ownerCharacterId: 1,
+        },
+      });
+      return advanceExternalCnsStateEntryFrame(enterCnsStateAndRunTimeZero(
+        postContact.target,
+        postContact.attacker,
+        stateNo,
+        cns,
+      ));
+    });
 
-    expect(result.players[1]).toMatchObject({ stateNo: 1465, stateOwnerId: 1, stateOwnerEntityId: 3 });
+    expect(result.players[1]).toMatchObject({
+      stateNo: 1465,
+      stateOwnerId: 1,
+      stateOwnerEntityId: 3,
+      stateTime: 1,
+      animNo: 1465,
+      y: 185,
+      targetBind: { ownerId: 3, remaining: 1, offsetX: 0, offsetY: -100 },
+    });
   });
 
   it('selects ground.velocity.y for grounded targets and air.velocity.y only for airborne targets', () => {
@@ -1546,7 +1604,7 @@ movetype = A
     const edge = resolveConfiguredHit({
       attackerX: 862, targetX: 912, groundCornerPush: -6, pauseTime: [0, 0],
     });
-    expect(edge.players[0].vx).toBe(-6);
+    expect(edge.players[0]).toMatchObject({ vx: 0, cornerPushVelocity: -6 });
     expect(edge.hitDiagnosticLines?.join('\n')).toContain('kind=ground atEdge=1 veloff=-6');
 
     const middle = resolveConfiguredHit({ groundCornerPush: -6, pauseTime: [0, 0] });
@@ -1557,7 +1615,7 @@ movetype = A
       attackerX: 862, targetX: 912, guardCornerPush: -4, guardFlag: 'H',
       targetCommands: new Set(['holdback']), guardPauseTime: [0, 0],
     });
-    expect(guarded.players[0].vx).toBe(-4);
+    expect(guarded.players[0]).toMatchObject({ vx: 0, cornerPushVelocity: -4 });
     expect(guarded.hitDiagnosticLines?.join('\n')).toContain('kind=guard atEdge=1 veloff=-4');
   });
 
@@ -1566,11 +1624,118 @@ movetype = A
       attackerX: 862, targetX: 912, groundVelocity: [-5.5, 0], guardFlag: 'H',
       targetCommands: new Set(['holdback']), guardPauseTime: [0, 0],
     });
-    expect(guarded.players[0].vx).toBeCloseTo(-7.15);
+    expect(guarded.players[0].vx).toBe(0);
+    expect(guarded.players[0].cornerPushVelocity).toBeCloseTo(-7.15);
     expect(guarded.hitDiagnosticLines?.join('\n')).toContain('kind=guard atEdge=1 veloff=-7.15');
 
     const middle = resolveConfiguredHit({ groundVelocity: [-5.5, 0], pauseTime: [0, 0] });
     expect(middle.players[0].vx).toBe(0);
+  });
+
+  it.each([
+    { side: 'right', attackerFacing: 1 as const, attackerX: 650, targetX: 700, targetScreenEdge: 'right' as const, expectedVx: -7.8 },
+    { side: 'left', attackerFacing: -1 as const, attackerX: 310, targetX: 260, targetScreenEdge: 'left' as const, expectedVx: 7.8 },
+  ])('applies itoko State 210 omitted cornerpush at the camera $side edge', ({
+    attackerFacing, attackerX, targetX, targetScreenEdge, expectedVx,
+  }) => {
+    const hit = resolveConfiguredHit({
+      attackerFacing,
+      attackerX,
+      targetX,
+      targetScreenEdge,
+      groundVelocity: [-6, 0],
+      pauseTime: [15, 14],
+    });
+
+    expect(hit.players[0].vx).toBe(0);
+    expect(hit.players[0].cornerPushVelocity).toBeCloseTo(expectedVx);
+    expect(hit.players[1].vx).toBeCloseTo(6 * attackerFacing);
+    expect(hit.hitDiagnosticLines?.join('\n')).toContain(`screenEdge=${targetScreenEdge}`);
+  });
+
+  it('applies the inherited guard cornerpush at a camera edge but not at normal spacing', () => {
+    const edge = resolveConfiguredHit({
+      attackerX: 650,
+      targetX: 700,
+      targetScreenEdge: 'right',
+      groundVelocity: [-6, 0],
+      guardFlag: 'H',
+      targetCommands: new Set(['holdback']),
+      guardPauseTime: [15, 14],
+    });
+    expect(edge.players[0].vx).toBe(0);
+    expect(edge.players[0].cornerPushVelocity).toBeCloseTo(-7.8);
+    expect(edge.hitDiagnosticLines?.join('\n')).toContain('kind=guard atEdge=1');
+    expect(edge.hitDiagnosticLines?.join('\n')).toContain('screenEdge=right');
+
+    const normal = resolveConfiguredHit({
+      attackerX: 650,
+      targetX: 700,
+      groundVelocity: [-6, 0],
+      pauseTime: [15, 14],
+    });
+    expect(normal.players[0].vx).toBe(0);
+  });
+
+  it('opens the distance by moving P1 when itoko State 210 hits P2 at the camera edge', () => {
+    const cns = parseCnsText(`
+[Statedef 210]
+type = S
+movetype = A
+physics = S
+anim = 210
+
+[State 210, HitDef]
+type = HitDef
+trigger1 = 1
+attr = S, NA
+hitflag = MAF
+pausetime = 15, 14
+ground.hittime = 20
+ground.slidetime = 20
+ground.velocity = -6, 0
+guard.velocity = -6
+`);
+    const initial = createInitialGameState(3000, {}, [850, 912]);
+    let state = stepCnsStateRuntime({
+      ...initial,
+      camera: { x: 512, y: 0, viewportWidth: 400, viewportHeight: 240 },
+      players: [
+        { ...initial.players[0], stateNo: 210, animNo: 210, moveType: 'A', ctrl: false },
+        { ...initial.players[1], animNo: 0 },
+      ],
+    }, cns).state;
+
+    state = applyViewportCameraRules(state, 400, 240, undefined, {
+      left: -400,
+      right: 400,
+      verticalFollow: 0,
+    });
+    expect(state.players[1].x).toBe(908);
+    expect(state.players[1].screenEdge).toBe('right');
+
+    state = resolveFallbackHits(state, air);
+    const contactP1X = state.players[0].x;
+    const contactP2X = state.players[1].x;
+    const contactDistance = contactP2X - contactP1X;
+    expect(state.players[0].vx).toBe(0);
+    expect(state.players[0].cornerPushVelocity).toBeCloseTo(-7.8);
+    expect(state.players[1].vx).toBe(6);
+
+    for (let frame = 0; frame < 25; frame += 1) {
+      state = stepCnsPhysicsMotion(state, cns);
+      state = applyFallbackStageRules(state);
+      state = applyViewportCameraRules(state, 400, 240, undefined, {
+        left: -400,
+        right: 400,
+        verticalFollow: 0,
+      });
+    }
+
+    expect(state.players[1].x).toBe(contactP2X);
+    expect(state.players[0].x).toBeLessThan(contactP1X);
+    expect(contactP1X - state.players[0].x).toBeCloseTo(22.941126);
+    expect(state.players[1].x - state.players[0].x).toBeGreaterThan(contactDistance);
   });
 
   it.each([
@@ -1580,7 +1745,8 @@ movetype = A
     const hit = resolveConfiguredHit({
       attackerX: 862, targetX: 912, targetStateType, hitFlag, pauseTime: [0, 0], ...options,
     });
-    expect(hit.players[0].vx).toBe(Object.values(options)[0]);
+    expect(hit.players[0].vx).toBe(0);
+    expect(hit.players[0].cornerPushVelocity).toBe(Object.values(options)[0]);
     expect(hit.hitDiagnosticLines?.join('\n')).toContain(`kind=${kind} atEdge=1`);
   });
 
@@ -1589,7 +1755,7 @@ movetype = A
       attackerX: 862, targetX: 912, targetStateType: 'A', guardFlag: 'A', airGuardCornerPush: -2,
       targetCommands: new Set(['holdback']), guardPauseTime: [0, 0],
     });
-    expect(guarded.players[0].vx).toBe(-2);
+    expect(guarded.players[0]).toMatchObject({ vx: 0, cornerPushVelocity: -2 });
     expect(guarded.hitDiagnosticLines?.join('\n')).toContain('kind=guard atEdge=1 veloff=-2');
   });
 
@@ -1680,6 +1846,7 @@ function resolveConfiguredHit({
   powerMax,
   attackerX,
   targetX,
+  targetScreenEdge,
   airAnimType,
   groundType,
   airType,
@@ -1757,6 +1924,7 @@ function resolveConfiguredHit({
   powerMax?: number;
   attackerX?: number;
   targetX?: number;
+  targetScreenEdge?: 'left' | 'right';
   airAnimType?: string;
   groundType?: string;
   airType?: string;
@@ -1905,6 +2073,7 @@ ${guardLines}
   players[targetIndex] = {
     ...players[targetIndex],
     x: targetX ?? (resolvedFacing === 1 ? 290 : 240),
+    screenEdge: targetScreenEdge,
     y: targetY ?? players[targetIndex].y,
     facing: targetFacing ?? players[targetIndex].facing,
     stateNo: targetStateNo ?? players[targetIndex].stateNo,

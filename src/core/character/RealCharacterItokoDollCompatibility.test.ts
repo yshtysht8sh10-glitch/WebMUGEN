@@ -7,10 +7,13 @@ import { getAnimationTriggerInfo, getCurrentAnimationElement } from '../animatio
 import { stepCnsPhysicsMotion } from '../cns/CnsPhysicsStep';
 import {
   advanceExternalCnsStateEntryFrame,
+  applyPostContactTargetBindControllers,
   enterCnsStateAndRunTimeZero,
   stepCnsStateRuntime,
 } from '../cns/CnsStateRuntime';
 import { createInitialGameState } from '../engine/GameState';
+import { applyFallbackStageRules } from '../engine/FallbackStageRules';
+import { resolveFallbackHits } from '../engine/FallbackHitResolver';
 import { spawnHelper } from '../helper/HelperSystem';
 
 const decoder = new TextDecoder('shift_jis');
@@ -26,6 +29,67 @@ const animationInput = {
 };
 
 describe('itoko thread-and-thimble doll compatibility', () => {
+  it('keeps a grounded P2 in State 1465 after the real Helper 1462 contact bind', () => {
+    let state = createInitialGameState();
+    state.players = [
+      { ...state.players[0], stateNo: -999, moveType: 'I' },
+      { ...state.players[1], x: 500, y: 285, stateNo: 0, animNo: 0, moveType: 'I' },
+    ];
+    state.helpers = spawnHelper(state.helpers, {
+      helperId: 1462,
+      rootEntityId: 1,
+      parentEntityId: 1,
+      ownerCharacterId: 1,
+      stateOwnerId: 1,
+      animationOwnerId: 1,
+      stateNo: 1462,
+      x: 400,
+      y: 245,
+      facing: 1,
+      keyCtrl: false,
+      ownPal: true,
+      spawnFrame: -1,
+      parent: state.players[0],
+    }, cns);
+
+    state = stepCnsStateRuntime(state, cns, animationInput).state;
+    const hand = state.helpers.entries.find((helper) => helper.helperId === 1462)!;
+    expect(hand.player).toMatchObject({ stateNo: 1462, animNo: 1462, moveType: 'A' });
+    expect(hand.player.activeHitDef).toMatchObject({ hitId: 1462, p2StateNo: 1465 });
+
+    state = resolveFallbackHits(state, air, true, state, (player, opponent, stateNo) => {
+      const postContact = applyPostContactTargetBindControllers(opponent, player, cns, {
+        ...animationInput,
+        entityContext: {
+          kind: 'helper',
+          entityId: hand.entityId,
+          helperId: hand.helperId,
+          rootEntityId: hand.rootEntityId,
+          parentEntityId: hand.parentEntityId,
+          ownerCharacterId: hand.ownerCharacterId,
+        },
+      });
+      return advanceExternalCnsStateEntryFrame(enterCnsStateAndRunTimeZero(
+        postContact.target,
+        postContact.attacker,
+        stateNo,
+        cns,
+        animationInput,
+      ));
+    });
+
+    expect(state.players[1], state.hitDiagnosticLines?.join('\n')).toMatchObject({
+      stateNo: 1465,
+      stateOwnerId: 1,
+      stateOwnerEntityId: hand.entityId,
+      stateTime: 1,
+      animNo: 1465,
+      x: 485,
+      y: 255,
+      targetBind: { ownerId: hand.entityId, remaining: 1, offsetX: 85, offsetY: 10 },
+    });
+  });
+
   it('starts caught State 1465 before hit-shake so gravity is active when the hand launches P2', () => {
     const initial = createInitialGameState();
     const contacted = {
@@ -138,6 +202,122 @@ describe('itoko thread-and-thimble doll compatibility', () => {
     state = stepCnsStateRuntime(state, cns, animationInput).state;
     expect(state.players[1]).toMatchObject({ stateNo: 1465, stateTime: 21, facing: -1, vx: 0.5, vy: -13.63 });
     expect(state.helpers.entries.find((helper) => helper.helperId === 1462)?.player.stateTime).toBe(11);
+  });
+
+  it('keeps State 1465 P2 on the real Helper 1462 hand through stage correction', () => {
+    let state = createInitialGameState();
+    state.helpers = spawnHelper(state.helpers, {
+      helperId: 1462,
+      rootEntityId: 1,
+      parentEntityId: 1,
+      ownerCharacterId: 1,
+      stateOwnerId: 1,
+      animationOwnerId: 1,
+      stateNo: 1464,
+      x: 300,
+      y: -80,
+      facing: 1,
+      keyCtrl: false,
+      ownPal: true,
+      spawnFrame: -1,
+      parent: state.players[0],
+    }, cns);
+    const hand = state.helpers.entries[0];
+    state.players[1] = {
+      ...state.players[1],
+      stateNo: 1465,
+      stateHeaderAppliedStateNo: 1465,
+      stateTime: 12,
+      stateOwnerId: 1,
+      stateOwnerEntityId: hand.entityId,
+      stateType: 'A',
+      moveType: 'H',
+      physics: 'N',
+      animNo: 1465,
+      animationOwnerId: 1,
+      targetBind: { ownerId: hand.entityId, remaining: 1, offsetX: 85, offsetY: 10 },
+    };
+
+    state = applyFallbackStageRules(stepCnsPhysicsMotion(state, cns));
+
+    const movedHand = state.helpers.entries.find((helper) => helper.entityId === hand.entityId)!.player;
+    expect(state.players[1]).toMatchObject({
+      stateNo: 1465,
+      animNo: 1465,
+      animationOwnerId: 1,
+      x: movedHand.x + 85 * movedHand.facing,
+      y: movedHand.y + 10,
+    });
+  });
+
+  it('lets the real anti-air Helper 1472 catch the released State 1465 target', () => {
+    let state = createInitialGameState();
+    state.players[0] = { ...state.players[0], moveType: 'I' };
+    state.players[1] = {
+      ...state.players[1],
+      x: 385,
+      y: -80,
+      facing: -1,
+      stateNo: 1465,
+      stateHeaderAppliedStateNo: 1465,
+      stateTime: 40,
+      stateOwnerId: 1,
+      stateOwnerEntityId: 1,
+      selfStateOwnerId: 2,
+      stateType: 'A',
+      moveType: 'H',
+      physics: 'N',
+      animNo: 1465,
+      animTime: 40,
+      vx: 0.5,
+      vy: -6.6,
+    };
+    state = stepCnsStateRuntime(state, cns, animationInput).state;
+    expect(state.players[1]).toMatchObject({ stateNo: 1465, animNo: 5050, stateType: 'A', moveType: 'H' });
+
+    state.helpers = spawnHelper(state.helpers, {
+      helperId: 1472,
+      rootEntityId: 1,
+      parentEntityId: 1,
+      ownerCharacterId: 1,
+      stateOwnerId: 1,
+      animationOwnerId: 1,
+      stateNo: 1472,
+      x: 300,
+      y: -80,
+      facing: 1,
+      keyCtrl: false,
+      ownPal: true,
+      spawnFrame: -1,
+      parent: state.players[0],
+    }, cns);
+    state = stepCnsStateRuntime(state, cns, animationInput).state;
+    const hand = state.helpers.entries.find((helper) => helper.helperId === 1472)!;
+    expect(hand.player.activeHitDef).toMatchObject({ hitFlag: 'AF', p2StateNo: 1475 });
+
+    for (let tick = 0; tick < 5; tick += 1) {
+      state = stepCnsPhysicsMotion(state, cns);
+      state = stepCnsStateRuntime(state, cns, animationInput).state;
+    }
+    const activeHand = state.helpers.entries.find((helper) => helper.entityId === hand.entityId)!;
+    activeHand.player = {
+      ...activeHand.player,
+      x: state.players[1].x - 85,
+      y: state.players[1].y - 10,
+    };
+    expect(activeHand.player).toMatchObject({ animNo: 1462, moveType: 'A' });
+
+    state = resolveFallbackHits(state, air, true, state);
+
+    expect(state.players[1], state.hitDiagnosticLines?.join('\n')).toMatchObject({
+      stateNo: 1475,
+      stateOwnerId: 1,
+      stateOwnerEntityId: hand.entityId,
+    });
+    expect(state.helpers.entries.find((helper) => helper.entityId === hand.entityId)?.player.moveContact).toMatchObject({
+      hit: true,
+      hitCount: 1,
+    });
   });
 
   it('marks every root-side control-thread frame for vertical AIR flipping', () => {

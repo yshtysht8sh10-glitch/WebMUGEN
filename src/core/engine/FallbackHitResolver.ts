@@ -27,13 +27,19 @@ type PriorityDecision = {
 
 export type HitEligibility = { accepted: boolean; reason: string; targetClass: string };
 type TeamRelation = 'enemy' | 'friendly';
+export type ExternalHitStateEntryContext = { customState: boolean };
 
 export function resolveFallbackHits(
   state: GameState,
   airDocument?: AirDocument | null,
   diagnosticsEnabled = true,
   animationSnapshot?: GameState,
-  enterOverrideState?: (player: PlayerState, opponent: PlayerState, stateNo: number) => PlayerState,
+  enterOverrideState?: (
+    player: PlayerState,
+    opponent: PlayerState,
+    stateNo: number,
+    context: ExternalHitStateEntryContext,
+  ) => PlayerState,
   canEntityResolveHit: (entityId: number) => boolean = () => true,
 ): GameState {
   if (!airDocument) {
@@ -236,7 +242,12 @@ function resolveAttack(
   airDocument: AirDocument,
   diagnosticsEnabled: boolean,
   priorityDecision: PriorityDecision = { allowed: true, reason: 'no_clash', own: 4, opponent: 4, ownType: 'Hit', opponentType: 'Hit' },
-  enterOverrideState?: (player: PlayerState, opponent: PlayerState, stateNo: number) => PlayerState,
+  enterOverrideState?: (
+    player: PlayerState,
+    opponent: PlayerState,
+    stateNo: number,
+    context: ExternalHitStateEntryContext,
+  ) => PlayerState,
   canResolveHit = true,
   teamRelation: TeamRelation = 'enemy',
   attackerEntityId: number = attacker.id,
@@ -377,7 +388,7 @@ function resolveAttack(
       hitPause: 0,
       hitPauseKind: undefined,
     };
-    if (enterOverrideState) overriddenTarget = enterOverrideState(overriddenTarget, attacker, override.stateNo);
+    if (enterOverrideState) overriddenTarget = enterOverrideState(overriddenTarget, attacker, override.stateNo, { customState: false });
     if (diagnosticsEnabled) diagnosticLines.push(
       `raw.hit_override attacker=p${attacker.id} target=p${target.id}`,
       `  activeHitDefId=${activeHitDefId ?? 'none'} slot=${override.slot} attr=${override.attr} state=${override.stateNo} forceair=${override.forceAir ? 1 : 0} remaining=${override.remaining} result=accepted damage=0 getHitVarKind=${overrideHitTimeKind}`,
@@ -429,7 +440,7 @@ function resolveAttack(
       ...(active.guardHitTime === undefined ? { fallbackReason: 'missing_guard_hittime' } : {}),
     }, guardGetHitVars);
     if (enterOverrideState && active.p2StateNo === undefined) {
-      guardedTarget = enterOverrideState(guardedTarget, attacker, reactionState);
+      guardedTarget = enterOverrideState(guardedTarget, attacker, reactionState, { customState: false });
     }
     guardedTarget = applyTargetRequestedState(guardedTarget, active, attacker.id, attackerEntityId);
     if (enterOverrideState && active.p2StateNo !== undefined) {
@@ -437,6 +448,7 @@ function resolveAttack(
         { ...guardedTarget, stateNo: target.stateNo },
         contactedAttacker,
         active.p2StateNo,
+        { customState: true },
       );
     }
     const auxiliary = applyHitDefAuxiliary(contactedAttacker, guardedTarget, attacker, target, active, true);
@@ -552,11 +564,15 @@ function resolveAttack(
     fallYVelocityAtHit: active.fall?.yVelocity ?? 0,
     ...(activeHitTime === undefined ? { fallbackReason: hitTimeFallbackReason } : {}),
   }, hitGetHitVars), active, attacker.id, attackerEntityId), attackerEntityId, active.hitId);
+  const entryAttacker = activeHitDefId === null || !registerContactTarget
+    ? contactedAttacker
+    : registerTarget(contactedAttacker, hitTarget, activeHitDefId, active.hitId ?? 0);
   if (enterOverrideState && active.p2StateNo !== undefined) {
     hitTarget = enterOverrideState(
       { ...hitTarget, stateNo: target.stateNo },
-      contactedAttacker,
+      entryAttacker,
       active.p2StateNo,
+      { customState: true },
     );
   }
   if (active.palFx && active.palFx.duration !== 0) {
@@ -571,10 +587,8 @@ function resolveAttack(
     };
   }
   const idText = activeHitDefId === null ? 'none' : String(activeHitDefId);
-  const auxiliary = applyHitDefAuxiliary(contactedAttacker, hitTarget, attacker, target, active, false);
-  const targetedAttacker = activeHitDefId === null || !registerContactTarget
-    ? auxiliary.attacker
-    : registerTarget(auxiliary.attacker, auxiliary.target, activeHitDefId, active.hitId ?? 0);
+  const auxiliary = applyHitDefAuxiliary(entryAttacker, hitTarget, attacker, target, active, false);
+  const targetedAttacker = auxiliary.attacker;
   const fallbackReason = '-';
   const hitEvent = createContactHitEvent(attacker, target, active, false, damage, overlap, attackBoxes, bodyBoxes, airDocument);
   if (diagnosticsEnabled) diagnosticLines.push(
@@ -1016,6 +1030,7 @@ type HitAuxiliaryResult = {
   attackerPowerBefore: number;
   targetPowerBefore: number;
   atEdge: boolean;
+  screenEdge: PlayerState['screenEdge'];
   cornerVelocity: number | undefined;
 };
 
@@ -1044,7 +1059,8 @@ function applyHitDefAuxiliary(
   const targetPowerBefore = targetAfterContact.power ?? 0;
   const attackerPower = guarded ? hitDef.getPower?.guarded : hitDef.getPower?.hit;
   const targetPower = guarded ? hitDef.givePower?.guarded : hitDef.givePower?.hit;
-  const atEdge = isAtFallbackStageEdge(targetBefore);
+  const screenEdge = targetBefore.screenEdge;
+  const atEdge = screenEdge !== undefined || isAtFallbackStageEdge(targetBefore);
   const cornerVelocity = guarded
     ? targetBefore.stateType === 'A' ? hitDef.cornerPush?.airGuard : hitDef.cornerPush?.guard
     : targetBefore.stateType === 'L' ? hitDef.cornerPush?.down
@@ -1053,7 +1069,9 @@ function applyHitDefAuxiliary(
   const attacker = {
     ...attackerAfterContact,
     ...(hitDef.p1SprPriority === undefined ? {} : { sprPriority: hitDef.p1SprPriority }),
-    ...(atEdge && cornerVelocity !== undefined ? { vx: attackerAfterContact.vx + cornerVelocity * attackerBefore.facing } : {}),
+    ...(atEdge && cornerVelocity !== undefined
+      ? { cornerPushVelocity: cornerVelocity * attackerBefore.facing }
+      : {}),
   };
   const target = {
     ...targetAfterContact,
@@ -1070,6 +1088,7 @@ function applyHitDefAuxiliary(
     attackerPowerBefore,
     targetPowerBefore,
     atEdge,
+    screenEdge,
     cornerVelocity,
   };
 }
@@ -1089,7 +1108,7 @@ function formatHitAuxiliaryDiagnostics(
   );
   if (hitDef.cornerPush && Object.values(hitDef.cornerPush).some((value) => value !== undefined)) lines.push(
     `raw.hit_cornerpush attacker=p${attackerBefore.id} target=p${targetBefore.id}`,
-    `  activeHitDefId=${activeHitDefId ?? 'none'} kind=${guarded ? 'guard' : targetBefore.stateType === 'L' ? 'down' : targetBefore.stateType === 'A' ? 'air' : 'ground'} atEdge=${result.atEdge ? 1 : 0} veloff=${result.cornerVelocity ?? '-'} facing=${attackerBefore.facing} vxBefore=${attackerBefore.vx} vxAfter=${result.attacker.vx} result=${result.atEdge && result.cornerVelocity !== undefined ? 'applied' : 'skipped'} reason=${!result.atEdge ? 'target_not_at_edge' : result.cornerVelocity === undefined ? 'parameter_not_selected' : '-'}`,
+    `  activeHitDefId=${activeHitDefId ?? 'none'} kind=${guarded ? 'guard' : targetBefore.stateType === 'L' ? 'down' : targetBefore.stateType === 'A' ? 'air' : 'ground'} atEdge=${result.atEdge ? 1 : 0} veloff=${result.cornerVelocity ?? '-'} screenEdge=${result.screenEdge ?? '-'} facing=${attackerBefore.facing} offsetBefore=${attackerBefore.cornerPushVelocity ?? 0} offsetAfter=${result.attacker.cornerPushVelocity ?? 0} vx=${result.attacker.vx} result=${result.atEdge && result.cornerVelocity !== undefined ? 'applied' : 'skipped'} reason=${!result.atEdge ? 'target_not_at_edge' : result.cornerVelocity === undefined ? 'parameter_not_selected' : '-'}`,
   );
   if (hitDef.snap) lines.push(
     `raw.hit_snap attacker=p${attackerBefore.id} target=p${targetBefore.id}`,

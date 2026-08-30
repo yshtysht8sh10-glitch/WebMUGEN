@@ -79,6 +79,8 @@ function readDefaultConst(name: string): number {
     case 'movement.airjump.num': return 1;
     case 'movement.airjump.height': return 35;
     case 'movement.yaccel': return 0.6;
+    case 'movement.stand.friction': return 0.85;
+    case 'movement.crouch.friction': return 0.82;
     case 'movement.down.bounce.offset.x': return 0;
     case 'movement.down.bounce.offset.y': return 20;
     case 'movement.down.bounce.yaccel': return 0.4;

@@ -169,11 +169,13 @@ describe('screen size profiles', () => {
     const state = createInitialGameState(undefined, {}, [48, 912]);
     state.players[0] = {
       ...state.players[0],
+      screenEdge: 'left',
       screenBound: { value: false, moveCameraX: false, moveCameraY: false },
     };
 
     const next = applyViewportCameraRules(state, 400, 240);
     expect(next.players[0].x).toBe(48);
+    expect(next.players[0].screenEdge).toBeUndefined();
     expect(next.players[0].vx).toBe(0);
   });
 
@@ -277,6 +279,7 @@ describe('screen size profiles', () => {
     const beyond = createInitialGameState(undefined, {}, [380, 1000]);
     const bounded = applyViewportCameraRules(beyond, 400, 240, beachStage());
     expect(resolveViewportCamera(bounded, 400, 240).x).toBe(400);
+    expect(bounded.players.map((player) => player.screenEdge)).toEqual(['left', 'right']);
 
     const classicBounded = applyViewportCameraRules(beyond, 320, 240, beachStage());
     expect(resolveViewportCamera(classicBounded, 320, 240).x).toBe(480);
@@ -290,6 +293,8 @@ describe('screen size profiles', () => {
     expect(camera.x).toBe(160);
     expect(next.players[0].x).toBe(camera.x + 15);
     expect(next.players[0].x - 15).toBe(camera.x);
+    expect(next.players[0].screenEdge).toBe('left');
+    expect(next.players[1].screenEdge).toBeUndefined();
   });
 });
 

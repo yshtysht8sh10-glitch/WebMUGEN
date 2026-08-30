@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { spawnHelper } from '../helper/HelperSystem';
 import { createInitialGameState } from './GameState';
 import { applyFallbackStageRules, buildPushBox, buildScreenEdgeBox } from './FallbackStageRules';
 
@@ -88,6 +89,46 @@ describe('FallbackStageRules', () => {
     expect(next.players[0].x).toBe(912);
     expect(next.players[1]).toMatchObject({ x: 892, y: 90, vx: 4, vy: -2 });
     expect(next.players[1].targetBind).toBeUndefined();
+  });
+
+  it('keeps a target attached to its Helper owner during final stage correction', () => {
+    const state = createInitialGameState();
+    state.helpers = spawnHelper(state.helpers, {
+      helperId: 1462,
+      rootEntityId: 1,
+      parentEntityId: 1,
+      ownerCharacterId: 1,
+      stateOwnerId: 1,
+      animationOwnerId: 1,
+      stateNo: 1464,
+      x: 420,
+      y: 90,
+      facing: -1,
+      keyCtrl: false,
+      ownPal: true,
+      spawnFrame: -1,
+      parent: state.players[0],
+    });
+    const hand = state.helpers.entries[0];
+    hand.player = { ...hand.player, vx: -3, vy: 2 };
+    state.players[1] = {
+      ...state.players[1],
+      x: 800,
+      y: 200,
+      moveType: 'H',
+      stateType: 'A',
+      targetBind: { ownerId: hand.entityId, remaining: 1, offsetX: 85, offsetY: 10 },
+    };
+
+    const next = applyFallbackStageRules(state);
+
+    expect(next.players[1]).toMatchObject({
+      x: 335,
+      y: 100,
+      vx: -3,
+      vy: 2,
+      targetBind: { ownerId: hand.entityId, remaining: 1, offsetX: 85, offsetY: 10 },
+    });
   });
 
   it.each([

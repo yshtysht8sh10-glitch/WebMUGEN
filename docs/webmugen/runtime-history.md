@@ -12,6 +12,13 @@ Live debug values are useful, but they change every frame. Runtime History prese
 
 The App frame number and `GameState.frame` share the same monotonic tick before runtime evaluation. This is required for creation-frame diagnostics: an Explod may report age/time zero only on its actual creation tick, then must advance on the next history frame.
 
+External HitDef custom-State traces include the collision-frame destination pass. When a newly
+accepted contact enables an `ignorehitpause = 1` TargetBind before `p2stateno` entry, the external
+trace adds `post-contact controllers=TargetBind`. The same frame should then show the destination
+State remaining active, rather than only a collapsed `1465->5100` transition. Issue #134 uses this
+marker together with `raw.helper_hit_collision` and `raw.custom_state` to distinguish a missing
+`p2stateno` transition from an immediate SelfState after entry.
+
 This is especially important for short routes such as:
 
 - State 0 → State 10 crouch start;
@@ -211,7 +218,7 @@ On a fresh reload, character/assets may finish loading while the game frame rema
 
 `raw.explod_create` records owner, internal runtime id, duplicate-capable MUGEN id, animation scope/number, postype, raw offset, resolved world/screen position, Facing/vfacing, bindtime, removetime, sprite priority, and ontop. `raw.explod_create_rejected` identifies missing or invalid `anim`. Rendering/lifecycle evidence follows in `raw.explod_step`, `raw.explod_render`, and `raw.explod_draw`; Issue #33 modifications are correlated through `raw.explod_modify` and the same internal ids.
 
-`raw.power` records initial, StateDef, PowerAdd/PowerSet, and TargetPowerAdd mutations with before/value-or-delta/after/max values. `raw.hit_power` records selected hit/guard `getpower` and `givepower`, both gauges before/after their player-specific clamp, and proves the mutation occurred once for the accepted contact. `raw.power_hud` is emitted when either rendered gauge value changes and records the runtime value/max plus Canvas width. `raw.hit_cornerpush` records contact class, edge condition, selected velocity offset, Facing, before/after attacker velocity, and applied/skipped reason. `raw.hit_snap` records Facing-relative offset and target before/after position. `raw.hit_sprpriority` records applied P1/P2 priorities.
+`raw.power` records initial, StateDef, PowerAdd/PowerSet, and TargetPowerAdd mutations with before/value-or-delta/after/max values. `raw.hit_power` records selected hit/guard `getpower` and `givepower`, both gauges before/after their player-specific clamp, and proves the mutation occurred once for the accepted contact. `raw.power_hud` is emitted when either rendered gauge value changes and records the runtime value/max plus Canvas width. `raw.hit_cornerpush` records contact class, edge condition, current camera `screenEdge`, selected velocity offset, Facing, before/after dedicated cornerpush offset, unchanged ordinary X velocity, and applied/skipped reason. `raw.hit_snap` records Facing-relative offset and target before/after position. `raw.hit_sprpriority` records applied P1/P2 priorities.
 
 `raw.hit_fall_damage` is emitted by common-State `HitFallDamage` and records fall damage, independent `fall.kill`, Life before/after, and the originating ActiveHitDef id.
 

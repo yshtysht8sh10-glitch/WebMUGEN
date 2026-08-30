@@ -159,8 +159,8 @@ describe('real character Helper HitDef integration', () => {
     expect(maximumCarryGap).toBeLessThanOrEqual(30);
     expect({ carriedFacing, carriedVelocity }).toEqual({ carriedFacing: -1, carriedVelocity: 8 });
     expect(state.players[1]).toMatchObject({ stateNo: 271, facing: 1, vx: -8 });
-    expect(state.players[1].x).toBeGreaterThan(800);
-    expect(state.players[1].x).toBeLessThan(810);
+    expect(state.players[1].x).toBeGreaterThanOrEqual(815);
+    expect(state.players[1].x).toBeLessThan(825);
     expect(resolveViewportCamera(state, 400, 240).x).toBeLessThan(512);
     expect(maximumVisible3030DuringCarry).toBeGreaterThan(2);
     expect(created3030.length).toBeGreaterThan(2);

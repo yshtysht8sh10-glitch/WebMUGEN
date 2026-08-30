@@ -31,7 +31,7 @@ import { createAfterImageState, setAfterImageTime } from '../afterimage/AfterIma
 import type { BgPalFxEvent } from '../palfx/BgPalFxSystem';
 import { mugenPosXToWorldX } from './MugenPositionCoordinates';
 
-type RuntimeEntityContext = {
+export type RuntimeEntityContext = {
   kind: 'root' | 'helper';
   entityId: number;
   helperId?: number;
@@ -122,6 +122,12 @@ export type CnsRuntimeInput = {
 };
 
 export type CnsRuntimeResult = { state: GameState; traces: CnsRuntimeTrace[] };
+
+export type PostContactTargetBindResult = {
+  attacker: PlayerState;
+  target: PlayerState;
+  executedControllers: string[];
+};
 
 type TargetOperation = {
   kind: 'state' | 'velSet' | 'velAdd' | 'lifeAdd' | 'powerAdd' | 'bind' | 'drop' | 'facing';
@@ -728,6 +734,39 @@ function executeStateControllers(
 
   if (debugEnabled) pushDebug(debugLines, executedControllers, `return S${stateDef.stateNo} state=${next.stateNo}`);
   return { player: next, redirectedOpponent, executedControllers, executedControllerRefs, debugLines, targetOperations };
+}
+
+export function applyPostContactTargetBindControllers(
+  attacker: PlayerState,
+  target: PlayerState,
+  cns: CnsDocument,
+  input: CnsRuntimeInput = {},
+  commands?: ReadonlySet<string>,
+): PostContactTargetBindResult {
+  const stateDef = findState(cns, attacker.stateNo);
+  if (!stateDef) return { attacker, target, executedControllers: [] };
+
+  const result = executeStateControllers(
+    attacker,
+    target,
+    stateDef,
+    cns,
+    input,
+    commands,
+    false,
+    input.traceDiagnostics !== false,
+    undefined,
+    input.gameTime ?? 0,
+    (controller) => controller.type.toLowerCase() === 'targetbind'
+      && (num(controller, 'ignorehitpause', attacker, input, commands, target) ?? 0) !== 0
+      && controller.triggers.some((trigger) => /\bmove(?:contact|hit|guarded)\b/i.test(trigger.expression)),
+  );
+
+  return {
+    attacker: result.player,
+    target: result.redirectedOpponent,
+    executedControllers: result.executedControllers,
+  };
 }
 
 function applyTargetOperations(
