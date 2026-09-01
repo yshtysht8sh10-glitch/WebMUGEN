@@ -24,6 +24,7 @@ function webMugenCatalogConfig(array $server = []): array
         'storageDir' => (string)(getenv('WEBMUGEN_PROXY_STORAGE_DIR') ?: $documentRoot . '/DotoEita/16_proxy_release/storage/data'),
         'storagePublicBase' => rtrim((string)(getenv('WEBMUGEN_PROXY_STORAGE_PUBLIC_BASE') ?: '/DotoEita/16_proxy_release/storage/data'), '/'),
         'catalogPath' => (string)(getenv('WEBMUGEN_CATALOG_PATH') ?: dirname(__DIR__) . '/content/catalog.json'),
+        'defaultSettingsPath' => (string)(getenv('WEBMUGEN_DEFAULT_SETTINGS_PATH') ?: dirname(__DIR__) . '/config/default-settings.json'),
         'publicUrl' => rtrim((string)(getenv('WEBMUGEN_PUBLIC_URL') ?: $scheme . '://' . $host . $appPath . '/index.html'), '/'),
         'defaultStageId' => (string)(getenv('WEBMUGEN_DEFAULT_STAGE_ID') ?: 'cyber'),
         'defaultCharacterId' => (string)(getenv('WEBMUGEN_DEFAULT_CHARACTER_ID') ?: 't-h-m-a'),
@@ -611,6 +612,71 @@ function webMugenSaveCatalog(array $config, mixed $catalog, string $expectedRevi
         'revision' => webMugenCatalogRevision($catalogPath),
         'itemCount' => count($catalog['items']),
     ];
+}
+
+function webMugenSaveDefaultSettings(array $config, mixed $settings): array
+{
+    webMugenValidateDefaultSettings($settings);
+    $path = (string)($config['defaultSettingsPath'] ?? '');
+    if ($path === '') throw new RuntimeException('Default settings path is not configured.', 500);
+    $directory = dirname($path);
+    if (!is_dir($directory) || !is_writable($directory)) throw new RuntimeException('Default settings directory is not writable.', 500);
+    $temporary = tempnam($directory, '.settings-');
+    if ($temporary === false) throw new RuntimeException('Default settings temporary file could not be created.', 500);
+    try {
+        $json = json_encode($settings, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
+        if (file_put_contents($temporary, $json, LOCK_EX) === false) throw new RuntimeException('Default settings temporary file could not be written.', 500);
+        $written = json_decode((string)file_get_contents($temporary), true, flags: JSON_THROW_ON_ERROR);
+        webMugenValidateDefaultSettings($written);
+        if (DIRECTORY_SEPARATOR === '\\' && is_file($path)) {
+            $backup = $path . '.replace-backup';
+            if (is_file($backup)) @unlink($backup);
+            if (!rename($path, $backup)) throw new RuntimeException('Existing default settings could not be prepared for replacement.', 500);
+            if (!rename($temporary, $path)) {
+                @rename($backup, $path);
+                throw new RuntimeException('Default settings atomic replacement failed.', 500);
+            }
+            @unlink($backup);
+        } elseif (!rename($temporary, $path)) {
+            throw new RuntimeException('Default settings atomic replacement failed.', 500);
+        }
+        if (!@chmod($path, 0644)) error_log('WebMUGEN settings warning: failed to set generated default settings permissions to 0644: ' . $path);
+    } finally {
+        if (is_file($temporary)) @unlink($temporary);
+    }
+    return ['version' => 1, 'path' => 'config/default-settings.json'];
+}
+
+function webMugenValidateDefaultSettings(mixed $settings): void
+{
+    if (!is_array($settings) || ($settings['version'] ?? null) !== 1) {
+        throw new RuntimeException('A version 1 WebMUGEN settings object is required.', 422);
+    }
+    foreach (['audio', 'runtime', 'content', 'input', 'ui'] as $group) {
+        if (!isset($settings[$group]) || !is_array($settings[$group])) {
+            throw new RuntimeException('settings.' . $group . ' is required.', 422);
+        }
+    }
+    if (!is_int($settings['audio']['masterVolumePercent'] ?? null) || ($settings['audio']['masterVolumePercent'] ?? -1) < 0 || ($settings['audio']['masterVolumePercent'] ?? 101) > 100) {
+        throw new RuntimeException('settings.audio.masterVolumePercent must be an integer from 0 to 100.', 422);
+    }
+    if (!is_bool($settings['audio']['muted'] ?? null)) throw new RuntimeException('settings.audio.muted must be boolean.', 422);
+    foreach (['catalogPath', 'characterId', 'stageId', 'lifeBarId', 'characterPath'] as $field) {
+        if (!is_string($settings['content'][$field] ?? null) || trim((string)$settings['content'][$field]) === '') {
+            throw new RuntimeException('settings.content.' . $field . ' is required.', 422);
+        }
+    }
+    $paletteNo = $settings['content']['paletteNo'] ?? null;
+    if (!is_int($paletteNo) || $paletteNo < 1 || $paletteNo > 12) throw new RuntimeException('settings.content.paletteNo must be an integer from 1 to 12.', 422);
+    $players = $settings['input']['players'] ?? null;
+    if (!is_array($players) || count($players) !== 2) throw new RuntimeException('settings.input.players must contain P1 and P2.', 422);
+    foreach ($players as $index => $player) {
+        if (!is_array($player)) throw new RuntimeException('settings.input.players[' . $index . '] must be an object.', 422);
+        foreach (['keyboard', 'gamepad', 'controller'] as $group) {
+            if (!isset($player[$group]) || !is_array($player[$group])) throw new RuntimeException('settings.input.players[' . $index . '].' . $group . ' is required.', 422);
+        }
+    }
+    if (!in_array($settings['ui']['language'] ?? null, ['ja', 'en'], true)) throw new RuntimeException('settings.ui.language must be ja or en.', 422);
 }
 
 function webMugenValidateCatalog(mixed $catalog): void

@@ -92,7 +92,12 @@ Keyboard disables Gamepad input only for that player; the player's keyboard mapp
 
 Edit `public/config/default-settings.json` to change defaults for first-time users and newly added fields. Existing user values keep priority. A change that must override an existing user value requires an explicit versioned migration; it must not be disguised as an ordinary default change.
 
-In Development Mode, the Publisher settings page exposes **Use current settings as publisher defaults**. After confirmation, the browser sends the normalized complete settings object to the local Vite-only `/__webmugen/default-settings` endpoint, which overwrites the fixed `public/config/default-settings.json` target. Public builds render neither the Publisher settings menu nor its actions, do not provide the development middleware endpoint, and the client handler checks the same feature flag before making a request.
+In Development Mode, the Publisher settings page exposes **Use current settings as publisher defaults**. After confirmation, the browser sends the normalized complete settings object to one of two authenticated development write paths:
+
+- the local Vite development server uses `/__webmugen/default-settings` and overwrites the fixed repository target `public/config/default-settings.json`;
+- a Public build elevated through the server-verified Development Pass uses the short-lived Development session token with the app-relative `api/catalog.php?action=save-default-settings` endpoint. PHP validates the version 1 settings groups and atomically replaces the deployed `config/default-settings.json` with public-readable permissions.
+
+Locked Public Mode renders neither the Publisher settings menu nor its actions, and the client handler checks the same feature flag before making a request. The server action requires the Catalog API secret or a valid scoped Development session; it never accepts an unauthenticated write. `WEBMUGEN_DEFAULT_SETTINGS_PATH` may override the fixed deployed settings path when hosting layout requires it. The configured directory must be writable by PHP.
 
 Arbitrary Character source loading and source editing are Development Mode features. Locked Public Mode keeps the Character Files page read-only, rejects edit handlers, and loads characters through the validated Catalog selection. A Public build can elevate the current tab only after the server verifies the separate Development Pass hash and issues a short-lived scoped token; only that token stays in memory, and reload returns to Public. Only content intended for public access should be deployed.
 

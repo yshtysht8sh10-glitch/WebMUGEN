@@ -40,6 +40,7 @@ try {
             'serverHeaderKeys' => webMugenDebugServerHeaderKeys($_SERVER),
             'storageDir' => (string)$config['storageDir'],
             'catalogPath' => (string)$config['catalogPath'],
+            'defaultSettingsPath' => (string)$config['defaultSettingsPath'],
             'publicUrl' => (string)$config['publicUrl'],
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         return;
@@ -91,6 +92,13 @@ try {
             'revision' => $result['revision'],
             'itemCount' => $result['itemCount'],
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    } elseif ($action === 'save-default-settings') {
+        $result = webMugenSaveDefaultSettings($config, $payload['settings'] ?? null);
+        echo json_encode([
+            'success' => true,
+            'version' => $result['version'],
+            'path' => $result['path'],
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     } elseif ($action === 'rebuild') {
         $result = webMugenRebuildCatalog($config);
         echo json_encode(['success' => true, 'registered' => count($result['entries']), 'excluded' => $result['excluded']], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
@@ -126,8 +134,9 @@ function webMugenErrorCode(Throwable $error, int $status, string $action = ''): 
     if ($status === 404) return 'not_found';
     if ($status === 422) {
         if ($action === 'save-catalog') return 'catalog.invalid';
+        if ($action === 'save-default-settings') return 'settings.invalid';
         return $action === 'publish-stage' ? 'stage.invalid' : 'character.invalid';
     }
     if ($status === 405) return 'method.invalid';
-    return 'catalog.failed';
+    return $action === 'save-default-settings' ? 'settings.failed' : 'catalog.failed';
 }

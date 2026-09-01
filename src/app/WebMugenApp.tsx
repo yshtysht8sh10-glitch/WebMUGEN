@@ -1577,7 +1577,9 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
     if (typeof window !== 'undefined' && !window.confirm(message)) return;
     setPublishDefaultsStatus(uiLanguage === 'ja' ? '保存中…' : 'Saving…');
     try {
-      await publishWebMugenDefaults(webMugenSettingsRef.current);
+      await publishWebMugenDefaults(webMugenSettingsRef.current, {
+        sessionToken: developmentModeSessionToken ?? undefined,
+      });
       publishedSettingsRef.current = normalizeWebMugenSettings(webMugenSettingsRef.current);
       setPublishDefaultsStatus(uiLanguage === 'ja' ? '公開用初期設定を更新しました。' : 'Publisher defaults updated.');
     } catch (error) {

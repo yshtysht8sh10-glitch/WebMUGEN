@@ -9,7 +9,12 @@ import { resolveApplicationAssetPath } from './ApplicationAssetPath';
 export const WEBMUGEN_SETTINGS_VERSION = 1;
 export const WEBMUGEN_SETTINGS_STORAGE_KEY = 'webmugen.settings.v1';
 export const PUBLISHED_SETTINGS_PATH = resolveApplicationAssetPath('config/default-settings.json');
-export const PUBLISH_SETTINGS_API_PATH = '/__webmugen/default-settings';
+export const LOCAL_PUBLISH_SETTINGS_API_PATH = '/__webmugen/default-settings';
+export const SERVER_PUBLISH_SETTINGS_API_PATH = resolveServerPublishSettingsApiPath();
+
+export function resolveServerPublishSettingsApiPath(locationHref?: string): string {
+  return `${resolveApplicationAssetPath('api/catalog.php', locationHref)}?action=save-default-settings`;
+}
 
 export const LEGACY_SETTINGS_KEYS = {
   input: 'webmugen.inputConfig.v1',
@@ -216,14 +221,52 @@ export function resetWebMugenSettings(publishedDefaults: WebMugenSettings, stora
 
 export async function publishWebMugenDefaults(
   settings: WebMugenSettings,
-  fetcher: (input: string, init: RequestInit) => Promise<{ ok: boolean; status: number; text(): Promise<string> }> = fetch,
+  options: {
+    sessionToken?: string;
+    fetcher?: (input: string, init: RequestInit) => Promise<{ ok: boolean; status: number; text(): Promise<string> }>;
+  } = {},
 ): Promise<void> {
-  const response = await fetcher(PUBLISH_SETTINGS_API_PATH, {
+  const sessionToken = options.sessionToken?.trim() ?? '';
+  const serverWrite = sessionToken !== '';
+  const path = serverWrite ? SERVER_PUBLISH_SETTINGS_API_PATH : LOCAL_PUBLISH_SETTINGS_API_PATH;
+  const normalized = normalizeWebMugenSettings(settings);
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (serverWrite) {
+    headers.Authorization = `Bearer ${sessionToken}`;
+    headers['X-WebMUGEN-Token'] = sessionToken;
+  }
+  const response = await (options.fetcher ?? fetch)(path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(normalizeWebMugenSettings(settings)),
+    cache: 'no-store',
+    headers,
+    body: JSON.stringify(serverWrite ? { settings: normalized } : normalized),
   });
-  if (!response.ok) throw new Error((await response.text()) || `HTTP ${response.status}`);
+  if (!response.ok) {
+    const source = await response.text();
+    const payload = parseJsonRecord(source);
+    const error = payload?.error;
+    const message = typeof error === 'string'
+      ? error
+      : isRecord(error) && typeof error.message === 'string'
+        ? error.message
+      : looksLikeHtml(source)
+        ? `HTTP ${response.status}: Publisher settings API was not found at ${path}.`
+        : source || `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+}
+
+function parseJsonRecord(source: string): Record<string, unknown> | undefined {
+  try {
+    const value: unknown = JSON.parse(source);
+    return isRecord(value) ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function looksLikeHtml(source: string): boolean {
+  return /^\s*(?:<!doctype\s+html|<html\b)/i.test(source);
 }
 
 function readLegacySettings(storage: SettingsStorage | undefined): unknown {

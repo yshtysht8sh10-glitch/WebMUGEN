@@ -10,6 +10,7 @@ import {
   normalizeWebMugenSettings,
   publishWebMugenDefaults,
   resetWebMugenSettings,
+  resolveServerPublishSettingsApiPath,
   saveWebMugenSettings,
   applyFeaturePolicyToSettings,
   applyCatalogSelectionToSettings,
@@ -18,6 +19,11 @@ import {
 import { createFeatureFlags } from './BuildMode';
 
 describe('WebMugenSettings', () => {
+  it('resolves the publisher settings API inside a subdirectory deployment', () => {
+    expect(resolveServerPublishSettingsApiPath('https://example.test/DotoEita/50_WebMUGEN/index.html?admin=1'))
+      .toBe('/DotoEita/50_WebMUGEN/api/catalog.php?action=save-default-settings');
+  });
+
   it('migrates the legacy root Catalog default into the current application directory', () => {
     expect(normalizeCatalogPath(
       '/content/catalog.json',
@@ -170,15 +176,45 @@ describe('WebMugenSettings', () => {
 
   it('publishes only a normalized versioned settings object', async () => {
     let request: { input: string; init: RequestInit } | undefined;
-    await publishWebMugenDefaults(normalizeWebMugenSettings({ runtime: { roundTime: 42 } }), async (input, init) => {
-      request = { input, init };
-      return { ok: true, status: 200, text: async () => '' };
+    await publishWebMugenDefaults(normalizeWebMugenSettings({ runtime: { roundTime: 42 } }), {
+      fetcher: async (input, init) => {
+        request = { input, init };
+        return { ok: true, status: 200, text: async () => '' };
+      },
     });
     expect(request?.input).toBe('/__webmugen/default-settings');
     const body = JSON.parse(String(request?.init.body));
     expect(body.version).toBe(1);
     expect(body.runtime.roundTime).toBe(42);
     expect(body).not.toHaveProperty('life');
+  });
+
+  it('publishes server defaults through the app-relative authenticated PHP API', async () => {
+    let request: { input: string; init: RequestInit } | undefined;
+    const sessionToken = 'wmd1.session-token.signature';
+    const settings = normalizeWebMugenSettings({ runtime: { roundTime: 54 } });
+    await publishWebMugenDefaults(settings, {
+      sessionToken,
+      fetcher: async (input, init) => {
+        request = { input, init };
+        return { ok: true, status: 200, text: async () => '{"success":true}' };
+      },
+    });
+    expect(request?.input).toBe('/api/catalog.php?action=save-default-settings');
+    expect(request?.init.headers).toMatchObject({
+      Authorization: `Bearer ${sessionToken}`,
+      'X-WebMUGEN-Token': sessionToken,
+    });
+    expect(JSON.parse(String(request?.init.body))).toEqual({ settings });
+  });
+
+  it('summarizes a hosting-provider HTML error instead of rendering its complete page', async () => {
+    const error = await publishWebMugenDefaults(normalizeWebMugenSettings({}), {
+      sessionToken: 'wmd1.session-token.signature',
+      fetcher: async () => ({ ok: false, status: 404, text: async () => '<!DOCTYPE html><html><body>provider error page</body></html>' }),
+    }).catch((caught) => caught);
+    expect(String(error)).toContain('HTTP 404: Publisher settings API was not found at /api/catalog.php?action=save-default-settings.');
+    expect(String(error)).not.toContain('provider error page');
   });
 
   it('locks Public mode to the publisher Catalog while retaining diagnostic settings', () => {

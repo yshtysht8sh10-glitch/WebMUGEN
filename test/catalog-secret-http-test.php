@@ -20,7 +20,12 @@ try {
     }
     copy(__DIR__ . '/../public/api/catalog.php', $api . '/catalog.php');
     copy(__DIR__ . '/../public/api/catalog-lib.php', $api . '/catalog-lib.php');
-    copy(__DIR__ . '/../public/content/catalog.json', $content . '/catalog.json');
+    file_put_contents($content . '/catalog.json', json_encode(['version' => 1, 'items' => [
+        ['id' => 't-h-m-a', 'name' => 'T-H-M-A', 'kind' => 'character', 'engine' => 'winmugen', 'source' => 'builtin', 'path' => '/chars/T-H-M-A.zip'],
+        ['id' => 'kfm', 'name' => 'KFM', 'kind' => 'character', 'engine' => 'winmugen', 'source' => 'builtin', 'path' => '/chars/kfm/kfm.def'],
+        ['id' => 'cyber', 'name' => 'Cyber', 'kind' => 'stage', 'engine' => 'webmugen', 'source' => 'builtin', 'path' => 'builtin:stage:cyber'],
+    ]], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+    copy(__DIR__ . '/../public/config/default-settings.json', $config . '/default-settings.json');
 
     putenv('WEBMUGEN_CATALOG_SECRET');
     putenv('WEBMUGEN_PROXY_STORAGE_DIR=' . $storage);
@@ -62,6 +67,23 @@ try {
     assertHttpValue(false, str_contains($authorize['body'], 'http-file-secret-value'), 'Development Mode authorization omits Pass');
     assertHttpValue(false, str_contains($authorize['body'], $developmentPass), 'Development Mode authorization omits entered Pass');
     assertHttpStatus(200, catalogRequest($server['url'], $authorizeJson['sessionToken']), 'Development session authorizes Catalog API');
+    $defaultSettings = json_decode((string)file_get_contents($config . '/default-settings.json'), true, flags: JSON_THROW_ON_ERROR);
+    $defaultSettings['runtime']['roundTime'] = 54;
+    $saveSettingsUrl = str_replace('action=play-url', 'action=save-default-settings', $server['url']);
+    $saveSettings = catalogResponse($saveSettingsUrl, $authorizeJson['sessionToken'], $authorizeJson['sessionToken'], ['settings' => $defaultSettings]);
+    assertHttpStatus(200, $saveSettings['status'], 'Development session saves publisher defaults');
+    $saveSettingsJson = json_decode($saveSettings['body'], true, flags: JSON_THROW_ON_ERROR);
+    assertHttpValue(true, $saveSettingsJson['success'], 'publisher defaults save success');
+    assertHttpValue('config/default-settings.json', $saveSettingsJson['path'], 'publisher defaults response path');
+    assertHttpValue(54, json_decode((string)file_get_contents($config . '/default-settings.json'), true, flags: JSON_THROW_ON_ERROR)['runtime']['roundTime'], 'publisher defaults API updates the served file');
+    if (DIRECTORY_SEPARATOR !== '\\') {
+        clearstatcache(true, $config . '/default-settings.json');
+        assertHttpValue(0644, fileperms($config . '/default-settings.json') & 0777, 'publisher defaults file permission');
+    }
+    assertHttpStatus(401, catalogResponse($saveSettingsUrl, null, null, ['settings' => $defaultSettings])['status'], 'publisher defaults save requires authentication');
+    $invalidSettings = catalogResponse($saveSettingsUrl, $authorizeJson['sessionToken'], null, ['settings' => ['version' => 2]]);
+    assertHttpStatus(422, $invalidSettings['status'], 'invalid publisher defaults are rejected');
+    assertHttpValue('settings.invalid', json_decode($invalidSettings['body'], true, flags: JSON_THROW_ON_ERROR)['error']['code'], 'invalid publisher defaults response code');
     assertHttpStatus(401, catalogResponse($authorizeUrl, null, null, null, 'wrong-pass')['status'], 'Development Mode rejects an invalid Pass');
     assertHttpStatus(401, catalogResponse($authorizeUrl, null, null, null, 'http-file-secret-value')['status'], 'API token is not accepted as Development Pass');
     assertHttpStatus(401, catalogRequest($authorizeUrl, null, null), 'Development Mode requires a Pass');
@@ -158,7 +180,11 @@ function startCatalogServer(string $documentRoot): array
     $port = (int)substr(strrchr($address, ':'), 1);
     $process = proc_open(
         [PHP_BINARY, '-S', '127.0.0.1:' . $port, '-t', $documentRoot],
-        [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+        [
+            0 => ['pipe', 'r'],
+            1 => ['file', $documentRoot . '/php-server.out.log', 'a'],
+            2 => ['file', $documentRoot . '/php-server.err.log', 'a'],
+        ],
         $pipes,
         $documentRoot,
     );

@@ -7,8 +7,10 @@ require_once __DIR__ . '/../public/api/catalog-lib.php';
 $root = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'webmugen-catalog-' . bin2hex(random_bytes(6));
 $storage = $root . DIRECTORY_SEPARATOR . 'storage';
 $content = $root . DIRECTORY_SEPARATOR . 'content';
+$settingsDirectory = $root . DIRECTORY_SEPARATOR . 'config';
 mkdir($storage, 0777, true);
 mkdir($content, 0777, true);
+mkdir($settingsDirectory, 0777, true);
 
 try {
     $characterDef = static fn(string $name): string => "[Info]\nname = \"{$name}\"\n[Files]\ncmd = fighter.cmd\ncns = fighter.cns\nanim = fighter.air\n";
@@ -28,6 +30,8 @@ try {
     createZip($root . '/outside.zip', ['outside.def' => $characterDef('Outside Fighter')]);
 
     $catalogPath = $content . '/catalog.json';
+    $defaultSettingsPath = $settingsDirectory . '/default-settings.json';
+    copy(__DIR__ . '/../public/config/default-settings.json', $defaultSettingsPath);
     $builtin = ['version' => 1, 'items' => [
         [
             'id' => 't-h-m-a', 'name' => 'T-H-M-A', 'kind' => 'character', 'engine' => 'winmugen',
@@ -47,6 +51,7 @@ try {
         'storageDir' => $storage,
         'storagePublicBase' => '/DotoEita/16_proxy_release/storage/data',
         'catalogPath' => $catalogPath,
+        'defaultSettingsPath' => $defaultSettingsPath,
         'publicUrl' => 'https://example.test/DotoEita/50_WebMUGEN/index.html',
         'defaultStageId' => 'cyber',
         'defaultCharacterId' => 't-h-m-a',
@@ -156,6 +161,24 @@ try {
         assertSame(409, $error->getCode(), 'stale GUI draft is rejected as a conflict');
     }
     assertSame('Changed by another publisher', webMugenReadCatalog($catalogPath)['items'][0]['name'], 'conflict keeps the newer server Catalog');
+
+    $defaultSettings = json_decode((string)file_get_contents($defaultSettingsPath), true, flags: JSON_THROW_ON_ERROR);
+    $defaultSettings['runtime']['roundTime'] = 54;
+    $savedSettings = webMugenSaveDefaultSettings($config, $defaultSettings);
+    assertSame(['version' => 1, 'path' => 'config/default-settings.json'], $savedSettings, 'default settings save reports the public path');
+    assertSame(54, json_decode((string)file_get_contents($defaultSettingsPath), true, flags: JSON_THROW_ON_ERROR)['runtime']['roundTime'], 'default settings save replaces the server file');
+    if (DIRECTORY_SEPARATOR !== '\\') {
+        clearstatcache(true, $defaultSettingsPath);
+        assertSame(0644, fileperms($defaultSettingsPath) & 0777, 'default settings save keeps the file publicly readable');
+    }
+    $beforeInvalidSettings = (string)file_get_contents($defaultSettingsPath);
+    try {
+        webMugenSaveDefaultSettings($config, ['version' => 2]);
+        throw new RuntimeException('expected invalid default settings rejection');
+    } catch (RuntimeException $error) {
+        assertSame(422, $error->getCode(), 'invalid default settings are rejected');
+    }
+    assertSame($beforeInvalidSettings, (string)file_get_contents($defaultSettingsPath), 'invalid default settings leave the current file unchanged');
 
     foreach (['../uploaded_938472.zip', 'sub/uploaded_938472.zip', 'sub\\uploaded_938472.zip', 'https://example.test/fighter.zip'] as $unsafeArchive) {
         try {
