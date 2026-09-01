@@ -6,15 +6,18 @@ This document defines how to maintain the WebMUGEN compatibility matrix.
 
 ## Source of truth
 
-`docs/webmugen/winmugen-compatibility-matrix.md` is the canonical row inventory and human-readable evidence checklist.
+`docs/webmugen/winmugen-compatibility-matrix.md` is the canonical WinMUGEN row inventory and human-readable evidence checklist.
 
-The Matrix is WinMUGEN-first. When a row has a known MUGEN 1.0 difference, its evidence must identify the tested profile instead of combining both versions into one ambiguous result. A future schema may add profile-specific status/evidence or separate profile views, but it must preserve the meaning and history of the WinMUGEN row. MUGEN 1.0 documentation alone cannot promote or redefine a WinMUGEN status. See `docs/architecture/compatibility.md`.
+Later versions are difference-only inventories:
 
-`docs/webmugen/winmugen-compatibility-matrix.html` is the browser viewer. It fetches and parses the Markdown inventory at runtime instead of embedding a second copy of every row. Every Markdown row stores the explicit canonical status, progress, and evidence shown by the HTML.
+- `mugen10-compatibility-delta.md` contains additions and changes relative to WinMUGEN;
+- `mugen11-compatibility-delta.md` contains additions and changes relative to MUGEN 1.0.
 
-The viewer resolves Matrix remarks through the same live Japanese/English language state used by headings, statuses, and table labels. English is the canonical source and fallback. Japanese remarks are prepared when the Markdown is parsed, with explicit per-item Japanese text taking precedence when an item needs terminology that cannot be translated safely by the shared Matrix glossary. Switching languages re-renders the current filtered rows without a page reload.
+Do not copy inherited rows into a delta inventory. The effective compatibility stack is WinMUGEN canonical + MUGEN 1.0 delta + MUGEN 1.1 delta. Later-version documentation cannot promote or redefine an inherited WinMUGEN status. See `docs/architecture/compatibility.md`.
 
-Update the Markdown inventory whenever compatibility behavior changes. Update the HTML in the same work cycle only when viewer behavior, labels, filters, or presentation change.
+`docs/webmugen/winmugen-compatibility-matrix.html` is the shared browser viewer. It fetches and parses the selected Markdown inventory at runtime instead of embedding row inventories in HTML. WinMUGEN is the default tab; each tab reuses the same renderer, search, section filter, status filter, and status summary.
+
+Update the owning Markdown inventory whenever compatibility behavior changes. Update the HTML in the same work cycle only when viewer behavior, labels, filters, or presentation change.
 
 Run `npm run matrix:check` after every Matrix edit. `node scripts/compatibility-matrix.mjs --write` refreshes the Markdown status summary; normal edits must state the canonical status directly in the Markdown row.
 
@@ -123,19 +126,9 @@ Separate subsystem may exist; CNS runtime connection and focused tests are unver
 
 Avoid vague notes such as `Supported`, `Partial support`, or `Needs work`.
 
-## Explicit overrides
+## Explicit statuses
 
-The HTML contains an override map for rows whose status cannot be inferred safely from legacy Markdown wording.
-
-Use explicit overrides for:
-
-- major aggregate features such as HitDef;
-- known Fallback implementations such as a push solver that ignores character Size/Width;
-- features with prepared Issues such as Explod/Sound Controllers;
-- rows whose progress depends on multiple subsystems or Issues;
-- entries where old notes use `Partial` for a safe no-op or placeholder.
-
-Keep the override note honest and update it when the underlying implementation changes.
+Every Markdown row stores the explicit status, progress, and evidence rendered by the HTML. Do not infer or override a row status in the viewer. This rule applies equally to the canonical inventory and both delta inventories.
 
 ## Real-character audit gate
 
@@ -187,9 +180,11 @@ Before committing a Matrix update, verify:
 - every `Safe no-op` note says that no game effect occurs;
 - Fallback is not used merely because a feature is incomplete;
 - Complete rows have focused-test or confirmed-runtime evidence;
-- HTML and Markdown contain the same row identities and canonical status/progress values (currently 446 rows);
-- HTML loads and parses the Markdown inventory;
-- search, section filter, and status filter still work;
+- the canonical WinMUGEN row identities and status/progress values remain unchanged unless the underlying compatibility evidence changed;
+- both delta inventories contain only differences from their immediate base version;
+- HTML loads and parses all three Markdown inventories;
+- WinMUGEN is the default tab, and all three tabs switch without reloading the page;
+- search, section filter, status filter, and summary work independently on every tab;
 - `public/chars/common1.cns` is unchanged.
 
 ## Commit scope

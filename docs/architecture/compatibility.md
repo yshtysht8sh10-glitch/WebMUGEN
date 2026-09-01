@@ -172,11 +172,17 @@ Use this sequence for new work:
 
 Do not broaden a WinMUGEN fix into MUGEN 1.0 support without separate evidence and acceptance criteria.
 
-## Compatibility Matrix direction
+## Compatibility Matrix structure
 
-The current Matrix is WinMUGEN-first and remains the canonical WinMUGEN checklist. During profile migration, rows with a known version difference must state the affected profile in their evidence.
+The Matrix is WinMUGEN-first and exposes three profile views. The WinMUGEN view is canonical and contains the complete compatibility inventory. The MUGEN 1.0 view contains only additions and changes relative to WinMUGEN. The MUGEN 1.1 view contains only additions and changes relative to MUGEN 1.0.
 
-The future Matrix representation should support one item identity with profile-specific status/evidence, or clearly separated per-profile views. It must not collapse different WinMUGEN and MUGEN 1.0 results into one ambiguous status. The schema change will be designed and migrated separately; this document does not change current Matrix status mechanics.
+```text
+WinMUGEN canonical inventory
+  + MUGEN 1.0 delta
+    + MUGEN 1.1 delta
+```
+
+An unchanged inherited item is not repeated in a later view. A later-version difference owns its own status and evidence in the corresponding delta inventory, so different profile results are never collapsed into one ambiguous status. Adding a delta row must not alter the meaning or history of the inherited WinMUGEN row.
 
 ## Adding MUGEN 1.1 or another version
 
@@ -201,6 +207,6 @@ The repository does not yet implement the target architecture:
 | Constants | `CnsConstants` combines character values and one global fallback table | Profile-owned resolution and defaults |
 | Common States | DEF-selected common States and bundled WinMUGEN `common1.cns` are merged without profile dispatch | Profile selects compatible common-state policy/assets |
 | Parser | SFF v1/v2 are independent parsers selected by the binary header; other syntax parsers retain normalized data | Continue separating format syntax from profile semantics |
-| Matrix | One WinMUGEN-first status per item | Preserve WinMUGEN view and add profile-specific evidence/status where differences exist |
+| Matrix | WinMUGEN canonical view plus MUGEN 1.0 and 1.1 difference-only views | Add verified later-version differences without duplicating inherited rows |
 
 Migration must be incremental. The first implementation milestone should add profile identity and loader selection without changing runtime behavior. Later milestones can move one semantic family at a time behind the dispatcher.

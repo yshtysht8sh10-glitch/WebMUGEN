@@ -76,11 +76,16 @@ export function validateMatrixHtml(html) {
       errors.push(`HTML status definition is missing: ${key}`);
     }
   }
-  if (!/fetch\(\s*['"]\.\/winmugen-compatibility-matrix\.md['"]/.test(html)) {
-    errors.push('HTML does not fetch the Markdown Matrix inventory.');
+  for (const source of [
+    './winmugen-compatibility-matrix.md',
+    './mugen10-compatibility-delta.md',
+    './mugen11-compatibility-delta.md',
+  ]) {
+    if (!html.includes(`source:'${source}'`)) errors.push(`HTML Matrix source is missing: ${source}`);
   }
-  if (!html.includes('sections=parse(md)')) errors.push('HTML does not parse fetched Markdown into sections.');
-  for (const functionName of ['splitRow', 'kindOf', 'parse', 'render', 'setLang', 'init']) {
+  if (!html.includes("activeProfile='winmugen'")) errors.push('HTML does not default to the canonical WinMUGEN tab.');
+  if (!html.includes('const matrixCache=new Map()')) errors.push('HTML does not separate Matrix data from rendering.');
+  for (const functionName of ['splitRow', 'kindOf', 'parse', 'render', 'setLang', 'selectProfile', 'init']) {
     if (!html.includes(`function ${functionName}(`)) errors.push(`HTML runtime function is missing: ${functionName}`);
   }
   if (/\b(?:stateRows|headerRows|controllerRows|triggerRows)\b/.test(html)) {
@@ -100,7 +105,12 @@ function updateSummary(markdown) {
 
 async function main() {
   const root = new URL('../', import.meta.url);
-  const markdownPath = new URL('docs/webmugen/winmugen-compatibility-matrix.md', root);
+  const matrixFiles = [
+    ['WinMUGEN canonical', 'docs/webmugen/winmugen-compatibility-matrix.md'],
+    ['MUGEN 1.0 delta', 'docs/webmugen/mugen10-compatibility-delta.md'],
+    ['MUGEN 1.1 delta', 'docs/webmugen/mugen11-compatibility-delta.md'],
+  ];
+  const markdownPath = new URL(matrixFiles[0][1], root);
   const htmlPath = new URL('docs/webmugen/winmugen-compatibility-matrix.html', root);
   let markdown = await readFile(markdownPath, 'utf8');
   if (process.argv.includes('--write')) {
@@ -108,11 +118,18 @@ async function main() {
     await writeFile(markdownPath, markdown, 'utf8');
   }
   const { errors, rows } = validateMatrix(markdown);
-  if (rows.length === 0) errors.push('no Matrix rows parsed');
+  const counts = [`WinMUGEN canonical: ${rows.length}`];
+  if (rows.length === 0) errors.push('no canonical Matrix rows parsed');
+  for (const [label, path] of matrixFiles.slice(1)) {
+    const delta = validateMatrix(await readFile(new URL(path, root), 'utf8'));
+    errors.push(...delta.errors.map((error) => `${label}: ${error}`));
+    if (delta.rows.length === 0) errors.push(`${label}: no Matrix rows parsed`);
+    counts.push(`${label}: ${delta.rows.length}`);
+  }
   const html = await readFile(htmlPath, 'utf8');
   errors.push(...validateMatrixHtml(html));
   if (errors.length > 0) throw new Error(errors.join('\n'));
-  console.log(`Compatibility Matrix: ${rows.length} rows validated.`);
+  console.log(`Compatibility Matrix: ${counts.join(', ')} rows validated.`);
 }
 
 if (process.argv[1]?.replaceAll('\\', '/').endsWith('/scripts/compatibility-matrix.mjs')) {

@@ -47,11 +47,9 @@ The goal is that a failing test log can answer where the route broke:
 
 ## Compatibility matrix rule
 
-`docs/webmugen/winmugen-compatibility-matrix.html` is the canonical compatibility checklist.
+`docs/webmugen/winmugen-compatibility-matrix.html` is the shared Matrix viewer. `winmugen-compatibility-matrix.md` is the canonical WinMUGEN inventory; MUGEN 1.0 and 1.1 use difference-only inventories.
 
-`docs/webmugen/winmugen-compatibility-matrix.md` is the human-readable mirror with more detailed notes.
-
-Update both files when implementation or tests change.
+Update the owning Markdown inventory when implementation or tests change. Do not duplicate inherited rows in a later-version delta.
 
 A row should be promoted to **Complete** only when at least one of the following is true:
 

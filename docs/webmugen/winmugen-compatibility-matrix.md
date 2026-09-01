@@ -2,7 +2,7 @@
 
 Updated: 2026-09-01
 
-This document is the working compatibility checklist for WebMUGEN. Every compatibility item is tracked on its own row. Do not combine multiple triggers, controllers, states, operators, redirects, or CMD features into a single matrix item.
+This document is the canonical WinMUGEN compatibility checklist for WebMUGEN. The HTML Matrix adds MUGEN 1.0 and MUGEN 1.1 tabs, but those tabs contain only version differences in `mugen10-compatibility-delta.md` and `mugen11-compatibility-delta.md`; they do not duplicate this inventory. Every compatibility item is tracked on its own row. Do not combine multiple triggers, controllers, states, operators, redirects, or CMD features into a single matrix item.
 
 Status is intentionally conservative: **Complete** requires either focused tests or a confirmed app integration path. Runtime shims with no game effect are **Safe no-op**; approximate alternate paths are **Fallback**, never Partial or Complete.
 

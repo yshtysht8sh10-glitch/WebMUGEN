@@ -127,11 +127,9 @@ For state controllers:
 
 ## Compatibility matrix policy
 
-`docs/webmugen/winmugen-compatibility-matrix.html` is the canonical compatibility checklist.
+`docs/webmugen/winmugen-compatibility-matrix.html` is the shared Matrix viewer. `winmugen-compatibility-matrix.md` is the canonical WinMUGEN inventory; the MUGEN 1.0 and 1.1 Markdown inventories contain only differences from their immediate base version.
 
-`docs/webmugen/winmugen-compatibility-matrix.md` is the human-readable mirror with more detailed notes.
-
-When implementation or tests change, update both files in the same work cycle.
+When implementation or tests change, update the owning Markdown inventory. Update HTML in the same work cycle only when viewer behavior or presentation changes.
 
 Do not combine multiple compatibility items into one row.
 
