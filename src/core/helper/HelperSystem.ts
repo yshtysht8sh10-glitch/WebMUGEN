@@ -24,6 +24,11 @@ export type HelperSpawnRequest = {
   parent: PlayerState;
 };
 
+// WinMUGEN's [Config] HelperMax accepts at most 56 Helpers in total.
+// WebMUGEN does not expose mugen.cfg yet, so use that compatibility ceiling
+// to bound same-tick Helper creation without inventing a generation rule.
+export const WINMUGEN_HELPER_MAX = 56;
+
 export function createInitialHelperState(): HelperRuntimeState {
   return { entries: [], nextEntityId: 3 };
 }

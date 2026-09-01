@@ -27,6 +27,9 @@ export function convertSffDocumentToImageDataSpritePack(
   const sharedPalette = options.externalPalette ?? findSharedPalette(document);
   const decodedSources = new Map<string, ReturnType<typeof decodePcx>>();
   const sourcePaletteMetadata = new Map<number, PaletteResolution>();
+  const externalCharacterPaletteIndexes = options.externalPalette
+    ? findExternalCharacterPaletteIndexes(document)
+    : new Set<number>();
   let previousPalette: PaletteResolution | null = null;
   let actPreviewSpriteKey: string | null = null;
   let actPreviewSpritePriority = -1;
@@ -53,6 +56,7 @@ export function convertSffDocumentToImageDataSpritePack(
       externalPaletteSelected: options.externalPalette !== undefined,
       externalPaletteKey: options.externalPaletteSlot === undefined ? 'external-act' : `external-act:p${options.externalPaletteSlot}`,
       externalPaletteIndexOrder: options.paletteIndexOrder ?? 'normal',
+      externalCharacterPalette: externalCharacterPaletteIndexes.has(sprite.index),
     });
     if (paletteResolution.palette && !palettes.has(paletteResolution.key)) {
       palettes.set(paletteResolution.key, {
@@ -153,6 +157,7 @@ function resolveSpritePalette({
   externalPaletteSelected,
   externalPaletteKey,
   externalPaletteIndexOrder,
+  externalCharacterPalette,
 }: {
   sprite: SffSpriteNode;
   sourceSprite: SffSpriteNode;
@@ -163,8 +168,9 @@ function resolveSpritePalette({
   externalPaletteSelected: boolean;
   externalPaletteKey: string;
   externalPaletteIndexOrder: 'normal' | 'reversed';
+  externalCharacterPalette: boolean;
 }): PaletteResolution {
-  if (externalPaletteSelected && previousPalette === null && sharedPalette) {
+  if (externalPaletteSelected && (previousPalette === null || externalCharacterPalette) && sharedPalette) {
     return {
       palette: sharedPalette,
       paletteIndexOrder: externalPaletteIndexOrder,
@@ -223,6 +229,31 @@ function resolveSpritePalette({
     source: externalPaletteSelected ? 'external-act' : 'shared-embedded',
     externalActApplied: externalPaletteSelected,
   };
+}
+
+/**
+ * WinMUGEN character ACT files recolor the shared character-sprite palette,
+ * not the individual portrait/effect palettes that may precede or follow it.
+ * Legacy SFF v1 files can use an individual-palette header and begin the
+ * character run with group 0 marked "use previous palette". Identify that
+ * contiguous shared run from the first group-0 sprite instead of treating an
+ * immediately preceding individual portrait as the selected character ACT.
+ */
+function findExternalCharacterPaletteIndexes(document: SffDocument): Set<number> {
+  const indexes = new Set<number>();
+  const firstCharacterSprite = document.sprites.findIndex((sprite) => sprite.groupNo === 0 && sprite.imageNo === 0);
+  const start = firstCharacterSprite >= 0
+    ? firstCharacterSprite
+    : document.sprites.findIndex((sprite) => sprite.groupNo === 0);
+  if (start < 0) return indexes;
+
+  indexes.add(document.sprites[start].index);
+  for (let index = start + 1; index < document.sprites.length; index += 1) {
+    const sprite = document.sprites[index];
+    if (!sprite.samePalette) break;
+    indexes.add(sprite.index);
+  }
+  return indexes;
 }
 
 function tryDecodeSpritePcx(

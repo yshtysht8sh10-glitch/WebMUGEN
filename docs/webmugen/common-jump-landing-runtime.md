@@ -16,7 +16,9 @@ physics = A
 
 ## Landing rule
 
-When a player is in any state with `physics = A`, the physics step applies air gravity. When that motion reaches the ground and `Statedef 52` exists, the runtime transitions to `State 52` with `stateTime = 0` and `animTime = 0`.
+When a player is in any state with `physics = A`, the physics step applies air gravity. When that motion reaches the ground and `Statedef 52` exists, the physics step selects `State 52` with `stateTime = 0`. The following normal CNS pass applies the StateDef header exactly once. This distinction is required for expression-valued entry fields such as akkarin's `anim = 47 + (...) * 20000`: the physics layer does not have the complete expression context and must not mark the StateDef header as already applied.
+
+A literal StateDef `anim` may be selected immediately at ground contact. An expression-valued `anim` is evaluated by the next CNS pass and restarts at `animTime = 0`, before State 52 controllers are evaluated. This prevents the preceding airborne animation from being retained indefinitely and allows the authored `AnimTime = 0` landing exit to run.
 
 ```text
 if physics = A

@@ -34,7 +34,7 @@ export function stepCnsPhysicsMotion(state: GameState, cns?: CnsDocument | null)
   ] as [PlayerState, PlayerState];
   const nextHelpers = state.helpers.entries.map((helper) => ({
     ...helper,
-    player: helper.spawnFrame === state.frame ? helper.player : stepPlayerCnsPhysics(helper.player, cns),
+    player: helper.hasCompletedInitialStatePass === false ? helper.player : stepPlayerCnsPhysics(helper.player, cns),
   }));
   const finalPlayers = applyTargetBindMaintenance(recoveredPlayers, state.players, nextHelpers, state.helpers.entries);
   const nextFrame = state.frame + 1;
@@ -286,7 +286,13 @@ function enterLandingState(player: PlayerState, opponent: PlayerState, stateDef:
     ...player,
     prevStateNo: player.stateNo,
     stateNo: stateDef.stateNo,
-    stateHeaderAppliedStateNo: stateDef.stateNo,
+    // Ground contact selects State 52, but the regular CNS runtime owns the
+    // StateDef entry. In particular, character common files may use an
+    // expression for `anim` (akkarin selects 20047 through var(3)); physics
+    // has no command/input context with which to evaluate that expression.
+    // Retain the prior applied State number so the next CNS pass evaluates
+    // every StateDef entry field exactly once instead of treating 52 as done.
+    stateHeaderAppliedStateNo: player.stateNo,
     stateTime: 0,
     stateType,
     moveType: toMoveType(stateDef.moveType) ?? player.moveType,

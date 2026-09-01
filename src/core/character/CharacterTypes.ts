@@ -4,6 +4,7 @@ import type { CmdDocument } from '../../parser/cmd/CmdTypes';
 import type { DefDocument } from '../../parser/def/DefTypes';
 import type { ImageDataSpritePack } from '../sprite/ImageDataSpriteTypes';
 import type { SndDocument } from '../../parser/snd/SndTypes';
+import type { CompatibilityProfileId } from '../../compatibility/CompatibilityProfile';
 
 export type CharacterPaletteAsset = {
   slot: number;
@@ -12,6 +13,7 @@ export type CharacterPaletteAsset = {
 };
 
 export type CharacterAssets = {
+  compatibilityProfile: CompatibilityProfileId;
   def: DefDocument;
   cns: CnsDocument;
   air: AirDocument;
@@ -20,11 +22,12 @@ export type CharacterAssets = {
   palettes: CharacterPaletteAsset[];
   sounds: SndDocument | null;
   loadDiagnostics: CharacterLoadDiagnostic[];
+  compatibilityDiagnostics: CharacterLoadDiagnostic[];
   cnsSourceFiles?: CharacterSourceFile[];
 };
 
 export type CharacterLoadDiagnostic = {
-  asset: 'sound';
+  asset: 'sound' | 'compatibility' | 'sprite';
   path: string;
   message: string;
 };

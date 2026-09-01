@@ -1,6 +1,6 @@
 # Loader
 
-Updated: 2026-08-25
+Updated: 2026-08-31
 
 This document describes how WebMUGEN loads and merges character files.
 
@@ -13,8 +13,9 @@ matching string triggers. The Settings character palette selector supplies `PalN
 matching DEF `palN` ACT for SFF v1 rendering. The selector accepts `p1` through `p12`; when the
 requested ACT is absent, rendering falls back to the first resolved palette while `PalNo` retains the
 requested number so character CNS palette branches remain observable. For SFF v1, the selected ACT
-overrides the first shared palette owner and propagates through its `samePalette` chain; later
-sprite-specific palettes, such as effect palettes, remain independent.
+overrides the contiguous shared character-palette run beginning at the first group-0 sprite, even
+when individual portrait palettes precede it; later sprite-specific palettes, such as effect palettes,
+remain independent.
 
 For ZIP Characters, the entry DEF is selected by Character structure rather than archive entry order. The loader inspects all DEF files and accepts definitions with `[Info]`, Character `[Files]`, `cmd`, `anim`, and either `cns` or `st`; stage, storyboard, and system DEFs are ignored. When archives contain a normal definition plus backup or no-AI variants, the candidate at the shallowest directory depth wins. Candidates at the same depth are ranked by the fewest non-letter/non-number characters in the filename, then the shortest filename, then lexical path order. This permits proxy-upload filenames, outer folders, and common variant subfolders while keeping selection deterministic. Zero valid Character definitions are rejected.
 
@@ -88,6 +89,7 @@ Rules:
 
 - `common1.cns` is loaded as an external file.
 - Character CNS/CMD StateDefs and the DEF-selected `stcommon` are merged first, followed by external `common1.cns`; WebMUGEN `common.cmd` routing is merged last. Positive State bodies therefore come from the character or `common1.cns`, never an identically numbered replacement in `common.cmd`.
+- `common.cmd` baseline `ChangeState` routes may enter a character-owned or DEF-selected `stcommon` movement State, but State-number-gated movement glue is not injected into that State. Its authored Controllers and animation selection own the State after entry. This prevents a common `ChangeAnim value = 20` from resetting a character's dynamic walk animation such as `20 + ifelse(...) * 20000` every frame. The temporary glue remains available when the selected positive State comes from WebMUGEN's common assets.
 - Do not embed another copy of `common1.cns` in TypeScript.
 - Do not patch `common1.cns` for WebMUGEN convenience.
 - Runtime incompatibilities should be fixed in parser/runtime/trigger/controller/physics layers.
@@ -116,6 +118,7 @@ Rules:
 
 - Character-defined routes should take precedence when they define the same primary behavior.
 - `common.cmd` fills missing baseline routes.
+- Primary-command overlap is evaluated within the authored StateType domain. A character's air-only `holdup` route does not suppress the common standing `holdup` route into State 40; an unrestricted or standing character route using the same primary command still overrides it.
 - `/chars/common.cmd` is the only WebMUGEN common CMD path. There is no loaded `common1.cmd`; `common1.cns` is the separate WinMUGEN-compatible common State body asset.
 - Common routes should be visible as MUGEN data rather than hidden TypeScript when practical.
 
@@ -127,15 +130,25 @@ The loader retains WAV payload bytes. Zero-byte, duplicate key, and non-RIFF/WAV
 
 A missing SND or a fatal invalid header does not discard otherwise valid character assets. `CharacterAssets.sounds` is `null` and `loadDiagnostics` records the sound path/error. Missing required CNS/CMD/AIR remains fatal. This separation allows silent character loading while keeping the audio failure observable.
 
+## Compatibility Profile and SFF dispatch
+
+`CharacterLoader` parses the DEF first and resolves `CharacterAssets.compatibilityProfile` from `[Info] mugenversion`. Missing version data retains the existing `WINMUGEN` fallback. `1.0` selects `MUGEN_1_0`; unknown values retain WinMUGEN and add a load diagnostic instead of silently upgrading the character.
+
+This decision is separate from the sprite format. The selected profile owns the resource policy, while `SffFormatDetector` reads the actual binary header and dispatches to the independent `SffV1Parser` or `SffV2Parser`. A MUGEN 1.0 DEF with an SFF v1 file still uses the v1 parser. Development diagnostics retain the selected Profile, detected SFF version, and parser name; a fatal parser error remains visible as the sample-fallback reason.
+
+SFF v2.0 currently implements the header, Sprite/Palette directories, LData, linked Sprite/Palette resolution, 8-bit RLE8 decoding, and per-Sprite palette references. Linked data is resolved with invalid-index and cycle detection while the referencing Sprite retains its own group/image, axes, palette selection, and metadata. RLE5, LZ5, TData, and non-8-bit resources throw explicit parser/converter errors. They are not treated as decoded or as safe no-ops. Alice Liddell's real archive verifies 873 Sprites, 373 Palettes, its multi-frame stand Action, and the application ZIP-loading route.
+
 ## SFF v1 palette policy
 
-The SFF v1 converter resolves palette ownership before indexed PCX pixels become RGBA. A sprite with its own PCX palette keeps that palette and uses normal source-index lookup even when the character has a DEF-selected ACT. The external ACT path, including reversed ACT index lookup, applies only to shared character-palette sprites.
+The nominal SFF v1 sprite-subheader size is 32 bytes. A known WinMUGEN-era malformed variant writes the 512-byte main-header size into the header's `subheaderSize` field while retaining an ordinary 32-byte sprite chain. WebMUGEN accepts only the exact `subheaderSize = firstSubfileOffset = 512` mix-up when the first node's length, next offset, and PCX signature prove the 32-byte boundary. Other unknown sizes and structurally invalid 512 values remain fatal. New Super Mario's `Mario.sff` exercises this compatibility path and loads all 143 declared sprites instead of falling back to the sample character.
 
-SFF subfile order is significant. A `samePalette` sprite inherits the previous effective palette in subfile sequence, including a preceding sprite-specific PCX palette. Linked sprites share the source pixel data but keep the linked node's palette context, so a linked node can inherit the previous effective palette instead of blindly sharing the source node's palette identity.
+The SFF v1 converter resolves palette ownership before indexed PCX pixels become RGBA. A sprite with its own PCX palette keeps that palette and uses normal source-index lookup even when the character has a DEF-selected ACT. The external ACT path, including reversed ACT index lookup, applies only to shared character-palette sprites. WinMUGEN's bundled `tools/mtools.txt` defines character sprites as shared-palette data and individual palettes as exceptions such as the large portrait.
+
+SFF subfile order is significant. Outside the identified character run, a `samePalette` sprite inherits the previous effective palette in subfile sequence, including a preceding sprite-specific PCX palette. The first group-0 sprite identifies the character run: it and the following contiguous `samePalette` nodes use the selected ACT rather than accidentally inheriting a preceding individual portrait. Kaoru_Hanayama places three individual 9000-group portraits before `0,0`; this rule keeps those portraits and later individual effect runs intact while making the in-game `0,0` RGBA identical to the ACT preview. Linked sprites share the source pixel data but keep the linked node's palette context, so a linked node outside that run can inherit the previous effective palette instead of blindly sharing the source node's palette identity.
 
 An embedded PCX VGA palette is accepted only when the RLE image data before its terminal marker decodes the complete declared image. This avoids treating an incidental `0x0c` byte at the marker-shaped offset of a shared-palette SFF subfile as a palette, which previously truncated bundled T-H-M-A sprite `5203,2` and hid the second element of bounce Action 5170.
 
-The resulting `ImageDataSpritePack` stores palette metadata and a palette cache key for each sprite. Normal player rendering, AIR Preview, and Explod rendering all consume the same baked RGBA data. Canvas bitmap caching is scoped by loaded asset identity, sprite group/index, baked palette key, and the Explod `ownpal` isolation flag. Identical group/index values from different owners or palette chains therefore cannot reuse one stale canvas. SFF v2 is rejected explicitly by the v1 parser; native SFF v2 decoding and dynamic palette effects remain unsupported rather than being interpreted as v1 data.
+The resulting `ImageDataSpritePack` stores palette metadata and a palette cache key for each sprite. Normal player rendering, AIR Preview, and Explod rendering all consume the same baked RGBA data. Canvas bitmap caching is scoped by loaded asset identity, sprite group/index, baked palette key, and the Explod `ownpal` isolation flag. Identical group/index values from different owners or palette chains therefore cannot reuse one stale canvas. SFF v2 never enters this parser; it is selected independently by the SFF header dispatcher. Dynamic palette effects remain unsupported.
 
 ## Why `common.cmd` exists
 
@@ -151,11 +164,12 @@ Examples:
 - walk forward/back route;
 - temporary movement glue such as VelSet or ChangeAnim while full common-state semantics are incomplete.
 
-When State -1 is merged, a common baseline route and its State-number-gated movement glue stay
-together ahead of character command routes. This matters when an attack is entered from common
-walk State 20/21: the common `VelSet`/`ChangeAnim` may finish first, but cannot run afterward and
-replace the attack StateDef animation. Bundled T-H-M-A coverage verifies State 21 -> 205 leaves
-Anim 205 active rather than restoring Anim 21.
+When State -1 is merged, a common baseline route remains ahead of character command routes.
+Its State-number-gated movement glue is retained only when the selected positive movement State
+comes from a common source. A character CNS or DEF-selected `stcommon` State owns its own velocity
+and animation Controllers without WebMUGEN glue. For a common-owned walk State 20/21, the retained
+glue may finish before a later character attack route, but cannot run afterward and replace the
+attack StateDef animation. Focused coverage verifies both ownership branches.
 
 ## Merge risks
 
@@ -193,6 +207,7 @@ Loader tests should verify:
 - a DEF-selected `stcommon` State wins over `common1.cns`, and `common1.cns` wins over an identically numbered State in `common.cmd`;
 - State -1 merge keeps trigger/controller data intact.
 - common movement glue remains before character routes that can replace State 20/21;
+- common movement glue is omitted when a character CNS or DEF-selected `stcommon` owns the referenced positive State;
 - DEF-relative and ZIP-relative SND paths load through `arrayBuffer`;
 - group/index lookup returns the original WAV bytes;
 - missing/invalid SND produces a load diagnostic without losing the character;

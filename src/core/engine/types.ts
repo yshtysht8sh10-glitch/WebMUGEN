@@ -239,6 +239,9 @@ export type PlayerState = {
   palFx?: BgPalFxState;
   drawAngle?: number;
   drawScale?: { x: number; y: number };
+  /** Tick-scoped Trans controller override for the current root/Helper sprite. */
+  spriteTransparency?: string;
+  spriteAlpha?: { source: number; destination: number };
   pauseControllerLatch?: { key: string; stateNo: number; stateTime: number };
   positionFrozen?: boolean;
   activeHitDef: ActiveHitDef | null;
@@ -317,6 +320,8 @@ export type PlayerState = {
     playerId: number;
     hitDefId: number;
     activeHitDefId: number;
+    /** Target was acquired by a HitDef throw attribute (NT/ST/HT). */
+    throwHit?: boolean;
   }>;
   targetBind?: { ownerId: number; remaining: number; offsetX: number; offsetY: number };
   playerPush?: boolean;

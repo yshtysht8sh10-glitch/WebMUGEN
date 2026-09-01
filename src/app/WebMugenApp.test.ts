@@ -609,7 +609,7 @@ describe('WebMugenApp runtime history', () => {
   it('links constant animation and State destinations while browsing', () => {
     const cnsFile = {
       path: 'Demo/Demo.cns', label: 'Demo.cns', kind: 'cns' as const, editable: true,
-      text: '[StateDef 100]\nanim = 103\n[State 100, Route]\ntype = ChangeState\nvalue = 3201\n[State 100, Helper]\ntype = Helper\nstateno = 3201\n[State 100, Animation]\ntype = ChangeAnim\nvalue = 103\n[State 100, Borrowed animation]\ntype = ChangeAnim2\nvalue = 104\n[State 100, Custom hit]\ntype = HitDef\np1stateno = 3201\np2stateno = 3202\n[StateDef 3201]\ntype = S\n[StateDef 3202]\ntype = A',
+      text: '[StateDef 100]\nanim = 103\n[State 100, Route]\ntype = ChangeState\nvalue = 3201\n[State 100, Helper]\ntype = Helper\nstateno = 3201\n[State 100, Animation]\ntype = ChangeAnim\nvalue = 103\n[State 100, Borrowed animation]\ntype = ChangeAnim2\nvalue = 104\n[State 100, Custom hit]\ntype = HitDef\np1stateno = 3201\np2stateno = 3202\n[StateDef 3201]; Helper destination\ntype = S\n[StateDef 3202]\ntype = A',
     };
     const airFile = {
       path: 'Demo/Demo.air', label: 'Demo.air', kind: 'air' as const, editable: true,
@@ -618,6 +618,7 @@ describe('WebMugenApp runtime history', () => {
     const files = [cnsFile, airFile];
     const targets = createSourceNavigationTargets(cnsFile, files);
 
+    expect(createSourceOutline(cnsFile)).toContainEqual(expect.objectContaining({ kind: 'statedef', line: 19, value: 3201 }));
     expect(targets.get(2)).toMatchObject({ kind: 'animation', value: 103, selection: { path: 'Demo/Demo.air', line: 1 } });
     expect(targets.get(5)).toMatchObject({ kind: 'state', value: 3201, selection: { path: 'Demo/Demo.cns', line: 19 } });
     expect(targets.get(8)).toMatchObject({ kind: 'state', value: 3201, selection: { path: 'Demo/Demo.cns', line: 19 } });

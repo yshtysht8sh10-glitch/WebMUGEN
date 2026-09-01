@@ -14,6 +14,16 @@ name = "holdfwd_up"
 command = /F+/U
 
 [Command]
+name = "up"
+command = U
+time = 1
+
+[Command]
+name = "holdup"
+command = /$U
+time = 1
+
+[Command]
 name = "qcf_a"
 command = D,DF,F,a
 time = 15
@@ -92,15 +102,21 @@ time = 10
     expect(hasCommand(state, 'qcf_a')).toBe(true);
   });
 
-  it('adds raw up command aliases for CNS jump triggers', () => {
+  it('distinguishes a direction press from a held direction', () => {
     const buffer = new InputBuffer();
     const input = { left: false, right: false, up: true, down: false, attack: false };
     buffer.push(input);
 
-    const state = resolveCommands(document, input, buffer);
+    const pressed = resolveCommands(document, input, buffer);
 
-    expect(hasCommand(state, 'holdup')).toBe(true);
-    expect(hasCommand(state, 'up')).toBe(true);
+    expect(hasCommand(pressed, 'holdup')).toBe(true);
+    expect(hasCommand(pressed, 'up')).toBe(true);
+
+    buffer.push(input);
+    const held = resolveCommands(document, input, buffer);
+
+    expect(hasCommand(held, 'holdup')).toBe(true);
+    expect(hasCommand(held, 'up')).toBe(false);
   });
 
   it('adds raw held diagonal command aliases', () => {
@@ -113,6 +129,20 @@ time = 10
     expect(hasCommand(state, 'holdfwd')).toBe(true);
     expect(hasCommand(state, 'holddown')).toBe(true);
     expect(hasCommand(state, 'holdfwd_down')).toBe(true);
+  });
+
+  it.each([
+    ['down', { ...neutral, down: true }, 'holddown'],
+    ['fwd', { ...neutral, right: true }, 'holdfwd'],
+    ['back', { ...neutral, left: true }, 'holdback'],
+  ] as const)('does not invent a non-held %s command from a held raw direction', (name, input, heldName) => {
+    const buffer = new InputBuffer();
+    buffer.push(input);
+
+    const state = resolveCommands(document, input, buffer);
+
+    expect(hasCommand(state, heldName)).toBe(true);
+    expect(hasCommand(state, name)).toBe(false);
   });
 
   it('resolves Right x2 as forward dash while facing right', () => {

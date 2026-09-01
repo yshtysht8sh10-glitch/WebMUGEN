@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parseCnsText } from '../../parser/cns/CnsParser';
 import { createInitialGameState } from '../engine/GameState';
 import { stepCnsPhysicsMotion } from './CnsPhysicsStep';
-import { stepCnsStateRuntime } from './CnsStateRuntime';
+import { enterCnsStateAndRunTimeZeroWithTrace, stepCnsStateRuntime } from './CnsStateRuntime';
 
 describe('Issue #75 runtime diagnostic gating', () => {
   it('does not return trace objects or raw diagnostic strings when both log sinks are disabled', () => {
@@ -456,19 +456,73 @@ value = ifelse((vel x)=0, 44, ifelse((vel x)>0, 45, 46))+var(5)*4
     expect(result.state.players[0]).toMatchObject({
       prevStateNo: 6142,
       stateNo: 50,
-      stateTime: -1,
-      animNo: 6143,
+      stateTime: 0,
+      animNo: 44,
       animTime: 0,
       ctrl: true,
     });
     expect(Number.isFinite(result.state.players[0].animNo)).toBe(true);
-    expect(result.traces[0].executedControllers).toEqual(['ChangeState', 'ChangeState']);
+    expect(result.traces[0].executedControllers).toEqual(['ChangeState', 'ChangeState', 'ChangeAnim']);
 
     const afterPhysics = stepCnsPhysicsMotion(result.state, cns);
-    expect(afterPhysics.players[0]).toMatchObject({ stateNo: 50, stateTime: 0, animNo: 6143 });
+    expect(afterPhysics.players[0]).toMatchObject({ stateNo: 50, stateTime: 1, animNo: 44 });
     const nextTick = stepCnsStateRuntime(afterPhysics, cns);
-    expect(nextTick.state.players[0]).toMatchObject({ stateNo: 50, stateTime: 0, animNo: 44, animTime: 0 });
-    expect(nextTick.traces[0].executedControllers).toEqual(['ChangeAnim']);
+    expect(nextTick.state.players[0]).toMatchObject({ stateNo: 50, stateTime: 1, animNo: 44, animTime: 1 });
+    expect(nextTick.traces[0].executedControllers).toEqual([]);
+  });
+
+  it('bounds an invalid same-tick ChangeState cycle without limiting valid chains to one destination', () => {
+    const cns = parseCnsText(`
+[StateDef 1]
+type = S
+physics = N
+[State 1, To two]
+type = ChangeState
+trigger1 = 1
+value = 2
+
+[StateDef 2]
+type = S
+physics = N
+[State 2, To one]
+type = ChangeState
+trigger1 = 1
+value = 1
+`);
+    const state = createInitialGameState();
+    const result = stepCnsStateRuntime({
+      ...state,
+      players: [{ ...state.players[0], stateNo: 1 }, state.players[1]],
+    }, cns);
+
+    expect(result.traces[0].executedControllers).toHaveLength(65);
+    expect(result.state.players[0].stateTime).toBe(-1);
+    expect(result.state.players[0].hitDiagnosticLines?.join('\n')).toContain('raw.state_transition entity=p1 result=limit count=64');
+  });
+
+  it('continues a ChangeState chain from an externally entered Time=0 State', () => {
+    const cns = parseCnsText(`
+[StateDef 10]
+type = S
+physics = N
+[State 10, Continue]
+type = ChangeState
+trigger1 = time = 0
+value = 11
+
+[StateDef 11]
+type = S
+physics = N
+[State 11, Arrival]
+type = VarSet
+trigger1 = time = 0
+var(1) = 77
+`);
+    const state = createInitialGameState();
+    const result = enterCnsStateAndRunTimeZeroWithTrace(state.players[0], state.players[1], 10, cns);
+
+    expect(result.player).toMatchObject({ stateNo: 11, stateTime: 0, vars: { 1: 77 } });
+    expect(result.trace.executedControllers).toEqual(['ChangeState', 'VarSet']);
   });
 
   it('returns from state 200 when MUGEN AnimTime reaches 0', () => {

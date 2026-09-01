@@ -1357,6 +1357,14 @@ movetype = A
     expect(stepCnsStateRuntime(hit, cns).state.players[0].stateNo).toBe(301);
   });
 
+  it('marks a Target acquired by a throw attribute for throw release semantics', () => {
+    const hit = resolveConfiguredHit({ hitId: 700, attr: 'S,NT', pauseTime: [1, 100] });
+    expect(hit.players[0].targets).toEqual([
+      expect.objectContaining({ playerId: 2, hitDefId: 700, throwHit: true }),
+    ]);
+    expect(hit.players[1]).toMatchObject({ hitPause: 100, hitPauseKind: 'shake' });
+  });
+
   it('does not retain a Target when the hit KOs it', () => {
     const hit = resolveConfiguredHit({ damage: 1000, hitId: 9 });
     expect(hit.players[1].life).toBe(0);

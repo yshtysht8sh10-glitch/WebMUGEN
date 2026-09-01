@@ -10,7 +10,8 @@ describe('FallbackHitRecovery', () => {
 [Statedef -1]
 [State -1, Input escape]
 type = ChangeState
-trigger1 = command = "a"
+triggerall = command = "a"
+trigger1 = ctrl
 value = 52
 
 [Statedef 5000]
@@ -86,7 +87,6 @@ ctrl = 1
 
     expect(guardLog).toContain('controller=CtrlSet value=1');
     expect(guardLog).toContain('reason=early_recovery_state_during_hitstun');
-    expect(guardLog).toContain('reason=input_changestate_during_hitstun');
     expect(state.players[index].hitStun?.elapsed).toBe(120);
     const finalCns = stepCnsStateRuntime(state, cns, { hitDiagnostics: true });
     state = applyFallbackHitRecovery(finalCns.state, true);

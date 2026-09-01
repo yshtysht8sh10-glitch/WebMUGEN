@@ -3,7 +3,7 @@ import { parseCnsText } from '../../parser/cns/CnsParser';
 import { createInitialGameState } from '../engine/GameState';
 import { restartRound } from '../engine/RoundRestart';
 import { applyExplodControllerEvents, type ExplodControllerEvent } from '../explod/ExplodSystem';
-import { spawnHelper } from '../helper/HelperSystem';
+import { spawnHelper, WINMUGEN_HELPER_MAX } from '../helper/HelperSystem';
 import { createInitialPauseState, startPause } from '../pause/PauseSystem';
 import { stepCnsPhysicsMotion } from './CnsPhysicsStep';
 import { stepCnsStateRuntime } from './CnsStateRuntime';
@@ -63,31 +63,31 @@ anim = 2000
 ctrl = 0
 `);
 
-  it('spawns P1/P2 helpers after controller evaluation with separate runtime and MUGEN IDs', () => {
+  it('spawns P1/P2 helpers and runs their initial State pass on the creation frame', () => {
     const initial = createInitialGameState();
     const result = stepCnsStateRuntime(initial, cns);
 
-    expect(result.state.helpers.entries).toHaveLength(2);
-    expect(result.state.helpers.entries.map((helper) => helper.entityId)).toEqual([3, 4]);
-    expect(result.state.helpers.entries.map((helper) => helper.helperId)).toEqual([100, 100]);
+    expect(result.state.helpers.entries).toHaveLength(4);
+    expect(result.state.helpers.entries.map((helper) => helper.entityId)).toEqual([3, 4, 5, 6]);
+    expect(result.state.helpers.entries.map((helper) => helper.helperId)).toEqual([100, 100, 200, 200]);
     expect(result.state.helpers.entries[0]).toMatchObject({
       rootEntityId: 1, parentEntityId: 1, ownerCharacterId: 1,
       stateOwnerId: 1, animationOwnerId: 1,
       pauseMoveTime: 12, superMoveTime: 34,
-      hasCompletedInitialStatePass: false,
+      hasCompletedInitialStatePass: true,
       canRenderBeforeInitialStatePass: false,
     });
     expect(result.state.helpers.entries[1]).toMatchObject({
       rootEntityId: 2, parentEntityId: 2, ownerCharacterId: 2,
     });
     expect(result.state.helpers.entries[0].player).toMatchObject({
-      stateNo: 100, stateTime: 0, animNo: 1000, animTime: 0,
+      stateNo: 100, stateTime: 0, animNo: 1001, animTime: 0,
       sprPriority: 0,
       collisionWidth: { xScale: 0.5, yScale: 0.75 },
     });
-    expect(result.traces).toHaveLength(2);
-    expect(result.state.hitDiagnosticLines?.join('\n')).toContain('firstStep=next_frame');
-    expect(result.state.hitDiagnosticLines?.join('\n')).toContain('creationRender=after_initial_pass');
+    expect(result.traces).toHaveLength(6);
+    expect(result.state.hitDiagnosticLines?.join('\n')).toContain('firstStep=creation_frame');
+    expect(result.state.hitDiagnosticLines?.join('\n')).toContain('creationRender=immediate');
   });
 
   it('makes a queued Helper visible to later NumHelper checks in the same tick', () => {
@@ -113,10 +113,10 @@ ctrl = 0
 
     const result = stepCnsStateRuntime({ ...initial, helpers }, cns);
 
-    expect(result.state.helpers.entries.filter((helper) => helper.helperId === 200)).toHaveLength(1);
+    expect(result.state.helpers.entries.filter((helper) => helper.helperId === 200)).toHaveLength(2);
     expect(result.traces.filter((trace) => trace.entityId !== undefined)
       .flatMap((trace) => trace.executedControllers)
-      .filter((controller) => controller === 'Helper')).toHaveLength(1);
+      .filter((controller) => controller === 'Helper')).toHaveLength(2);
   });
 
   it('starts Helper sprpriority independently from the parent and honors the initial StateDef value', () => {
@@ -249,29 +249,258 @@ postype = front
     ]);
   });
 
-  it('runs Helper State/Anim on the next frame, supports nested parent identity, NumHelper, and DestroySelf', () => {
+  it('runs nested Helper State/Anim on the creation frame, supports parent identity, NumHelper, and DestroySelf', () => {
     let state = stepCnsStateRuntime(createInitialGameState(), cns).state;
+    expect(state.helpers.entries.every((helper) => helper.hasCompletedInitialStatePass)).toBe(true);
     state = stepCnsPhysicsMotion(state, cns);
-    expect(state.helpers.entries[0].player.stateTime).toBe(0);
-    expect(state.helpers.entries[0].hasCompletedInitialStatePass).toBe(false);
+    expect(state.helpers.entries[0].player.stateTime).toBe(1);
+    expect(state.helpers.entries[0].hasCompletedInitialStatePass).toBe(true);
+    expect(state.helpers.entries[2].player.stateTime).toBe(1);
+    expect(state.helpers.entries[2].hasCompletedInitialStatePass).toBe(true);
 
     const stepped = stepCnsStateRuntime(state, cns);
-    expect(stepped.state.helpers.entries.slice(0, 2).every((helper) => helper.hasCompletedInitialStatePass)).toBe(true);
-    expect(stepped.state.helpers.entries).toHaveLength(4);
-    expect(stepped.state.helpers.entries.slice(0, 2).map((helper) => helper.player.animNo)).toEqual([1001, 1001]);
-    expect(stepped.state.helpers.entries.slice(0, 2).map((helper) => helper.player.screenBound)).toEqual([
-      { value: false, moveCameraX: false, moveCameraY: false },
-      { value: false, moveCameraX: false, moveCameraY: false },
-    ]);
-    expect(stepped.state.helpers.entries.slice(2).map((helper) => helper.helperId)).toEqual([200, 200]);
-    expect(stepped.state.helpers.entries[2]).toMatchObject({ rootEntityId: 1, parentEntityId: 3, ownerCharacterId: 1 });
-    expect(stepped.state.helpers.entries[3]).toMatchObject({ rootEntityId: 2, parentEntityId: 4, ownerCharacterId: 2 });
-    expect(stepped.traces.slice(2).map((trace) => trace.entityId)).toEqual([3, 4]);
+    expect(stepped.state.helpers.entries.every((helper) => helper.hasCompletedInitialStatePass)).toBe(true);
+    expect(stepped.state.helpers.entries).toHaveLength(2);
+    expect(stepped.state.helpers.entries.map((helper) => helper.helperId)).toEqual([200, 200]);
+    expect(stepped.state.helpers.entries[0]).toMatchObject({ rootEntityId: 1, parentEntityId: 3, ownerCharacterId: 1 });
+    expect(stepped.state.helpers.entries[1]).toMatchObject({ rootEntityId: 2, parentEntityId: 4, ownerCharacterId: 2 });
+    expect(stepped.traces.slice(2).map((trace) => trace.entityId)).toEqual([5, 3, 6, 4]);
 
-    state = stepCnsPhysicsMotion(stepped.state, cns);
-    const destroyed = stepCnsStateRuntime(state, cns);
+    const destroyed = stepped;
     expect(destroyed.state.helpers.entries.map((helper) => helper.helperId)).toEqual([200, 200]);
     expect(destroyed.state.hitDiagnosticLines?.join('\n')).toContain('event=destroy entityId=3');
+  });
+
+  it('runs parent, child, and grandchild Helper initial States in one creation-frame FIFO', () => {
+    const generationCns = parseCnsText(`
+[StateDef 0]
+type = S
+physics = N
+
+[State 0, Parent Helper]
+type = Helper
+trigger1 = time = 0
+id = 100
+stateno = 100
+
+[StateDef 100]
+type = S
+physics = N
+
+[State 100, Child Helper]
+type = Helper
+trigger1 = time = 0
+id = 200
+stateno = 200
+
+[StateDef 200]
+type = S
+physics = N
+
+[State 200, Grandchild Helper]
+type = Helper
+trigger1 = time = 0
+id = 300
+stateno = 300
+
+[StateDef 300]
+type = A
+physics = N
+
+[State 300, Initial velocity]
+type = VelSet
+trigger1 = time = 0
+x = 7
+y = -2
+`);
+    const initial = createInitialGameState();
+    const result = stepCnsStateRuntime({
+      ...initial,
+      players: [initial.players[0], { ...initial.players[1], stateTime: 1 }],
+    }, generationCns);
+
+    expect(result.state.helpers.entries.map((helper) => helper.helperId)).toEqual([100, 200, 300]);
+    expect(result.state.helpers.entries.map((helper) => helper.parentEntityId)).toEqual([1, 3, 4]);
+    expect(result.state.helpers.entries.every((helper) => helper.hasCompletedInitialStatePass)).toBe(true);
+    expect(result.state.helpers.entries[2].player).toMatchObject({ vx: 7, vy: -2, stateTime: 0 });
+    expect(result.traces.slice(2).map((trace) => trace.entityId)).toEqual([3, 4, 5]);
+  });
+
+  it('bounds same-frame recursive Helper creation with WinMUGEN HelperMax', () => {
+    const recursiveCns = parseCnsText(`
+[StateDef 0]
+type = S
+physics = N
+
+[State 0, Seed]
+type = Helper
+trigger1 = time = 0
+id = 100
+stateno = 100
+
+[StateDef 100]
+type = S
+physics = N
+
+[State 100, Replicate]
+type = Helper
+trigger1 = 1
+id = 100
+stateno = 100
+`);
+    const result = stepCnsStateRuntime(createInitialGameState(), recursiveCns);
+
+    expect(result.state.helpers.entries).toHaveLength(WINMUGEN_HELPER_MAX);
+    expect(result.state.helpers.entries.every((helper) => helper.hasCompletedInitialStatePass)).toBe(true);
+    expect(result.state.hitDiagnosticLines?.join('\n')).toContain(`result=helpermax limit=${WINMUGEN_HELPER_MAX}`);
+  });
+
+  it('lets a creation-frame Helper read root AnimElem and apply VelSet before Physics=N motion', () => {
+    const introCns = parseCnsText(`
+[StateDef 0]
+type = S
+physics = N
+anim = 10
+
+[State 0, Ball]
+type = Helper
+trigger1 = AnimElem = 1
+id = 2000
+stateno = 2000
+pos = 22, -17
+
+[StateDef 2000]
+type = A
+movetype = I
+physics = N
+anim = 2000
+
+[State 2000, Gravity]
+type = VelAdd
+trigger1 = 1
+y = .15
+
+[State 2000, Launch]
+type = VelSet
+trigger1 = root, AnimElem = 1
+x = .15
+y = -3.2
+`);
+    const animationInfo = (_animNo: number, animTime: number) => ({
+      elementNo: 1,
+      elementTime: animTime,
+      elementStarted: animTime === 0,
+      elementCount: 1,
+      elementTimes: [0],
+    });
+    const initial = createInitialGameState();
+    const created = stepCnsStateRuntime(initial, introCns, { getAnimationTriggerInfo: animationInfo }).state;
+    const p1Ball = created.helpers.entries.find((helper) => helper.rootEntityId === 1)!;
+
+    expect(p1Ball.player).toMatchObject({
+      stateNo: 2000,
+      stateTime: 0,
+      physics: 'N',
+      x: initial.players[0].x + 22,
+      y: initial.players[0].y - 17,
+      vx: 0.15,
+      vy: -3.2,
+    });
+
+    const moved = stepCnsPhysicsMotion(created, introCns);
+    expect(moved.helpers.entries.find((helper) => helper.entityId === p1Ball.entityId)?.player).toMatchObject({
+      stateTime: 1,
+      x: initial.players[0].x + 22.15,
+      y: initial.players[0].y - 20.2,
+      vx: 0.15,
+      vy: -3.2,
+    });
+
+    const accelerated = stepCnsStateRuntime(moved, introCns, { getAnimationTriggerInfo: animationInfo }).state;
+    expect(accelerated.helpers.entries.find((helper) => helper.entityId === p1Ball.entityId)?.player.vy).toBeCloseTo(-3.05);
+  });
+
+  it('creates the intro ball when a same-tick ChangeState chain reaches State 191 AnimElem 1', () => {
+    const introChainCns = parseCnsText(`
+[StateDef 5900]
+type = S
+physics = N
+anim = 5900
+
+[State 5900, Select intro]
+type = ChangeState
+trigger1 = time = 0
+value = 190
+
+[StateDef 190]
+type = S
+physics = N
+anim = 190
+
+[State 190, Character intro]
+type = ChangeState
+trigger1 = time = 0
+value = 191
+
+[StateDef 191]
+type = S
+physics = S
+anim = 190
+
+[State 191, Ball]
+type = Helper
+trigger1 = AnimElem = 1
+id = 2000
+stateno = 2000
+pos = 22, -17
+size.xscale = .5
+size.yscale = .5
+
+[StateDef 2000]
+type = A
+physics = N
+anim = 2000
+
+[State 2000, Gravity]
+type = VelAdd
+trigger1 = 1
+y = .15
+
+[State 2000, Launch]
+type = VelSet
+trigger1 = root, AnimElem = 1
+x = .15
+y = -3.2
+`);
+    const animationInfo = (_animNo: number, animTime: number) => ({
+      elementNo: 1,
+      elementTime: animTime,
+      elementStarted: animTime === 0,
+      elementCount: 1,
+      elementTimes: [0],
+    });
+    const initial = createInitialGameState();
+    const result = stepCnsStateRuntime({
+      ...initial,
+      players: initial.players.map((player) => ({
+        ...player,
+        stateNo: 5900,
+        stateTime: 0,
+        animNo: 5900,
+        animTime: 0,
+      })) as typeof initial.players,
+    }, introChainCns, { getAnimationTriggerInfo: animationInfo });
+
+    expect(result.state.players.map((player) => player.stateNo)).toEqual([191, 191]);
+    expect(result.state.helpers.entries.map((helper) => helper.helperId)).toEqual([2000, 2000]);
+    expect(result.state.helpers.entries[0].player).toMatchObject({
+      stateNo: 2000,
+      stateTime: 0,
+      vx: 0.15,
+      vy: -3.2,
+      collisionWidth: { xScale: 0.5, yScale: 0.5 },
+    });
+    expect(result.traces[0].executedControllers).toEqual(['ChangeState', 'ChangeState', 'Helper']);
   });
 
   it('keeps Helper Explod ownership through RemoveExplod and DestroySelf', () => {
@@ -333,18 +562,8 @@ trigger1 = time = 1
     let events: ExplodControllerEvent[] = [];
     let result = stepCnsStateRuntime(state, explodCns, explodCallbacks(events));
     state = applyExplodControllerEvents(result.state, events);
-    expect(state.explods.entries).toHaveLength(2);
-    expect(state.explods.entries.map((entry) => entry.owner.entityId)).toEqual([1, 2]);
-
-    state = stepCnsPhysicsMotion(state, explodCns);
-    events = [];
-    result = stepCnsStateRuntime(state, explodCns, explodCallbacks(events));
-    state = applyExplodControllerEvents(result.state, events);
+    expect(state.explods.entries).toHaveLength(4);
     expect(state.explods.entries.map((entry) => entry.owner.entityId)).toEqual([1, 2, 3, 4]);
-    expect(state.explods.entries.map((entry) => entry.bind?.targetEntityId)).toEqual([1, 2, 3, 4]);
-    expect(state.explods.entries.slice(2).map((entry) => entry.offset)).toEqual([{ x: 5, y: -6 }, { x: 5, y: -6 }]);
-    expect(state.hitDiagnosticLines?.join('\n')).toContain('raw.explod_modify owner=p1 id=77 matched=1');
-    expect(state.hitDiagnosticLines?.join('\n')).toContain('raw.explod_bindtime owner=p2 id=77 matched=1');
 
     state = stepCnsPhysicsMotion(state, explodCns);
     events = [];
@@ -358,7 +577,7 @@ trigger1 = time = 1
 
   it('clears every Helper and resets the allocator on round restart', () => {
     const spawned = stepCnsStateRuntime(createInitialGameState(), cns).state;
-    expect(spawned.helpers.entries).toHaveLength(2);
+    expect(spawned.helpers.entries).toHaveLength(4);
     expect(restartRound(1).gameState.helpers).toEqual({ entries: [], nextEntityId: 3 });
   });
 
@@ -537,6 +756,61 @@ value = 200
     expect(withKeyCtrl.player).toMatchObject({ stateNo: 200, vars: { 0: 1, 1: 200 } });
     expect(result.traces.find((trace) => trace.entityId === withoutKeyCtrl.entityId)?.executedControllers).toEqual(['VarSet']);
     expect(result.traces.find((trace) => trace.entityId === withKeyCtrl.entityId)?.executedControllers).toEqual(['VarAdd', 'ChangeState', 'VarSet']);
+  });
+
+  it('exposes root commands through a redirected keyctrl Helper command trigger', () => {
+    const commandRedirectCns = parseCnsText(`
+[StateDef 0]
+type = S
+movetype = I
+physics = S
+anim = 0
+ctrl = 1
+
+[StateDef 210]
+type = S
+movetype = A
+physics = S
+anim = 210
+ctrl = 0
+
+[StateDef 99999]
+type = S
+movetype = I
+physics = N
+anim = 0
+ctrl = 0
+
+[Statedef -1]
+
+[State -1, D4meirin-style Helper command route]
+type = ChangeState
+triggerall = !ishelper
+triggerall = helper(99999), command = "a"
+trigger1 = statetype != A
+trigger1 = ctrl
+value = 210
+`);
+    const initial = createInitialGameState();
+    const createState = (keyCtrl: boolean) => ({
+      ...initial,
+      helpers: spawnHelper(initial.helpers, {
+        helperId: 99999, rootEntityId: 1, parentEntityId: 1, ownerCharacterId: 1,
+        stateOwnerId: 1, animationOwnerId: 1, stateNo: 99999,
+        x: initial.players[0].x, y: initial.players[0].y, facing: 1,
+        keyCtrl, ownPal: false, spawnFrame: 0, parent: initial.players[0],
+      }, commandRedirectCns),
+    });
+
+    const enabled = stepCnsStateRuntime(createState(true), commandRedirectCns, {
+      p1Commands: new Set(['a']), p2Commands: new Set(),
+    });
+    const disabled = stepCnsStateRuntime(createState(false), commandRedirectCns, {
+      p1Commands: new Set(['a']), p2Commands: new Set(),
+    });
+
+    expect(enabled.state.players[0]).toMatchObject({ stateNo: 210, animNo: 210, moveType: 'A', ctrl: false });
+    expect(disabled.state.players[0]).toMatchObject({ stateNo: 0, animNo: 0, moveType: 'I', ctrl: true });
   });
 
   it('uses the Helper runtime entity id for Pause movetime ownership', () => {

@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { getCurrentAnimationElement } from '../animation/AnimationPlayer';
+import { stepCnsPhysicsMotion } from '../cns/CnsPhysicsStep';
 import { stepCnsStateRuntime } from '../cns/CnsStateRuntime';
 import { createInitialGameState } from '../engine/GameState';
 import { loadCharacterFromDef, type CharacterAssetFetcher } from './CharacterLoader';
@@ -157,6 +159,39 @@ describe('CharacterLoader common movement routes', () => {
 
     expect(result.state.players[0].stateNo).toBe(20);
     expect(result.traces[0].executedControllers).toContain('ChangeState');
+  });
+
+  it('does not inject common walk glue into a character stcommon State 20', async () => {
+    const character = await loadCharacterFromDef('/chars/akkarin/akkarin.def', createAkkarinWalkTestFetcher());
+    const commandState = character.cns.states.find((state) => state.stateNo === -1);
+
+    expect(commandState?.controllers.map((controller) => controller.type)).toEqual(['ChangeState']);
+
+    const initial = createInitialGameState();
+    const runtime = stepCnsStateRuntime({
+      ...initial,
+      players: [{
+        ...initial.players[0],
+        stateNo: 20,
+        stateTime: 4,
+        animNo: 20020,
+        animTime: 4,
+        stateType: 'S',
+        physics: 'S',
+        ctrl: true,
+        vars: { 3: 0 },
+      }, initial.players[1]],
+    }, character.cns, {
+      p1Commands: new Set(['holdfwd']),
+      p2Commands: new Set(),
+    });
+
+    expect(runtime.state.players[0]).toMatchObject({ stateNo: 20, animNo: 20020, animTime: 4 });
+    expect(runtime.traces[0].executedControllers).toEqual(['VelSet']);
+
+    const advanced = stepCnsPhysicsMotion(runtime.state, character.cns);
+    expect(advanced.players[0].animTime).toBe(5);
+    expect(getCurrentAnimationElement(character.air, 20020, advanced.players[0].animTime)?.element.imageNo).toBe(2);
   });
 
   it('runs common holddown route through State 10 startup into crouching State 11 at runtime', async () => {
@@ -414,3 +449,71 @@ describe('CharacterLoader common movement routes', () => {
     expect(result.traces[0].executedControllers).not.toContain('ChangeState');
   });
 });
+
+function createAkkarinWalkTestFetcher(): CharacterAssetFetcher {
+  const textAssets = new Map<string, string>([
+    ['/chars/akkarin/akkarin.def', '[Files]\ncmd = akkarin.cmd\ncns = akkarin.cns\nstcommon = akkarincommon1.cns\nanim = akkarin.air\n'],
+    ['/chars/akkarin/akkarin.cns', '[StateDef -3]\n'],
+    ['/chars/akkarin/akkarin.cmd', '[Command]\nname = "holdfwd"\ncommand = /F\n\n[StateDef -1]\n'],
+    ['/chars/akkarin/akkarincommon1.cns', `
+[StateDef 20]
+type = S
+physics = S
+
+[State 20, Velocity]
+type = VelSet
+trigger1 = command = "holdfwd"
+x = 3
+
+[State 20, Character animation]
+type = ChangeAnim
+trigger1 = Anim != 20 + (ifelse(var(3) = 0, 1, 0)) * 20000
+value = 20 + (ifelse(var(3) = 0, 1, 0)) * 20000
+`],
+    ['/chars/akkarin/akkarin.air', `
+[Begin Action 20020]
+20020,1, 0,0, 5
+20020,2, 0,0, 5
+`],
+    ['/chars/common.cmd', `
+[Command]
+name = "holdfwd"
+command = /F
+
+[StateDef -1]
+
+[State -1, Common Walk Forward]
+type = ChangeState
+triggerall = command = "holdfwd"
+trigger1 = statetype = S
+trigger1 = ctrl
+trigger1 = stateno != 20
+value = 20
+
+[State -1, Common Walk Forward Velocity]
+type = VelSet
+triggerall = command = "holdfwd"
+trigger1 = stateno = 20
+x = 2.4
+
+[State -1, Common Walk Forward Anim]
+type = ChangeAnim
+triggerall = command = "holdfwd"
+trigger1 = stateno = 20
+trigger1 = anim != 20
+value = 20
+`],
+    ['/chars/common1.cns', '[StateDef 20]\ntype = S\nphysics = S\nanim = 20\n'],
+  ]);
+
+  return {
+    async text(path) {
+      const asset = textAssets.get(path);
+      if (asset === undefined) throw new Error(`missing text asset: ${path}`);
+      return asset;
+    },
+    async arrayBuffer() {
+      throw new Error('binary assets are not used in this test');
+    },
+  };
+}

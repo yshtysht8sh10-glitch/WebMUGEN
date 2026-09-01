@@ -7,9 +7,10 @@ import type { CmdDocument } from '../../parser/cmd/CmdTypes';
 import { parseCnsText } from '../../parser/cns/CnsParser';
 import { getCharacterDefFiles, parseDefText } from '../../parser/def/DefParser';
 import { parseSndV1 } from '../../parser/snd/SndParser';
-import { convertSffV1ToImageDataSpritePack } from '../sprite/SffSpritePackConverter';
+import { loadSffSpritePack } from '../sprite/SffSpritePackDispatcher';
 import type { CharacterAssets, CharacterLoadDiagnostic, CharacterPaletteAsset, CharacterSourceFile } from './CharacterTypes';
 import { decodeMugenText } from '../../parser/text/MugenTextDecoder';
+import { resolveCompatibilityProfile } from '../../compatibility/CompatibilityProfile';
 
 const COMMON_CNS_PATH = '/chars/common1.cns';
 const COMMON_CMD_PATHS = ['/chars/common.cmd'];
@@ -135,6 +136,7 @@ export async function loadCharacterFromDef(
 ): Promise<CharacterAssets> {
   const defText = await fetcher.text(defPath);
   const def = parseDefText(defText);
+  const compatibility = resolveCompatibilityProfile(def);
   const files = getCharacterDefFiles(def);
   const basePath = getBasePath(defPath);
 
@@ -163,14 +165,24 @@ export async function loadCharacterFromDef(
 
   const selectedPaletteAsset = selectCharacterPalette(palettes, options.paletteNo ?? 1);
   const selectedPalette = selectedPaletteAsset?.bytes;
-  const sprites = files.sprite !== undefined
-    ? convertSffV1ToImageDataSpritePack(await fetcher.arrayBuffer(resolveAssetPath(basePath, files.sprite)), {
+  const spritePath = files.sprite !== undefined ? resolveAssetPath(basePath, files.sprite) : null;
+  const spriteResult = spritePath
+    ? loadSffSpritePack(compatibility.profile, await fetcher.arrayBuffer(spritePath), {
         externalPalette: selectedPalette,
         externalPaletteSlot: selectedPaletteAsset?.slot,
         preferExternalPalette: selectedPalette !== undefined,
         paletteIndexOrder: selectedPalette !== undefined ? 'reversed' : 'normal',
       })
     : null;
+  const sprites = spriteResult?.pack ?? null;
+  const compatibilityDiagnostics: CharacterLoadDiagnostic[] = [
+    ...(compatibility.diagnostic ? [{ asset: 'compatibility' as const, path: defPath, message: compatibility.diagnostic }] : []),
+    ...(spriteResult ? [{
+      asset: 'sprite' as const,
+      path: spritePath ?? '',
+      message: `Compatibility Profile=${compatibility.profile.id}; detected SFF=${spriteResult.detection.version}; parser=${spriteResult.detection.parser}.`,
+    }] : []),
+  ];
 
   const commonCmdTexts = fetchedCommonCmdTexts.length > 0
     ? fetchedCommonCmdTexts
@@ -214,6 +226,7 @@ export async function loadCharacterFromDef(
   ];
 
   return {
+    compatibilityProfile: compatibility.profile.id,
     def,
     cns,
     air: parseAirText(airText),
@@ -222,6 +235,7 @@ export async function loadCharacterFromDef(
     palettes,
     sounds: soundResult.sounds,
     loadDiagnostics: soundResult.diagnostics,
+    compatibilityDiagnostics,
     cnsSourceFiles,
   };
 }
@@ -289,14 +303,18 @@ function annotateCnsDocument(document: CnsDocument, source: CnsStateDefinition['
 
 export function mergeMissingCnsStates(base: CnsDocument, common: CnsDocument): CnsDocument {
   const existingStateNos = new Set(base.states.map((state) => state.stateNo));
+  const characterOwnedStateNos = new Set(base.states
+    .filter((state) => state.stateNo >= 0 && state.source !== 'common')
+    .map((state) => state.stateNo));
   const commonCommandState = findCnsState(common, -1);
 
   const states = base.states.map((state) => {
     if (state.stateNo !== -1 || !commonCommandState) return state;
 
-    const characterPrimaryCommands = collectPrimaryCommandRoutes(state.controllers);
     const baselineMovementControllers = commonCommandState.controllers.filter(
-      (controller) => isBaselineMovementController(controller) && !isOverriddenByCharacterPrimaryCommand(controller, characterPrimaryCommands),
+      (controller) => isBaselineMovementController(controller)
+        && !isOverriddenByCharacterPrimaryCommand(controller, state.controllers)
+        && !isCommonStateGlueForCharacterState(controller, characterOwnedStateNos),
     );
     const otherCommonControllers = commonCommandState.controllers.filter((controller) => !isBaselineMovementController(controller));
 
@@ -322,6 +340,18 @@ export function mergeMissingCnsStates(base: CnsDocument, common: CnsDocument): C
   return document;
 }
 
+function isCommonStateGlueForCharacterState(
+  controller: CnsStateController,
+  characterOwnedStateNos: ReadonlySet<number>,
+): boolean {
+  if (controller.type.toLowerCase() === 'changestate') return false;
+
+  return controller.triggers.some((trigger) => {
+    const match = trigger.expression.match(/^\s*stateno\s*=\s*(-?\d+)\s*$/i);
+    return match ? characterOwnedStateNos.has(Number(match[1])) : false;
+  });
+}
+
 function isBaselineMovementController(controller: CnsStateController): boolean {
   if (controller.type.toLowerCase() === 'changestate') {
     const value = Number(controller.params.value);
@@ -343,10 +373,31 @@ export function selectCharacterPalette<T extends { slot: number }>(
 
 function isOverriddenByCharacterPrimaryCommand(
   controller: CnsStateController,
-  characterPrimaryCommands: ReadonlySet<string>,
+  characterControllers: readonly CnsStateController[],
 ): boolean {
   const commonPrimaryCommands = collectPrimaryCommandRoutes([controller]);
-  return Array.from(commonPrimaryCommands).some((commandName) => characterPrimaryCommands.has(commandName));
+  return characterControllers.some((characterController) => {
+    const characterPrimaryCommands = collectPrimaryCommandRoutes([characterController]);
+    const sharesPrimaryCommand = Array.from(commonPrimaryCommands).some((commandName) => characterPrimaryCommands.has(commandName));
+    return sharesPrimaryCommand && !hasDisjointRequiredStateTypes(controller, characterController);
+  });
+}
+
+function hasDisjointRequiredStateTypes(
+  commonController: CnsStateController,
+  characterController: CnsStateController,
+): boolean {
+  const commonStateType = requiredStateType(commonController);
+  const characterStateType = requiredStateType(characterController);
+  return commonStateType !== null && characterStateType !== null && commonStateType !== characterStateType;
+}
+
+function requiredStateType(controller: CnsStateController): string | null {
+  for (const trigger of controller.triggers) {
+    const match = trigger.expression.match(/^\s*statetype\s*=\s*([scal])\s*$/i);
+    if (match) return match[1].toUpperCase();
+  }
+  return null;
 }
 
 function filterCommonCommandControllers(

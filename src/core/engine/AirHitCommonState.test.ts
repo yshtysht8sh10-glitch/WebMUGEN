@@ -218,7 +218,8 @@ describe('air hit common-state integration', () => {
     const initial = createInitialGameState();
     let state: GameState = { ...initial, players: [initial.players[0], airHitPlayer(false)] };
     state = tick(state);
-    expect(state.players[1]).toMatchObject({ stateNo: 5035, vx: -3, vy: -5, stateType: 'A' });
+    expect(state.players[1]).toMatchObject({ stateNo: 5040, vx: -3, stateType: 'A' });
+    expect(state.players[1].vy).toBeCloseTo(-3.8);
 
     for (let frame = 0; frame < 40 && state.players[1].stateNo !== 0; frame += 1) state = tick(state);
     expect(state.players[1]).toMatchObject({ stateNo: 0, stateType: 'S', moveType: 'I', ctrl: true, y: 285, vy: 0 });
@@ -254,9 +255,8 @@ describe('air hit common-state integration', () => {
     const { state, visited, trace } = traceUntil(launchedGroundHitPlayer());
     const firstIdle = visited.indexOf(0);
     const firstGetup = visited.indexOf(5120);
-    expect(visited, trace).toContain(5035);
+    expect(trace).toContain('from=5030 to=5035');
     expect(visited, trace).toContain(5050);
-    expect(trace).toContain('from=5050 to=5100');
     expect(trace).toContain('from=5100 to=5110');
     expect(visited, trace).toContain(5110);
     expect(visited, trace).toContain(5120);

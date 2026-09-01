@@ -75,6 +75,8 @@ import {
   applyRoundFlowStateEntries,
   isMatchOver,
   requestRoundResultSkip,
+  isCharacterIntroInputActive,
+  isIntroSkipButtonHeld,
   shouldStartNextMatch,
   shouldStartNextRound,
   skipRoundIntro,
@@ -269,7 +271,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
   const p1HitPauseCommandBufferRef = useRef<HitPauseCommandBuffer | null>(null);
   const p2HitPauseCommandBufferRef = useRef<HitPauseCommandBuffer | null>(null);
   const restartPressedRef = useRef(false);
-  const presentationSkipInputHeldRef = useRef(false);
+  const introSkipButtonHeldRef = useRef(false);
+  const resultSkipInputHeldRef = useRef(false);
   const pendingWinMugenHotkeysRef = useRef<WinMugenHotkeyAction[]>([]);
   const winMugenPausedRef = useRef(false);
   const winMugenHudVisibleRef = useRef(true);
@@ -652,10 +655,12 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
         const config = inputConfigRef.current;
         const pressedKeys = input?.getPressedKeys(config) ?? new Set<string>();
         const presentationKeys = new Set([...pressedKeys].filter((key) => !isWinMugenSystemKey(key)));
-        const presentationSkipPressed = presentationKeys.size > 0 && !presentationSkipInputHeldRef.current;
         const inputSnapshot = createInputDebugSnapshot(pressedKeys);
         const p1Input = keysToP1Input(pressedKeys, config);
         const p2Input = keysToP2Input(pressedKeys, config);
+        const introSkipButtonHeld = isIntroSkipButtonHeld(p1Input, p2Input);
+        const introSkipPressed = introSkipButtonHeld && !introSkipButtonHeldRef.current;
+        const resultSkipPressed = presentationKeys.size > 0 && !resultSkipInputHeldRef.current;
         const currentPlayers = gameStateRef.current.players;
         p1CommandBufferRef.current.push(p1Input, currentPlayers[0].facing);
         p2CommandBufferRef.current.push(p2Input, currentPlayers[1].facing);
@@ -728,12 +733,15 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
           p2HitPauseCommandBufferRef.current?.clear();
           audioRuntimeRef.current?.stopAll();
         } else {
-          if (presentationSkipPressed) {
+          if (introSkipPressed) {
             nextState = skipRoundIntro(nextState, nextRoundState);
+          }
+          if (resultSkipPressed) {
             nextRoundState = requestRoundResultSkip(nextRoundState);
           }
           nextState = applyRoundFlowStateEntries(nextState, nextRoundState);
           const fightActive = nextRoundState.phase === 'fight';
+          const characterCommandsActive = fightActive || isCharacterIntroInputActive(nextState, nextRoundState);
           const pauseAtFrameStart = nextState.pause ?? createInitialPauseState();
           if (ENABLE_RUNTIME_FALLBACKS && fightActive) {
             nextState = applyFallbackControls(nextState, p1Input, p2Input);
@@ -750,8 +758,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
           const cnsScreenLeft = cnsCamera.x;
           const cnsScreenRight = cnsCamera.x + cnsScreenProfile.logicalWidth;
           const cnsResult = stepCnsStateRuntime(nextState, character.cns, {
-            p1Commands: fightActive ? p1Commands : new Set(),
-            p2Commands: fightActive ? p2Commands : new Set(),
+            p1Commands: characterCommandsActive ? p1Commands : new Set(),
+            p2Commands: characterCommandsActive ? p2Commands : new Set(),
             getAnimationDuration: (animNo) => getMugenAnimEndTime(character.air, animNo),
             getAnimationElementNo: (animNo, animTime) => {
               const element = getCurrentAnimationElement(character.air, animNo, animTime);
@@ -1088,7 +1096,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
         nextState = synchronizeBoundExplodPositions(nextState);
 
         restartPressedRef.current = inputSnapshot.system.restartRound;
-        presentationSkipInputHeldRef.current = presentationKeys.size > 0;
+        introSkipButtonHeldRef.current = introSkipButtonHeld;
+        resultSkipInputHeldRef.current = presentationKeys.size > 0;
 
         const simulationFinishedAt = performance.now();
         const explodRenderDiagnosticLines = rendererRef.current?.render(nextState, nextFeedback, nextRoundState, nextScore, {
@@ -5237,7 +5246,7 @@ export function createSourceOutline(file: CharacterSourceFile): SourceOutlineIte
   let currentStateDef: { line: number; stateNo: number } | null = null;
   for (let index = 0; index < lines.length; index += 1) {
     const lineNo = index + 1;
-    const line = lines[index].trim();
+    const line = lines[index].replace(/;.*$/, '').trim();
     const airMatch = line.match(/^\[?\s*Begin\s+Action\s+(-?\d+)\s*\]?$/i);
     if (airMatch) {
       const actionNo = Number(airMatch[1]);
@@ -5818,7 +5827,7 @@ export function ManualPanel() {
     <section className="settings-section manual-panel">
       <h2>{text('Controls', '操作説明')}</h2>
       <p>{text(
-        'Any configured game key skips a character intro. A new match starts automatically after either player wins two rounds.',
+        'A newly pressed attack or Start button skips a character intro. Direction inputs remain available to character intro logic. A new match starts automatically after either player wins two rounds.',
         '設定済みのゲームキーでキャラクターのイントロをスキップできます。どちらかが2ラウンド先取すると、自動で次の試合を開始します。',
       )}</p>
       <h3>{text('WinMUGEN-compatible system shortcuts', 'WinMUGEN互換のシステム操作')}</h3>
@@ -5869,10 +5878,13 @@ function createStaticDebugInfo(character: any, source: string, spriteCount: numb
     `name: ${readDefValue(character.def, 'Info', 'name') ?? '-'}`,
     `displayname: ${readDefValue(character.def, 'Info', 'displayname') ?? '-'}`,
     `author: ${readDefValue(character.def, 'Info', 'author') ?? '-'}`,
+    `compatibility profile: ${character.compatibilityProfile ?? 'sample/unresolved'}`,
     `sprites: ${spriteCount}`,
     `cns states: ${character.cns.states.length}`,
     `cmd commands: ${character.cmd.commands.length}`,
     `runtime fallback: ${ENABLE_RUNTIME_FALLBACKS ? 'on' : 'off'}`,
+    ...(character.compatibilityDiagnostics ?? []).map((diagnostic: { asset: string; path: string; message: string }) =>
+      `load diagnostic [${diagnostic.asset}] ${diagnostic.path}: ${diagnostic.message}`),
   ];
 
   const stateRows = character.cns.states

@@ -32,6 +32,13 @@ describe('Catalog Generator classification', () => {
     expect(ambiguous.errors[0]).toContain('multiple content kinds');
   });
 
+  it('classifies a DEF-declared MUGEN 1.0 Character without filename-specific rules', () => {
+    const mugen10 = characterDef.replace('[Info]', '[Info]\nmugenversion = 1.0');
+    expect(classifyDefText(mugen10, 'alice.def')).toMatchObject({ kind: 'character', engine: 'mugen_1_0' });
+    expect(classifyZipBytes(zipSync({ 'Alice/Alice.def': strToU8(mugen10) }), 'arbitrary.zip'))
+      .toMatchObject({ kind: 'character', engine: 'mugen_1_0' });
+  });
+
   it('classifies multi-DEF Stage ZIPs like the selected beach and forest archives', () => {
     const beach = classifyZipBytes(zipSync({
       '夏の浜辺/Beach_in_summerA.def': strToU8('[Info]\nname = Beach in summer A\n[Camera]\n[PlayerInfo]\n[Bound]\n[StageInfo]\n[BGDef]\nspr = beach.sff'),

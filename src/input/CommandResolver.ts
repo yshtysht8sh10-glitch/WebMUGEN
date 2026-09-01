@@ -57,22 +57,18 @@ function addRawDirectionCommandAliases(commandNames: Set<string>, input: PlayerI
   const back = facing === 1 ? input.left : input.right;
   if (input.up) {
     commandNames.add('holdup');
-    commandNames.add('up');
   }
 
   if (input.down) {
     commandNames.add('holddown');
-    commandNames.add('down');
   }
 
   if (forward) {
     commandNames.add('holdfwd');
-    commandNames.add('fwd');
   }
 
   if (back) {
     commandNames.add('holdback');
-    commandNames.add('back');
   }
 
   if (forward && input.up) {

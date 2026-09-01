@@ -64,12 +64,18 @@ export function stepPauseState(state: PauseState): PauseState {
 
   const wasActive = isGamePaused(state);
   const active = nextPauseTime > 0 || nextSuperPauseTime > 0;
+  const movingOwnerAtResume = wasActive && !active && state.moveTime > 0
+    ? state.ownerEntityId
+    : null;
   return {
     pauseTime: nextPauseTime,
     superPauseTime: nextSuperPauseTime,
     moveTime: nextMoveTime,
     darken: nextSuperPauseTime > 0 ? state.darken : false,
-    ownerEntityId: active ? state.ownerEntityId : null,
+    // Retain the owner for the one resume-guard pass only when its movetime
+    // covered the final Pause tick. That owner already advanced normally and
+    // must be allowed to evaluate its next authored Time condition.
+    ownerEntityId: active ? state.ownerEntityId : movingOwnerAtResume,
     kind: nextSuperPauseTime > 0 ? 'superpause' : nextPauseTime > 0 ? 'pause' : null,
     resumeGuard: wasActive && !active ? true : false,
   };

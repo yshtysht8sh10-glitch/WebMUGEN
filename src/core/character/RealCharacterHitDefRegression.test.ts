@@ -274,6 +274,7 @@ describe('T-H-M-A State 215 launch regression', () => {
     expect(contacted, `State 215 ${mode} P${attackerId} facing=${facing} contact`).not.toBeNull();
     if (ko) expect(contacted!.players[targetIndex].life, contacted!.hitDiagnosticLines?.join('\n')).toBe(0);
     let state = contacted!;
+    const runtimeDiagnostics = [...(state.hitDiagnosticLines ?? [])];
     let round = createInitialRoundState();
     round = { ...round, phase: 'fight' };
     const visited: number[] = [state.players[targetIndex].stateNo];
@@ -294,6 +295,7 @@ describe('T-H-M-A State 215 launch regression', () => {
         roundWinner: round.winner,
         roundEndReason: round.endReason,
       }).state;
+      runtimeDiagnostics.push(...(cns.hitDiagnosticLines ?? []));
       transitions.push(...(cns.players[targetIndex].hitDiagnosticLines ?? []).filter((line) => line.includes('from=') && line.includes('to=')));
       const moved = stepCnsPhysicsMotion(cns, assets.cns);
       state = applyFallbackHitRecovery(moved, true);
@@ -303,7 +305,7 @@ describe('T-H-M-A State 215 launch regression', () => {
       if (ko ? state.players[targetIndex].stateNo === 5150 : sawGetup && state.players[targetIndex].stateNo === 0) break;
     }
 
-    const diagnostics = state.hitDiagnosticLines?.join('\n') ?? '';
+    const diagnostics = runtimeDiagnostics.join('\n');
     expect(diagnostics).toContain('hitDefId=215');
     expect(diagnostics).toContain('fall=1');
     expect(visited).toContain(mode === 'air' ? 5020 : 5000);

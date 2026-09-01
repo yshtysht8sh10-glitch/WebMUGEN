@@ -425,7 +425,12 @@ export class CanvasRenderer {
       if (groupNo < 0 || imageNo < 0) {
         return diagnosticsEnabled ? `${prefix} ${elementFields} result=skip reason=intentional_invisible_element spriteExists=0 playerVisible=0 rendererDrawRequested=0` : '';
       }
-      const blend = resolveSpriteBlend(currentElement.element.blend ?? null, null);
+      const controllerTransparency = normalizePlayerTransparency(player.spriteTransparency);
+      const effectiveTransparency = controllerTransparency ?? currentElement.element.blend ?? null;
+      const blend = resolveSpriteBlend(
+        effectiveTransparency,
+        controllerTransparency ? player.spriteAlpha ?? null : null,
+      );
       ctx.save();
       applySpriteBlend(ctx, blend);
       const drawn = this.drawSpriteByElement(
@@ -454,7 +459,7 @@ export class CanvasRenderer {
       );
       ctx.restore();
 
-      if (drawn.drawn) return diagnosticsEnabled ? `${prefix} ${elementFields} scale=(${scaleX},${scaleY}) airBlend=${blend.mode || 'none'} composite=${describeSpriteComposite(blend)} spriteExists=1 result=drawn playerVisible=1 rendererDrawRequested=1 ${drawn.diagnostic}${blend.limitation ? ` limitation=${blend.limitation}` : ''}` : '';
+      if (drawn.drawn) return diagnosticsEnabled ? `${prefix} ${elementFields} scale=(${scaleX},${scaleY}) airBlend=${blend.mode || 'none'} trans=${blend.mode || 'none'} alpha=(${blend.sourceAlpha},${blend.destinationAlpha}) transSource=${controllerTransparency ? 'controller' : currentElement.element.blend ? 'air' : 'default'} composite=${describeSpriteComposite(blend)} spriteExists=1 result=drawn playerVisible=1 rendererDrawRequested=1 ${drawn.diagnostic}${blend.limitation ? ` limitation=${blend.limitation}` : ''}` : '';
       if (spriteAssets.imageDataSpritePack || spriteAssets.spritePack) {
         return diagnosticsEnabled ? `${prefix} ${elementFields} spriteExists=0 result=skip reason=sprite_missing playerVisible=0 rendererDrawRequested=0` : '';
       }
@@ -882,6 +887,12 @@ function resolveAfterImageFilter(afterImage: NonNullable<PlayerState['afterImage
   return `${afterImage.palette.invertAll ? 'invert(1) ' : ''}grayscale(${grayscale}) contrast(${contrast}) brightness(${brightness})`;
 }
 
+function normalizePlayerTransparency(transparency: string | undefined): string | null {
+  const normalized = transparency?.trim();
+  if (!normalized || normalized.toLowerCase() === 'default') return null;
+  return normalized;
+}
+
 function resolveSpriteBlend(
   transparency: string | null,
   alpha: { source: number; destination: number } | null,
@@ -891,6 +902,20 @@ function resolveSpriteBlend(
   const sourceAlpha = alpha?.source ?? (airAlpha ? Number(airAlpha[1]) : 256);
   const destinationAlpha = alpha?.destination ?? (airAlpha ? Number(airAlpha[2]) : mode === 'a' ? 256 : mode === 'a1' ? 128 : 0);
   const globalAlpha = Math.min(1, Math.max(0, sourceAlpha / 256));
+  // WinMUGEN characters commonly keep Trans active from State -3 with
+  // addalpha 256,0. That pair is ordinary opaque replacement, not additive
+  // brightening; akkarin uses it whenever its transparency var is zero.
+  if ((mode === 'addalpha' || airAlpha) && sourceAlpha >= 256 && destinationAlpha <= 0) {
+    return {
+      mode: transparency?.trim() ?? '',
+      compositeOperation: 'source-over',
+      globalAlpha: 1,
+      sourceAlpha,
+      destinationAlpha,
+      limitation: null,
+      subtractive: false,
+    };
+  }
   if (mode === 'a' || mode === 'a1' || airAlpha || mode === 'add' || mode === 'add1' || mode === 'addalpha') {
     const approximatedAirAdd = mode === 'a';
     return {

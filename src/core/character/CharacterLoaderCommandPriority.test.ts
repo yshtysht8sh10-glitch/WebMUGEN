@@ -185,6 +185,72 @@ value = 40
     });
   });
 
+  it('keeps the common ground jump when the character uses holdup only for an air jump', async () => {
+    const character = await loadCharacterFromDef('/chars/d4meirin/d4meirin.def', createFetcher(new Map([
+      ['/chars/d4meirin/d4meirin.def', '[Files]\ncmd = d4meirin.cmd\ncns = d4meirin.cns\nanim = d4meirin.air\n'],
+      ['/chars/d4meirin/d4meirin.cns', `
+[StateDef 0]
+type = S
+movetype = I
+physics = S
+anim = 0
+ctrl = 1
+
+[StateDef 40]
+type = A
+movetype = I
+physics = A
+anim = 40
+ctrl = 0
+
+[StateDef 56]
+type = A
+movetype = I
+physics = A
+anim = 56
+ctrl = 0
+`],
+      ['/chars/d4meirin/d4meirin.air', 'Begin Action 0\n0,0, 0,0, 5\nBegin Action 40\n0,0, 0,0, 5\n'],
+      ['/chars/d4meirin/d4meirin.cmd', `
+[Command]
+name = "holdup"
+command = /U
+
+[Statedef -1]
+
+[State -1, Air Jump]
+type = ChangeState
+triggerall = command = "holdup"
+triggerall = statetype = A
+trigger1 = ctrl
+value = 56
+`],
+      ['/chars/common.cmd', `
+[Command]
+name = "holdup"
+command = /U
+
+[Statedef -1]
+
+[State -1, Common Ground Jump]
+type = ChangeState
+triggerall = command = "holdup"
+trigger1 = statetype = S
+trigger1 = ctrl
+value = 40
+`],
+      ['/chars/common1.cns', ''],
+    ])));
+
+    const commandState = character.cns.states.find((state) => state.stateNo === -1);
+    expect(commandState?.controllers.map((controller) => controller.params.value)).toEqual([40, 56]);
+
+    const result = stepCnsStateRuntime(createInitialGameState(), character.cns, {
+      p1Commands: new Set(['holdup', 'up']), p2Commands: new Set(),
+    });
+    expect(result.state.players[0]).toMatchObject({ stateNo: 40, animNo: 40, stateType: 'A', physics: 'A' });
+  });
+
   it('runs a character-defined jump variant State 42 at runtime', async () => {
     const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createFetcher(new Map([
       ['/chars/kfm/kfm.def', '[Files]\ncmd = kfm.cmd\ncns = kfm.cns\nanim = kfm.air\n'],
@@ -327,13 +393,6 @@ physics = S
 anim = 0
 ctrl = 1
 
-[StateDef 21]
-type = S
-movetype = I
-physics = S
-anim = 21
-ctrl = 1
-
 [StateDef 205]
 type = S
 movetype = A
@@ -384,7 +443,14 @@ trigger1 = stateno = 21
 trigger1 = anim != 21
 value = 21
 `],
-      ['/chars/common1.cns', ''],
+      ['/chars/common1.cns', `
+[StateDef 21]
+type = S
+movetype = I
+physics = S
+anim = 21
+ctrl = 1
+`],
     ])));
 
     const commandState = character.cns.states.find((state) => state.stateNo === -1);

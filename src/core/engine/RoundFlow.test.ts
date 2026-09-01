@@ -5,6 +5,8 @@ import { createInitialRoundState } from './RoundState';
 import {
   applyRoundFlowStateEntries,
   isMatchOver,
+  isCharacterIntroInputActive,
+  isIntroSkipButtonHeld,
   ROUND_INITIALIZE_STATE,
   ROUND_RESULT_FRAMES,
   shouldStartNextRound,
@@ -70,11 +72,69 @@ describe('Issue #93 WinMUGEN Round Flow coordinator', () => {
 
   it('skips character intro states after initialization while retaining presentation flow', () => {
     const initial = createInitialGameState();
-    const intro = { ...initial, players: initial.players.map((player) => ({ ...player, stateNo: 191, ctrl: false })) as typeof initial.players };
+    const intro = {
+      ...initial,
+      players: [
+        { ...initial.players[0], stateNo: 191, ctrl: false },
+        {
+          ...initial.players[1], stateNo: 193, stateType: 'A' as const, physics: 'N' as const,
+          y: 183.17, vx: 1.5, vy: 0.41, ctrl: false,
+        },
+      ] as typeof initial.players,
+      projectiles: [{} as (typeof initial.projectiles)[number]],
+      helpers: {
+        ...initial.helpers,
+        entries: [{} as (typeof initial.helpers.entries)[number]],
+      },
+      explods: {
+        ...initial.explods,
+        entries: [{} as (typeof initial.explods.entries)[number]],
+      },
+    };
     const round = { ...createInitialRoundState(), frameInPhase: 1 };
     const skipped = skipRoundIntro(intro, round);
     expect(skipped.players.map((player) => player.stateNo)).toEqual([0, 0]);
     expect(skipped.players.every((player) => player.ctrl)).toBe(true);
+    expect(skipped.players[1]).toMatchObject({
+      y: 285, vx: 0, vy: 0, stateType: 'S', physics: 'S', animNo: 0,
+    });
+    expect(skipped.projectiles).toHaveLength(0);
+    expect(skipped.helpers.entries).toHaveLength(0);
+    expect(skipped.explods.entries).toHaveLength(0);
+  });
+
+  it('reserves only attack and Start buttons for character intro skipping', () => {
+    const neutral = { left: false, right: false, up: false, down: false, attack: false };
+    expect(isIntroSkipButtonHeld({ ...neutral, left: true }, neutral)).toBe(false);
+    expect(isIntroSkipButtonHeld(neutral, { ...neutral, up: true })).toBe(false);
+    expect(isIntroSkipButtonHeld({ ...neutral, attack: true, buttons: ['a'] }, neutral)).toBe(true);
+    expect(isIntroSkipButtonHeld(neutral, { ...neutral, buttons: new Set(['x']) })).toBe(true);
+    expect(isIntroSkipButtonHeld(neutral, { ...neutral, buttons: ['s'] })).toBe(true);
+  });
+
+  it('enables character commands only during the character-owned part of the intro', () => {
+    const initial = createInitialGameState();
+    const round = { ...createInitialRoundState(), frameInPhase: 1 };
+    const characterIntro = {
+      ...initial,
+      players: [{ ...initial.players[0], stateNo: 191 }, initial.players[1]] as typeof initial.players,
+    };
+    expect(isCharacterIntroInputActive(characterIntro, round)).toBe(true);
+    expect(isCharacterIntroInputActive(initial, { ...round, introPresentationFrame: 1 })).toBe(false);
+    expect(isCharacterIntroInputActive(characterIntro, { ...round, phase: 'fight' })).toBe(false);
+  });
+
+  it('does not clear rebuilt effects when input arrives after both character intros have ended', () => {
+    const initial = createInitialGameState();
+    const presentation = {
+      ...initial,
+      helpers: {
+        ...initial.helpers,
+        entries: [{} as (typeof initial.helpers.entries)[number]],
+      },
+    };
+    const round = { ...createInitialRoundState(), frameInPhase: 80 };
+    expect(skipRoundIntro(presentation, round)).toBe(presentation);
   });
 
   it('does not restart a character-owned intro or result substate while the round clock is paused at frame zero', () => {

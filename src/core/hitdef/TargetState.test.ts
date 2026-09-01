@@ -23,4 +23,12 @@ describe('TargetState', () => {
     const state = createInitialGameState();
     expect(registerTarget(state.players[0], { ...state.players[1], life: 0 }, 10, 42).targets).toEqual([]);
   });
+
+  it('records whether the acquired target came from a throw HitDef', () => {
+    const state = createInitialGameState();
+    const owner = registerTarget(state.players[0], state.players[1], 10, 700, true);
+    expect(owner.targets).toEqual([
+      { playerId: 2, hitDefId: 700, activeHitDefId: 10, throwHit: true },
+    ]);
+  });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialGameState } from '../engine/GameState';
 import { stepCnsPhysicsMotion } from './CnsPhysicsStep';
+import { stepCnsStateRuntime } from './CnsStateRuntime';
 import { parseCnsText } from '../../parser/cns/CnsParser';
 import { DEFAULT_GROUND_Y } from '../engine/GroundClamp';
 
@@ -299,6 +300,7 @@ anim = 47
         {
           ...state.players[0],
           stateNo: 50,
+          stateHeaderAppliedStateNo: 50,
           stateType: 'A',
           physics: 'A',
           ctrl: true,
@@ -321,6 +323,89 @@ anim = 47
       animTime: 0,
       y: 285,
       vy: 0,
+      stateHeaderAppliedStateNo: 50,
+    });
+  });
+
+  it('defers an expression-based landing Anim to the normal StateDef entry pass', () => {
+    const state = createInitialGameState();
+    const cns = parseCnsText(`
+[Statedef 52]
+type = S
+movetype = I
+physics = S
+ctrl = 0
+anim = 47 + (ifelse(var(3) = 0, 1, 0)) * 20000
+
+[State 52, Return]
+type = ChangeState
+trigger1 = AnimTime = 0
+value = 0
+ctrl = 1
+
+[Statedef 0]
+type = S
+movetype = I
+physics = S
+ctrl = 1
+anim = 0
+`);
+
+    const landed = stepCnsPhysicsMotion({
+      ...state,
+      players: [
+        {
+          ...state.players[0],
+          vars: { 3: 0 },
+          stateNo: 50,
+          stateHeaderAppliedStateNo: 50,
+          stateType: 'A',
+          physics: 'A',
+          ctrl: true,
+          y: 284,
+          vy: 6,
+          animNo: 20044,
+          animTime: 17,
+        },
+        state.players[1],
+      ],
+    }, cns);
+
+    expect(landed.players[0]).toMatchObject({
+      stateNo: 52,
+      stateHeaderAppliedStateNo: 50,
+      animNo: 20044,
+    });
+
+    const animationInput = {
+      getAnimationDuration: (animNo: number) => (animNo === 20047 ? 6 : null),
+    };
+    const entered = stepCnsStateRuntime(landed, cns, animationInput);
+    expect(entered.state.players[0]).toMatchObject({
+      stateNo: 52,
+      stateHeaderAppliedStateNo: 52,
+      animNo: 20047,
+      animTime: 0,
+      stateTime: 0,
+      stateType: 'S',
+      physics: 'S',
+      ctrl: false,
+    });
+
+    const returned = stepCnsStateRuntime({
+      ...entered.state,
+      players: [{
+        ...entered.state.players[0],
+        animTime: 6,
+        stateTime: 6,
+      }, entered.state.players[1]],
+    }, cns, animationInput);
+    expect(returned.state.players[0]).toMatchObject({
+      prevStateNo: 52,
+      stateNo: 0,
+      animNo: 0,
+      animTime: 0,
+      ctrl: true,
     });
   });
 });

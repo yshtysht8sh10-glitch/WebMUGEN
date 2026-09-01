@@ -36,21 +36,34 @@ Compatibility fixes must therefore answer these questions before implementation:
 
 ## Compatibility Profile
 
-Character loading will determine one explicit `CompatibilityProfile` and retain it on the loaded character. Initial profile identities are:
+Character loading determines one explicit `CompatibilityProfile` immediately after parsing the DEF and retains it on `CharacterAssets`. Initial profile identities are:
 
 ```ts
 type CompatibilityProfileId = 'WINMUGEN' | 'MUGEN_1_0';
 // Future: 'MUGEN_1_1'
 ```
 
-The intended selection rule is:
+The implemented selection rule is:
 
-- absent `Info.mugenversion`, or a WinMUGEN version such as `2002,02,14`: `WINMUGEN`;
+- absent `Info.mugenversion`, or a recognized WinMUGEN value: `WINMUGEN`;
 - `Info.mugenversion = 1.0`: `MUGEN_1_0`;
 - a future recognized 1.1 value: `MUGEN_1_1`;
 - unknown or malformed values: use a documented conservative policy and emit a load diagnostic; never silently infer a later profile from one isolated expression.
 
-The loaded `CharacterAssets` will hold the selected profile. Runtime systems will consume profile services or resolved policies instead of scattering `if (mugenversion == ...)` checks through controllers, physics, HitDef, and animation.
+The loaded `CharacterAssets` holds the selected profile. Runtime systems will incrementally consume profile services or resolved policies instead of scattering `if (mugenversion == ...)` checks through controllers, physics, HitDef, and animation.
+
+### Compatibility version and resource format are separate axes
+
+Character compatibility is selected from the DEF; a binary parser is selected from that file's own header. Neither may be inferred exclusively from the other:
+
+```text
+Character DEF -> mugenversion -> WINMUGEN / MUGEN_1_0 Profile
+SFF binary    -> SFF header   -> SffV1Parser / SffV2Parser
+```
+
+Consequently, a MUGEN 1.0 character may use a legacy SFF v1 resource, while an SFF v2 header is not by itself permission to classify an otherwise unspecified character as MUGEN 1.0. The selected profile owns the resource policy and the SFF dispatcher owns header detection. `CharacterLoader` calls this seam and does not contain per-version SFF branches.
+
+The first implemented MUGEN 1.0 profile feature is SFF v2.0 loading. This milestone does not claim complete MUGEN 1.0 CNS, Trigger, StateController, physics, AIR, or palette-effect semantics.
 
 Conceptually:
 
@@ -183,11 +196,11 @@ The repository does not yet implement the target architecture:
 
 | Area | Current state | Target state |
 |---|---|---|
-| Profile selection | DEF retains generic fields, but `CharacterAssets` has no selected compatibility profile | Select once during load and retain the profile |
+| Profile selection | Implemented for `WINMUGEN` and `MUGEN_1_0`; unknown values diagnose and conservatively select WinMUGEN | Extend with profile-owned semantic services |
 | Runtime dispatch | Runtime modules call shared global behavior | Runtime consumes profile policies |
 | Constants | `CnsConstants` combines character values and one global fallback table | Profile-owned resolution and defaults |
 | Common States | DEF-selected common States and bundled WinMUGEN `common1.cns` are merged without profile dispatch | Profile selects compatible common-state policy/assets |
-| Parser | Metadata retains raw scalar/array values; vector normalization is being added independently of semantics | Common normalized syntax model consumed by profiles |
+| Parser | SFF v1/v2 are independent parsers selected by the binary header; other syntax parsers retain normalized data | Continue separating format syntax from profile semantics |
 | Matrix | One WinMUGEN-first status per item | Preserve WinMUGEN view and add profile-specific evidence/status where differences exist |
 
 Migration must be incremental. The first implementation milestone should add profile identity and loader selection without changing runtime behavior. Later milestones can move one semantic family at a time behind the dispatcher.

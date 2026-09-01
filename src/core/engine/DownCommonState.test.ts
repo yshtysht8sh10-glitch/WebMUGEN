@@ -111,7 +111,7 @@ describe('common down and getup states', () => {
   });
 
   it.each([
-    { yvel: 0, expectedState: 5110, expectedAnim: 5080 },
+    { yvel: 0, expectedState: 5110, expectedAnim: 5110 },
     { yvel: -4, expectedState: 5050, expectedAnim: 5090 },
   ])('routes State 5080 by down y velocity: $yvel', ({ yvel, expectedState, expectedAnim }) => {
     const player = downPlayer(5080, {

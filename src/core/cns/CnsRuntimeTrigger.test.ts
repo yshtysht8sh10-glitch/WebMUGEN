@@ -10,6 +10,13 @@ describe('CnsRuntimeTrigger', () => {
     expect(evaluateCnsRuntimeTrigger('Ctrl = 0', { player: { ...player, ctrl: false } })).toBe(true);
   });
 
+  it('evaluates HitShakeOver as a WinMUGEN numeric boolean', () => {
+    const player = createInitialGameState().players[0];
+    expect(evaluateCnsRuntimeTrigger('HitShakeOver = 1', { player: { ...player, hitPause: 0 } })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('HitShakeOver = 0', { player: { ...player, hitPause: 3 } })).toBe(true);
+    expect(evaluateCnsRuntimeTrigger('HitShakeOver', { player: { ...player, hitPause: 0 } })).toBe(true);
+  });
+
   it('evaluates DEF metadata names and the selected palette number', () => {
     const state = createInitialGameState(3000, {
       name: 'Metadata Fighter', authorName: 'Metadata Author', palNo: 3,

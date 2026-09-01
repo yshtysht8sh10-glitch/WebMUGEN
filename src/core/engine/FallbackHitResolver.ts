@@ -566,7 +566,13 @@ function resolveAttack(
   }, hitGetHitVars), active, attacker.id, attackerEntityId), attackerEntityId, active.hitId);
   const entryAttacker = activeHitDefId === null || !registerContactTarget
     ? contactedAttacker
-    : registerTarget(contactedAttacker, hitTarget, activeHitDefId, active.hitId ?? 0);
+    : registerTarget(
+        contactedAttacker,
+        hitTarget,
+        activeHitDefId,
+        active.hitId ?? 0,
+        active.attr?.attackTypes.some((attackType) => attackType.trim().toUpperCase().endsWith('T')) === true,
+      );
   if (enterOverrideState && active.p2StateNo !== undefined) {
     hitTarget = enterOverrideState(
       { ...hitTarget, stateNo: target.stateNo },

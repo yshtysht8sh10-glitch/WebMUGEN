@@ -1,6 +1,6 @@
 # CMD Compatibility Notes
 
-Updated: 2026-08-22
+Updated: 2026-09-01
 
 This document summarizes CMD implementation notes. The compatibility matrix remains the source of truth:
 
@@ -14,6 +14,7 @@ Follow `docs/webmugen/development-policy.md`: common movement routing belongs in
 | Feature | Matrix status | Current note | Remaining risk |
 |---|---|---|---|
 | Single button commands | Complete | Browser Input Config exposes keyboard/gamepad mappings for `a,b,c,x,y,z` and Start; Start is emitted as the WinMUGEN `s` token and production T-H-M-A coverage resolves `name = "start"` into Taunt State 195. When a CMD also defines the corresponding direct button hold (for example `b` and `/b`), the hold is exposed first and the press on the following input tick, preserving WinMUGEN button-hold priority without losing the normal press. | Motion-final button priority and broader buffering still need audit. |
+| Single direction `U/D/F/B` | Complete | A non-held direction command is emitted only on a fresh direction edge. Holding the same direction continues to satisfy `/U`, `/D`, `/F`, or `/B`, but does not repeat the corresponding non-held command every tick. Mother_Legion State 50 verifies that `command = "up"` applies its authored `VelAdd y = -2` once instead of continuously accelerating. | Compound direction and charge timing still need audit. |
 | Hold direction `/D` | Complete | Used for crouch route. | Complex combined syntax needs audit. |
 | Hold direction `/F` | Complete | Used for walk-forward route. | Direction depends on facing/context assumptions. |
 | Hold direction `/B` | Complete | Used for walk-back route. | Direction depends on facing/context assumptions. |
@@ -29,6 +30,8 @@ Follow `docs/webmugen/development-policy.md`: common movement routing belongs in
 | `/` hold prefix | Partial | Used in common commands. | Syntax coverage is incomplete. |
 
 Issue #79 was caused in the production matcher, not by State -1 route ordering. During a single `D -> DF -> F+a` motion, several held `DF` frames could each satisfy both cardinal `D` and `F`. That made T-H-M-A's `~D, F, D, F, a` super command active alongside its normal `~D, DF, F, a` command. The matcher now rejects adjacent, different cardinal steps when both are satisfied only by reusing the same unchanged diagonal direction. Exact `DF` steps, `$`/`/` hold commands, release commands, and lenient final-direction-plus-button input remain covered by focused tests.
+
+State -1 command controllers are evaluated normally outside HitPause, including while a player is in a hit or guard reaction. The controller's own triggers decide whether it may interrupt that State. This is required for WinMUGEN guard cancels: Elecbyte's 3 Sep 1999 update notes give `command` together with `StateNo >= 150` / `StateNo <= 153` as the authored pattern. WebMUGEN does not hard-code those State numbers or `GetHitVar(guarded)` as an engine exception. An akkarin-derived route verifies held forward plus the `x+y` command enters State 720 from State 150 and consumes 1000 Power after HitPause; the same route remains false in State 5000 or below 1000 Power. HitPause still requires `ignorehitpause = 1`.
 
 ## Common routing policy
 
@@ -50,6 +53,14 @@ substate such as `101` into State `20` through the common `Statedef -1` route.
 Their temporary `VelSet` and `ChangeAnim` glue also excludes `holdup`. Therefore,
 a diagonal jump entered from State `20` or `21` cannot reapply the previous walk
 animation after the jump route has entered State `40`.
+
+The baseline route and the temporary State-number-gated glue have different ownership rules.
+The `holdfwd`/`holdback` `ChangeState` route may enter a State supplied by the Character or its
+DEF-selected `stcommon`, but WebMUGEN does not then inject the common `VelSet`/`ChangeAnim` glue
+into that character-owned State. This is required by WinMUGEN characters that dynamically choose
+walk animations. akkarin State 20 selects Anim 20 or 20020 from `var(3)`; forcing Anim 20 in
+State -1 and restoring Anim 20020 in the current State reset the displayed animation every tick.
+Common-owned State 20/21 continues to receive the temporary glue.
 
 ## Debugging CMD routes
 

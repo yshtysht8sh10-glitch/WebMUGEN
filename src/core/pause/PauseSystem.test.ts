@@ -38,6 +38,7 @@ describe('Phase57 PauseSystem', () => {
     expect(ownerActiveFrames).toBe(12);
     expect(opponentActiveFrames).toBe(0);
     expect(isGamePaused(pause)).toBe(false);
+    expect(pause).toMatchObject({ resumeGuard: true, ownerEntityId: 1 });
   });
 
   it('starts super pause with darken and movetime', () => {

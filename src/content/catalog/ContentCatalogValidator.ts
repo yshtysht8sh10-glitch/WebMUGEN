@@ -100,7 +100,7 @@ function readKind(value: unknown): ContentKind | null {
 }
 
 function readEngine(value: unknown): ContentEngine | null {
-  return value === 'winmugen' || value === 'webmugen' ? value : null;
+  return value === 'winmugen' || value === 'mugen_1_0' || value === 'webmugen' ? value : null;
 }
 
 function isPathCompatible(path: string, kind: ContentKind, engine: ContentEngine): boolean {

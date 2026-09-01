@@ -6,6 +6,7 @@ import type { CatalogClassificationResult, CatalogSourceFile } from './CatalogGe
 import { decodeMugenText } from '../../parser/text/MugenTextDecoder';
 import { inspectCharacterDef } from '../CharacterDefDiscovery';
 import { selectPreferredDefCandidate } from '../DefCandidateSelection';
+import type { ContentEngine } from '../catalog/ContentCatalogTypes';
 
 type ParsedDef = {
   sections: Map<string, Map<string, string>>;
@@ -30,13 +31,19 @@ export function classifyDefText(text: string, entryFile = 'content.def'): Catalo
   }
   return {
     kind: detected[0],
-    engine: 'winmugen',
+    engine: classifyMugenEngine(detected[0], sections),
     confidence: 1,
     entryFile,
     ...(parsed.name ? { name: parsed.name } : {}),
     warnings: [],
     errors: [],
   };
+}
+
+function classifyMugenEngine(kind: ContentKind, sections: Map<string, Map<string, string>>): ContentEngine {
+  if (kind !== 'character') return 'winmugen';
+  const version = sections.get('info')?.get('mugenversion')?.trim();
+  return version && /^1(?:\.0+)?$/i.test(version) ? 'mugen_1_0' : 'winmugen';
 }
 
 export function classifyZipBytes(bytes: Uint8Array, entryFile = 'content.zip'): CatalogClassificationResult {

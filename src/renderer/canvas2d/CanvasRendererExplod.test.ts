@@ -231,6 +231,88 @@ describe('CanvasRenderer Explod integration', () => {
     expect(drawImage.mock.calls.map(([image]) => image)).toEqual([helperImage, p1Image, p2Image]);
   });
 
+  it('applies a Helper Trans addalpha override to its current sprite', () => {
+    const observed: Array<{ image: CanvasImageSource; composite: GlobalCompositeOperation; alpha: number }> = [];
+    let context: CanvasRenderingContext2D;
+    const drawImage = vi.fn((image: CanvasImageSource) => observed.push({
+      image,
+      composite: context.globalCompositeOperation,
+      alpha: context.globalAlpha,
+    }));
+    context = fakeContext({ drawImage, scale: vi.fn(), translate: vi.fn() });
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+    const state = createInitialGameState();
+    state.helpers.entries = [{
+      entityId: 3,
+      helperId: 1200,
+      rootEntityId: 1,
+      parentEntityId: 1,
+      ownerCharacterId: 1,
+      stateOwnerId: 1,
+      animationOwnerId: 1,
+      keyCtrl: false,
+      ownPal: false,
+      spawnFrame: 10,
+      player: {
+        ...state.players[0],
+        animNo: 1200,
+        spriteTransparency: 'addalpha',
+        spriteAlpha: { source: 150, destination: 100 },
+      },
+    }];
+    const helperImage = {} as HTMLImageElement;
+    const p1Image = {} as HTMLImageElement;
+    const p2Image = {} as HTMLImageElement;
+    const p1Air: AirDocument = { actions: [
+      { actionNo: 0, elements: [{ groupNo: 0, imageNo: 0, offsetX: 0, offsetY: 0, duration: 1, clsn1: [], clsn2: [] }], defaultClsn1: [], defaultClsn2: [] },
+      { actionNo: 1200, elements: [{ groupNo: 1200, imageNo: 0, offsetX: 0, offsetY: 0, duration: 1, clsn1: [], clsn2: [] }], defaultClsn1: [], defaultClsn2: [] },
+    ] };
+    const p1Sprites: SpritePack = { sprites: new Map([
+      ['0,0', { groupNo: 0, imageNo: 0, src: '', xAxis: 0, yAxis: 0, image: p1Image }],
+      ['1200,0', { groupNo: 1200, imageNo: 0, src: '', xAxis: 0, yAxis: 0, image: helperImage }],
+    ]) };
+    const p2Sprites: SpritePack = { sprites: new Map([
+      ['0,0', { groupNo: 0, imageNo: 0, src: '', xAxis: 0, yAxis: 0, image: p2Image }],
+    ]) };
+
+    const diagnostics = new CanvasRenderer(canvas, undefined, null, null, {
+      1: { airDocument: p1Air, spritePack: p1Sprites },
+      2: { airDocument: air(0, 0, 0), spritePack: p2Sprites },
+    }).render(state);
+
+    expect(observed).toContainEqual({ image: helperImage, composite: 'lighter', alpha: 150 / 256 });
+    expect(diagnostics).toContainEqual(expect.stringContaining('entity=p1 state=0 anim=1200'));
+    expect(diagnostics).toContainEqual(expect.stringContaining('trans=addalpha alpha=(150,100) transSource=controller composite=lighter'));
+  });
+
+  it('renders State -3 addalpha 256,0 as an opaque player instead of brightening the background', () => {
+    const observed: Array<{ image: CanvasImageSource; composite: GlobalCompositeOperation; alpha: number }> = [];
+    let context: CanvasRenderingContext2D;
+    const drawImage = vi.fn((image: CanvasImageSource) => observed.push({
+      image,
+      composite: context.globalCompositeOperation,
+      alpha: context.globalAlpha,
+    }));
+    context = fakeContext({ drawImage, scale: vi.fn(), translate: vi.fn() });
+    const canvas = { width: 640, height: 360, getContext: () => context } as unknown as HTMLCanvasElement;
+    const state = createInitialGameState();
+    state.players[0] = {
+      ...state.players[0],
+      spriteTransparency: 'addalpha',
+      spriteAlpha: { source: 256, destination: 0 },
+    };
+    const p1Image = {} as HTMLImageElement;
+    const p2Image = {} as HTMLImageElement;
+    const p1Assets = { airDocument: air(0, 0, 0), spritePack: { sprites: new Map([['0,0', { groupNo: 0, imageNo: 0, src: '', xAxis: 0, yAxis: 0, image: p1Image }]]) } as SpritePack };
+    const p2Assets = { airDocument: air(0, 0, 0), spritePack: { sprites: new Map([['0,0', { groupNo: 0, imageNo: 0, src: '', xAxis: 0, yAxis: 0, image: p2Image }]]) } as SpritePack };
+
+    const diagnostics = new CanvasRenderer(canvas, undefined, null, null, { 1: p1Assets, 2: p2Assets }).render(state);
+
+    expect(observed).toContainEqual({ image: p1Image, composite: 'source-over', alpha: 1 });
+    expect(diagnostics).toContainEqual(expect.stringContaining('entity=p1 state=0 anim=0'));
+    expect(diagnostics).toContainEqual(expect.stringContaining('trans=addalpha alpha=(256,0) transSource=controller composite=source-over'));
+  });
+
   it('uses the AIR element A field when the Explod controller has no trans override', () => {
     const observedBlend: Array<{ composite: GlobalCompositeOperation; alpha: number }> = [];
     let context: CanvasRenderingContext2D;

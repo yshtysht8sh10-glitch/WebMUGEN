@@ -84,7 +84,7 @@ describe('itoko rocket-punch Helper presentation', () => {
 
     expect(flyingHand).toMatchObject({
       parentEntityId: 3,
-      hasCompletedInitialStatePass: false,
+      hasCompletedInitialStatePass: true,
       canRenderBeforeInitialStatePass: true,
       player: { stateNo: 1421, animNo: 1421, animTime: 0 },
     });

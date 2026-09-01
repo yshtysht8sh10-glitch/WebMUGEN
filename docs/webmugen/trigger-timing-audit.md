@@ -19,6 +19,6 @@ Pause ownership uses the unique runtime entity id, not the character root id or 
 
 ## Ordering and diagnostics
 
-The activation CNS pass emits Pause/SuperPause and other Controller side effects once. Later globally paused passes log `global_pause skip` with kind, remaining time, and owner. HitPause logs selective execution and remaining time. Explod diagnostics record frozen/allowed updates and allowance consumption. `resumeGuard` makes the first post-pause pass advance clocks without re-running the activation Controller at the same StateTime.
+The activation CNS pass emits Pause/SuperPause and other Controller side effects once. Later globally paused passes log `global_pause skip` with kind, remaining time, and owner. HitPause logs selective execution and remaining time. Explod diagnostics record frozen/allowed updates and allowance consumption. `resumeGuard` makes the first post-pause pass advance clocks without re-running an activation Controller at the same frozen StateTime. An owner whose `movetime` covered the final Pause tick is exempt because its StateTime already advanced; this preserves exact post-Pause equality triggers such as `Time = 30`.
 
 P1 is evaluated before P2, and Helpers after both roots. Same-pass events produced before a newly emitted Pause is committed remain an explicit Partial boundary. Exact comparison against WinMUGEN for simultaneous player events and Helper-owned Projectile pause behavior remains a manual compatibility check, not an untracked fallback.

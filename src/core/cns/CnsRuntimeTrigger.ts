@@ -821,6 +821,7 @@ function getNumberSource(rawName: string): NumberSource | null {
     case 'hitvely':
     case 'hitvel y': return (context) => readOptionalNumber(context.player, 'hitVelY', 0);
     case 'hitpausetime': return (context) => context.player.hitPause;
+    case 'hitshakeover': return (context) => context.player.hitPause <= 0 ? 1 : 0;
     case 'hitcount': return (context) => context.player.moveContact?.hitCount ?? 0;
     case 'uniqhitcount': return (context) => new Set((context.player.hitTargets ?? []).map((entry) => `${entry.activeHitDefId}:${entry.defenderId}`)).size;
     case 'hitfall': return (context) => readOptionalBool(context.player, 'hitFall', false) ? 1 : 0;

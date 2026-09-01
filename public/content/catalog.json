@@ -188,7 +188,7 @@
     {
       "id": "material-5-archive",
       "kind": "character",
-      "engine": "winmugen",
+      "engine": "mugen_1_0",
       "name": "Alice Liddell",
       "path": "/chars/material-5-archive.zip",
       "source": "external"

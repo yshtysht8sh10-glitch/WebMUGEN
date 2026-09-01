@@ -39,6 +39,6 @@ export function resolveCatalogSelection(catalog: ContentCatalog, ids: CatalogSel
 }
 
 export function formatCatalogEntryLabel(entry: ContentCatalogEntry): string {
-  const engineLabel = entry.engine === 'winmugen' ? 'WinMUGEN' : 'WebMUGEN';
+  const engineLabel = entry.engine === 'winmugen' ? 'WinMUGEN' : entry.engine === 'mugen_1_0' ? 'MUGEN 1.0' : 'WebMUGEN';
   return `[${engineLabel}] ${entry.name}`;
 }

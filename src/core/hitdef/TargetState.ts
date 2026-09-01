@@ -7,10 +7,19 @@ export function registerTarget(
   target: PlayerState,
   activeHitDefId: number,
   hitDefId: number,
+  throwHit = false,
 ): PlayerState {
   if (target.life <= 0) return removeTarget(player, target.id);
   const retained = (player.targets ?? []).filter((entry) => entry.playerId !== target.id);
-  return { ...player, targets: [...retained, { playerId: target.id, hitDefId, activeHitDefId }] };
+  return {
+    ...player,
+    targets: [...retained, {
+      playerId: target.id,
+      hitDefId,
+      activeHitDefId,
+      ...(throwHit ? { throwHit: true } : {}),
+    }],
+  };
 }
 
 export function removeTarget(player: PlayerState, playerId: number): PlayerState {

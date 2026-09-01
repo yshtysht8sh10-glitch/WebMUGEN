@@ -19,6 +19,86 @@ function targetState(hitDefId = 42) {
 }
 
 describe('CnsStateRuntime target controllers', () => {
+  it('ends target hit-shake when akkarin State 701 releases P2 into State 702', () => {
+    const cns = parseCnsText(`
+[Statedef 701]
+type = S
+movetype = A
+physics = S
+ctrl = 0
+
+[State 701, release]
+type = TargetState
+trigger1 = Time = 30
+value = 702
+ID = 700
+ignorehitpause = 1
+
+[Statedef 702]
+type = A
+movetype = H
+physics = N
+ctrl = 0
+
+[State 702, stop]
+type = VelSet
+trigger1 = Time = 0
+x = 0
+y = 0
+
+[State 702, launch]
+type = VelSet
+trigger1 = Time = 1
+x = 4
+y = -8
+
+[State 702, gravity]
+type = VelAdd
+trigger1 = Time >= 1
+y = .28
+`);
+    const state = targetState(700);
+    state.players[0].targets = state.players[0].targets?.map((target) => ({ ...target, throwHit: true }));
+    state.players[0] = {
+      ...state.players[0],
+      stateNo: 701,
+      stateHeaderAppliedStateNo: 701,
+      stateTime: 30,
+      animNo: 701,
+      animTime: 30,
+    };
+    state.players[1] = {
+      ...state.players[1],
+      stateNo: 5000,
+      stateHeaderAppliedStateNo: 5000,
+      stateTime: 0,
+      hitPause: 70,
+      hitPauseKind: 'shake',
+      vx: -2,
+    };
+
+    const released = stepCnsStateRuntime(state, cns);
+    expect(released.traces[0].executedControllers).toContain('TargetState');
+    expect(released.traces[1].executedControllers).toContain('VelSet');
+    expect(released.state.players[1]).toMatchObject({
+      stateNo: 702,
+      stateTime: 0,
+      hitPause: 0,
+      vy: 0,
+    });
+    expect(released.state.players[1].vx).toBeCloseTo(0);
+    expect(released.state.players[1].hitPauseKind).toBeUndefined();
+
+    const timeOne = stepCnsPhysicsMotion(released.state, cns);
+    const launched = stepCnsStateRuntime(timeOne, cns);
+    expect(launched.state.players[1]).toMatchObject({
+      stateNo: 702,
+      stateTime: 1,
+      vx: -4,
+      vy: -7.72,
+    });
+  });
+
   it('can release an already acquired KO target from a borrowed custom State', () => {
     const cns = parseCnsText(`
 [Statedef 200]

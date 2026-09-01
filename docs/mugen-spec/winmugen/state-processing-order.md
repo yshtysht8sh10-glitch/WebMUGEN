@@ -1,5 +1,14 @@
 # State processing order（Root / Helper）
 
+> 2026-08-31 改訂: セクション7にあった「新規Helperの初回State処理を次tickへ
+> 遅延する」というWebMUGEN独自の仮定は、kikka State 191 / Helper State 2000の
+> 実データによって否定された。通常の新規Helperは生成フレーム中、tick開始時から存在した
+> エンティティの処理後かつPhysics前に最初のCurrent Stateを処理する。これにより
+> `root, AnimElem = 1` で `VelSet (.15,-3.2)` が実行される。Elecbyte公式仕様では
+> Helperを親・子・孫という世代で区別しておらず、すべて独立したplayer instanceとして扱う。
+> そのため、初回State内で生成されたHelperも同じ生成FIFOへ追加し、同じtickで初回Stateを
+> 処理する。無制限再帰は世代別遅延ではなくWinMUGENの合計`HelperMax`（最大56）で制限する。
+
 ## 目的
 
 この文書は、WinMUGEN互換を優先するWebMUGENにおいて、1 tick内での通常State、特殊State（`StateDef -3` / `-2` / `-1`）、Root、Helperの処理順を定義する。
@@ -205,9 +214,10 @@ P2 Helper B
 
 1. tick開始時点のRootおよび既存Helperのスナップショットを固定する。
 2. 同じ入力・同じ初期状態なら、毎回同じ順番で処理する。
-3. tick途中で生成されたHelperは、そのtickでは通常State処理を開始しない。
-4. 新規Helperは次tickからState処理へ参加する。
-5. tick途中の生成・削除によって、走査中の配列順が変化しないようにする。
+3. tick途中で生成された通常のHelperは、既存エンティティの走査後、同じtickで最初のCurrent Stateを処理する。
+4. その初回処理中に生成されたHelperも同じFIFOの末尾へ追加し、世代に関係なく同じtickで初回Stateを処理する。
+5. tick途中の生成・削除によって、既存エンティティの走査中の配列順が変化しないようにする。
+6. 同tick生成の停止条件にはWinMUGEN `[Config] HelperMax`の合計上限を使う。
 
 WebMUGEN Phase 1で採用している基本順序:
 
@@ -215,11 +225,12 @@ WebMUGEN Phase 1で採用している基本順序:
 1. P1 Root
 2. P2 Root
 3. tick開始時点に存在したHelper（安定したentityId順）
-4. DestroySelfを反映
-5. 新規Helperを追加
+4. 新規HelperをFIFOから1体追加し、その初回Current Stateを処理
+5. 初回処理が生成したHelperを同じFIFO末尾へ追加し、空になるかHelperMaxへ達するまで4を繰り返す
+6. DestroySelfを反映
 ```
 
-このエンティティ間順序はWebMUGENの決定論的実装方針であり、WinMUGEN内部の未公開スロット順と完全一致することまでは現時点で保証しない。順序依存キャラクターが確認された場合は、WinMUGENとの比較試験を行う。
+この順序は、kikka State 191が生成するHelper State 2000の実データにより更新した。生成フレームで`root, AnimElem = 1`を評価しなければ、`VelSet x = .15, y = -3.2`が永久に実行されず、ボールが画面外へ落下するためである。さらにitoko State 1106はHelper自身の`Time = 0`から別のHelperを生成する実データであり、世代別仕様を設けない設計と整合する。公式資料には全player instance間の厳密なスロット走査順までは記載されていないため、FIFO順そのものはPartialとして継続検証する。
 
 ---
 
@@ -296,7 +307,7 @@ Helperが`keyctrl = 0`であるにもかかわらずRootと同じ`-3 / -2 / -1`�
 | Helper `keyctrl=0` | Currentのみ |
 | Helper `keyctrl=1` | Rootの`-1`を継承後、Currentを処理 |
 | Helperの`-3/-2` | 通常Helperでは処理しない |
-| 新規Helperの初回処理 | 生成tickではState処理せず、次tickから開始 |
+| 新規Helperの初回処理 | 生成元の世代に関係なく生成tick内のFIFOでCurrent Stateを処理。合計HelperMaxで制限 |
 | Root/Helper間の厳密な順序 | 公開仕様では未確定。WebMUGENは決定論的順序を採用 |
 
 ---

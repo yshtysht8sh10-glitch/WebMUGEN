@@ -157,11 +157,9 @@ describe('T-H-M-A Projectile ProjHit -> TargetState custom-state route', () => {
       type: 'create',
       request: expect.objectContaining({ mugenId: 17100, animNo: 17100 }),
     }));
-    expect(observed.helpers.entries).toEqual(expect.arrayContaining([
-      expect.objectContaining({ helperId: 5503, rootEntityId: 1, player: expect.objectContaining({ stateNo: 5503 }) }),
-    ]));
-
-    stepCnsStateRuntime(observed, ownerWithCommandCns, input);
+    // The creation-frame pass plays the impact sound before State 5503's
+    // following DestroySelf observes P2's completed same-tick State change.
+    expect(observed.helpers.entries.some((helper) => helper.helperId === 5503)).toBe(false);
     expect(sounds).toContainEqual(expect.objectContaining({
       type: 'play', ownerId: 1, scope: 'character', group: 252, index: 0,
     }));

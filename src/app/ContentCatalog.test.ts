@@ -104,6 +104,8 @@ describe('Content Catalog Reader and Validator', () => {
       .toBe('[WebMUGEN] Fresh');
     expect(formatCatalogEntryLabel({ id: 'arena', name: 'Arena', kind: 'stage', engine: 'winmugen', path: '/stages/arena.def' }))
       .toBe('[WinMUGEN] Arena');
+    expect(formatCatalogEntryLabel({ id: 'alice', name: 'Alice', kind: 'character', engine: 'mugen_1_0', path: '/chars/alice.zip' }))
+      .toBe('[MUGEN 1.0] Alice');
   });
 
   it('rejects an unknown built-in/external source marker', () => {

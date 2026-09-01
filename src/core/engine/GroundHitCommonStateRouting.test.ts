@@ -56,12 +56,12 @@ function getHitPlayer(testCase: RouteCase): PlayerState {
 describe('ground hit common-state routing', () => {
   it.each<RouteCase>([
     { name: 'ground yvel=0 fall=0', stateNo: 5000, targetStateTypeAtHit: 'S', yvel: 0, fall: 0, expected: 5001 },
-    { name: 'ground yvel!=0 fall=0', stateNo: 5000, targetStateTypeAtHit: 'S', yvel: 8, fall: 0, expected: 5030 },
-    { name: 'ground yvel=0 fall=1', stateNo: 5000, targetStateTypeAtHit: 'S', yvel: 0, fall: 1, expected: 5030 },
-    { name: 'air target', stateNo: 5020, targetStateTypeAtHit: 'A', yvel: 8, fall: 0, expected: 5030 },
+    { name: 'ground yvel!=0 fall=0', stateNo: 5000, targetStateTypeAtHit: 'S', yvel: 8, fall: 0, expected: 5040 },
+    { name: 'ground yvel=0 fall=1', stateNo: 5000, targetStateTypeAtHit: 'S', yvel: 0, fall: 1, expected: 5050 },
+    { name: 'air target', stateNo: 5020, targetStateTypeAtHit: 'A', yvel: 8, fall: 0, expected: 5040 },
     { name: 'crouch yvel=0 fall=0', stateNo: 5010, targetStateTypeAtHit: 'C', yvel: 0, fall: 0, expected: 5011 },
-    { name: 'crouch yvel!=0 fall=0', stateNo: 5010, targetStateTypeAtHit: 'C', yvel: 8, fall: 0, expected: 5030 },
-    { name: 'trip/fall', stateNo: 5000, targetStateTypeAtHit: 'S', yvel: 0, fall: 1, groundtype: 3, expected: 5030 },
+    { name: 'crouch yvel!=0 fall=0', stateNo: 5010, targetStateTypeAtHit: 'C', yvel: 8, fall: 0, expected: 5040 },
+    { name: 'trip/fall', stateNo: 5000, targetStateTypeAtHit: 'S', yvel: 0, fall: 1, groundtype: 3, expected: 5050 },
   ])('$name routes to $expected', (testCase) => {
     const initial = createInitialGameState();
     const result = stepCnsStateRuntime({
@@ -74,7 +74,8 @@ describe('ground hit common-state routing', () => {
       expect(diagnostics).toContain('value=5001 result=1 yvel=0 fall=0 hitShakeOver=1');
       expect(diagnostics).toContain('value=5030 result=1 yvel=0 fall=0 hitShakeOver=1');
     }
-    expect(diagnostics).toContain(`from=${testCase.stateNo} to=${testCase.expected} stopRemaining=1`);
-    expect(result.state.players[1].stateNo, diagnostics).toBe(testCase.expected === 5030 ? 5035 : testCase.expected);
+    const firstDestination = testCase.expected === 5040 || testCase.expected === 5050 ? 5030 : testCase.expected;
+    expect(diagnostics).toContain(`from=${testCase.stateNo} to=${firstDestination} stopRemaining=1`);
+    expect(result.state.players[1].stateNo, diagnostics).toBe(testCase.expected);
   });
 });

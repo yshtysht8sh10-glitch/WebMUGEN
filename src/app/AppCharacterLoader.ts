@@ -89,7 +89,7 @@ async function loadAppCharacterAssets(
     : attachHttpCharacterFileInventory(defPath, await loadCharacterFromDef(defPath, fetcher, { paletteNo }));
 }
 
-export function createSampleCharacterAssets(): Pick<CharacterAssets, 'cns' | 'air' | 'cmd' | 'sprites' | 'sounds' | 'loadDiagnostics' | 'cnsSourceFiles'> {
+export function createSampleCharacterAssets(): Pick<CharacterAssets, 'cns' | 'air' | 'cmd' | 'sprites' | 'sounds' | 'loadDiagnostics' | 'compatibilityDiagnostics' | 'cnsSourceFiles'> {
   return {
     cns: parseCnsText(sampleCharacterCns, { sourceFile: 'sample.cns' }),
     air: parseAirText(sampleCharacterAir),
@@ -97,6 +97,7 @@ export function createSampleCharacterAssets(): Pick<CharacterAssets, 'cns' | 'ai
     sprites: null,
     sounds: null,
     loadDiagnostics: [],
+    compatibilityDiagnostics: [],
     cnsSourceFiles: [
       { path: 'sample.cns', label: 'sample.cns', text: sampleCharacterCns, kind: 'cns' },
       { path: 'sample.air', label: 'sample.air', text: sampleCharacterAir, kind: 'air' },

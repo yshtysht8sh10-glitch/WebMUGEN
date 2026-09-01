@@ -77,7 +77,8 @@ Important distinctions:
 - SFF/PCX default behavior remains normal.
 - Character DEF/ACT loading explicitly opts into external ACT palette behavior.
 - Sprite-specific PCX palettes always use normal source-index lookup.
-- `samePalette` nodes inherit the previous effective palette in SFF subfile order.
+- The contiguous character run beginning at the first group-0 sprite uses the selected ACT.
+- Outside that run, `samePalette` nodes inherit the previous effective palette in SFF subfile order.
 - Linked sprites share source pixels but keep the linked node's palette context.
 
 ### `src/parser/pcx/PcxDecoder.ts`
@@ -133,9 +134,11 @@ Keep these behaviors covered:
 - PCX decoding supports reversed palette index order.
 - Source index `0` remains transparent even with reversed palette order.
 - SFF conversion preserves sprite-specific embedded palettes under DEF ACT selection.
-- `samePalette` inherits the previous effective palette by subfile order.
+- A group-0 character run following individual portrait palettes still uses the selected ACT.
+- Other `samePalette` runs inherit the previous effective palette by subfile order.
 - Linked sprite tests verify source pixels can be recolored by linked-node palette context.
 - T-H-M-A Action 15001 `15000,0..11` retains sprite-specific palette metadata and representative RGBA values before AIR Preview/Explod rendering.
+- Kaoru_Hanayama-style individual 9000 portraits followed by a shared group-0 run apply ACT to the character run without recoloring later individual effects.
 
 ## Current Limitations
 

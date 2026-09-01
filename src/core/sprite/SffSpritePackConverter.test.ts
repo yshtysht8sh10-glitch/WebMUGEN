@@ -252,6 +252,37 @@ describe('SffSpritePackConverter', () => {
     expect(p9Pack.cacheKey).toContain('act:p9');
   });
 
+  it('applies ACT to a group-0 shared run after individual portrait palettes', () => {
+    const document = createPaletteChainDocument([
+      { groupNo: 9000, imageNo: 0, samePalette: false, pcx: createFake8BitPcx(true, [80, 10, 20]) },
+      { groupNo: 9000, imageNo: 1, samePalette: false, pcx: createFake8BitPcx(true, [90, 20, 30]) },
+      { groupNo: 9000, imageNo: 801, samePalette: false, pcx: createFake8BitPcx(true, [200, 180, 140]) },
+      { groupNo: 0, imageNo: 0, samePalette: true, pcx: createFake8BitPcx(false) },
+      { groupNo: 0, imageNo: 1, samePalette: true, pcx: createFake8BitPcx(false) },
+      { groupNo: 6020, imageNo: 0, samePalette: false, pcx: createFake8BitPcx(true, [20, 210, 70]) },
+      { groupNo: 6020, imageNo: 1, samePalette: true, pcx: createFake8BitPcx(false) },
+    ]);
+    const selectedAct = new Uint8Array(256 * 3);
+    selectedAct.set([40, 70, 220], (255 - 1) * 3);
+
+    const pack = convertSffDocumentToImageDataSpritePack(document, {
+      externalPalette: selectedAct,
+      externalPaletteSlot: 1,
+      preferExternalPalette: true,
+      paletteIndexOrder: 'reversed',
+    });
+
+    expect(Array.from(pack.sprites.get('0,0')!.imageData.data.slice(0, 4))).toEqual([40, 70, 220, 255]);
+    expect(Array.from(pack.sprites.get('0,1')!.imageData.data.slice(0, 4))).toEqual([40, 70, 220, 255]);
+    expect(pack.sprites.get('0,0')?.paletteMetadata).toMatchObject({
+      source: 'external-act',
+      externalActApplied: true,
+      paletteIndexOrder: 'reversed',
+    });
+    expect(Array.from(pack.sprites.get('6020,0')!.imageData.data.slice(0, 4))).toEqual([20, 210, 70, 255]);
+    expect(Array.from(pack.sprites.get('6020,1')!.imageData.data.slice(0, 4))).toEqual([20, 210, 70, 255]);
+  });
+
   it('lets linked sprites share source pixels while inheriting the linked node palette context', () => {
     const doc = createPaletteChainDocument([
       { groupNo: 10, imageNo: 0, samePalette: false, pcx: createFake8BitPcx(true, [200, 10, 20]) },

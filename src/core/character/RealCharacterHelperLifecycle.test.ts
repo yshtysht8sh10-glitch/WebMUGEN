@@ -47,13 +47,15 @@ describe('T-H-M-A damage-counter Helper lifecycle', () => {
       players: [parent, initial.players[1]] as typeof initial.players,
       helpers,
     };
+    const diagnostics: string[] = [];
 
     for (let frame = 0; frame <= 201 && state.helpers.entries.length > 0; frame += 1) {
       state = stepCnsStateRuntime(state, document).state;
+      diagnostics.push(...(state.hitDiagnosticLines ?? []));
       state = stepCnsPhysicsMotion(state, document);
     }
 
     expect(state.helpers.entries).toHaveLength(0);
-    expect(state.hitDiagnosticLines?.join('\n')).toContain('event=destroy entityId=3');
+    expect(diagnostics.join('\n')).toContain('event=destroy entityId=3');
   });
 });

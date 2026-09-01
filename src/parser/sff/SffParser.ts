@@ -16,7 +16,7 @@ export function parseSffV1(buffer: ArrayBuffer): SffDocument {
     throw new Error('SFF v2 is not supported by the SFF v1 parser.');
   }
 
-  if (header.subheaderSize !== SFF_V1_SUBHEADER_SIZE) {
+  if (header.subheaderSize !== SFF_V1_SUBHEADER_SIZE && !hasMiswrittenV1HeaderSize(view, header, buffer.byteLength)) {
     throw new Error(`Unsupported SFF subheader size: ${header.subheaderSize}`);
   }
 
@@ -36,6 +36,22 @@ export function parseSffV1(buffer: ArrayBuffer): SffDocument {
     sprites,
     data,
   };
+}
+
+function hasMiswrittenV1HeaderSize(view: DataView, header: SffHeader, byteLength: number): boolean {
+  // Some WinMUGEN-era tools wrote the 512-byte main header size into the
+  // subheader-size field. WinMUGEN still loads these as ordinary 32-byte SFF
+  // v1 sprite nodes. Accept only that exact field mix-up and require the first
+  // node to end at its linked-list offset with a PCX payload at byte 32.
+  if (header.subheaderSize !== 512 || header.firstSubfileOffset !== 512) return false;
+  const offset = header.firstSubfileOffset;
+  if (offset + SFF_V1_SUBHEADER_SIZE >= byteLength) return false;
+  const nextOffset = view.getInt32(offset, true);
+  const length = view.getInt32(offset + 4, true);
+  const dataOffset = offset + SFF_V1_SUBHEADER_SIZE;
+  if (length <= 0 || dataOffset + length > byteLength) return false;
+  if (nextOffset !== 0 && nextOffset !== dataOffset + length) return false;
+  return view.getUint8(dataOffset) === 0x0a;
 }
 
 export function getSpriteData(document: SffDocument, sprite: SffSpriteNode): Uint8Array {

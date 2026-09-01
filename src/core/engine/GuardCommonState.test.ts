@@ -135,7 +135,9 @@ describe('guard common-state integration', () => {
       onExplodCreate: (event) => explodEvents.push(event),
     });
 
-    const p2Gauge = explodEvents.filter((event) => event.type === 'create');
+    const p2Gauge = explodEvents.filter((event) => (
+      event.type === 'create' && [2030, 2031, 2032].includes(event.request.mugenId)
+    ));
     expect(p2Gauge.map((event) => event.request.mugenId)).toEqual([2030, 2031, 2032]);
     expect(p2Gauge.map((event) => ({ postype: event.request.postype, x: event.request.position.x }))).toEqual([
       { postype: 'left', x: 238 },

@@ -2,6 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { createHttpCharacterAssetFetcher, loadCharacterFromDef, resolveAssetPath, selectCharacterPalette, type CharacterAssetFetcher } from './CharacterLoader';
 
 describe('CharacterLoader', () => {
+  it('selects the Compatibility Profile from DEF mugenversion', async () => {
+    const textAssets = minimalTextAssets('[Info]\nmugenversion = 1.0\n[Files]\ncmd = kfm.cmd\ncns = kfm.cns\nanim = kfm.air\n');
+    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createTextOnlyFetcher(textAssets));
+    expect(character.compatibilityProfile).toBe('MUGEN_1_0');
+  });
+
+  it('diagnoses an unknown DEF version while preserving the WinMUGEN fallback', async () => {
+    const textAssets = minimalTextAssets('[Info]\nmugenversion = future\n[Files]\ncmd = kfm.cmd\ncns = kfm.cns\nanim = kfm.air\n');
+    const character = await loadCharacterFromDef('/chars/kfm/kfm.def', createTextOnlyFetcher(textAssets));
+    expect(character.compatibilityProfile).toBe('WINMUGEN');
+    expect(character.compatibilityDiagnostics).toContainEqual(expect.objectContaining({ asset: 'compatibility', message: expect.stringContaining('Unknown') }));
+  });
   it('detects CP932 when loading an unpacked HTTP text asset', async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async () => new Response(new Uint8Array([
