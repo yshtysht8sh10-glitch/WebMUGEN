@@ -14,13 +14,17 @@ export function loadCatalogPublicBases(
     const value: unknown = JSON.parse(storage.getItem(CATALOG_PUBLIC_BASES_STORAGE_KEY) ?? 'null');
     if (!isRecord(value)) return { ...defaults };
     return {
-      character: safePublicBase(value.character) ?? defaults.character,
-      stage: safePublicBase(value.stage) ?? defaults.stage,
-      lifebar: safePublicBase(value.lifebar) ?? defaults.lifebar,
+      character: migrateLegacyApplicationBase(safePublicBase(value.character), '/chars', defaults.character),
+      stage: migrateLegacyApplicationBase(safePublicBase(value.stage), '/stages', defaults.stage),
+      lifebar: migrateLegacyApplicationBase(safePublicBase(value.lifebar), '/lifebars', defaults.lifebar),
     };
   } catch {
     return { ...defaults };
   }
+}
+
+function migrateLegacyApplicationBase(value: string | undefined, legacy: string, fallback: string): string {
+  return value === legacy && fallback !== legacy ? fallback : value ?? fallback;
 }
 
 export function saveCatalogPublicBases(

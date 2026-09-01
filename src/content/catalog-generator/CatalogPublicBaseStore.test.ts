@@ -37,4 +37,18 @@ describe('Catalog public URL base storage', () => {
     })).toEqual({ character: '/chars', stage: '/stages', lifebar: '/saved-lifebars' });
     expect(saveCatalogPublicBases(defaults, { getItem: vi.fn(), setItem: () => { throw new Error('quota'); } })).toBe(false);
   });
+
+  it('migrates legacy bundled roots to the current application subdirectory', () => {
+    const subdirectoryDefaults = {
+      character: '/DotoEita/50_WebMUGEN/chars',
+      stage: '/DotoEita/50_WebMUGEN/stages',
+      lifebar: '/DotoEita/50_WebMUGEN/lifebars',
+    };
+    const storage = {
+      getItem: () => JSON.stringify({ character: '/chars', stage: '/stages', lifebar: '/lifebars' }),
+      setItem: vi.fn(),
+    };
+
+    expect(loadCatalogPublicBases(subdirectoryDefaults, storage)).toEqual(subdirectoryDefaults);
+  });
 });

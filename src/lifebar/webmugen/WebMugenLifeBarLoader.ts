@@ -1,10 +1,11 @@
 import type { WebMugenLifeBarDefinition } from './WebMugenLifeBarSchema';
+import { isSafeSameOriginContentPath } from '../../app/ApplicationAssetPath';
 
 export async function loadWebMugenLifeBar(
   path: string,
   fetcher: (input: string) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }> = fetch,
 ): Promise<WebMugenLifeBarDefinition> {
-  if ((!path.startsWith('/lifebars/webmugen/') && !path.startsWith('/content/')) || !path.endsWith('.json') || path.includes('..') || path.includes('://')) {
+  if (!isSafeSameOriginContentPath(path, ['lifebars/webmugen', 'content'], ['.json'])) {
     throw new Error('WebMUGEN lifebar loader accepts only same-origin /lifebars/webmugen/ or /content/ JSON content.');
   }
   const response = await fetcher(path);

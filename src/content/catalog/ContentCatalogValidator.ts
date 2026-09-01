@@ -65,9 +65,18 @@ export function resolveCatalogEntryPath(path: string, sourcePath: string): strin
   const normalized = path.trim().replace(/\\/g, '/');
   if (!normalized || hasUnsafePathPart(normalized) || normalized.includes('://') || normalized.startsWith('//')) return null;
   if (normalized.startsWith('builtin:')) return normalized;
-  if (normalized.startsWith('/')) return normalized;
+  if (normalized.startsWith('/')) return resolveLegacyApplicationRootPath(normalized, sourcePath);
   const directory = sourcePath.slice(0, sourcePath.lastIndexOf('/') + 1);
   return `${directory}${normalized}`;
+}
+
+function resolveLegacyApplicationRootPath(path: string, sourcePath: string): string {
+  const applicationRoot = sourcePath.endsWith('/content/catalog.json')
+    ? sourcePath.slice(0, -'content/catalog.json'.length)
+    : '';
+  if (!applicationRoot || applicationRoot === '/') return path;
+  if (!['/chars/', '/stages/', '/lifebars/'].some((prefix) => path.startsWith(prefix))) return path;
+  return `${applicationRoot}${path.slice(1)}`;
 }
 
 function validateCatalogEntry(

@@ -128,16 +128,19 @@ describe('Catalog Generator folder and permission support', () => {
     expect(await readCatalogDirectoryAsset(root, 'missing.zip')).toBeNull();
   });
 
-  it('reads a generated /stages path from the retained local Stage folder', async () => {
+  it('reads root and app-prefixed /stages paths from the retained local Stage folder', async () => {
     const factory = createMemoryIdbFactory();
     const root = directory('stages', [file('material-23-archive.zip', 'bloody forest zip')]);
     vi.stubGlobal('indexedDB', factory);
     await saveCatalogDirectoryHandle(root, 'stage');
 
     const bytes = await readLocalCatalogStageAsset('/stages/material-23-archive.zip');
+    const appPrefixedBytes = await readLocalCatalogStageAsset('/DotoEita/50_WebMUGEN/stages/material-23-archive.zip');
 
     expect(new TextDecoder().decode(bytes ?? undefined)).toBe('bloody forest zip');
+    expect(new TextDecoder().decode(appPrefixedBytes ?? undefined)).toBe('bloody forest zip');
     expect(await readLocalCatalogStageAsset('/chars/material-23-archive.zip')).toBeNull();
+    expect(await readLocalCatalogStageAsset('/DotoEita/50_WebMUGEN/stages/../private.zip')).toBeNull();
     vi.unstubAllGlobals();
   });
 

@@ -48,6 +48,17 @@ describe('WinMUGEN and WebMUGEN presentation separation', () => {
     expect([stage.id, lifeBar.id, winLifeBar.format]).toEqual(['cyber-training', 'default-cyber', 'winmugen-fight-def']);
   });
 
+  it('accepts presentation assets below a subdirectory deployment', async () => {
+    const stagePath = '/DotoEita/50_WebMUGEN/stages/webmugen/cyber-training/stage.json';
+    const lifeBarPath = '/DotoEita/50_WebMUGEN/lifebars/webmugen/default-cyber/lifebar.json';
+    const stage = await loadWebMugenStage(stagePath, async () => ({ ok: true, status: 200, json: async () => nativeStage }));
+    const lifeBar = await loadWebMugenLifeBar(lifeBarPath, async () => ({ ok: true, status: 200, json: async () => nativeLifeBar }));
+
+    expect(stage.sourcePath).toBe(stagePath);
+    expect(stage.layers[0].src).toBe('/DotoEita/50_WebMUGEN/stages/webmugen/cyber-training/background.png');
+    expect(lifeBar.sourcePath).toBe(lifeBarPath);
+  });
+
   it('exposes native stage ground, camera, and bounds through the common runtime', () => {
     const runtime = new WebMugenStageRuntime(parseWebMugenStage(nativeStage));
     expect(runtime.engine).toBe('webmugen');

@@ -43,6 +43,11 @@ not change Stage semantics: candidate DEF selection, referenced SFF validation, 
 runtime construction remain identical to an HTTP-loaded archive. Missing permission or a missing
 local ZIP preserves the original Stage load error and the application's visible Stage fallback.
 
+Catalog and built-in Stage/LifeBar HTTP paths accept the same safe application prefix as Character
+assets. A deployment below `/DotoEita/50_WebMUGEN/` therefore requests bundled definitions and ZIPs
+below that directory instead of the origin-root `/stages/` or `/lifebars/`. Traversal, scheme-relative,
+and remote URL forms remain rejected. Explicit proxy storage paths are not prefixed.
+
 Text contents are decoded independently for every DEF, CNS, CMD, AIR, ZSS, JSON, and inspectable text entry. UTF-8, UTF-16LE, and UTF-16BE BOMs take priority; without a BOM, a strict UTF-8 decode is attempted and valid UTF-8 is accepted, otherwise the bytes are decoded as Shift-JIS/CP932. The same detector is used by ZIP Characters, unpacked HTTP Characters, ZIP Stages, Catalog classification, and the development file inventory. This permits UTF-8 and CP932 files to coexist in one Character without passing different strings to the file viewer and runtime parser.
 
 ## Loaded asset types

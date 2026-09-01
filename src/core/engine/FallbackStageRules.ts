@@ -20,19 +20,25 @@ export type PushBox = {
   source: 'width_controller' | 'character_size' | 'winmugen_defaults';
 };
 
-export type FallbackStageRuleOptions = { autoTurn?: boolean };
+export type FallbackStageRuleOptions = {
+  autoTurn?: boolean;
+  stageBounds?: { left: number; right: number } | false;
+};
 
 export function applyFallbackStageRules(state: GameState, options: FallbackStageRuleOptions = {}): GameState {
+  const stageBounds = options.stageBounds === undefined
+    ? { left: FALLBACK_STAGE_LEFT, right: FALLBACK_STAGE_RIGHT }
+    : options.stageBounds;
   const [p1, p2] = state.players;
-  let nextP1 = clampToStage(p1);
-  let nextP2 = clampToStage(p2);
+  let nextP1 = clampToStage(p1, stageBounds);
+  let nextP2 = clampToStage(p2, stageBounds);
 
   const beforeFacing: [PlayerState['facing'], PlayerState['facing']] = [nextP1.facing, nextP2.facing];
   [nextP1, nextP2] = applyFacing(nextP1, nextP2, state, options.autoTurn ?? true);
-  const pushResult = applyPushApart(nextP1, nextP2);
+  const pushResult = applyPushApart(nextP1, nextP2, stageBounds);
   [nextP1, nextP2] = pushResult.players;
-  nextP1 = clampToStage(nextP1);
-  nextP2 = clampToStage(nextP2);
+  nextP1 = clampToStage(nextP1, stageBounds);
+  nextP2 = clampToStage(nextP2, stageBounds);
   [nextP1, nextP2] = finalizeTargetBinds([nextP1, nextP2], state.helpers.entries);
   [nextP1, nextP2] = applyFacing(nextP1, nextP2, state, options.autoTurn ?? true);
 
@@ -110,7 +116,11 @@ type PushResult = {
   result: 'applied' | 'skip_playerpush' | 'skip_vertical' | 'skip_horizontal';
 };
 
-function applyPushApart(p1: PlayerState, p2: PlayerState): PushResult {
+function applyPushApart(
+  p1: PlayerState,
+  p2: PlayerState,
+  stageBounds: { left: number; right: number } | false,
+): PushResult {
   const p1Box = buildPushBox(p1);
   const p2Box = buildPushBox(p2);
   const overlapX = overlapAmount(p1Box.left, p1Box.right, p2Box.left, p2Box.right);
@@ -126,8 +136,10 @@ function applyPushApart(p1: PlayerState, p2: PlayerState): PushResult {
   }
 
   const direction = p2.x > p1.x ? 1 : p2.x < p1.x ? -1 : p1.facing;
-  const p1Capacity = direction > 0 ? p1.x - FALLBACK_STAGE_LEFT : FALLBACK_STAGE_RIGHT - p1.x;
-  const p2Capacity = direction > 0 ? FALLBACK_STAGE_RIGHT - p2.x : p2.x - FALLBACK_STAGE_LEFT;
+  const leftBound = stageBounds === false ? Number.NEGATIVE_INFINITY : stageBounds.left;
+  const rightBound = stageBounds === false ? Number.POSITIVE_INFINITY : stageBounds.right;
+  const p1Capacity = direction > 0 ? p1.x - leftBound : rightBound - p1.x;
+  const p2Capacity = direction > 0 ? rightBound - p2.x : p2.x - leftBound;
   let p1Move = Math.min(overlapX / 2, p1Capacity);
   let p2Move = Math.min(overlapX / 2, p2Capacity);
   let remaining = overlapX - p1Move - p2Move;
@@ -218,11 +230,11 @@ function isAirborne(player: PlayerState): boolean {
   return player.stateType === 'A' || player.physics === 'A';
 }
 
-function clampToStage(player: PlayerState): PlayerState {
-  if (player.screenBound?.value === false) return player;
+function clampToStage(player: PlayerState, stageBounds: { left: number; right: number } | false): PlayerState {
+  if (stageBounds === false || player.screenBound?.value === false) return player;
   return {
     ...player,
-    x: Math.min(FALLBACK_STAGE_RIGHT, Math.max(FALLBACK_STAGE_LEFT, player.x)),
+    x: Math.min(stageBounds.right, Math.max(stageBounds.left, player.x)),
   };
 }
 

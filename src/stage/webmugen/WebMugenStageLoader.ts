@@ -1,10 +1,11 @@
 import type { WebMugenStageDefinition, WebMugenStageLayer } from './WebMugenStageSchema';
+import { isSafeSameOriginContentPath } from '../../app/ApplicationAssetPath';
 
 export async function loadWebMugenStage(
   path: string,
   fetcher: (input: string) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }> = fetch,
 ): Promise<WebMugenStageDefinition> {
-  if ((!path.startsWith('/stages/webmugen/') && !path.startsWith('/content/')) || !path.endsWith('.json') || path.includes('..') || path.includes('://')) {
+  if (!isSafeSameOriginContentPath(path, ['stages/webmugen', 'content'], ['.json'])) {
     throw new Error('WebMUGEN stage loader accepts only same-origin /stages/webmugen/ or /content/ JSON content.');
   }
   const response = await fetcher(path);

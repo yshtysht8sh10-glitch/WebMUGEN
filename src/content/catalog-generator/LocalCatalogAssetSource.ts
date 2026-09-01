@@ -44,8 +44,11 @@ export async function readCatalogDirectoryAsset(
 
 function localCatalogRelativePath(path: string, publicBase: string): string | null {
   const normalized = path.trim().replace(/\\/g, '/');
-  if (!normalized.startsWith(publicBase)) return null;
-  const relativePath = normalized.slice(publicBase.length);
+  if (!normalized.startsWith('/') || normalized.startsWith('//') || normalized.includes('://')) return null;
+  const baseIndex = normalized.lastIndexOf(publicBase);
+  if (baseIndex < 0) return null;
+  const relativePath = normalized.slice(baseIndex + publicBase.length);
+  if (!safeRelativeParts(relativePath)) return null;
   if (publicBase === CHARACTER_PUBLIC_BASE && (relativePath === 'common.cmd' || relativePath === 'common1.cns')) return null;
   return relativePath;
 }
