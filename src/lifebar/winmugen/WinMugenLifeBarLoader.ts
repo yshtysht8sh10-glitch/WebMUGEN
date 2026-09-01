@@ -1,11 +1,12 @@
 import { getDefValue, parseDefText } from '../../parser/def/DefParser';
 import type { WinMugenLifeBarDefinition } from './WinMugenLifeBarTypes';
+import { isSafeSameOriginContentPath } from '../../app/ApplicationAssetPath';
 
 export async function loadWinMugenLifeBar(
   path: string,
   fetcher: (input: string) => Promise<{ ok: boolean; status: number; text(): Promise<string> }> = fetch,
 ): Promise<WinMugenLifeBarDefinition> {
-  if ((!path.startsWith('/lifebars/winmugen/') && !path.startsWith('/content/')) || !path.toLowerCase().endsWith('.def') || path.includes('..') || path.includes('://')) {
+  if (!isSafeSameOriginContentPath(path, ['lifebars/winmugen', 'content'], ['.def'])) {
     throw new Error('WinMUGEN lifebar loader accepts only same-origin /lifebars/winmugen/ or /content/ DEF content.');
   }
   const response = await fetcher(path);

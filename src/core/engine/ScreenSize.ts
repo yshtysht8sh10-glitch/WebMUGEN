@@ -86,7 +86,10 @@ export function applyViewportCameraRules(
     width,
     leftInset,
     rightInset,
-    stage ? resolveStageCameraXBounds(width, stage) : nativeCameraBounds ?? { minimum: 0, maximum: Math.max(0, 960 - width) },
+    stage ? resolveStageCameraXBounds(width, stage) : nativeCameraBounds ?? {
+      minimum: FALLBACK_STAGE_LEFT,
+      maximum: Math.max(FALLBACK_STAGE_LEFT, FALLBACK_STAGE_RIGHT - width),
+    },
     state.camera?.viewportWidth === width && state.camera.viewportHeight === height
       ? state.camera.x
       : desiredCamera.x,

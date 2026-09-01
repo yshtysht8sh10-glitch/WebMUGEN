@@ -165,6 +165,20 @@ describe('screen size profiles', () => {
     expect(resolveViewportCamera(state, 400, 240).x).toBe(512);
   });
 
+  it('keeps the classic fallback camera right edge aligned with the fallback physics bound', () => {
+    const state = createInitialGameState(undefined, {}, [912, 892]);
+    state.camera = { x: 592, y: 65, viewportWidth: 320, viewportHeight: 240 };
+    state.players[1] = {
+      ...state.players[1],
+      screenBound: { value: false, moveCameraX: false, moveCameraY: false },
+    };
+
+    const next = applyViewportCameraRules(state, 320, 240);
+    const camera = resolveViewportCamera(next, 320, 240);
+    expect(camera.x).toBe(592);
+    expect(camera.x + 320).toBe(912);
+  });
+
   it('does not clamp a player whose ScreenBound value is disabled', () => {
     const state = createInitialGameState(undefined, {}, [48, 912]);
     state.players[0] = {

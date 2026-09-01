@@ -566,6 +566,7 @@ describe('T-H-M-A State 3430 TargetBind regression', () => {
   it.each([
     { stage: 'Material22', x: 525, cameraX: 160, screenLeft: 160, screenRight: 560 },
     { stage: 'WebMUGEN', x: 876, cameraX: 512, screenLeft: 512, screenRight: 912 },
+    { stage: 'WebMUGEN classic fallback', x: 912, cameraX: 592, screenLeft: 592, screenRight: 912 },
   ])('leaves Darkness Finger carry State 3420 at the $stage wall', async ({ x, cameraX, screenLeft, screenRight }) => {
     const assets = await loadCharacterFromDef('public/chars/T-H-M-A/T-H-M-A/T-H-M-A.def', createFileSystemFetcher());
     const states = assets.cns.states.filter((state) => state.stateNo === 3420 || state.stateNo === 3430);

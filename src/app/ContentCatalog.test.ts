@@ -35,6 +35,20 @@ describe('Content Catalog Reader and Validator', () => {
     expect(catalog.entries[0].source).toBe('builtin');
   });
 
+  it('migrates legacy bundled roots beneath a subdirectory deployment without rewriting proxy paths', () => {
+    const catalog = validateContentCatalog({ version: 1, items: [
+      { id: 'hero', name: 'Hero', kind: 'character', engine: 'winmugen', path: '/chars/hero.zip' },
+      { id: 'arena', name: 'Arena', kind: 'stage', engine: 'winmugen', path: '/stages/arena.zip' },
+      { id: 'proxy', name: 'Proxy', kind: 'stage', engine: 'winmugen', path: '/DotoEita/16_proxy_release/storage/data/arena.zip' },
+    ] }, '/DotoEita/50_WebMUGEN/content/catalog.json');
+
+    expect(catalog.entries.map((entry) => entry.path)).toEqual([
+      '/DotoEita/50_WebMUGEN/chars/hero.zip',
+      '/DotoEita/50_WebMUGEN/stages/arena.zip',
+      '/DotoEita/16_proxy_release/storage/data/arena.zip',
+    ]);
+  });
+
   it('bypasses HTTP caches so a just-published Character is immediately selectable', async () => {
     const fetcher = vi.fn(async () => response(validDocument));
     await loadContentCatalog('/content/catalog.json', fetcher);

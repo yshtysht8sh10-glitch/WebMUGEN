@@ -10,6 +10,7 @@ import type { CatalogDirectoryHandle, CatalogDirectoryRole, CatalogGeneratorResu
 import { CatalogServerWriteError, readCatalogServerSnapshot, saveCatalogDraftToServer, scanCatalogServerContent } from './CatalogServerWriter';
 import { readCatalogSourceFiles, readCatalogSourcePath } from './LocalFolderCatalogSource';
 import { downloadCatalogJson, ensureDirectoryPermission, serializeContentCatalog, writeCatalogToDirectory } from './CatalogWriter';
+import { resolveApplicationAssetPath } from '../../app/ApplicationAssetPath';
 
 type DirectoryPickerWindow = Window & {
   showDirectoryPicker?: (options?: { mode?: 'read' | 'readwrite' }) => Promise<CatalogDirectoryHandle>;
@@ -17,9 +18,9 @@ type DirectoryPickerWindow = Window & {
 
 const SOURCE_KINDS: ContentKind[] = ['character', 'stage', 'lifebar'];
 const DEFAULT_PUBLIC_BASES: Record<ContentKind, string> = {
-  character: '/chars',
-  stage: '/stages',
-  lifebar: '/lifebars',
+  character: resolveApplicationAssetPath('chars'),
+  stage: resolveApplicationAssetPath('stages'),
+  lifebar: resolveApplicationAssetPath('lifebars'),
 };
 
 export type CatalogGeneratorMode = 'server' | 'local';

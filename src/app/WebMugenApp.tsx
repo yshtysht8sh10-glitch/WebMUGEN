@@ -196,13 +196,14 @@ import {
 } from './UrlContentSelection';
 import { CatalogGeneratorPanel } from '../content/catalog-generator/CatalogGeneratorPanel';
 import { resolveRuntimeFrameTick } from './RuntimeFrameScheduler';
+import { resolveApplicationAssetPath } from './ApplicationAssetPath';
 
-const DEFAULT_CHARACTER_DEF_PATH = '/chars/T-H-M-A.zip';
+const DEFAULT_CHARACTER_DEF_PATH = resolveApplicationAssetPath('chars/T-H-M-A.zip');
 const NATIVE_STAGE_PATHS: Record<Exclude<StageTheme, 'external'>, string> = {
-  fresh: '/stages/webmugen/fresh-training/stage.json',
-  cyber: '/stages/webmugen/cyber-training/stage.json',
-  'fresh-clasic': '/stages/webmugen/fresh-clasic/stage.json',
-  'cyber-clasic': '/stages/webmugen/cyber-clasic/stage.json',
+  fresh: resolveApplicationAssetPath('stages/webmugen/fresh-training/stage.json'),
+  cyber: resolveApplicationAssetPath('stages/webmugen/cyber-training/stage.json'),
+  'fresh-clasic': resolveApplicationAssetPath('stages/webmugen/fresh-clasic/stage.json'),
+  'cyber-clasic': resolveApplicationAssetPath('stages/webmugen/cyber-clasic/stage.json'),
 };
 const ENABLE_RUNTIME_FALLBACKS = false;
 const APP_PLAYER_START_X = [380, 580] as const;
@@ -541,8 +542,8 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
           const lifeBarPath = selectedLifeBar?.engine === 'webmugen' && !selectedLifeBar.path.startsWith('builtin:')
             ? selectedLifeBar.path
             : runtimeSettingsRef.current.hudTheme === 'cyber'
-              ? '/lifebars/webmugen/default-cyber/lifebar.json'
-              : '/lifebars/webmugen/default-cyber/fresh-lifebar.json';
+              ? resolveApplicationAssetPath('lifebars/webmugen/default-cyber/lifebar.json')
+              : resolveApplicationAssetPath('lifebars/webmugen/default-cyber/fresh-lifebar.json');
           loadedLifeBarRuntime = new WebMugenLifeBarRuntime(await loadWebMugenLifeBar(lifeBarPath));
         }
       } catch (error) {
@@ -867,7 +868,10 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
             nextState = restorePausedEntityPhysics(beforePhysicsState, nextState, pauseDuringFrame);
           }
 
-          nextState = applyFallbackStageRules(nextState, { autoTurn: loadedStageRuntime?.isAutoTurnEnabled() ?? true });
+          nextState = applyFallbackStageRules(nextState, {
+            autoTurn: loadedStageRuntime?.isAutoTurnEnabled() ?? true,
+            stageBounds: loadedStageRuntime ? false : undefined,
+          });
           const activeScreenProfile = getScreenSizeProfile(runtimeSettingsRef.current.screenSizeMode);
           nextState = applyViewportCameraRules(
             nextState,

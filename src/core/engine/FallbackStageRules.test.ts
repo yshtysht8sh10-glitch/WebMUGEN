@@ -32,6 +32,19 @@ describe('FallbackStageRules', () => {
     expect(next.players[1].x).toBeLessThanOrEqual(912);
   });
 
+  it('defers hard clamping to the loaded Stage camera rules', () => {
+    const state = createInitialGameState();
+    const next = applyFallbackStageRules({
+      ...state,
+      players: [
+        { ...state.players[0], x: 940 },
+        { ...state.players[1], x: 920, playerPush: false },
+      ],
+    }, { stageBounds: false });
+
+    expect(next.players.map((player) => player.x)).toEqual([940, 920]);
+  });
+
   it('pushes overlapping players apart', () => {
     const state = createInitialGameState();
     const next = applyFallbackStageRules({
