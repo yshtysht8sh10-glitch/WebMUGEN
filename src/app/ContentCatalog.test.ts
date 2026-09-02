@@ -33,6 +33,7 @@ describe('Content Catalog Reader and Validator', () => {
     ]);
     expect(catalog).toMatchObject({ totalEntries: 3, rejectedEntries: 0, sourcePath: '/packs/catalog.json' });
     expect(catalog.entries[0].source).toBe('builtin');
+    expect(catalog.entries.every((entry) => (entry.visibility ?? 'public') === 'public')).toBe(true);
   });
 
   it('migrates legacy bundled roots beneath a subdirectory deployment without rewriting proxy paths', () => {
@@ -94,6 +95,24 @@ describe('Content Catalog Reader and Validator', () => {
     expect(selection.fallbackKinds).toEqual(['character', 'stage', 'lifebar']);
   });
 
+  it('keeps unlisted content in the Catalog while excluding it from normal selection', () => {
+    const catalog = validateContentCatalog({ version: 1, items: [
+      { id: 'public-char', name: 'Public', kind: 'character', engine: 'winmugen', path: '/chars/public.zip' },
+      { id: 'test-char', name: 'Test', kind: 'character', engine: 'winmugen', path: '/chars/test.zip', visibility: 'unlisted' },
+      { id: 'stage', name: 'Stage', kind: 'stage', engine: 'webmugen', path: 'builtin:stage:fresh' },
+    ] }, '/content/catalog.json');
+
+    expect(catalog.entries.map((entry) => entry.id)).toEqual(['public-char', 'test-char', 'stage']);
+    expect(entriesOfKind(catalog, 'character').map((entry) => entry.id)).toEqual(['public-char']);
+    expect(resolveCatalogSelection(catalog, { characterId: 'test-char', stageId: 'stage', lifeBarId: '' }).character?.id)
+      .toBe('public-char');
+    expect(resolveCatalogSelection(
+      catalog,
+      { characterId: 'test-char', stageId: 'stage', lifeBarId: '' },
+      { character: 'test-char' },
+    ).character?.id).toBe('test-char');
+  });
+
   it('uses the previous successful Catalog when reload, HTTP, JSON, or timeout fails', async () => {
     const previous = validateContentCatalog(validDocument, '/content/catalog.json');
     const result = await readContentCatalog('/content/changed.json', {
@@ -128,5 +147,13 @@ describe('Content Catalog Reader and Validator', () => {
     ] }, '/content/catalog.json');
     expect(catalog.entries).toEqual([]);
     expect(catalog.issues[0].code).toBe('item.source');
+  });
+
+  it('rejects an unknown visibility marker', () => {
+    const catalog = validateContentCatalog({ version: 1, items: [
+      { id: 'hero', name: 'Hero', kind: 'character', engine: 'winmugen', path: '/chars/hero.zip', visibility: 'private' },
+    ] }, '/content/catalog.json');
+    expect(catalog.entries).toEqual([]);
+    expect(catalog.issues[0].code).toBe('item.visibility');
   });
 });

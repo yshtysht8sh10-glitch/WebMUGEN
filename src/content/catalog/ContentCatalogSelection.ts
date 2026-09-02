@@ -14,18 +14,22 @@ export type ResolvedCatalogSelection = {
 };
 
 export function entriesOfKind(catalog: ContentCatalog, kind: ContentKind): ContentCatalogEntry[] {
-  return catalog.entries.filter((entry) => entry.kind === kind);
+  return catalog.entries.filter((entry) => entry.kind === kind && entry.visibility !== 'unlisted');
 }
 
 export function findCatalogEntry(catalog: ContentCatalog, kind: ContentKind, id: string): ContentCatalogEntry | undefined {
   return catalog.entries.find((entry) => entry.kind === kind && entry.id === id);
 }
 
-export function resolveCatalogSelection(catalog: ContentCatalog, ids: CatalogSelectionIds): ResolvedCatalogSelection {
+export function resolveCatalogSelection(
+  catalog: ContentCatalog,
+  ids: CatalogSelectionIds,
+  directIds: Partial<Record<ContentKind, string>> = {},
+): ResolvedCatalogSelection {
   const fallbackKinds: ContentKind[] = [];
   const resolve = (kind: ContentKind, id: string) => {
     const exact = findCatalogEntry(catalog, kind, id);
-    if (exact) return exact;
+    if (exact && (exact.visibility !== 'unlisted' || directIds[kind] === id)) return exact;
     const fallback = entriesOfKind(catalog, kind)[0];
     if (fallback) fallbackKinds.push(kind);
     return fallback;

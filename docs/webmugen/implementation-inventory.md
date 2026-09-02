@@ -4,10 +4,10 @@ Updated: 2026-08-23
 
 This document is a high-level inventory of WebMUGEN implementation areas. It is not the source of truth for exact compatibility status; use the compatibility matrix for that.
 
-- Content catalog Reader/Validator/Selection: `src/content/catalog/`, the `src/app/ContentCatalog.ts` facade, `public/content/catalog.json`, and `docs/webmugen/content-catalog.md`.
+- Content catalog Reader/Validator/Selection: `src/content/catalog/`, the `src/app/ContentCatalog.ts` facade, `public/content/catalog.json`, and `docs/webmugen/content-catalog.md`; Catalog membership is independent from `public`/`unlisted` normal-GUI visibility, and explicit URL selection can resolve unlisted entries.
 - Development Catalog generation: `src/content/catalog-generator/`; separate Character/Stage/LifeBar source handles and one output handle, direct same-origin paths, kind validation, built-in/external merging, pending-input tracking, and HTTP-first local Character/Stage asset fallback.
 - URL content selection and Share URL generation: `src/app/UrlContentSelection.ts`, the Content settings UI, and `docs/webmugen/url-settings.md`.
-- Proxy-release publication and server administration adapter: `public/api/catalog.php` and `catalog-lib.php`; authenticated fixed-root Character/Stage ZIP classification, stable `proxy-release-*` IDs, deterministic DEF selection, revision-guarded GUI Catalog save, validated atomic Catalog/default-settings replacement and proxy publication deletion with `0644` permissions, and generated Character/Stage play URLs.
+- Proxy-release publication and server administration adapter: `public/api/catalog.php` and `catalog-lib.php`; authenticated fixed-root Character/Stage ZIP classification, stable `proxy-release-*` IDs with optional persisted 128-bit access keys for unlisted URLs, independent visibility and ID preservation across upsert/rebuild, deterministic DEF selection, revision-guarded GUI Catalog save, validated atomic Catalog/default-settings replacement and proxy publication deletion with `0644` permissions, and generated Character/Stage play URLs.
 - Separated Stage/LifeBar presentation runtimes: `src/stage/{winmugen,webmugen}`, `src/lifebar/{winmugen,webmugen}`, and `docs/webmugen/native-presentation.md`.
 
 ## Parser layer

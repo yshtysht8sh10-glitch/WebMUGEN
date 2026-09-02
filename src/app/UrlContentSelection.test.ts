@@ -10,9 +10,9 @@ import {
 
 const catalog: ContentCatalog = { version: 1, totalEntries: 4, rejectedEntries: 0, issues: [], entries: [
   { id: 'saved-char', name: 'Saved', kind: 'character', engine: 'winmugen', path: '/chars/saved.def' },
-  { id: 'url char', name: 'URL', kind: 'character', engine: 'winmugen', path: '/chars/url.zip' },
+  { id: 'url char', name: 'URL', kind: 'character', engine: 'winmugen', path: '/chars/url.zip', visibility: 'unlisted' },
   { id: 'saved-stage', name: 'Saved stage', kind: 'stage', engine: 'webmugen', path: 'builtin:stage:fresh' },
-  { id: 'url-stage', name: 'URL stage', kind: 'stage', engine: 'winmugen', path: '/stages/url.zip' },
+  { id: 'url-stage', name: 'URL stage', kind: 'stage', engine: 'winmugen', path: '/stages/url.zip', visibility: 'unlisted' },
 ] };
 
 const saved = normalizeWebMugenSettings({
@@ -62,6 +62,15 @@ describe('URL content selection', () => {
     const result = applyUrlContentSelection(saved, catalog, '?character=url%20char&stage=url-stage');
     expect(result.settings.content).toMatchObject({ characterId: 'url char', stageId: 'url-stage' });
     expect(result.settings.runtime).toMatchObject({ stageTheme: 'external', stageArchivePath: '/stages/url.zip' });
+  });
+
+  it('does not retain an unlisted saved selection without an explicit URL', () => {
+    const unlistedSaved = normalizeWebMugenSettings({
+      ...saved,
+      content: { ...saved.content, characterId: 'url char', stageId: 'url-stage' },
+    }, saved);
+    const result = applyUrlContentSelection(unlistedSaved, catalog, '');
+    expect(result.settings.content).toMatchObject({ characterId: 'saved-char', stageId: 'saved-stage' });
   });
 
   it.each([

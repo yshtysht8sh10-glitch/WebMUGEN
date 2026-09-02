@@ -46,7 +46,10 @@ export function applyUrlContentOverrides(
   return applyCatalogSelectionToSettings({
     ...settings,
     content: { ...settings.content, ...overrides },
-  }, catalog);
+  }, catalog, {
+    ...(overrides.characterId ? { character: overrides.characterId } : {}),
+    ...(overrides.stageId ? { stage: overrides.stageId } : {}),
+  });
 }
 
 export function applyUrlContentSelection(
@@ -70,7 +73,10 @@ export function applyUrlContentSelection(
       characterId: character ?? settings.content.characterId,
       stageId: stage ?? settings.content.stageId,
     },
-  }, catalog);
+  }, catalog, {
+    ...(character ? { character } : {}),
+    ...(stage ? { stage } : {}),
+  });
   return {
     settings: selected,
     source: { character: character ? 'url' : 'settings', stage: stage ? 'url' : 'settings' },

@@ -350,14 +350,14 @@ function webMugenScanCatalog(array $config): array
     return ['entries' => $entries, 'excluded' => $excluded];
 }
 
-function webMugenCatalogEntryForZip(string $zipPath, array $config, ?string $publicationId = null): array
+function webMugenCatalogEntryForZip(string $zipPath, array $config, ?string $publicationId = null, string $visibility = 'public', ?string $accessKey = null): array
 {
-    return webMugenCatalogEntryForKind($zipPath, $config, $publicationId, 'character');
+    return webMugenCatalogEntryForKind($zipPath, $config, $publicationId, 'character', $visibility, $accessKey);
 }
 
-function webMugenStageCatalogEntryForZip(string $zipPath, array $config, ?string $publicationId = null): array
+function webMugenStageCatalogEntryForZip(string $zipPath, array $config, ?string $publicationId = null, string $visibility = 'public', ?string $accessKey = null): array
 {
-    return webMugenCatalogEntryForKind($zipPath, $config, $publicationId, 'stage');
+    return webMugenCatalogEntryForKind($zipPath, $config, $publicationId, 'stage', $visibility, $accessKey);
 }
 
 function webMugenCatalogEntryForAnyZip(string $zipPath, array $config, ?string $publicationId = null): array
@@ -375,8 +375,11 @@ function webMugenCatalogEntryForAnyZip(string $zipPath, array $config, ?string $
     }
 }
 
-function webMugenCatalogEntryForKind(string $zipPath, array $config, ?string $publicationId, string $kind): array
+function webMugenCatalogEntryForKind(string $zipPath, array $config, ?string $publicationId, string $kind, string $visibility = 'public', ?string $accessKey = null): array
 {
+    if (!in_array($visibility, ['public', 'unlisted'], true)) {
+        throw new RuntimeException('visibility must be public or unlisted.', 400);
+    }
     $storageRoot = realpath((string)$config['storageDir']);
     $resolved = realpath($zipPath);
     if ($storageRoot === false || $resolved === false || !is_file($resolved) || !webMugenPathIsInside($resolved, $storageRoot)) {
@@ -386,13 +389,14 @@ function webMugenCatalogEntryForKind(string $zipPath, array $config, ?string $pu
     $fileName = basename($resolved);
     $publicId = $publicationId ?? webMugenPublicationIdFromFileName($fileName);
     $id = $publicId !== null
-        ? 'proxy-release-' . strtolower($publicId)
+        ? webMugenPublishedContentId($publicId, $accessKey)
         : 'proxy-release-' . substr(hash_file('sha256', $resolved), 0, 20);
     return [
         'id' => $id,
         'kind' => $kind,
         'engine' => 'winmugen',
         'source' => 'external',
+        'visibility' => $visibility,
         'name' => $inspection['name'],
         'path' => rtrim((string)$config['storagePublicBase'], '/') . '/' . rawurlencode($fileName),
     ];
@@ -433,22 +437,39 @@ function webMugenRebuildCatalog(array $config): array
 {
     $scan = webMugenScanCatalog($config);
     $catalog = webMugenReadCatalog((string)$config['catalogPath']);
+    $proxyStateByPath = [];
+    foreach ($catalog['items'] as $item) {
+        if (str_starts_with((string)($item['id'] ?? ''), 'proxy-release-')) {
+            $proxyStateByPath[webMugenCatalogPathKey((string)($item['path'] ?? ''))] = [
+                'id' => (string)$item['id'],
+                'visibility' => webMugenCatalogVisibility($item),
+            ];
+        }
+    }
     $preserved = array_values(array_filter($catalog['items'], static fn(array $item): bool => !str_starts_with((string)($item['id'] ?? ''), 'proxy-release-')));
     $preservedPaths = array_fill_keys(array_map(static fn(array $item): string => webMugenCatalogPathKey((string)($item['path'] ?? '')), $preserved), true);
     $entries = array_values(array_filter($scan['entries'], static fn(array $entry): bool => !isset($preservedPaths[webMugenCatalogPathKey((string)($entry['path'] ?? ''))])));
+    $entries = array_map(static function (array $entry) use ($proxyStateByPath): array {
+        $pathKey = webMugenCatalogPathKey((string)($entry['path'] ?? ''));
+        $state = $proxyStateByPath[$pathKey] ?? null;
+        if ($state !== null) $entry['id'] = $state['id'];
+        $entry['visibility'] = $state['visibility'] ?? 'public';
+        return $entry;
+    }, $entries);
     $document = ['version' => 1, 'items' => array_merge($preserved, $entries)];
     webMugenWriteCatalogAtomic((string)$config['catalogPath'], $document);
     return ['catalog' => $document, 'entries' => $entries, 'excluded' => $scan['excluded']];
 }
 
-function webMugenPublishCharacter(array $config, string $publicationId, string $archiveFile, ?string $stageId = null): array
+function webMugenPublishCharacter(array $config, string $publicationId, string $archiveFile, ?string $stageId = null, string $visibility = 'public', ?string $accessKey = null): array
 {
-    if (!preg_match('/^[0-9]+$/', $publicationId)) throw new RuntimeException('publicationId must be numeric.', 400);
-    $entry = webMugenCatalogEntryForZip(webMugenPublicationArchivePath($config, $archiveFile), $config, $publicationId);
+    $entry = webMugenCatalogEntryForZip(webMugenPublicationArchivePath($config, $archiveFile), $config, $publicationId, $visibility, $accessKey);
     $catalog = webMugenReadCatalog((string)$config['catalogPath']);
     $entryPathKey = webMugenCatalogPathKey($entry['path']);
+    $legacyId = webMugenPublishedContentId($publicationId);
     $items = array_values(array_filter($catalog['items'], static fn(array $item): bool => (
         ($item['id'] ?? null) !== $entry['id']
+        && ($item['id'] ?? null) !== $legacyId
         && webMugenCatalogPathKey((string)($item['path'] ?? '')) !== $entryPathKey
     )));
     $items[] = $entry;
@@ -462,14 +483,15 @@ function webMugenPublishCharacter(array $config, string $publicationId, string $
     ];
 }
 
-function webMugenPublishStage(array $config, string $publicationId, string $archiveFile, ?string $characterId = null): array
+function webMugenPublishStage(array $config, string $publicationId, string $archiveFile, ?string $characterId = null, string $visibility = 'public', ?string $accessKey = null): array
 {
-    if (!preg_match('/^[0-9]+$/', $publicationId)) throw new RuntimeException('publicationId must be numeric.', 400);
-    $entry = webMugenStageCatalogEntryForZip(webMugenPublicationArchivePath($config, $archiveFile), $config, $publicationId);
+    $entry = webMugenStageCatalogEntryForZip(webMugenPublicationArchivePath($config, $archiveFile), $config, $publicationId, $visibility, $accessKey);
     $catalog = webMugenReadCatalog((string)$config['catalogPath']);
     $entryPathKey = webMugenCatalogPathKey($entry['path']);
+    $legacyId = webMugenPublishedContentId($publicationId);
     $items = array_values(array_filter($catalog['items'], static fn(array $item): bool => (
         ($item['id'] ?? null) !== $entry['id']
+        && ($item['id'] ?? null) !== $legacyId
         && webMugenCatalogPathKey((string)($item['path'] ?? '')) !== $entryPathKey
     )));
     $items[] = $entry;
@@ -480,14 +502,14 @@ function webMugenPublishStage(array $config, string $publicationId, string $arch
     return ['entry' => $entry, 'playUrl' => $playUrl];
 }
 
-function webMugenDeletePublishedContent(array $config, string $publicationId): array
+function webMugenDeletePublishedContent(array $config, string $publicationId, ?string $accessKey = null): array
 {
-    if (!preg_match('/^[0-9]+$/', $publicationId)) throw new RuntimeException('publicationId must be numeric.', 400);
-    $contentId = 'proxy-release-' . strtolower($publicationId);
+    $contentId = webMugenPublishedContentId($publicationId, $accessKey);
+    $legacyId = webMugenPublishedContentId($publicationId);
     $catalog = webMugenReadCatalog((string)$config['catalogPath']);
     $items = array_values(array_filter(
         $catalog['items'],
-        static fn(array $item): bool => ($item['id'] ?? null) !== $contentId,
+        static fn(array $item): bool => ($item['id'] ?? null) !== $contentId && ($item['id'] ?? null) !== $legacyId,
     ));
     $deleted = count($items) !== count($catalog['items']);
     if ($deleted) {
@@ -716,12 +738,28 @@ function webMugenValidateCatalog(mixed $catalog): void
         if (!in_array($kind, ['character', 'stage', 'lifebar'], true)) throw new RuntimeException('Catalog item has an unknown kind.', 500);
         if (!in_array($engine, ['winmugen', 'webmugen'], true)) throw new RuntimeException('Catalog item has an unknown engine.', 500);
         if (isset($item['source']) && !in_array($item['source'], ['builtin', 'external'], true)) throw new RuntimeException('Catalog item has an unknown source.', 500);
+        if (isset($item['visibility']) && !in_array($item['visibility'], ['public', 'unlisted'], true)) throw new RuntimeException('Catalog item has an unknown visibility.', 500);
         if (!webMugenCatalogItemPathIsValid($path, $kind, $engine)) throw new RuntimeException('Catalog item has an invalid path.', 500);
         $normalizedPath = webMugenCatalogPathKey($path);
         if (isset($paths[$normalizedPath])) throw new RuntimeException('Catalog contains a duplicate path.', 500);
         $ids[strtolower($id)] = true;
         $paths[$normalizedPath] = true;
     }
+}
+
+function webMugenPublishedContentId(string $publicationId, ?string $accessKey = null): string
+{
+    if (!preg_match('/^[0-9]+$/', $publicationId)) throw new RuntimeException('publicationId must be numeric.', 400);
+    if ($accessKey !== null && $accessKey !== '') {
+        if (!preg_match('/^[a-f0-9]{32}$/', $accessKey)) throw new RuntimeException('accessKey must be 32 lowercase hexadecimal characters.', 400);
+        return 'proxy-release-' . $accessKey;
+    }
+    return 'proxy-release-' . strtolower($publicationId);
+}
+
+function webMugenCatalogVisibility(array $item): string
+{
+    return ($item['visibility'] ?? 'public') === 'unlisted' ? 'unlisted' : 'public';
 }
 
 function webMugenCatalogPathKey(string $path): string

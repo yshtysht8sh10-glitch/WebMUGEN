@@ -594,6 +594,10 @@ function catalogDraftState(
 function toDocument(catalog: ContentCatalog): ContentCatalogDocument {
   return {
     version: 1,
-    items: catalog.entries.map(({ id, name, kind, engine, path, source }) => ({ id, name, kind, engine, path, ...(source ? { source } : {}) })),
+    items: catalog.entries.map(({ id, name, kind, engine, path, source, visibility }) => ({
+      id, name, kind, engine, path,
+      ...(source ? { source } : {}),
+      ...(visibility ? { visibility } : {}),
+    })),
   };
 }

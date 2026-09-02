@@ -73,14 +73,29 @@ try {
     assertSame('cyber', webMugenReadCatalog($catalogPath)['items'][1]['id'], 'built-in Stage is preserved');
     assertSame('default-cyber', webMugenReadCatalog($catalogPath)['items'][2]['id'], 'built-in LifeBar is preserved');
 
+    $unlisted = webMugenPublishCharacter($config, '1', 'material-1-archive.zip', null, 'unlisted');
+    assertSame('unlisted', $unlisted['entry']['visibility'], 'publish accepts unlisted visibility');
+    webMugenRebuildCatalog($config);
+    $rebuiltUnlisted = array_values(array_filter(webMugenReadCatalog($catalogPath)['items'], static fn(array $entry): bool => $entry['id'] === 'proxy-release-1'));
+    assertSame('unlisted', $rebuiltUnlisted[0]['visibility'] ?? null, 'rebuild preserves existing proxy visibility');
+
+    $accessKey = '0123456789abcdef0123456789abcdef';
+    $opaque = webMugenPublishCharacter($config, '1', 'material-1-archive.zip', null, 'unlisted', $accessKey);
+    assertSame('proxy-release-' . $accessKey, $opaque['entry']['id'], 'unlisted publication can use an opaque content ID');
+    assertSame(false, str_contains($opaque['playUrl'], 'proxy-release-1&'), 'opaque play URL does not expose the numeric publication ID');
+    $opaqueRebuilt = webMugenRebuildCatalog($config);
+    $opaqueMatches = array_values(array_filter($opaqueRebuilt['entries'], static fn(array $entry): bool => $entry['path'] === '/DotoEita/16_proxy_release/storage/data/material-1-archive.zip'));
+    assertSame('proxy-release-' . $accessKey, $opaqueMatches[0]['id'] ?? null, 'rebuild preserves an opaque content ID by archive path');
+
     $second = webMugenRebuildCatalog($config);
-    assertSame(array_column($rebuilt['entries'], 'id'), array_column($second['entries'], 'id'), 'rebuild keeps IDs stable');
+    assertSame(array_column($opaqueRebuilt['entries'], 'id'), array_column($second['entries'], 'id'), 'rebuild keeps IDs stable');
     if (DIRECTORY_SEPARATOR !== '\\') {
         clearstatcache(true, $catalogPath);
         assertSame(0644, fileperms($catalogPath) & 0777, 'rebuild makes the Catalog publicly readable');
     }
     $published = webMugenPublishCharacter($config, '123', 'uploaded_938472.zip');
     assertSame('proxy-release-123', $published['entry']['id'], 'publication ID is independent from the archive filename');
+    assertSame('public', $published['entry']['visibility'], 'publication visibility defaults to public for backward compatibility');
     assertSame('/DotoEita/16_proxy_release/storage/data/uploaded_938472.zip', $published['entry']['path'], 'the actual archive filename is retained in the Catalog path');
     $publishedCharacterMatches = array_values(array_filter(
         webMugenReadCatalog($catalogPath)['items'],
@@ -113,6 +128,23 @@ try {
     assertSame(0, count(array_filter(webMugenReadCatalog($catalogPath)['items'], static fn(array $entry): bool => $entry['id'] === 'proxy-release-123')), 'deleted content is absent from the Catalog');
     assertSame(false, webMugenDeletePublishedContent($config, '123')['deleted'], 'deletion is idempotent');
     assertSame(true, is_file($storage . '/uploaded_938472.zip'), 'Catalog deletion never removes proxy-release source archives');
+    $deletedOpaque = webMugenDeletePublishedContent($config, '1', $accessKey);
+    assertSame(true, $deletedOpaque['deleted'], 'opaque published content is removed with its access key');
+    assertSame('proxy-release-' . $accessKey, $deletedOpaque['contentId'], 'opaque content ID is returned');
+
+    try {
+        webMugenPublishCharacter($config, '124', 'uploaded_938472.zip', null, 'private');
+        throw new RuntimeException('expected invalid visibility rejection');
+    } catch (RuntimeException $error) {
+        assertSame(400, $error->getCode(), 'unknown publication visibility is rejected');
+    }
+
+    try {
+        webMugenPublishCharacter($config, '124', 'uploaded_938472.zip', null, 'unlisted', 'predictable');
+        throw new RuntimeException('expected invalid access key rejection');
+    } catch (RuntimeException $error) {
+        assertSame(400, $error->getCode(), 'short access key is rejected');
+    }
 
     $draft = webMugenReadCatalog($catalogPath);
     $draft["items"][0]["name"] = 'Edited in GUI';
