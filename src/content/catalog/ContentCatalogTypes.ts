@@ -3,6 +3,7 @@ import { resolveApplicationAssetPath } from '../../app/ApplicationAssetPath';
 export type ContentKind = 'character' | 'stage' | 'lifebar';
 export type ContentEngine = 'winmugen' | 'mugen_1_0' | 'webmugen';
 export type ContentSource = 'builtin' | 'external';
+export type ContentVisibility = 'public' | 'unlisted';
 
 export type ContentCatalogEntry = {
   id: string;
@@ -11,6 +12,8 @@ export type ContentCatalogEntry = {
   engine: ContentEngine;
   path: string;
   source?: ContentSource;
+  /** Omitted by legacy version 1 Catalogs and interpreted as public. */
+  visibility?: ContentVisibility;
 };
 
 export type ContentCatalogIssue = {

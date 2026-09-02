@@ -64,21 +64,23 @@ try {
     if ($action === 'publish-character') {
         $publicationId = (string)($payload['publicationId'] ?? '');
         $archiveFile = (string)($payload['archiveFile'] ?? '');
-        $result = webMugenPublishCharacter($config, $publicationId, $archiveFile, isset($payload['stageId']) ? (string)$payload['stageId'] : null);
+        $result = webMugenPublishCharacter($config, $publicationId, $archiveFile, isset($payload['stageId']) ? (string)$payload['stageId'] : null, (string)($payload['visibility'] ?? 'public'), isset($payload['accessKey']) ? (string)$payload['accessKey'] : null);
         echo json_encode([
             'success' => true,
             'characterId' => $result['entry']['id'],
             'characterPath' => $result['entry']['path'],
+            'visibility' => webMugenCatalogVisibility($result['entry']),
             'playUrl' => $result['playUrl'],
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     } elseif ($action === 'publish-stage') {
         $publicationId = (string)($payload['publicationId'] ?? '');
         $archiveFile = (string)($payload['archiveFile'] ?? '');
-        $result = webMugenPublishStage($config, $publicationId, $archiveFile, isset($payload['characterId']) ? (string)$payload['characterId'] : null);
+        $result = webMugenPublishStage($config, $publicationId, $archiveFile, isset($payload['characterId']) ? (string)$payload['characterId'] : null, (string)($payload['visibility'] ?? 'public'), isset($payload['accessKey']) ? (string)$payload['accessKey'] : null);
         echo json_encode([
             'success' => true,
             'stageId' => $result['entry']['id'],
             'stagePath' => $result['entry']['path'],
+            'visibility' => webMugenCatalogVisibility($result['entry']),
             'playUrl' => $result['playUrl'],
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     } elseif ($action === 'save-catalog') {
@@ -100,7 +102,7 @@ try {
             'path' => $result['path'],
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     } elseif ($action === 'delete-content') {
-        $result = webMugenDeletePublishedContent($config, (string)($payload['publicationId'] ?? ''));
+        $result = webMugenDeletePublishedContent($config, (string)($payload['publicationId'] ?? ''), isset($payload['accessKey']) ? (string)$payload['accessKey'] : null);
         echo json_encode([
             'success' => true,
             'deleted' => $result['deleted'],

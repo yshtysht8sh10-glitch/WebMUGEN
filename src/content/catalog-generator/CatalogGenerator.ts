@@ -136,5 +136,6 @@ function createDisplayName(path: string): string {
 }
 
 function sameEntry(left: ContentCatalogEntry, right: ContentCatalogEntry): boolean {
-  return left.name === right.name && left.kind === right.kind && left.engine === right.engine && left.path === right.path && left.source === right.source;
+  return left.name === right.name && left.kind === right.kind && left.engine === right.engine && left.path === right.path
+    && left.source === right.source && (left.visibility ?? 'public') === (right.visibility ?? 'public');
 }

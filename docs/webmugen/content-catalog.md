@@ -1,6 +1,6 @@
 # Content Catalog
 
-Updated: 2026-08-29
+Updated: 2026-09-02
 
 ## Purpose and architecture
 
@@ -10,7 +10,7 @@ Responsibilities are deliberately separated:
 
 - **Catalog Reader** fetches one same-origin JSON file, enforces a timeout, parses JSON, and returns either a validated Catalog or a structured failure with the previous successful Catalog as fallback.
 - **Catalog Validator** checks the schema, version, individual items, duplicate IDs and paths, kind/engine values, safe paths, and resolves relative paths against the Catalog directory.
-- **Content Selection** exposes only entries of the requested kind and resolves a removed selection to the first allowed entry of that kind.
+- **Content Selection** exposes only `public` entries of the requested kind in the normal GUI, while direct URL selection may resolve a validated `unlisted` entry.
 - **Content Loader** remains the final authority for the selected Character, Stage, or LifeBar. A declared `kind` never bypasses its normal Loader validation.
 - **Catalog Generator** is a separate Development Mode tool. It scans independently selected Character, Stage, and LifeBar folders, validates directly specified files, and creates `catalog.json` in an independent output folder or download.
 
@@ -29,6 +29,7 @@ The canonical version 1 document uses `items`:
       "kind": "character",
       "engine": "winmugen",
       "source": "builtin",
+      "visibility": "public",
       "name": "T-H-M-A",
       "path": "/chars/T-H-M-A.zip"
     },
@@ -52,7 +53,7 @@ The canonical version 1 document uses `items`:
 }
 ```
 
-Each item has a stable `id`, display `name`, `kind` (`character`, `stage`, or `lifebar`), execution `engine` (`winmugen`, `mugen_1_0`, or `webmugen`), and path. For MUGEN Characters, Catalog generation derives `winmugen` / `mugen_1_0` from the Character DEF `mugenversion`; an SFF v2 file alone does not change the Character profile. The optional `source` field distinguishes publisher-shipped `builtin` items from generated `external` items. Relative paths are resolved from the directory containing `catalog.json`; absolute same-origin paths remain absolute. The legacy bundled roots `/chars/`, `/stages/`, and `/lifebars/` are the exception: when the bundled Catalog itself is below an application subdirectory, those three roots migrate beneath that application directory. Explicit proxy paths such as `/DotoEita/16_proxy_release/storage/data/` remain origin-absolute. Built-in native content may use `builtin:<kind>:<id>`.
+Each item has a stable `id`, display `name`, `kind` (`character`, `stage`, or `lifebar`), execution `engine` (`winmugen`, `mugen_1_0`, or `webmugen`), and path. Optional `visibility` is `public` or `unlisted`; omission remains equivalent to `public` for version 1 backward compatibility. Catalog membership and normal-GUI visibility are deliberately separate: both values remain loadable Catalog entries, but normal selectors and ordinary saved/default fallback consider only `public`; a validated Character or Stage ID explicitly supplied by URL may select `unlisted`. For MUGEN Characters, Catalog generation derives `winmugen` / `mugen_1_0` from the Character DEF `mugenversion`; an SFF v2 file alone does not change the Character profile. The optional `source` field distinguishes publisher-shipped `builtin` items from generated `external` items. Relative paths are resolved from the directory containing `catalog.json`; absolute same-origin paths remain absolute. The legacy bundled roots `/chars/`, `/stages/`, and `/lifebars/` are the exception: when the bundled Catalog itself is below an application subdirectory, those three roots migrate beneath that application directory. Explicit proxy paths such as `/DotoEita/16_proxy_release/storage/data/` remain origin-absolute. Built-in native content may use `builtin:<kind>:<id>`.
 
 Unknown kinds/engines, unsafe paths, duplicate IDs or paths, invalid item shapes, and incompatible extensions are excluded individually and reported. A missing `items` array or unsupported top-level version rejects the whole document. An empty `items` array is valid and leaves the publisher's safe game fallbacks active.
 
@@ -68,7 +69,7 @@ Selection priority is:
 URL selection > localStorage user setting > default-settings.json > code fallback
 ```
 
-URL Character and Stage IDs are accepted only when an entry of the correct kind exists in the validated publisher Catalog. URL selection is session-only and does not automatically overwrite localStorage. If a saved/current ID disappears, selection falls back to the first allowed item of the same kind.
+URL Character and Stage IDs are accepted only when an entry of the correct kind exists in the validated publisher Catalog. This explicit route accepts both `public` and `unlisted`; unlisted IDs are never discovered through the normal selectors. URL selection is session-only and does not automatically overwrite localStorage. If a saved/current ID disappears or is unlisted without an explicit URL override, selection falls back to the first public item of the same kind.
 
 ## Catalog Generator
 
@@ -148,9 +149,9 @@ the current application directory; other explicit same-origin absolute Catalog p
 
 The supplied PHP endpoint `public/api/catalog.php` is the deployment adapter for the proxy-release workflow. It scans only the configured fixed storage root, validates each ZIP server-side, and rewrites the same version 1 Catalog consumed by the Runtime. It supports authenticated `POST` actions:
 
-- `publish-character`: validate one `publicationId` plus the actual `archiveFile` basename and return its stable Character ID, Character path, and play URL;
-- `publish-stage`: validate one Stage ZIP, upsert it with the stable publication ID, and return its Stage ID, Stage path, and a play URL using the configured default Character;
-- `delete-content`: idempotently remove the `proxy-release-<publicationId>` Catalog entry without deleting the proxy-release service's source ZIP;
+- `publish-character`: validate one `publicationId` plus the actual `archiveFile` basename, optionally use a 128-bit `accessKey` for its public Catalog ID, and return its stable Character ID, Character path, and play URL;
+- `publish-stage`: validate one Stage ZIP, optionally use a 128-bit `accessKey` for its public Catalog ID, and return its Stage ID, Stage path, and a play URL using the configured default Character;
+- `delete-content`: idempotently remove the matching numeric or opaque proxy-release Catalog entry without deleting the proxy-release service's source ZIP;
 - `rebuild`: rescan the fixed storage root and replace all `proxy-release-*` entries while retaining publisher/built-in entries;
 - `scan-catalog`: inspect the fixed storage root and return validated Character and Stage entries plus exclusions without modifying `catalog.json`; this is the server-mode draft import route;
 - `save-catalog`: validate and atomically replace the complete GUI Catalog draft only when its `expectedRevision` still matches the server file;
@@ -200,11 +201,11 @@ Configure the remaining deployment values with these server-side environment var
 - `WEBMUGEN_DEFAULT_STAGE_ID`: stage ID included in generated play URLs.
 - `WEBMUGEN_DEFAULT_CHARACTER_ID`: character ID used when generating a play URL for a published Stage (default `t-h-m-a`).
 
-`publish-character` accepts `publicationId`, `archiveFile`, and optional `stageId`. `publicationId` produces the stable ID `proxy-release-<publicationId>`; it is never inferred from `archiveFile`. `archiveFile` must be a `.zip` basename with no slash, backslash, `..`, URL syntax, absolute path, or control characters, and is resolved only below `WEBMUGEN_PROXY_STORAGE_DIR`. A valid Character DEF requires `[Info]`, `[Files]`, `cmd`, `anim`, and either `cns` or `st`. Multiple valid definitions use the same shallowest/simplest deterministic ranking as the browser Character loader. A valid Stage DEF requires Stage metadata plus `[Camera]`, `[PlayerInfo]`, `[Bound]`, and `[BGDef] spr`; multiple Stage definitions use the same ranking. Zero valid definitions, corrupt archives, traversal paths, or unsafe names fail without changing the existing Catalog.
+`publish-character` accepts `publicationId`, `archiveFile`, optional `stageId`, and optional `accessKey`. The numeric `publicationId` remains the authenticated lifecycle key for upsert and cleanup. Without `accessKey`, it produces the backward-compatible Catalog ID `proxy-release-<publicationId>`. With `accessKey`, the key must be exactly 32 lowercase hexadecimal characters and produces `proxy-release-<accessKey>`; proxy-release generates this value with 128 bits of cryptographic randomness for test publications and persists it for stable retries. Publishing with an access key removes a legacy numeric entry for the same publication and any entry using the same archive path. `archiveFile` must be a `.zip` basename with no slash, backslash, `..`, URL syntax, absolute path, or control characters, and is resolved only below `WEBMUGEN_PROXY_STORAGE_DIR`. A valid Character DEF requires `[Info]`, `[Files]`, `cmd`, `anim`, and either `cns` or `st`. Multiple valid definitions use the same shallowest/simplest deterministic ranking as the browser Character loader. A valid Stage DEF requires Stage metadata plus `[Camera]`, `[PlayerInfo]`, `[Bound]`, and `[BGDef] spr`; multiple Stage definitions use the same ranking. Zero valid definitions, corrupt archives, traversal paths, or unsafe names fail without changing the existing Catalog.
 
-`publish-stage` accepts `publicationId`, `archiveFile`, and optional `characterId`. It writes a `kind: "stage"`, `engine: "winmugen"` entry using stable ID `proxy-release-<publicationId>`. Before writing, it verifies that the selected Character exists and generates `?character=<id>&stage=proxy-release-<publicationId>`.
+`publish-stage` accepts `publicationId`, `archiveFile`, optional `characterId`, optional `visibility`, and optional `accessKey`. `publish-character` accepts the same visibility and access-key fields. Visibility must be `public` or `unlisted` and defaults to `public` for older clients. Each endpoint stores it on the Catalog entry and still returns a direct play URL. Rebuild preserves both the ID and visibility of an existing proxy entry with the same archive path, preventing an opaque unlisted ID from reverting to a filename-derived numeric ID. Stage publication writes a `kind: "stage"`, `engine: "winmugen"` entry using either the backward-compatible numeric ID or the opaque access-key ID. Before writing, it verifies that the selected Character exists and generates the matching `?character=<id>&stage=<id>` URL.
 
-`delete-content` accepts a numeric `publicationId`. It removes only the matching `proxy-release-<publicationId>` entry and succeeds idempotently when the entry is already absent. Source archives remain owned by proxy-release and are never removed by this endpoint.
+`delete-content` accepts a numeric `publicationId` and optional `accessKey`. It removes the matching opaque entry and its legacy numeric alias, and succeeds idempotently when both are already absent. Source archives remain owned by proxy-release and are never removed by this endpoint.
 
 Before writing, the endpoint builds the prospective Catalog, verifies that the requested Stage exists as a Stage entry, generates the standard `?character=<id>&stage=<id>` URL, and validates the complete document. Only then does it atomically replace `catalog.json`; an invalid Stage cannot leave a Character-only partial update. Rebuild continues to inspect every ZIP basename in the configured storage directory, replaces only `proxy-release-*` items, retains built-in/publisher items, and returns per-file exclusions.
 

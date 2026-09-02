@@ -8,9 +8,9 @@ WebMUGEN accepts catalog IDs in the query string:
 https://example.com/webmugen/?character=t-h-m-a&stage=fresh
 ```
 
-`character` must name a character entry and `stage` must name a stage entry in the publisher's validated content catalog. The values are IDs, not paths or URLs. Find valid IDs in `public/content/catalog.json` or in the Settings content selectors.
+`character` must name a character entry and `stage` must name a stage entry in the publisher's validated content catalog. The values are IDs, not paths or URLs. A Catalog entry with `visibility: "unlisted"` is intentionally absent from Settings selectors but remains valid when its exact ID is supplied in this URL; this is the test-publication route.
 
-The proxy-release publishing endpoint returns this same URL form after it adds the Character to the Catalog. It does not add a second runtime selection mechanism; `proxy-release-<publicationId>` is an ordinary validated Character ID and the configured default Stage is an ordinary Stage ID.
+The proxy-release publishing endpoint returns this same URL form after it adds the Character or Stage to the Catalog. It does not add a second runtime loading mechanism. Normal publications may retain the backward-compatible `proxy-release-<publicationId>` ID. Test publications use a persisted random 128-bit access key as `proxy-release-<accessKey>` and `visibility: "unlisted"`, so neither the normal GUI nor a guessed numeric publication ID reveals them. Possession of the exact URL grants play access only; it does not grant publication management authority.
 
 Startup priority is `URL query > localStorage user settings > default-settings.json > compiled fallback`. A partial URL changes only that content type. For example, `?character=kfm` keeps the stored/default stage, audio, input, and display settings.
 

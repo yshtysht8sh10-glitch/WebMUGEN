@@ -3,7 +3,7 @@ import { DEFAULT_AUDIO_SETTINGS, normalizeAudioSettings, type AudioSettings } fr
 import { DEFAULT_RUNTIME_SETTINGS, normalizeRuntimeSettings, type RuntimeSettings } from './RuntimeSettings';
 import type { UiLanguage } from './UiLanguage';
 import type { WebMugenFeatureFlags } from './BuildMode';
-import { DEFAULT_CONTENT_CATALOG_PATH, resolveCatalogSelection, type ContentCatalog } from './ContentCatalog';
+import { DEFAULT_CONTENT_CATALOG_PATH, resolveCatalogSelection, type ContentCatalog, type ContentKind } from './ContentCatalog';
 import { resolveApplicationAssetPath } from './ApplicationAssetPath';
 
 export const WEBMUGEN_SETTINGS_VERSION = 1;
@@ -163,8 +163,12 @@ export function applyFeaturePolicyToSettings(
   }, publishedDefaults);
 }
 
-export function applyCatalogSelectionToSettings(settings: WebMugenSettings, catalog: ContentCatalog): WebMugenSettings {
-  const { character, stage, lifeBar } = resolveCatalogSelection(catalog, settings.content);
+export function applyCatalogSelectionToSettings(
+  settings: WebMugenSettings,
+  catalog: ContentCatalog,
+  directIds: Partial<Record<ContentKind, string>> = {},
+): WebMugenSettings {
+  const { character, stage, lifeBar } = resolveCatalogSelection(catalog, settings.content, directIds);
   const next = normalizeWebMugenSettings({
     ...settings,
     content: {

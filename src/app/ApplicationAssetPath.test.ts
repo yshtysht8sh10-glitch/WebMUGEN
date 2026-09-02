@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isSafeSameOriginContentPath, resolveApplicationAssetPath } from './ApplicationAssetPath';
+import { isSafeSameOriginAssetPath, isSafeSameOriginContentPath, resolveApplicationAssetPath } from './ApplicationAssetPath';
 
 describe('resolveApplicationAssetPath', () => {
   it('keeps application assets inside root and subdirectory deployments', () => {
@@ -20,5 +20,16 @@ describe('isSafeSameOriginContentPath', () => {
     expect(isSafeSameOriginContentPath('/DotoEita/50_WebMUGEN/content/demo.zip', ['content'], ['.zip'])).toBe(true);
     expect(isSafeSameOriginContentPath('/stages/../private/demo.zip', ['stages'], ['.zip'])).toBe(false);
     expect(isSafeSameOriginContentPath('https://evil.test/stages/demo.zip', ['stages'], ['.zip'])).toBe(false);
+  });
+});
+
+describe('isSafeSameOriginAssetPath', () => {
+  it('accepts Catalog ZIPs outside the application directory while retaining same-origin path safety', () => {
+    expect(isSafeSameOriginAssetPath('/DotoEita/16_proxy_release/storage/data/material-22-archive.zip', ['.zip'])).toBe(true);
+    expect(isSafeSameOriginAssetPath('/DotoEita/16_proxy_release/storage/data/material-23-archive.ZIP', ['.zip'])).toBe(true);
+    expect(isSafeSameOriginAssetPath('/DotoEita/16_proxy_release/storage/../private/stage.zip', ['.zip'])).toBe(false);
+    expect(isSafeSameOriginAssetPath('//evil.test/stage.zip', ['.zip'])).toBe(false);
+    expect(isSafeSameOriginAssetPath('https://evil.test/stage.zip', ['.zip'])).toBe(false);
+    expect(isSafeSameOriginAssetPath('/DotoEita/16_proxy_release/storage/data/stage.def', ['.zip'])).toBe(false);
   });
 });

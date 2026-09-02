@@ -92,16 +92,20 @@ function validateCatalogEntry(
   const engine = readEngine(value.engine);
   const rawPath = typeof value.path === 'string' ? value.path : '';
   const source = value.source === 'builtin' || value.source === 'external' ? value.source : undefined;
+  const visibility = value.visibility === undefined
+    ? undefined
+    : value.visibility === 'public' || value.visibility === 'unlisted' ? value.visibility : null;
   if (!/^[a-z0-9][a-z0-9_-]{0,63}$/i.test(id)) return reject('Catalog item has an invalid ID.', 'item.id');
   if (!name || name.length > 120) return reject(`Catalog item ${id} has an invalid name.`, 'item.name');
   if (!kind) return reject(`Catalog item ${id} has an unknown kind.`, 'item.kind');
   if (!engine) return reject(`Catalog item ${id} has an unknown engine.`, 'item.engine');
   if (value.source !== undefined && !source) return reject(`Catalog item ${id} has an unknown source.`, 'item.source');
+  if (visibility === null) return reject(`Catalog item ${id} has an unknown visibility.`, 'item.visibility');
   const path = resolveCatalogEntryPath(rawPath, sourcePath);
   if (!path || !isPathCompatible(path, kind, engine)) {
     return reject(`Catalog item ${id} has an invalid ${engine} ${kind} path.`, 'item.path');
   }
-  return { entry: { id, name, kind, engine, path, ...(source ? { source } : {}) } };
+  return { entry: { id, name, kind, engine, path, ...(source ? { source } : {}), ...(visibility ? { visibility } : {}) } };
 }
 
 function readKind(value: unknown): ContentKind | null {

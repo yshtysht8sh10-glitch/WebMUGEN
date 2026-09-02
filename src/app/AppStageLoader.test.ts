@@ -2,6 +2,7 @@ import { zipSync, strToU8 } from 'fflate';
 import { describe, expect, it, vi } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { loadMugenStageZip } from './AppStageLoader';
+import { loadWinMugenStage } from '../stage/winmugen/WinMugenStageLoader';
 
 class FakeImageData {
   constructor(
@@ -77,6 +78,19 @@ describe('MUGEN stage ZIP loader', () => {
     expect(stage.sprites.sprites.get('0,1')).toMatchObject({ xAxis: 0, yAxis: 0 });
     expect(stage.sprites.sprites.get('0,1')?.imageData).toMatchObject({ width: 1280, height: 666 });
     expect(stage.sprites.sprites.get('0,0')).toMatchObject({ xAxis: 0, yAxis: -484 });
+    vi.unstubAllGlobals();
+  }, 20_000);
+
+  it('loads a server Catalog Stage ZIP from an origin-absolute external storage path', async () => {
+    const archive = await readFile('public/stages/material-22-archive.zip');
+    const fetchMock = vi.fn(async () => new Response(archive));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const path = '/DotoEita/16_proxy_release/storage/data/material-22-archive.zip';
+    const stage = await loadWinMugenStage(path);
+
+    expect(stage.name).toBe('Beach in summer A');
+    expect(fetchMock).toHaveBeenCalledWith(path);
     vi.unstubAllGlobals();
   }, 20_000);
 
