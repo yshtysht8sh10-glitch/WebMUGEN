@@ -1,8 +1,11 @@
 {
   "name": "webmugen",
   "private": true,
-  "version": "0.6.5",
+  "version": "0.6.8",
   "type": "module",
+  "exports": {
+    "./proxy-release-preview": "./src/integration/ProxyReleasePreviewApi.ts"
+  },
   "scripts": {
     "dev": "vite",
     "dev:public": "vite --mode public",
