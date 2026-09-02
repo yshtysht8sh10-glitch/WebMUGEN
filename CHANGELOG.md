@@ -2,8 +2,8 @@
 
 ## 0.6.8 - 2026-09-02
 
-- Exposed the production DEF, text decoding, compatibility, and SFF sprite pipeline through a browser-safe integration entry point for Proxy Release previews.
-- Kept ACT selection and SFF v1/v2 palette behavior on the same implementation used by the WebMUGEN character runtime.
+- Recorded this runtime revision as the source snapshot for Proxy Release's independently deployed DEF/text/ACT palette helpers.
+- Kept WebMUGEN free of a runtime or package dependency on Proxy Release.
 
 ## 0.6.7 - 2026-09-02
 
