@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.5 - 2026-09-02
+
+- Added authenticated, idempotent deletion of proxy-release Catalog entries for temporary-publication cleanup.
+
 ## 0.6.0 - 2026-08-25
 
 - Added authenticated proxy-release Stage publication with stable Catalog IDs and playable Character/Stage URLs.

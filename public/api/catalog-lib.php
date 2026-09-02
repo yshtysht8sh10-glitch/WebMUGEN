@@ -480,6 +480,22 @@ function webMugenPublishStage(array $config, string $publicationId, string $arch
     return ['entry' => $entry, 'playUrl' => $playUrl];
 }
 
+function webMugenDeletePublishedContent(array $config, string $publicationId): array
+{
+    if (!preg_match('/^[0-9]+$/', $publicationId)) throw new RuntimeException('publicationId must be numeric.', 400);
+    $contentId = 'proxy-release-' . strtolower($publicationId);
+    $catalog = webMugenReadCatalog((string)$config['catalogPath']);
+    $items = array_values(array_filter(
+        $catalog['items'],
+        static fn(array $item): bool => ($item['id'] ?? null) !== $contentId,
+    ));
+    $deleted = count($items) !== count($catalog['items']);
+    if ($deleted) {
+        webMugenWriteCatalogAtomic((string)$config['catalogPath'], ['version' => 1, 'items' => $items]);
+    }
+    return ['deleted' => $deleted, 'contentId' => $contentId];
+}
+
 function webMugenBuildPlayUrl(array $config, array $catalog, string $characterId, string $stageId): string
 {
     $character = false;

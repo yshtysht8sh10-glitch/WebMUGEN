@@ -99,6 +99,13 @@ try {
             'version' => $result['version'],
             'path' => $result['path'],
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    } elseif ($action === 'delete-content') {
+        $result = webMugenDeletePublishedContent($config, (string)($payload['publicationId'] ?? ''));
+        echo json_encode([
+            'success' => true,
+            'deleted' => $result['deleted'],
+            'contentId' => $result['contentId'],
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     } elseif ($action === 'rebuild') {
         $result = webMugenRebuildCatalog($config);
         echo json_encode(['success' => true, 'registered' => count($result['entries']), 'excluded' => $result['excluded']], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);

@@ -107,6 +107,12 @@ try {
         $publishedStage['playUrl'],
         'Stage play URL uses the configured default Character',
     );
+    $deleted = webMugenDeletePublishedContent($config, '123');
+    assertSame(true, $deleted['deleted'], 'published content is removed');
+    assertSame('proxy-release-123', $deleted['contentId'], 'stable content ID is returned');
+    assertSame(0, count(array_filter(webMugenReadCatalog($catalogPath)['items'], static fn(array $entry): bool => $entry['id'] === 'proxy-release-123')), 'deleted content is absent from the Catalog');
+    assertSame(false, webMugenDeletePublishedContent($config, '123')['deleted'], 'deletion is idempotent');
+    assertSame(true, is_file($storage . '/uploaded_938472.zip'), 'Catalog deletion never removes proxy-release source archives');
 
     $draft = webMugenReadCatalog($catalogPath);
     $draft["items"][0]["name"] = 'Edited in GUI';

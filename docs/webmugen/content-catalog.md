@@ -150,6 +150,7 @@ The supplied PHP endpoint `public/api/catalog.php` is the deployment adapter for
 
 - `publish-character`: validate one `publicationId` plus the actual `archiveFile` basename and return its stable Character ID, Character path, and play URL;
 - `publish-stage`: validate one Stage ZIP, upsert it with the stable publication ID, and return its Stage ID, Stage path, and a play URL using the configured default Character;
+- `delete-content`: idempotently remove the `proxy-release-<publicationId>` Catalog entry without deleting the proxy-release service's source ZIP;
 - `rebuild`: rescan the fixed storage root and replace all `proxy-release-*` entries while retaining publisher/built-in entries;
 - `scan-catalog`: inspect the fixed storage root and return validated Character and Stage entries plus exclusions without modifying `catalog.json`; this is the server-mode draft import route;
 - `save-catalog`: validate and atomically replace the complete GUI Catalog draft only when its `expectedRevision` still matches the server file;
@@ -202,6 +203,8 @@ Configure the remaining deployment values with these server-side environment var
 `publish-character` accepts `publicationId`, `archiveFile`, and optional `stageId`. `publicationId` produces the stable ID `proxy-release-<publicationId>`; it is never inferred from `archiveFile`. `archiveFile` must be a `.zip` basename with no slash, backslash, `..`, URL syntax, absolute path, or control characters, and is resolved only below `WEBMUGEN_PROXY_STORAGE_DIR`. A valid Character DEF requires `[Info]`, `[Files]`, `cmd`, `anim`, and either `cns` or `st`. Multiple valid definitions use the same shallowest/simplest deterministic ranking as the browser Character loader. A valid Stage DEF requires Stage metadata plus `[Camera]`, `[PlayerInfo]`, `[Bound]`, and `[BGDef] spr`; multiple Stage definitions use the same ranking. Zero valid definitions, corrupt archives, traversal paths, or unsafe names fail without changing the existing Catalog.
 
 `publish-stage` accepts `publicationId`, `archiveFile`, and optional `characterId`. It writes a `kind: "stage"`, `engine: "winmugen"` entry using stable ID `proxy-release-<publicationId>`. Before writing, it verifies that the selected Character exists and generates `?character=<id>&stage=proxy-release-<publicationId>`.
+
+`delete-content` accepts a numeric `publicationId`. It removes only the matching `proxy-release-<publicationId>` entry and succeeds idempotently when the entry is already absent. Source archives remain owned by proxy-release and are never removed by this endpoint.
 
 Before writing, the endpoint builds the prospective Catalog, verifies that the requested Stage exists as a Stage entry, generates the standard `?character=<id>&stage=<id>` URL, and validates the complete document. Only then does it atomically replace `catalog.json`; an invalid Stage cannot leave a Character-only partial update. Rebuild continues to inspect every ZIP basename in the configured storage directory, replaces only `proxy-release-*` items, retains built-in/publisher items, and returns per-file exclusions.
 
