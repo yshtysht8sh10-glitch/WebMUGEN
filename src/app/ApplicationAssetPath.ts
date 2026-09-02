@@ -13,13 +13,21 @@ export function isSafeSameOriginContentPath(
   directories: readonly string[],
   extensions: readonly string[],
 ): boolean {
+  if (!isSafeSameOriginAssetPath(path, extensions)) return false;
+  const normalized = path.trim().replace(/\\/g, '/');
+  return directories.some((directory) => normalized.includes(`/${directory.replace(/^\/+|\/+$/g, '')}/`));
+}
+
+export function isSafeSameOriginAssetPath(
+  path: string,
+  extensions: readonly string[],
+): boolean {
   const normalized = path.trim().replace(/\\/g, '/');
   const lower = normalized.toLowerCase();
   return normalized.startsWith('/')
     && !normalized.startsWith('//')
     && !normalized.includes('://')
     && !normalized.split('/').some((part) => part === '.' || part === '..')
-    && directories.some((directory) => normalized.includes(`/${directory.replace(/^\/+|\/+$/g, '')}/`))
     && extensions.some((extension) => lower.endsWith(extension.toLowerCase()));
 }
 
