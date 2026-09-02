@@ -518,7 +518,12 @@ export function WebMugenApp({ initialPage = 'play' }: { initialPage?: AppPage })
       let loadedLifeBarRuntime: LifeBarRuntime | undefined;
       let stageLoadError: string | null = null;
       try {
-        const selectedStage = contentCatalogRef.current.entries.find((entry) => entry.kind === 'stage' && entry.id === webMugenSettingsRef.current.content.stageId);
+        const liveContent = applyUrlContentOverrides(
+          webMugenSettingsRef.current,
+          contentCatalogRef.current,
+          urlContentOverridesRef.current,
+        ).content;
+        const selectedStage = contentCatalogRef.current.entries.find((entry) => entry.kind === 'stage' && entry.id === liveContent.stageId);
         const stageTheme = runtimeSettingsRef.current.stageTheme;
         if (selectedStage?.engine === 'winmugen' || (!selectedStage && stageTheme === 'external')) {
           const stagePath = selectedStage?.path ?? runtimeSettingsRef.current.stageArchivePath;

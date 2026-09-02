@@ -8,11 +8,12 @@ import {
   getUrlContentOverrides,
 } from './UrlContentSelection';
 
-const catalog: ContentCatalog = { version: 1, totalEntries: 4, rejectedEntries: 0, issues: [], entries: [
+const catalog: ContentCatalog = { version: 1, totalEntries: 5, rejectedEntries: 0, issues: [], entries: [
   { id: 'saved-char', name: 'Saved', kind: 'character', engine: 'winmugen', path: '/chars/saved.def' },
   { id: 'url char', name: 'URL', kind: 'character', engine: 'winmugen', path: '/chars/url.zip', visibility: 'unlisted' },
   { id: 'saved-stage', name: 'Saved stage', kind: 'stage', engine: 'webmugen', path: 'builtin:stage:fresh' },
   { id: 'url-stage', name: 'URL stage', kind: 'stage', engine: 'winmugen', path: '/stages/url.zip', visibility: 'unlisted' },
+  { id: 'cyber', name: 'Cyber', kind: 'stage', engine: 'webmugen', path: 'builtin:stage:cyber' },
 ] };
 
 const saved = normalizeWebMugenSettings({
@@ -62,6 +63,21 @@ describe('URL content selection', () => {
     const result = applyUrlContentSelection(saved, catalog, '?character=url%20char&stage=url-stage');
     expect(result.settings.content).toMatchObject({ characterId: 'url char', stageId: 'url-stage' });
     expect(result.settings.runtime).toMatchObject({ stageTheme: 'external', stageArchivePath: '/stages/url.zip' });
+  });
+
+  it('gives a URL-selected built-in Stage priority over the previously saved Stage', () => {
+    const previouslyExternal = normalizeWebMugenSettings({
+      ...saved,
+      content: { ...saved.content, stageId: 'url-stage' },
+      runtime: { ...saved.runtime, stageTheme: 'external', stageArchivePath: '/stages/url.zip' },
+    }, saved);
+
+    const selected = applyUrlContentSelection(previouslyExternal, catalog, '?character=saved-char&stage=cyber');
+    const live = applyUrlContentOverrides(previouslyExternal, catalog, getUrlContentOverrides(selected));
+
+    expect(selected.source.stage).toBe('url');
+    expect(live.content.stageId).toBe('cyber');
+    expect(live.runtime.stageTheme).toBe('cyber');
   });
 
   it('does not retain an unlisted saved selection without an explicit URL', () => {
